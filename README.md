@@ -17,6 +17,7 @@ Early release build. The app can read and write Steam collection data, but you s
 - Drag games into collections and bulk-edit selected games.
 - Auto-categorize by hours, genre, tags, year, and score.
 - Show achievements, wishlist, friends comparison, play history, HLTB data, and library stats.
+- Probe Steam Family shared games with the saved Web API key or an optional Store `webapi_token`.
 - Export games, categories, and library summaries.
 
 ## Requirements
@@ -61,6 +62,11 @@ Release builds are produced by GitHub Actions as:
 - portable Windows zip
 
 Version tags are created from `package.json` (`v0.1.0`, `v0.2.0`, ...). Each tag triggers a GitHub Release with generated changelog notes and Windows artifacts.
+
+For quick test builds, run the `Preview` GitHub Actions workflow. It skips NSIS
+installer packaging and uploads only a portable preview exe/zip.
+
+For Steam Family setup and the optional Store `webapi_token` fallback, see [docs/steam-family.md](docs/steam-family.md).
 
 ## Data And Backups
 

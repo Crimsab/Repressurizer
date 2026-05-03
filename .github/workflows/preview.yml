@@ -1,0 +1,97 @@
+name: Preview
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_checks:
+        description: Run TypeScript checks before building
+        required: false
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  windows-portable:
+    name: Windows portable preview
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read version
+        id: version
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json | ConvertFrom-Json).version
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Cache Bun
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          shared-key: windows-portable-preview
+          cache-on-failure: true
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck
+        if: inputs.run_checks == 'true'
+        run: bun run check
+
+      - name: Build portable executable
+        run: bun tauri build --no-bundle
+
+      - name: Collect preview artifacts
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts
+          Copy-Item src-tauri\target\release\repressurizer.exe artifacts\Repressurizer-preview-portable.exe
+          Compress-Archive -Path artifacts\Repressurizer-preview-portable.exe -DestinationPath artifacts\Repressurizer-preview-portable-windows-x64.zip -Force
+
+          $metadata = [ordered]@{
+            name = "Repressurizer preview"
+            version = "${{ steps.version.outputs.version }}"
+            commit = "${{ github.sha }}"
+            ref = "${{ github.ref_name }}"
+            built_at = (Get-Date).ToUniversalTime().ToString("o")
+            notes = "Portable preview build; no installer or updater manifest."
+          }
+          $metadata | ConvertTo-Json -Depth 4 | Set-Content -Path artifacts\preview-build.json -Encoding utf8
+          Get-ChildItem artifacts | ForEach-Object { "$($_.Name) $($_.Length) bytes" }
+
+      - name: Upload preview artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: repressurizer-preview-windows
+          path: artifacts/*
+          if-no-files-found: error
