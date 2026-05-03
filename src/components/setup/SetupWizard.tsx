@@ -8,6 +8,7 @@ import {
   fetchLibrary,
   loadCollections,
 } from "../../lib/tauri";
+import { mergeCollectionOnlyGames } from "../../lib/libraryMerge";
 import type { OwnedGame, SteamCollection, SteamUser } from "../../lib/types";
 import {
   GameController,
@@ -67,7 +68,8 @@ export function SetupWizard() {
       const collections = await loadCollections(steamPath, selectedUser);
       console.log("Got collections:", collections.length);
 
-      setLoadedGames(games);
+      const details = useGameStore.getState().details;
+      setLoadedGames(mergeCollectionOnlyGames(games, collections, details));
       setLoadedCollections(collections);
       setStep(2);
       setLoading(false);

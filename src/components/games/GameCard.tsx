@@ -13,9 +13,10 @@ interface GameCardProps {
   onContextMenu: (e: React.MouseEvent, game: OwnedGame) => void;
   onDoubleClick: (game: OwnedGame) => void;
   onShiftClick?: (appId: number) => void;
+  isPossibleDuplicate?: boolean;
 }
 
-export function GameCard({ game, onContextMenu, onDoubleClick, onShiftClick }: GameCardProps) {
+export function GameCard({ game, onContextMenu, onDoubleClick, onShiftClick, isPossibleDuplicate }: GameCardProps) {
   const isSelected = useGameStore((s) => !!s.selectedGameIds[game.appid]);
   const toggleGameSelection = useGameStore((s) => s.toggleGameSelection);
   const clearSelection = useGameStore((s) => s.clearSelection);
@@ -109,12 +110,22 @@ export function GameCard({ game, onContextMenu, onDoubleClick, onShiftClick }: G
 
       {/* Info */}
       <div className="bg-repressurizer-surface p-2.5 pb-3 h-[98px]">
-        <h3 className="truncate text-sm font-medium text-white leading-tight">
+        <h3 className="truncate text-sm font-medium text-white leading-tight" title={`${String(game.name ?? "")} (#${game.appid})`}>
           {String(game.name ?? "")}
         </h3>
-        <p className="mt-0.5 inline-flex items-center gap-1 text-xs text-repressurizer-text-muted">
-          <Clock size={11} className="text-repressurizer-text-faint" />
+        <p className="mt-0.5 flex items-center gap-1 text-xs text-repressurizer-text-muted">
+          <Clock size={11} className="shrink-0 text-repressurizer-text-faint" />
           <span className="font-mono tabular-nums">{hours}h</span>
+          {(isPossibleDuplicate || game.is_collection_only) && (
+            <span className="ml-1 rounded-md border border-repressurizer-border-subtle px-1 font-mono text-[10px] text-repressurizer-text-faint">
+              #{game.appid}
+            </span>
+          )}
+          {game.is_collection_only && (
+            <span className="rounded-md bg-amber-500/10 px-1 text-[10px] font-medium text-amber-300">
+              Local
+            </span>
+          )}
         </p>
 
         {/* Category chips */}

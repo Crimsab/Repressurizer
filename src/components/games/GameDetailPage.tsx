@@ -35,6 +35,7 @@ import {
   Timer,
   ArrowsClockwise,
   Star,
+  Hash,
 } from "@phosphor-icons/react";
 
 interface GameDetailPageProps {
@@ -290,7 +291,12 @@ function InfoTab({
   return (
     <div className="space-y-6">
       {/* Quick stats */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+        <StatCard
+          label="App ID"
+          value={`#${game.appid}`}
+          icon={<Hash size={16} weight="duotone" />}
+        />
         <StatCard
           label="Playtime"
           value={`${(game.playtime_forever / 60).toFixed(1)}h`}

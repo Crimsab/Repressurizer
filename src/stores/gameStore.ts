@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
 import type { OwnedGame, GameDetails } from "../lib/types";
 import type { GameStatus } from "./statusStore";
+import { displayNameFromDetails, isPlaceholderGameName } from "../lib/libraryMerge";
 
 function persistDetailsCache(details: Record<number, GameDetails>) {
   invoke("save_details_cache", { data: JSON.stringify(details) }).catch(() => {});
@@ -15,6 +16,18 @@ export interface FilterState {
   tagFilter: string[];    // empty = all tags
   minHltbHours: number | null;
   maxHltbHours: number | null;
+  minReleaseYear: number | null;
+  maxReleaseYear: number | null;
+  platforms: Array<"windows" | "mac" | "linux">;
+  minMetacritic: number | null;
+  maxMetacritic: number | null;
+  minAchievementPct: number | null;
+  maxAchievementPct: number | null;
+  onlyFamilyShared: boolean;
+  onlyPossibleDuplicates: boolean;
+  onlyMissingDetails: boolean;
+  onlyDelisted: boolean;
+  onlyCollectionOnly: boolean;
 }
 
 const DEFAULT_FILTERS: FilterState = {
@@ -25,6 +38,18 @@ const DEFAULT_FILTERS: FilterState = {
   tagFilter: [],
   minHltbHours: null,
   maxHltbHours: null,
+  minReleaseYear: null,
+  maxReleaseYear: null,
+  platforms: [],
+  minMetacritic: null,
+  maxMetacritic: null,
+  minAchievementPct: null,
+  maxAchievementPct: null,
+  onlyFamilyShared: false,
+  onlyPossibleDuplicates: false,
+  onlyMissingDetails: false,
+  onlyDelisted: false,
+  onlyCollectionOnly: false,
 };
 
 export type SortBy = "name" | "playtime" | "lastPlayed" | "appid" | "metacritic" | "hltb" | "achievements" | "status";
@@ -80,27 +105,41 @@ export const useGameStore = create<GameState>((set, get) => ({
   selectedGameIds: {},
   filters: { ...DEFAULT_FILTERS },
 
-  setGames: (games) => {
-    const map: Record<number, OwnedGame> = {};
-    for (const g of games) {
-      map[g.appid] = g;
-    }
-    set({ games: map, loading: false, error: null });
-  },
+  setGames: (games) =>
+    set((state) => {
+      const map: Record<number, OwnedGame> = {};
+      for (const g of games) {
+        map[g.appid] = {
+          ...g,
+          name: displayNameFromDetails(g, state.details[g.appid]),
+        };
+      }
+      return { games: map, loading: false, error: null };
+    }),
 
   mergeGames: (games) =>
     set((state) => {
       const map = { ...state.games };
       for (const game of games) {
         const existing = map[game.appid];
-        map[game.appid] = existing
-          ? {
-              ...game,
-              ...existing,
-              name: existing.name || game.name,
-              img_icon_url: existing.img_icon_url ?? game.img_icon_url,
-            }
+        const merged = existing
+          ? existing.is_collection_only && !game.is_collection_only
+            ? {
+                ...existing,
+                ...game,
+                img_icon_url: game.img_icon_url ?? existing.img_icon_url,
+              }
+            : {
+                ...game,
+                ...existing,
+                name: existing.name || game.name,
+                img_icon_url: existing.img_icon_url ?? game.img_icon_url,
+              }
           : game;
+        map[game.appid] = {
+          ...merged,
+          name: displayNameFromDetails(merged, state.details[game.appid]),
+        };
       }
       return { games: map };
     }),
@@ -108,18 +147,28 @@ export const useGameStore = create<GameState>((set, get) => ({
   setDetails: (appId, details) =>
     set((state) => {
       const next = { ...state.details, [appId]: details };
+      const games = { ...state.games };
+      const game = games[appId];
+      if (game && (game.is_collection_only || isPlaceholderGameName(appId, game.name))) {
+        games[appId] = { ...game, name: displayNameFromDetails(game, details) };
+      }
       persistDetailsCache(next);
-      return { details: next };
+      return { details: next, games };
     }),
 
   setBulkDetails: (details) =>
     set((state) => {
       const next = { ...state.details };
+      const games = { ...state.games };
       for (const d of details) {
         next[d.app_id] = d;
+        const game = games[d.app_id];
+        if (game && (game.is_collection_only || isPlaceholderGameName(d.app_id, game.name))) {
+          games[d.app_id] = { ...game, name: displayNameFromDetails(game, d) };
+        }
       }
       persistDetailsCache(next);
-      return { details: next };
+      return { details: next, games };
     }),
 
   clearDetailsCache: () => {
@@ -192,6 +241,26 @@ export const useGameStore = create<GameState>((set, get) => ({
   isSelected: (appId) => !!get().selectedGameIds[appId],
   hasActiveFilters: () => {
     const f = get().filters;
-    return f.minHours !== null || f.maxHours !== null || f.statuses.length > 0 || f.onlyUnplayed || f.tagFilter.length > 0;
+    return (
+      f.minHours !== null ||
+      f.maxHours !== null ||
+      f.statuses.length > 0 ||
+      f.onlyUnplayed ||
+      f.tagFilter.length > 0 ||
+      f.minHltbHours !== null ||
+      f.maxHltbHours !== null ||
+      f.minReleaseYear !== null ||
+      f.maxReleaseYear !== null ||
+      f.platforms.length > 0 ||
+      f.minMetacritic !== null ||
+      f.maxMetacritic !== null ||
+      f.minAchievementPct !== null ||
+      f.maxAchievementPct !== null ||
+      f.onlyFamilyShared ||
+      f.onlyPossibleDuplicates ||
+      f.onlyMissingDetails ||
+      f.onlyDelisted ||
+      f.onlyCollectionOnly
+    );
   },
 }));

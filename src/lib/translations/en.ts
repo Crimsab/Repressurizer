@@ -192,7 +192,7 @@ const en = {
   "review.clear": "Clear rating",
 
   // Search
-  "search.advanced.hint": "Try: genre:rpg status:playing hours:>10",
+  "search.advanced.hint": "Try: /final.*vii/i year:2013 hours:>10",
   "search.filter.genre": "genre",
   "search.filter.status": "status",
   "search.filter.hours": "hours",

@@ -194,7 +194,7 @@ const it: Record<keyof typeof en, string> = {
   "review.clear": "Rimuovi voto",
 
   // Search
-  "search.advanced.hint": "Prova: genre:rpg status:playing hours:>10",
+  "search.advanced.hint": "Prova: /final.*vii/i year:2013 hours:>10",
   "search.filter.genre": "genere",
   "search.filter.status": "stato",
   "search.filter.hours": "ore",

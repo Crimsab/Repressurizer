@@ -1,7 +1,7 @@
-import type { Page } from "@playwright/test";
+import type { Page, Route } from "@playwright/test";
 
 export async function installTauriMock(page: Page) {
-  await page.route("https://steamcdn-a.akamaihd.net/steam/apps/*/header.jpg", async (route) => {
+  const fulfillSteamHeader = async (route: Route) => {
     const appId = route.request().url().match(/\/apps\/(\d+)\//)?.[1] ?? "0";
     const hue = Number(appId) % 360;
     const svg = `
@@ -18,14 +18,18 @@ export async function installTauriMock(page: Page) {
       </svg>
     `;
     await route.fulfill({ contentType: "image/svg+xml", body: svg });
-  });
+  };
+
+  await page.route("https://cdn.akamai.steamstatic.com/steam/apps/*/header.jpg", fulfillSteamHeader);
+  await page.route("https://steamcdn-a.akamaihd.net/steam/apps/*/header.jpg", fulfillSteamHeader);
+  await page.route("https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/**/header.jpg*", fulfillSteamHeader);
 
   await page.addInitScript(() => {
     const settings = {
       steamPath: "C:\\\\Program Files (x86)\\\\Steam",
       steamId3: "123456",
       steamId64: "76561198000000000",
-      apiKey: "",
+      apiKey: "mock-key",
       setupComplete: true,
       showDynamicCategories: false,
       pinFavorites: true,
@@ -48,6 +52,8 @@ export async function installTauriMock(page: Page) {
       { appid: 10, name: "Disco Elysium", playtime_forever: 720, img_icon_url: null, rtime_last_played: 1_775_000_000 },
       { appid: 20, name: "Hades", playtime_forever: 1800, img_icon_url: null, rtime_last_played: 1_776_000_000 },
       { appid: 30, name: "Outer Wilds", playtime_forever: 0, img_icon_url: null, rtime_last_played: 0 },
+      { appid: 12100, name: "Grand Theft Auto III", playtime_forever: 90, img_icon_url: null, rtime_last_played: 0 },
+      { appid: 1546970, name: "Grand Theft Auto III – The Definitive Edition", playtime_forever: 0, img_icon_url: null, rtime_last_played: 0 },
     ];
 
     const collections = [
@@ -55,7 +61,7 @@ export async function installTauriMock(page: Page) {
         id: "rpg",
         key: "rpg",
         name: "RPG",
-        added: [10],
+        added: [10, 39140],
         removed: [],
         timestamp: 1,
         is_deleted: false,
@@ -96,6 +102,35 @@ export async function installTauriMock(page: Page) {
         switch (cmd) {
           case "fetch_library":
             return games;
+          case "fetch_game_details": {
+            const appId = Number(args?.appId ?? args?.app_id ?? 0);
+            const names: Record<number, string> = {
+              10: "Disco Elysium",
+              20: "Hades",
+              30: "Outer Wilds",
+              40: "It Takes Two",
+              12100: "Grand Theft Auto III",
+              39140: "FINAL FANTASY VII",
+              1546970: "Grand Theft Auto III – The Definitive Edition",
+            };
+            return {
+              app_id: appId,
+              name: names[appId] ?? `App ${appId}`,
+              genres: appId === 39140 ? ["RPG"] : ["Adventure"],
+              categories: ["Single-player"],
+              release_date: appId === 39140 ? "Jul 24, 2013" : "Jan 4, 2008",
+              metacritic_score: appId === 12100 ? 93 : null,
+              developers: ["Mock Studio"],
+              publishers: ["Mock Publisher"],
+              platforms: { windows: true, mac: false, linux: false },
+              header_image: `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appId}/header.jpg`,
+              capsule_image: `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appId}/capsule_231x87.jpg`,
+              price_initial: null,
+              price_final: null,
+              price_currency: null,
+              is_free: false,
+            };
+          }
           case "load_collections":
             return collections;
           case "create_manual_backup":

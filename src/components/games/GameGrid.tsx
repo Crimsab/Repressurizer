@@ -7,12 +7,14 @@ import { useHltbStore } from "../../stores/hltbStore";
 import { useAchievementsStore } from "../../stores/achievementsStore";
 import { useReviewStore } from "../../stores/reviewStore";
 import { useFamilyStore } from "../../stores/familyStore";
+import { MAX_FAIL_RUNS, useFailedGamesStore } from "../../stores/failedGamesStore";
 import { GameCard } from "./GameCard";
 import { ContextMenu } from "./ContextMenu";
 import { GameDetailPage } from "./GameDetailPage";
 import type { OwnedGame } from "../../lib/types";
 import { Spinner, MagnifyingGlass, FolderOpen, Clock, UsersThree } from "@phosphor-icons/react";
-import { parseSearchQuery, matchesFilter, hasAdvancedFilters } from "../../lib/search";
+import { extractReleaseYear, parseSearchQuery, matchesFilter, hasAdvancedFilters } from "../../lib/search";
+import { possibleDuplicateAppIds } from "../../lib/gameIdentity";
 
 interface ContextMenuState {
   x: number;
@@ -37,11 +39,22 @@ export function GameGrid() {
   const details = useGameStore((s) => s.details);
   const reviews = useReviewStore((s) => s.reviews);
   const familyApps = useFamilyStore((s) => s.apps);
+  const failedGames = useFailedGamesStore((s) => s.fails);
   const { activeCategory, collections } = useCategoryStore();
   const lastClickedId = useRef<number | null>(null);
 
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [detailGame, setDetailGame] = useState<OwnedGame | null>(null);
+  const duplicateAppIds = useMemo(() => possibleDuplicateAppIds(Object.values(games)), [games]);
+  const delistedAppIds = useMemo(
+    () =>
+      new Set(
+        Object.entries(failedGames)
+          .filter(([, count]) => count >= MAX_FAIL_RUNS)
+          .map(([id]) => Number(id))
+      ),
+    [failedGames]
+  );
 
   const handleContextMenu = useCallback((e: React.MouseEvent, game: OwnedGame) => {
     e.preventDefault();
@@ -95,7 +108,13 @@ export function GameGrid() {
       if (hasAdvancedFilters(searchQuery)) {
         const filter = parseSearchQuery(searchQuery);
         gameList = gameList.filter((g) =>
-          matchesFilter(g, details[g.appid], statuses, allGameTags, reviews, filter)
+          matchesFilter(g, details[g.appid], statuses, allGameTags, reviews, filter, {
+            hltbData,
+            achievements: achievementSummaries,
+            familyApps,
+            duplicateAppIds,
+            delistedAppIds,
+          })
         );
       } else {
         const q = searchQuery.toLowerCase();
@@ -141,6 +160,67 @@ export function GameGrid() {
         if (filters.maxHltbHours !== null && hours > filters.maxHltbHours) return false;
         return true;
       });
+    }
+
+    if (filters.minReleaseYear !== null || filters.maxReleaseYear !== null) {
+      gameList = gameList.filter((g) => {
+        const year = extractReleaseYear(details[g.appid]?.release_date);
+        if (year == null) return false;
+        if (filters.minReleaseYear !== null && year < filters.minReleaseYear) return false;
+        if (filters.maxReleaseYear !== null && year > filters.maxReleaseYear) return false;
+        return true;
+      });
+    }
+
+    if (filters.platforms.length > 0) {
+      gameList = gameList.filter((g) => {
+        const platforms = details[g.appid]?.platforms;
+        return !!platforms && filters.platforms.some((platform) => platforms[platform]);
+      });
+    }
+
+    if (filters.minMetacritic !== null || filters.maxMetacritic !== null) {
+      gameList = gameList.filter((g) => {
+        const score = details[g.appid]?.metacritic_score ?? null;
+        if (score == null) return false;
+        if (filters.minMetacritic !== null && score < filters.minMetacritic) return false;
+        if (filters.maxMetacritic !== null && score > filters.maxMetacritic) return false;
+        return true;
+      });
+    }
+
+    if (filters.minAchievementPct !== null || filters.maxAchievementPct !== null) {
+      gameList = gameList.filter((g) => {
+        const summary = achievementSummaries[g.appid];
+        if (!summary || summary.total <= 0) return false;
+        const pct = (summary.achieved / summary.total) * 100;
+        if (filters.minAchievementPct !== null && pct < filters.minAchievementPct) return false;
+        if (filters.maxAchievementPct !== null && pct > filters.maxAchievementPct) return false;
+        return true;
+      });
+    }
+
+    if (filters.onlyFamilyShared) {
+      gameList = gameList.filter((g) => {
+        const familyApp = familyApps[g.appid];
+        return !!familyApp && familyApp.is_family_shared && familyApp.exclude_reason === 0;
+      });
+    }
+
+    if (filters.onlyPossibleDuplicates) {
+      gameList = gameList.filter((g) => duplicateAppIds.has(g.appid));
+    }
+
+    if (filters.onlyMissingDetails) {
+      gameList = gameList.filter((g) => !details[g.appid]);
+    }
+
+    if (filters.onlyDelisted) {
+      gameList = gameList.filter((g) => delistedAppIds.has(g.appid));
+    }
+
+    if (filters.onlyCollectionOnly) {
+      gameList = gameList.filter((g) => g.is_collection_only);
     }
 
     const STATUS_ORDER: Record<string, number> = {
@@ -193,7 +273,7 @@ export function GameGrid() {
     });
 
     return gameList;
-  }, [games, activeCategory, collections, familyApps, searchQuery, sortBy, sortAsc, filters, statuses, allGameTags, hltbData, achievementSummaries, details, reviews]);
+  }, [games, activeCategory, collections, familyApps, searchQuery, sortBy, sortAsc, filters, statuses, allGameTags, hltbData, achievementSummaries, details, reviews, duplicateAppIds, delistedAppIds]);
 
   const orderedIds = useMemo(() => filteredGames.map((g) => g.appid), [filteredGames]);
 
@@ -248,6 +328,7 @@ export function GameGrid() {
               onContextMenu={handleContextMenu}
               onDoubleClick={handleDoubleClick}
               onShiftClick={handleShiftClick}
+              isPossibleDuplicate={duplicateAppIds.has(game.appid)}
             />
           ))}
         </div>
@@ -263,6 +344,7 @@ export function GameGrid() {
               onContextMenu={handleContextMenu}
               onDoubleClick={handleDoubleClick}
               onShiftClick={handleShiftClick}
+              isPossibleDuplicate={duplicateAppIds.has(game.appid)}
             />
           ))}
         </div>
@@ -293,11 +375,13 @@ function GameListRow({
   onContextMenu,
   onDoubleClick,
   onShiftClick,
+  isPossibleDuplicate,
 }: {
   game: OwnedGame;
   onContextMenu: (e: React.MouseEvent, game: OwnedGame) => void;
   onDoubleClick: (game: OwnedGame) => void;
   onShiftClick?: (appId: number) => void;
+  isPossibleDuplicate?: boolean;
 }) {
   const toggleGameSelection = useGameStore((s) => s.toggleGameSelection);
   const clearSelection = useGameStore((s) => s.clearSelection);
@@ -352,6 +436,16 @@ function GameListRow({
       }`}
     >
       <span className="flex-1 truncate text-sm text-white">{String(game.name ?? "")}</span>
+      {(isPossibleDuplicate || game.is_collection_only) && (
+        <span className="shrink-0 rounded-md border border-repressurizer-border-subtle px-1.5 py-0.5 font-mono text-[10px] text-repressurizer-text-faint">
+          #{game.appid}
+        </span>
+      )}
+      {game.is_collection_only && (
+        <span className="shrink-0 rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-300">
+          Local
+        </span>
+      )}
       {status !== "none" && (
         <span className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-medium ${statusMeta.color} ${statusMeta.bg}`}>
           {statusMeta.label}

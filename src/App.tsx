@@ -17,6 +17,7 @@ import { useHltbIgnoredStore } from "./stores/hltbIgnoredStore";
 import { useToastStore } from "./stores/toastStore";
 import { useFamilyStore } from "./stores/familyStore";
 import { fetchLibrary, loadCollections, createManualBackup } from "./lib/tauri";
+import { mergeCollectionOnlyGames } from "./lib/libraryMerge";
 import { useT } from "./lib/i18n";
 import { SetupWizard } from "./components/setup/SetupWizard";
 import { Header } from "./components/layout/Header";
@@ -215,7 +216,8 @@ function AppContent() {
       ])
         .then(([games, collections]) => {
           const familyGames = useFamilyStore.getState().sharedGamesAsOwned();
-          const mergedGames = [...games, ...familyGames];
+          const cachedDetails = useGameStore.getState().details;
+          const mergedGames = mergeCollectionOnlyGames([...games, ...familyGames], collections, cachedDetails);
           console.log("Reloaded:", mergedGames.length, "games,", collections.length, "collections");
           setGames(mergedGames);
           setCollections(collections);
@@ -233,7 +235,6 @@ function AppContent() {
 
           // Auto-start background fetches after library loads
           const { startDetailsFetch, startHltbFetch } = useBackgroundFetchStore.getState();
-          const cachedDetails = useGameStore.getState().details;
           const cachedHltb = useHltbStore.getState().data;
 
           if (settings.apiKey) {

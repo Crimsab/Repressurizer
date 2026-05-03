@@ -35,6 +35,7 @@ export interface OwnedGame {
   playtime_forever: number;
   img_icon_url: string | null;
   rtime_last_played: number;
+  is_collection_only?: boolean;
 }
 
 export interface GameDetails {
