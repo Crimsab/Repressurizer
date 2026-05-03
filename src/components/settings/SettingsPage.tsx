@@ -7,6 +7,7 @@ import { useSettingsStore } from "../../stores/settingsStore";
 import { useGameStore } from "../../stores/gameStore";
 import { useCategoryStore } from "../../stores/categoryStore";
 import { useFamilyStore } from "../../stores/familyStore";
+import { familyAppsToOwnedGames } from "../../lib/familyLibrary";
 import { useFailedGamesStore, getIgnoredGameName, MAX_FAIL_RUNS } from "../../stores/failedGamesStore";
 import { useHltbIgnoredStore, getHltbIgnoredGameName, HLTB_MAX_FAILS } from "../../stores/hltbIgnoredStore";
 
@@ -225,17 +226,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
       const result = await fetchFamilyLibrary(settings.apiKey, familyAccessToken.trim() || undefined);
       setFamilyResult(result);
       useFamilyStore.getState().setResult(result);
-      mergeGames(
-        result.apps
-          .filter((app) => app.is_family_shared && app.exclude_reason === 0)
-          .map((app) => ({
-            appid: app.appid,
-            name: app.name?.trim() || `App ${app.appid}`,
-            playtime_forever: 0,
-            img_icon_url: null,
-            rtime_last_played: 0,
-          }))
-      );
+      mergeGames(familyAppsToOwnedGames(result.apps));
       setMessage(`Steam Family loaded with ${result.auth_used}.`);
     } catch (e) {
       setMessage(`Steam Family probe failed: ${e}`);
@@ -608,7 +599,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
 
               {/* About */}
               <div className="border-t border-repressurizer-border pt-5 text-xs text-repressurizer-text-muted">
-                <p className="font-medium text-repressurizer-text">Repressurizer v0.1.0</p>
+                <p className="font-medium text-repressurizer-text">Repressurizer v{__APP_VERSION__}</p>
                 <p className="mt-1 text-repressurizer-text-faint">Personal Steam Library Manager</p>
                 <p className="text-repressurizer-text-faint">Dynamic categories (prefixed with ~) are managed by Steam and are read-only.</p>
               </div>

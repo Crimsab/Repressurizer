@@ -8,10 +8,14 @@
     "dev": "vite",
     "build": "vite build",
     "check": "tsc --noEmit",
+    "test": "bun run test:unit && bun run test:e2e",
+    "test:unit": "vitest run src",
+    "test:e2e": "playwright test",
     "preview": "vite preview",
     "tauri": "tauri"
   },
   "devDependencies": {
+    "@playwright/test": "^1.59.1",
     "@tailwindcss/vite": "^4.2.4",
     "@tauri-apps/cli": "^2.11.0",
     "@types/react": "^19.2.14",
@@ -19,7 +23,8 @@
     "@vitejs/plugin-react": "^5.2.0",
     "tailwindcss": "^4.2.4",
     "typescript": "~5.9.3",
-    "vite": "^7.3.2"
+    "vite": "^7.3.2",
+    "vitest": "^4.1.5"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.2.8",

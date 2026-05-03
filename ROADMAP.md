@@ -19,6 +19,7 @@
 - Export redacted diagnostics for support. [done]
 - In-app update check/install backed by GitHub Releases. [done]
 - Steam Family library probe, cache, smart list, and shared-game badges. [done]
+- Unit tests and Playwright browser smoke tests for release safety. [done]
 
 ## Future Features
 

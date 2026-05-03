@@ -35,8 +35,12 @@ Use Bun for JavaScript dependencies and scripts.
 ```bash
 bun install
 bun run check
+bun run test:unit
+bun run test:e2e
 bun run build
 ```
+
+`bun run test` runs both unit tests and the Playwright browser smoke checks. Playwright attaches dashboard/settings screenshots under `test-results/` for visual review.
 
 For a local Windows build:
 

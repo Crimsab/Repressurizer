@@ -2,6 +2,8 @@ node_modules/
 dist/
 artifacts/
 out/
+playwright-report/
+test-results/
 src-tauri/gen/
 src-tauri/target/
 *.log

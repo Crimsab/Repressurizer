@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { loadAppData, saveAppData } from "../lib/tauri";
 import type { FamilyLibraryApp, FamilyLibraryResult } from "../lib/tauri";
 import type { OwnedGame } from "../lib/types";
+import { familyAppToOwnedGame, isSharedFamilyApp } from "../lib/familyLibrary";
 
 const STORAGE_KEY = "steam_family.json";
 
@@ -32,16 +33,6 @@ function toMap(apps: FamilyLibraryApp[]): Record<number, FamilyLibraryApp> {
     map[app.appid] = app;
   }
   return map;
-}
-
-function toOwnedGame(app: FamilyLibraryApp): OwnedGame {
-  return {
-    appid: app.appid,
-    name: app.name?.trim() || `App ${app.appid}`,
-    playtime_forever: 0,
-    img_icon_url: null,
-    rtime_last_played: 0,
-  };
 }
 
 function persist(cache: FamilyCache) {
@@ -97,14 +88,14 @@ export const useFamilyStore = create<FamilyState>((set, get) => ({
 
   isFamilyShared: (appId) => {
     const app = get().apps[appId];
-    return !!app && app.is_family_shared && app.exclude_reason === 0;
+    return !!app && isSharedFamilyApp(app);
   },
 
   sharedCount: () =>
-    Object.values(get().apps).filter((app) => app.is_family_shared && app.exclude_reason === 0).length,
+    Object.values(get().apps).filter(isSharedFamilyApp).length,
 
   sharedGamesAsOwned: () =>
     Object.values(get().apps)
-      .filter((app) => app.is_family_shared && app.exclude_reason === 0)
-      .map(toOwnedGame),
+      .filter(isSharedFamilyApp)
+      .map(familyAppToOwnedGame),
 }));
