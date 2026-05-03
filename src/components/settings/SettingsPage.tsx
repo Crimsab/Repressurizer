@@ -51,6 +51,11 @@ interface SettingsPageProps {
   onClose: () => void;
 }
 
+function redactTail(value: string | null | undefined): string | null {
+  if (!value) return null;
+  return `***${value.slice(-4)}`;
+}
+
 export function SettingsPage({ onClose }: SettingsPageProps) {
   const settings = useSettingsStore();
   const gameCount = useGameStore((s) => Object.keys(s.games).length);
@@ -222,19 +227,41 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
     setFamilyChecking(true);
     setFamilyResult(null);
     setMessage("");
+    const startedAt = performance.now();
+    console.groupCollapsed("[Repressurizer] Steam Family probe");
+    console.info("Starting Steam Family probe", {
+      hasApiKey: Boolean(settings.apiKey),
+      hasStoreWebApiToken: Boolean(familyAccessToken.trim()),
+      steamId64: redactTail(settings.steamId64),
+    });
     try {
       const result = await fetchFamilyLibrary(
         settings.apiKey,
         familyAccessToken.trim() || undefined,
         settings.steamId64 || undefined
       );
+      console.info("Steam Family probe result", {
+        authUsed: result.auth_used,
+        familyGroupId: redactTail(result.family_groupid),
+        ownerSteamId: redactTail(result.owner_steamid),
+        totalApps: result.total_apps,
+        ownedApps: result.owned_apps,
+        sharedApps: result.shared_apps,
+        excludedApps: result.excluded_apps,
+        durationMs: Math.round(performance.now() - startedAt),
+      });
       setFamilyResult(result);
       useFamilyStore.getState().setResult(result);
       mergeGames(familyAppsToOwnedGames(result.apps));
       setMessage(`Steam Family loaded with ${result.auth_used}.`);
     } catch (e) {
+      console.error("Steam Family probe failed", {
+        error: String(e),
+        durationMs: Math.round(performance.now() - startedAt),
+      });
       setMessage(`Steam Family probe failed: ${e}`);
     } finally {
+      console.groupEnd();
       setFamilyChecking(false);
     }
   };
