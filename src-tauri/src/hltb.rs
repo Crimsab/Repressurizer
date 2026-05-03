@@ -139,8 +139,36 @@ fn hltb_game_to_data(game: &HltbGame, confidence: f32) -> HltbData {
     }
 }
 
+fn collapse_dotted_acronyms(value: &str) -> String {
+    let chars: Vec<char> = value.chars().collect();
+    let mut out = String::with_capacity(value.len());
+    let mut i = 0;
+
+    while i < chars.len() {
+        if chars[i].is_ascii_alphabetic() && i + 1 < chars.len() && chars[i + 1] == '.' {
+            let mut letters = String::new();
+            let mut j = i;
+            while j + 1 < chars.len() && chars[j].is_ascii_alphabetic() && chars[j + 1] == '.' {
+                letters.push(chars[j]);
+                j += 2;
+            }
+
+            if letters.len() >= 3 {
+                out.push_str(&letters);
+                i = j;
+                continue;
+            }
+        }
+
+        out.push(chars[i]);
+        i += 1;
+    }
+
+    out
+}
+
 fn clean_title(value: &str) -> String {
-    value
+    collapse_dotted_acronyms(value)
         .replace(['™', '®', '©'], "")
         .replace('&', " and ")
         .replace(
@@ -674,6 +702,10 @@ mod tests {
             normalize_for_match("Dragon Quest VII Reimagined (2026)"),
             "dragon quest vii reimagined"
         );
+        assert_eq!(
+            normalize_for_match("S.T.A.L.K.E.R.: Shadow of Chernobyl"),
+            "stalker shadow of chernobyl"
+        );
     }
 
     #[test]
@@ -780,6 +812,14 @@ mod tests {
             death["searchTerms"],
             json!(["Death", "Stranding", "2", "On", "The", "Beach"])
         );
+
+        let stalker = query_variants("S.T.A.L.K.E.R. 2: Heart of Chornobyl");
+        assert!(stalker
+            .iter()
+            .any(|v| normalize_for_match(v) == "stalker 2 heart of chornobyl"));
+        assert!(stalker
+            .iter()
+            .any(|v| normalize_for_match(v) == "stalker 2"));
     }
 
     #[tokio::test]
@@ -907,6 +947,50 @@ mod tests {
         assert!(
             found >= 3,
             "expected at least 3 live HLTB matches, got {found}"
+        );
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn live_hltb_smoke_stalker_titles() {
+        if std::env::var("REPRESSURIZER_HLTB_LIVE").ok().as_deref() != Some("1") {
+            eprintln!("set REPRESSURIZER_HLTB_LIVE=1 to run the live HLTB smoke test");
+            return;
+        }
+
+        let client = reqwest::Client::builder()
+            .user_agent(UA)
+            .build()
+            .expect("client");
+        let cases = [
+            (
+                "S.T.A.L.K.E.R.: Shadow of Chernobyl",
+                Some(4500),
+                Some(2007),
+            ),
+            ("S.T.A.L.K.E.R.: Clear Sky", Some(20510), Some(2008)),
+            ("S.T.A.L.K.E.R.: Call of Pripyat", Some(41700), Some(2010)),
+            (
+                "S.T.A.L.K.E.R. 2: Heart of Chornobyl",
+                Some(1643320),
+                Some(2024),
+            ),
+        ];
+
+        let mut found = 0;
+        for (name, app_id, year) in cases {
+            let result = fetch_hltb_inner(&client, &default_endpoints(), name, app_id, year)
+                .await
+                .expect("live lookup should not error");
+            eprintln!("HLTB live STALKER: {name} -> {result:?}");
+            if result.is_some() {
+                found += 1;
+            }
+        }
+
+        assert!(
+            found >= 3,
+            "expected at least 3 live STALKER HLTB matches, got {found}"
         );
     }
 }
