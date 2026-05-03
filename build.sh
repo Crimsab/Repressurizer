@@ -7,13 +7,14 @@ export PATH="/root/.cargo/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 cd "$(dirname "$0")"
 
 echo "=== Building Repressurizer for Windows ==="
+VERSION="$(bun -e "console.log(JSON.parse(require('fs').readFileSync('package.json', 'utf8')).version)")"
 
 echo "→ Frontend + Rust cross-compile..."
 bunx @tauri-apps/cli build --runner cargo-xwin --target x86_64-pc-windows-msvc 2>&1 | grep -E "(Compiling repressurizer|Finished|Built|error|warning.*repressurizer)"
 
 TARGET_DIR="src-tauri/target/x86_64-pc-windows-msvc/release"
 EXE="$TARGET_DIR/repressurizer.exe"
-INSTALLER="$TARGET_DIR/bundle/nsis/Repressurizer_0.1.0_x64-setup.exe"
+INSTALLER="$TARGET_DIR/bundle/nsis/Repressurizer_${VERSION}_x64-setup.exe"
 OUT_DIR="artifacts"
 
 if [ -f "$EXE" ]; then
