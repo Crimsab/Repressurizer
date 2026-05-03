@@ -69,13 +69,14 @@ jobs:
         run: bun run check
 
       - name: Build portable executable
-        run: bun tauri build --no-bundle
+        run: bun tauri build --debug --no-bundle
 
       - name: Collect preview artifacts
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path artifacts
-          Copy-Item src-tauri\target\release\repressurizer.exe artifacts\Repressurizer-preview-portable.exe
+          Copy-Item src-tauri\target\debug\repressurizer.exe artifacts\Repressurizer-preview-portable-debug.exe
+          Copy-Item artifacts\Repressurizer-preview-portable-debug.exe artifacts\Repressurizer-preview-portable.exe
           Compress-Archive -Path artifacts\Repressurizer-preview-portable.exe -DestinationPath artifacts\Repressurizer-preview-portable-windows-x64.zip -Force
 
           $metadata = [ordered]@{
@@ -84,7 +85,8 @@ jobs:
             commit = "${{ github.sha }}"
             ref = "${{ github.ref_name }}"
             built_at = (Get-Date).ToUniversalTime().ToString("o")
-            notes = "Portable preview build; no installer or updater manifest."
+            profile = "debug"
+            notes = "Debug portable preview build; no installer or updater manifest."
           }
           $metadata | ConvertTo-Json -Depth 4 | Set-Content -Path artifacts\preview-build.json -Encoding utf8
           Get-ChildItem artifacts | ForEach-Object { "$($_.Name) $($_.Length) bytes" }
