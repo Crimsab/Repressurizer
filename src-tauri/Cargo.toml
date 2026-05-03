@@ -27,3 +27,6 @@ sha2 = "0.10"
 base64 = "0.22"
 chrono = "0.4"
 dirs = "6"
+
+[dev-dependencies]
+wiremock = "0.6"

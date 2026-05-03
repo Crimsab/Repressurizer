@@ -223,7 +223,11 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
     setFamilyResult(null);
     setMessage("");
     try {
-      const result = await fetchFamilyLibrary(settings.apiKey, familyAccessToken.trim() || undefined);
+      const result = await fetchFamilyLibrary(
+        settings.apiKey,
+        familyAccessToken.trim() || undefined,
+        settings.steamId64 || undefined
+      );
       setFamilyResult(result);
       useFamilyStore.getState().setResult(result);
       mergeGames(familyAppsToOwnedGames(result.apps));
@@ -362,7 +366,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-repressurizer-text">Probe shared family library</p>
                       <p className="mt-0.5 text-xs leading-relaxed text-repressurizer-text-faint">
-                        First tries your Steam Web API key. If Valve rejects it, paste a temporary Steam Store webapi token from an authenticated browser session.
+                        Uses your Steam Store webapi_token to resolve the real family group before loading shared apps. A normal Steam Web API key is only a fallback.
                       </p>
                     </div>
                   </div>
@@ -371,7 +375,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                       type="password"
                       value={familyAccessToken}
                       onChange={(e) => setFamilyAccessToken(e.target.value)}
-                      placeholder="Optional Steam Store access token"
+                      placeholder="Steam Store webapi_token"
                       className="min-w-0 flex-1 rounded-lg border border-repressurizer-border bg-repressurizer-surface px-3 py-2 text-xs text-repressurizer-text placeholder:text-repressurizer-text-faint transition-colors focus:border-repressurizer-accent focus:outline-none"
                     />
                     <button

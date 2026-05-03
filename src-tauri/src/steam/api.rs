@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+use serde::{de, Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
 
 // === Achievement types ===
@@ -433,6 +433,7 @@ pub struct FamilyLibraryApp {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FamilyLibraryResult {
     pub auth_used: String,
+    pub family_groupid: Option<String>,
     pub owner_steamid: Option<String>,
     pub total_apps: usize,
     pub owned_apps: usize,
@@ -456,6 +457,132 @@ struct WishlistV1Item {
     added_date: u64,
     #[serde(default)]
     date_added: u64,
+}
+
+#[derive(Debug)]
+enum SteamFamilyAuth {
+    WebApiKey(String),
+    AccessToken(String),
+}
+
+impl SteamFamilyAuth {
+    fn from_inputs(api_key: String, access_token: Option<String>) -> Result<Self, String> {
+        let token = access_token.unwrap_or_default().trim().to_string();
+        if !token.is_empty() {
+            return Ok(Self::AccessToken(token));
+        }
+
+        let key = api_key.trim().to_string();
+        if !key.is_empty() {
+            return Ok(Self::WebApiKey(key));
+        }
+
+        Err("Missing Steam Web API key or Steam Store webapi_token".to_string())
+    }
+
+    fn auth_used(&self) -> &'static str {
+        match self {
+            Self::WebApiKey(_) => "web_api_key",
+            Self::AccessToken(_) => "access_token",
+        }
+    }
+
+    fn help_text(&self) -> &'static str {
+        match self {
+            Self::WebApiKey(_) => {
+                "Steam Families usually needs the authenticated user's Steam Store webapi_token; a normal Steam Web API key may be rejected."
+            }
+            Self::AccessToken(_) => "The Steam Store webapi_token may be expired or not tied to this Steam account.",
+        }
+    }
+
+    fn apply(&self, request: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
+        match self {
+            Self::WebApiKey(key) => request.query(&[("key", key.as_str())]),
+            Self::AccessToken(token) => request.query(&[("access_token", token.as_str())]),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+struct FamilyGroupResponse {
+    response: Option<FamilyGroupInner>,
+}
+
+#[derive(Debug, Deserialize)]
+struct FamilyGroupInner {
+    #[serde(default)]
+    is_not_member_of_any_group: bool,
+    #[serde(default, deserialize_with = "deserialize_optional_stringish")]
+    family_groupid: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct SharedLibraryResponse {
+    response: Option<SharedLibraryInner>,
+}
+
+#[derive(Debug, Deserialize)]
+struct SharedLibraryInner {
+    owner_steamid: Option<String>,
+    #[serde(default)]
+    apps: Vec<FamilyAppRaw>,
+}
+
+#[derive(Debug, Deserialize)]
+struct FamilyAppRaw {
+    #[serde(deserialize_with = "deserialize_u64ish")]
+    appid: u64,
+    name: Option<String>,
+    #[serde(default, deserialize_with = "deserialize_string_vec")]
+    owner_steamids: Vec<String>,
+    #[serde(default)]
+    exclude_reason: u32,
+}
+
+fn deserialize_u64ish<'de, D>(deserializer: D) -> Result<u64, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    match serde_json::Value::deserialize(deserializer)? {
+        serde_json::Value::Number(n) => n
+            .as_u64()
+            .ok_or_else(|| de::Error::custom("expected unsigned integer")),
+        serde_json::Value::String(s) => s
+            .parse::<u64>()
+            .map_err(|_| de::Error::custom("expected unsigned integer string")),
+        other => Err(de::Error::custom(format!(
+            "expected integer, got {}",
+            other
+        ))),
+    }
+}
+
+fn deserialize_optional_stringish<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = Option::<serde_json::Value>::deserialize(deserializer)?;
+    Ok(value.and_then(|v| match v {
+        serde_json::Value::String(s) if !s.trim().is_empty() => Some(s),
+        serde_json::Value::Number(n) => Some(n.to_string()),
+        _ => None,
+    }))
+}
+
+fn deserialize_string_vec<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let values = Vec::<serde_json::Value>::deserialize(deserializer)?;
+    Ok(values
+        .into_iter()
+        .filter_map(|value| match value {
+            serde_json::Value::String(s) => Some(s),
+            serde_json::Value::Number(n) => Some(n.to_string()),
+            _ => None,
+        })
+        .collect())
 }
 
 #[tauri::command]
@@ -525,102 +652,49 @@ pub async fn fetch_wishlist(steam_id64: String) -> Result<Vec<WishlistItem>, Str
 pub async fn fetch_family_library(
     api_key: String,
     access_token: Option<String>,
+    steam_id64: Option<String>,
 ) -> Result<FamilyLibraryResult, String> {
-    let token = access_token.unwrap_or_default();
-    let use_access_token = !token.trim().is_empty();
-    let auth_value = if use_access_token { token.trim() } else { api_key.trim() };
-
-    if auth_value.is_empty() {
-        return Err("Missing Steam Web API key or Steam Store access token".to_string());
-    }
-
-    #[derive(Debug, Deserialize)]
-    struct FamilyResponse {
-        response: Option<FamilyInner>,
-    }
-
-    #[derive(Debug, Deserialize)]
-    struct FamilyInner {
-        owner_steamid: Option<String>,
-        #[serde(default)]
-        apps: Vec<FamilyAppRaw>,
-    }
-
-    #[derive(Debug, Deserialize)]
-    struct FamilyAppRaw {
-        appid: u64,
-        name: Option<String>,
-        #[serde(default)]
-        owner_steamids: Vec<String>,
-        #[serde(default)]
-        exclude_reason: u32,
-    }
-
     let client = reqwest::Client::builder()
         .user_agent("Repressurizer/0.1")
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
-    let mut request = client
-        .get("https://api.steampowered.com/IFamilyGroupsService/GetSharedLibraryApps/v1/")
-        .query(&[
-            ("family_groupid", "0"),
-            ("include_own", "true"),
-            ("include_excluded", "true"),
-            ("include_free", "true"),
-            ("include_non_games", "true"),
-            ("format", "json"),
-        ]);
+    fetch_family_library_from_base(
+        &client,
+        "https://api.steampowered.com",
+        api_key,
+        access_token,
+        steam_id64,
+    )
+    .await
+}
 
-    request = if use_access_token {
-        request.query(&[("access_token", auth_value)])
-    } else {
-        request.query(&[("key", auth_value)])
-    };
+async fn fetch_family_library_from_base(
+    client: &reqwest::Client,
+    base_url: &str,
+    api_key: String,
+    access_token: Option<String>,
+    steam_id64: Option<String>,
+) -> Result<FamilyLibraryResult, String> {
+    let auth = SteamFamilyAuth::from_inputs(api_key, access_token)?;
+    let steam_id64 = steam_id64.unwrap_or_default().trim().to_string();
+    let family_groupid = fetch_family_groupid(client, base_url, &auth, &steam_id64).await?;
+    let shared =
+        fetch_shared_family_apps(client, base_url, &auth, &family_groupid, &steam_id64).await?;
 
-    let response = request
-        .send()
-        .await
-        .map_err(|e| format!("Steam Family request failed: {}", e))?;
-
-    let status = response.status();
-    let text = response
-        .text()
-        .await
-        .map_err(|e| format!("Failed to read Steam Family response: {}", e))?;
-
-    if !status.is_success() {
-        return Err(format!(
-            "Steam Family API returned status {}: {}",
-            status,
-            text.chars().take(220).collect::<String>()
-        ));
-    }
-
-    if text.trim_start().starts_with('<') {
-        return Err("Steam Family API returned HTML instead of JSON".to_string());
-    }
-
-    let parsed: FamilyResponse =
-        serde_json::from_str(&text).map_err(|e| format!("Failed to parse Steam Family response: {}", e))?;
-    let inner = parsed
-        .response
-        .ok_or_else(|| "Steam Family response did not include a response object".to_string())?;
-
-    let owner_steamid = inner.owner_steamid;
     let mut owned_apps = 0usize;
     let mut shared_apps = 0usize;
     let mut excluded_apps = 0usize;
 
-    let apps = inner
+    let apps = shared
         .apps
         .into_iter()
         .map(|app| {
-            let is_owned_by_current_user = owner_steamid
-                .as_ref()
-                .is_some_and(|owner| app.owner_steamids.iter().any(|id| id == owner));
+            let is_owned_by_current_user =
+                !steam_id64.is_empty() && app.owner_steamids.iter().any(|id| id == &steam_id64);
+            let has_family_owner = app.owner_steamids.iter().any(|id| id != &steam_id64);
             let is_family_shared =
-                owner_steamid.is_some() && !is_owned_by_current_user && app.exclude_reason == 0;
+                app.exclude_reason == 0 && !is_owned_by_current_user && has_family_owner;
 
             if is_owned_by_current_user {
                 owned_apps += 1;
@@ -644,14 +718,277 @@ pub async fn fetch_family_library(
         .collect::<Vec<_>>();
 
     Ok(FamilyLibraryResult {
-        auth_used: if use_access_token { "access_token" } else { "web_api_key" }.to_string(),
-        owner_steamid,
+        auth_used: auth.auth_used().to_string(),
+        family_groupid: Some(family_groupid),
+        owner_steamid: if steam_id64.is_empty() {
+            shared.owner_steamid
+        } else {
+            Some(steam_id64)
+        },
         total_apps: apps.len(),
         owned_apps,
         shared_apps,
         excluded_apps,
         apps,
     })
+}
+
+async fn fetch_family_groupid(
+    client: &reqwest::Client,
+    base_url: &str,
+    auth: &SteamFamilyAuth,
+    steam_id64: &str,
+) -> Result<String, String> {
+    let url = steam_api_url(base_url, "IFamilyGroupsService/GetFamilyGroupForUser/v1/");
+    let mut request = auth.apply(client.get(url)).query(&[
+        ("include_family_group_response", "false"),
+        ("format", "json"),
+    ]);
+
+    if !steam_id64.is_empty() {
+        request = request.query(&[("steamid", steam_id64)]);
+    }
+
+    let text = send_family_request(request, "Steam Family group", auth).await?;
+    let parsed: FamilyGroupResponse = serde_json::from_str(&text)
+        .map_err(|e| format!("Failed to parse Steam Family group response: {}", e))?;
+    let inner = parsed.response.ok_or_else(|| {
+        "Steam Family group response did not include a response object".to_string()
+    })?;
+
+    if inner.is_not_member_of_any_group {
+        return Err("This Steam account is not a member of a Steam Family group.".to_string());
+    }
+
+    inner.family_groupid.filter(|id| id != "0").ok_or_else(|| {
+        "Steam Family group response did not include a valid family_groupid.".to_string()
+    })
+}
+
+async fn fetch_shared_family_apps(
+    client: &reqwest::Client,
+    base_url: &str,
+    auth: &SteamFamilyAuth,
+    family_groupid: &str,
+    steam_id64: &str,
+) -> Result<SharedLibraryInner, String> {
+    let url = steam_api_url(base_url, "IFamilyGroupsService/GetSharedLibraryApps/v1/");
+    let mut request = auth.apply(client.get(url)).query(&[
+        ("family_groupid", family_groupid),
+        ("include_own", "true"),
+        ("include_excluded", "true"),
+        ("include_free", "true"),
+        ("include_non_games", "true"),
+        ("language", "english"),
+        ("format", "json"),
+    ]);
+
+    if !steam_id64.is_empty() {
+        request = request.query(&[("steamid", steam_id64)]);
+    }
+
+    let text = send_family_request(request, "Steam Family library", auth).await?;
+    let parsed: SharedLibraryResponse = serde_json::from_str(&text)
+        .map_err(|e| format!("Failed to parse Steam Family library response: {}", e))?;
+
+    parsed.response.ok_or_else(|| {
+        "Steam Family library response did not include a response object".to_string()
+    })
+}
+
+fn steam_api_url(base_url: &str, path: &str) -> String {
+    format!(
+        "{}/{}",
+        base_url.trim_end_matches('/'),
+        path.trim_start_matches('/')
+    )
+}
+
+async fn send_family_request(
+    request: reqwest::RequestBuilder,
+    context: &str,
+    auth: &SteamFamilyAuth,
+) -> Result<String, String> {
+    let response = request
+        .send()
+        .await
+        .map_err(|e| format!("{} request failed: {}", context, e))?;
+
+    let status = response.status();
+    let text = response
+        .text()
+        .await
+        .map_err(|e| format!("Failed to read {} response: {}", context, e))?;
+
+    if !status.is_success() {
+        return Err(format!(
+            "{} API returned status {}: {} {}",
+            context,
+            status,
+            text.chars().take(220).collect::<String>(),
+            auth.help_text()
+        ));
+    }
+
+    if text.trim_start().starts_with('<') {
+        return Err(format!(
+            "{} API returned HTML instead of JSON. {}",
+            context,
+            auth.help_text()
+        ));
+    }
+
+    Ok(text)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+    use wiremock::matchers::{method, path, query_param};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    fn test_client() -> reqwest::Client {
+        reqwest::Client::builder()
+            .user_agent("Repressurizer/test")
+            .build()
+            .expect("test client")
+    }
+
+    #[tokio::test]
+    async fn family_library_resolves_group_before_fetching_apps() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/IFamilyGroupsService/GetFamilyGroupForUser/v1/"))
+            .and(query_param("access_token", "store-token"))
+            .and(query_param("steamid", "765000"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "response": {
+                    "is_not_member_of_any_group": false,
+                    "family_groupid": "123456"
+                }
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        Mock::given(method("GET"))
+            .and(path("/IFamilyGroupsService/GetSharedLibraryApps/v1/"))
+            .and(query_param("access_token", "store-token"))
+            .and(query_param("family_groupid", "123456"))
+            .and(query_param("steamid", "765000"))
+            .and(query_param("include_own", "true"))
+            .and(query_param("include_excluded", "true"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "response": {
+                    "apps": [
+                        {
+                            "appid": "620",
+                            "name": "Portal 2",
+                            "owner_steamids": ["765111"],
+                            "exclude_reason": 0
+                        },
+                        {
+                            "appid": 70,
+                            "name": "Half-Life",
+                            "owner_steamids": ["765000"],
+                            "exclude_reason": 0
+                        },
+                        {
+                            "appid": 400,
+                            "name": "Portal",
+                            "owner_steamids": ["765111"],
+                            "exclude_reason": 3
+                        }
+                    ]
+                }
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let result = fetch_family_library_from_base(
+            &test_client(),
+            &server.uri(),
+            String::new(),
+            Some("store-token".to_string()),
+            Some("765000".to_string()),
+        )
+        .await
+        .expect("family library");
+
+        assert_eq!(result.auth_used, "access_token");
+        assert_eq!(result.family_groupid.as_deref(), Some("123456"));
+        assert_eq!(result.owner_steamid.as_deref(), Some("765000"));
+        assert_eq!(result.total_apps, 3);
+        assert_eq!(result.owned_apps, 1);
+        assert_eq!(result.shared_apps, 1);
+        assert_eq!(result.excluded_apps, 1);
+        assert!(result
+            .apps
+            .iter()
+            .any(|app| app.appid == 620 && app.is_family_shared));
+        assert!(result
+            .apps
+            .iter()
+            .any(|app| app.appid == 70 && app.is_owned_by_current_user));
+    }
+
+    #[tokio::test]
+    async fn family_library_reports_not_member() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/IFamilyGroupsService/GetFamilyGroupForUser/v1/"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "response": {
+                    "is_not_member_of_any_group": true,
+                    "family_groupid": "0"
+                }
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let error = fetch_family_library_from_base(
+            &test_client(),
+            &server.uri(),
+            String::new(),
+            Some("store-token".to_string()),
+            Some("765000".to_string()),
+        )
+        .await
+        .expect_err("not member");
+
+        assert!(error.contains("not a member"));
+    }
+
+    #[tokio::test]
+    async fn family_library_explains_web_api_key_rejections() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/IFamilyGroupsService/GetFamilyGroupForUser/v1/"))
+            .and(query_param("key", "developer-key"))
+            .respond_with(ResponseTemplate::new(403).set_body_string("Access is denied"))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let error = fetch_family_library_from_base(
+            &test_client(),
+            &server.uri(),
+            "developer-key".to_string(),
+            None,
+            Some("765000".to_string()),
+        )
+        .await
+        .expect_err("rejected key");
+
+        assert!(error.contains("webapi_token"));
+        assert!(error.contains("normal Steam Web API key"));
+    }
 }
 
 // === Vanity URL resolver ===
@@ -674,9 +1011,14 @@ pub async fn resolve_vanity_url(api_key: String, vanity_url: String) -> Result<S
         .map_err(|e| e.to_string())?;
 
     #[derive(Deserialize)]
-    struct VanityOuter { response: VanityInner }
+    struct VanityOuter {
+        response: VanityInner,
+    }
     #[derive(Deserialize)]
-    struct VanityInner { steamid: Option<String>, success: u32 }
+    struct VanityInner {
+        steamid: Option<String>,
+        success: u32,
+    }
 
     let resp: VanityOuter = serde_json::from_str(&text).map_err(|e| e.to_string())?;
     if resp.response.success == 1 {
@@ -714,9 +1056,13 @@ pub async fn fetch_player_summary(api_key: String, steam_id64: String) -> Result
         .map_err(|e| e.to_string())?;
 
     #[derive(Deserialize)]
-    struct Outer { response: Inner }
+    struct Outer {
+        response: Inner,
+    }
     #[derive(Deserialize)]
-    struct Inner { players: Vec<PlayerData> }
+    struct Inner {
+        players: Vec<PlayerData>,
+    }
     #[derive(Deserialize)]
     struct PlayerData {
         steamid: String,

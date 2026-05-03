@@ -319,6 +319,7 @@ export interface FamilyLibraryApp {
 
 export interface FamilyLibraryResult {
   auth_used: "web_api_key" | "access_token" | string;
+  family_groupid: string | null;
   owner_steamid: string | null;
   total_apps: number;
   owned_apps: number;
@@ -329,11 +330,13 @@ export interface FamilyLibraryResult {
 
 export async function fetchFamilyLibrary(
   apiKey: string,
-  accessToken?: string
+  accessToken?: string,
+  steamId64?: string
 ): Promise<FamilyLibraryResult> {
   return invoke<FamilyLibraryResult>("fetch_family_library", {
     apiKey,
     accessToken: accessToken || null,
+    steamId64: steamId64 || null,
   });
 }
 
