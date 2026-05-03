@@ -67,6 +67,12 @@ jobs:
           git tag -a "${{ steps.version.outputs.tag }}" -m "Repressurizer ${{ steps.version.outputs.tag }}"
           git push origin "${{ steps.version.outputs.tag }}"
 
+      - name: Trigger release workflow
+        if: steps.existing.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run release.yml --ref "${{ steps.version.outputs.tag }}"
+
       - name: Report existing tag
         if: steps.existing.outputs.exists == 'true'
         run: echo "Tag ${{ steps.version.outputs.tag }} already exists; skipping."
