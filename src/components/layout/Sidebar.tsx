@@ -1,0 +1,808 @@
+import { useState, useEffect, useRef, useCallback } from "react";
+import { useCategoryStore } from "../../stores/categoryStore";
+import { useGameStore } from "../../stores/gameStore";
+import { useSettingsStore } from "../../stores/settingsStore";
+import { useExportUiStore } from "../../stores/exportUiStore";
+import type { OwnedGame, SteamCollection } from "../../lib/types";
+import { GameDetailPage } from "../games/GameDetailPage";
+import { MergeCategoriesDialog } from "../categories/MergeCategoriesDialog";
+import {
+  GameController,
+  Question,
+  FolderOpen,
+  Plus,
+  PencilSimple,
+  TrashSimple,
+  Robot,
+  Stack,
+  Lightning,
+  EyeSlash,
+  Clock,
+  DotsSixVertical,
+  Export,
+  X,
+  ArrowsMerge,
+  CopySimple,
+} from "@phosphor-icons/react";
+import { getHeaderImageUrl } from "../../lib/tauri";
+import { useT } from "../../lib/i18n";
+
+interface CategoryContextMenuState {
+  x: number;
+  y: number;
+  collection: SteamCollection;
+}
+
+export function Sidebar() {
+  const {
+    collections,
+    activeCategory,
+    setActiveCategory,
+    addCategory,
+    removeCategory,
+    renameCategory,
+    addGamesToCategory,
+    selectedCategoryKeys,
+    toggleCategorySelection,
+    clearCategorySelection,
+    setSelectedCategoryKeys,
+    duplicateCategory,
+  } = useCategoryStore();
+
+  const games = useGameStore((s) => s.games);
+  const openExportDialog = useExportUiStore((s) => s.openExportDialog);
+  const selectedGameIds = useGameStore((s) => s.selectedGameIds);
+  const showDynamicCategories = useSettingsStore((s) => s.showDynamicCategories);
+  const pinFavorites = useSettingsStore((s) => s.pinFavorites);
+  const showSmartLists = useSettingsStore((s) => s.showSmartLists);
+  const showNowPlaying = useSettingsStore((s) => s.showNowPlaying);
+  const sidebarWidth = useSettingsStore((s) => s.sidebarWidth);
+  const setSettings = useSettingsStore((s) => s.setSettings);
+
+  const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
+
+  const handleResizeMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    dragRef.current = { startX: e.clientX, startWidth: sidebarWidth };
+
+    const onMouseMove = (ev: MouseEvent) => {
+      if (!dragRef.current) return;
+      const delta = ev.clientX - dragRef.current.startX;
+      const next = Math.min(400, Math.max(160, dragRef.current.startWidth + delta));
+      setSettings({ sidebarWidth: next });
+    };
+
+    const onMouseUp = () => {
+      dragRef.current = null;
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+  };
+
+  const t = useT();
+  const categoryOrder = useSettingsStore((s) => s.categoryOrder ?? []);
+
+  const [newCatName, setNewCatName] = useState("");
+  const [showNewCat, setShowNewCat] = useState(false);
+  const [detailGame, setDetailGame] = useState<OwnedGame | null>(null);
+  const [editingKey, setEditingKey] = useState<string | null>(null);
+  const [editName, setEditName] = useState("");
+  const [dragOver, setDragOver] = useState<string | null>(null);
+  const [contextMenu, setContextMenu] = useState<CategoryContextMenuState | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [showMerge, setShowMerge] = useState(false);
+  const [duplicateFor, setDuplicateFor] = useState<SteamCollection | null>(null);
+  const [duplicateName, setDuplicateName] = useState("");
+  const categoryAnchorRef = useRef<string | null>(null);
+
+  // Category reorder drag state
+  const [reorderDragKey, setReorderDragKey] = useState<string | null>(null);
+  const [reorderOverKey, setReorderOverKey] = useState<string | null>(null);
+
+  const handleCategoryDragStart = useCallback((key: string) => {
+    setReorderDragKey(key);
+  }, []);
+
+  const handleCategoryDragOver = useCallback((e: React.DragEvent, key: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setReorderOverKey(key);
+  }, []);
+
+  const handleCategoryDrop = useCallback((targetKey: string) => {
+    if (!reorderDragKey || reorderDragKey === targetKey) {
+      setReorderDragKey(null);
+      setReorderOverKey(null);
+      return;
+    }
+    // Compute new order
+    const currentOrder = sortedCollections.map((c) => c.key);
+    const fromIdx = currentOrder.indexOf(reorderDragKey);
+    const toIdx = currentOrder.indexOf(targetKey);
+    if (fromIdx === -1 || toIdx === -1) return;
+    const newOrder = [...currentOrder];
+    newOrder.splice(fromIdx, 1);
+    newOrder.splice(toIdx, 0, reorderDragKey);
+    setSettings({ categoryOrder: newOrder });
+    setReorderDragKey(null);
+    setReorderOverKey(null);
+  }, [reorderDragKey]);
+
+  const gameCount = Object.keys(games).length;
+  const allGameIds = Object.keys(games).map(Number);
+  const categorizedIds = new Set(collections.flatMap((c) => c.added));
+  const uncategorizedCount = allGameIds.filter((id) => !categorizedIds.has(id)).length;
+
+  const gameValues = Object.values(games);
+  const backlogCount = gameValues.filter((g) => g.playtime_forever === 0).length;
+  const thirtyDaysAgo = Math.floor(Date.now() / 1000) - 30 * 24 * 60 * 60;
+  const recentlyPlayedCount = gameValues.filter((g) => g.rtime_last_played > thirtyDaysAgo).length;
+
+  const oneDayAgo = Math.floor(Date.now() / 1000) - 24 * 60 * 60;
+  const nowPlayingGame = gameValues.reduce<(typeof gameValues)[0] | null>((best, g) => {
+    if (g.rtime_last_played <= oneDayAgo) return best;
+    if (!best || g.rtime_last_played > best.rtime_last_played) return g;
+    return best;
+  }, null);
+  const hiddenCollection = collections.find((c) => c.id === "hidden");
+  const hiddenCount = hiddenCollection?.added.length ?? 0;
+
+  const handleCreateCategory = () => {
+    if (newCatName.trim()) {
+      addCategory(newCatName.trim());
+      setNewCatName("");
+      setShowNewCat(false);
+    }
+  };
+
+  const handleDrop = (key: string) => {
+    const ids = Object.keys(selectedGameIds).map(Number);
+    if (ids.length > 0) {
+      addGamesToCategory(key, ids);
+    }
+    setDragOver(null);
+  };
+
+  const handleContextMenu = (e: React.MouseEvent, col: SteamCollection) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (col.is_dynamic) return;
+    if (
+      selectedCategoryKeys.length > 1 &&
+      !selectedCategoryKeys.includes(col.key)
+    ) {
+      clearCategorySelection();
+    }
+    setContextMenu({ x: e.clientX, y: e.clientY, collection: col });
+  };
+
+  useEffect(() => {
+    if (selectedCategoryKeys.length === 0) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if ((e.target as HTMLElement).tagName === "INPUT") return;
+      e.preventDefault();
+      clearCategorySelection();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [selectedCategoryKeys.length, clearCategorySelection]);
+
+  const visibleCollections = collections.filter(
+    (c) => c.id !== "hidden" && (showDynamicCategories || !c.is_dynamic)
+  );
+  const sortedCollections = [...visibleCollections].sort((a, b) => {
+    // Custom order takes priority if both items are in the order list
+    if (categoryOrder.length > 0) {
+      const aIdx = categoryOrder.indexOf(a.key);
+      const bIdx = categoryOrder.indexOf(b.key);
+      if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
+      if (aIdx !== -1) return -1;
+      if (bIdx !== -1) return 1;
+    }
+    if (pinFavorites) {
+      const aFav = a.id === "favorite" || a.key === "favorite" || a.name.toLowerCase() === "favorite" || a.name.toLowerCase() === "favorites";
+      const bFav = b.id === "favorite" || b.key === "favorite" || b.name.toLowerCase() === "favorite" || b.name.toLowerCase() === "favorites";
+      if (aFav && !bFav) return -1;
+      if (!aFav && bFav) return 1;
+    }
+    return a.name.localeCompare(b.name);
+  });
+
+  return (
+    <aside
+      className="relative flex flex-col border-r border-repressurizer-border-subtle bg-repressurizer-surface/50 shrink-0"
+      style={{ width: sidebarWidth }}
+    >
+      {/* Resize handle */}
+      <div
+        onMouseDown={handleResizeMouseDown}
+        className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-repressurizer-accent/30 transition-colors z-10"
+        title="Drag to resize"
+      />
+
+      <div className="flex-1 overflow-auto px-2 py-2">
+
+        {/* Now Playing */}
+        {showNowPlaying && nowPlayingGame && (
+          <button
+            onClick={() => setDetailGame(nowPlayingGame)}
+            className="mb-2 w-full overflow-hidden rounded-xl border border-repressurizer-border bg-repressurizer-surface text-left transition-all hover:border-repressurizer-accent/50 hover:bg-repressurizer-surface-hover group"
+          >
+            <div className="relative h-14 overflow-hidden">
+              <img
+                src={getHeaderImageUrl(nowPlayingGame.appid)}
+                alt=""
+                className="h-full w-full object-cover object-top opacity-90 group-hover:opacity-100 transition-opacity scale-105 group-hover:scale-100"
+                onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+              <span className="absolute top-1.5 right-1.5 rounded-md bg-repressurizer-accent px-1.5 py-0.5 text-[8px] font-bold text-black tracking-wide uppercase">
+                Recent
+              </span>
+            </div>
+            <div className="px-2.5 py-2">
+              <p className="truncate text-xs font-semibold text-white leading-tight">{String(nowPlayingGame.name ?? "")}</p>
+              <p className="flex items-center gap-1 text-[10px] text-repressurizer-text-muted mt-0.5">
+                <Clock size={9} className="text-repressurizer-accent shrink-0" />
+                <span className="text-repressurizer-text">{(nowPlayingGame.playtime_forever / 60).toFixed(1)}h</span>
+                <span className="text-repressurizer-border">·</span>
+                {formatTimeAgo(nowPlayingGame.rtime_last_played)}
+              </p>
+            </div>
+          </button>
+        )}
+
+        {/* All games */}
+        <SidebarItem
+          active={activeCategory === "all"}
+          onClick={() => setActiveCategory("all")}
+          icon={<GameController size={15} weight={activeCategory === "all" ? "fill" : "duotone"} />}
+          label="All"
+          count={gameCount}
+        />
+
+        {/* Uncategorized */}
+        <SidebarItem
+          active={activeCategory === "uncategorized"}
+          onClick={() => setActiveCategory("uncategorized")}
+          icon={<Question size={15} weight={activeCategory === "uncategorized" ? "fill" : "duotone"} />}
+          label="Uncategorized"
+          count={uncategorizedCount}
+        />
+
+        {showSmartLists && (
+          <>
+            <div className="my-2 mx-2 border-t border-repressurizer-border-subtle" />
+
+            {/* Smart Lists */}
+            <p className="mb-1 px-2.5 text-[10px] uppercase tracking-wider text-repressurizer-text-faint font-medium">Smart Lists</p>
+            <SidebarItem
+              active={activeCategory === "backlog"}
+              onClick={() => setActiveCategory("backlog")}
+              icon={<Stack size={15} weight={activeCategory === "backlog" ? "fill" : "duotone"} />}
+              label="Backlog"
+              count={backlogCount}
+            />
+            <SidebarItem
+              active={activeCategory === "recently-played"}
+              onClick={() => setActiveCategory("recently-played")}
+              icon={<Lightning size={15} weight={activeCategory === "recently-played" ? "fill" : "duotone"} />}
+              label="Recently Played"
+              count={recentlyPlayedCount}
+            />
+          </>
+        )}
+
+        <div className="my-2 mx-2 border-t border-repressurizer-border-subtle" />
+
+        {/* Categories */}
+        {sortedCollections.map((col) => (
+          <div
+            key={col.key}
+            draggable={!col.is_dynamic && editingKey !== col.key}
+            onDragStart={(e) => {
+              if (col.is_dynamic) return;
+              // If there are selected games, this is a game-to-category drag — don't intercept
+              if (Object.keys(selectedGameIds).length > 0) return;
+              e.dataTransfer.setData("text/x-category-key", col.key);
+              handleCategoryDragStart(col.key);
+            }}
+            onDragOver={(e) => {
+              // Category reorder drag
+              if (reorderDragKey && !col.is_dynamic) {
+                handleCategoryDragOver(e, col.key);
+                return;
+              }
+              // Game drop on category
+              if (!col.is_dynamic) {
+                e.preventDefault();
+                setDragOver(col.key);
+              }
+            }}
+            onDragLeave={() => { setDragOver(null); setReorderOverKey(null); }}
+            onDrop={() => {
+              if (reorderDragKey) {
+                handleCategoryDrop(col.key);
+                return;
+              }
+              if (!col.is_dynamic) handleDrop(col.key);
+            }}
+            onDragEnd={() => { setReorderDragKey(null); setReorderOverKey(null); }}
+            className={`rounded-lg transition-all ${
+              dragOver === col.key ? "ring-1 ring-repressurizer-accent bg-repressurizer-accent/5" : ""
+            } ${reorderDragKey === col.key ? "opacity-50" : ""} ${
+              reorderOverKey === col.key && reorderDragKey !== col.key ? "border-t-2 border-repressurizer-accent" : ""
+            }`}
+          >
+            {editingKey === col.key && !col.is_dynamic ? (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  renameCategory(col.key, editName);
+                  setEditingKey(null);
+                }}
+                className="px-1 py-0.5"
+              >
+                <input
+                  autoFocus
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  onBlur={() => setEditingKey(null)}
+                  className="w-full rounded-md border border-repressurizer-accent bg-repressurizer-bg px-2.5 py-1.5 text-sm text-repressurizer-text focus:outline-none"
+                />
+              </form>
+            ) : (
+              <button
+                onClick={(e) => {
+                  if (col.is_dynamic) {
+                    setActiveCategory(col.key);
+                    return;
+                  }
+                  if (e.shiftKey && categoryAnchorRef.current) {
+                    e.preventDefault();
+                    const fromIdx = sortedCollections.findIndex(
+                      (c) => c.key === categoryAnchorRef.current
+                    );
+                    const toIdx = sortedCollections.findIndex((c) => c.key === col.key);
+                    if (fromIdx === -1 || toIdx === -1) return;
+                    const start = Math.min(fromIdx, toIdx);
+                    const end = Math.max(fromIdx, toIdx);
+                    const keys = sortedCollections
+                      .slice(start, end + 1)
+                      .filter((c) => !c.is_dynamic)
+                      .map((c) => c.key);
+                    if (keys.length) setSelectedCategoryKeys(keys);
+                    return;
+                  }
+                  if (e.ctrlKey || e.metaKey) {
+                    e.preventDefault();
+                    toggleCategorySelection(col.key);
+                    categoryAnchorRef.current = col.key;
+                    return;
+                  }
+                  setActiveCategory(col.key);
+                  categoryAnchorRef.current = col.key;
+                }}
+                onDoubleClick={() => {
+                  if (col.is_dynamic) return;
+                  setEditingKey(col.key);
+                  setEditName(col.name);
+                }}
+                onContextMenu={(e) => handleContextMenu(e, col)}
+                className={`group flex w-full items-center gap-2 rounded-lg px-1 py-1.5 text-left text-sm transition-colors ${
+                  activeCategory === col.key
+                    ? "bg-repressurizer-accent/10 text-white"
+                    : "text-repressurizer-text hover:bg-repressurizer-surface-hover"
+                } ${col.is_dynamic ? "italic text-repressurizer-text-muted" : ""} ${
+                  !col.is_dynamic && selectedCategoryKeys.includes(col.key)
+                    ? "ring-1 ring-repressurizer-accent/50 bg-repressurizer-accent/5"
+                    : ""
+                }`}
+              >
+                {!col.is_dynamic && (
+                  <DotsSixVertical size={10} weight="bold" className="shrink-0 text-repressurizer-text-faint opacity-0 group-hover:opacity-50 transition-opacity cursor-grab" />
+                )}
+                {col.is_dynamic ? (
+                  <Robot size={14} weight="duotone" className="shrink-0 text-repressurizer-text-faint" />
+                ) : (
+                  <FolderOpen size={14} weight={activeCategory === col.key ? "fill" : "duotone"} className="shrink-0 text-repressurizer-text-faint" />
+                )}
+                <span className="flex-1 truncate">{col.name}</span>
+                <span className="font-mono text-[10px] text-repressurizer-text-faint tabular-nums pr-1">
+                  {col.is_dynamic ? "auto" : col.added.length}
+                </span>
+              </button>
+            )}
+          </div>
+        ))}
+        {/* Hidden */}
+        {hiddenCount > 0 && (
+          <>
+            <div className="my-2 mx-2 border-t border-repressurizer-border-subtle" />
+            <SidebarItem
+              active={activeCategory === "hidden"}
+              onClick={() => setActiveCategory("hidden")}
+              icon={<EyeSlash size={15} weight={activeCategory === "hidden" ? "fill" : "duotone"} />}
+              label="Hidden"
+              count={hiddenCount}
+            />
+          </>
+        )}
+      </div>
+
+      {/* Multi-select actions */}
+      {selectedCategoryKeys.length > 0 && (
+        <div className="border-t border-repressurizer-border-subtle px-2 py-2 flex flex-wrap items-center gap-2 bg-repressurizer-bg/80">
+          <span className="text-[11px] text-repressurizer-text-muted tabular-nums">
+            {t("sidebar.category.selectedCount", { count: selectedCategoryKeys.length })}
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              openExportDialog({ initialScope: "categories_pick" });
+            }}
+            className="btn-press flex items-center gap-1 rounded-lg bg-repressurizer-accent/15 px-2.5 py-1 text-[11px] font-medium text-repressurizer-accent hover:bg-repressurizer-accent/25"
+          >
+            <Export size={12} weight="bold" />
+            {t("sidebar.category.exportSelected", { count: selectedCategoryKeys.length })}
+          </button>
+          {selectedCategoryKeys.length >= 2 && (
+            <button
+              type="button"
+              onClick={() => setShowMerge(true)}
+              className="btn-press flex items-center gap-1 rounded-lg border border-repressurizer-border px-2.5 py-1 text-[11px] font-medium text-repressurizer-text hover:bg-repressurizer-surface-hover"
+            >
+              <ArrowsMerge size={12} />
+              {t("sidebar.category.merge")}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => clearCategorySelection()}
+            className="btn-press flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] text-repressurizer-text-muted hover:text-white hover:bg-repressurizer-surface-hover"
+            title={t("sidebar.category.clearSelection")}
+          >
+            <X size={12} weight="bold" />
+            {t("sidebar.category.clearSelection")}
+          </button>
+        </div>
+      )}
+
+      {/* New category */}
+      <div className="border-t border-repressurizer-border-subtle p-2">
+        {showNewCat ? (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              handleCreateCategory();
+            }}
+            className="flex gap-1"
+          >
+            <input
+              autoFocus
+              value={newCatName}
+              onChange={(e) => setNewCatName(e.target.value)}
+              onBlur={() => {
+                if (!newCatName.trim()) setShowNewCat(false);
+              }}
+              placeholder="Category name"
+              className="flex-1 rounded-lg border border-repressurizer-border bg-repressurizer-bg px-3 py-1.5 text-sm text-repressurizer-text placeholder:text-repressurizer-text-faint focus:border-repressurizer-accent focus:outline-none"
+            />
+            <button
+              type="submit"
+              className="btn-press rounded-lg bg-repressurizer-accent px-3 py-1.5 text-sm text-white hover:bg-repressurizer-accent-hover"
+            >
+              <Plus size={14} weight="bold" />
+            </button>
+          </form>
+        ) : (
+          <button
+            onClick={() => setShowNewCat(true)}
+            className="btn-press flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-repressurizer-border px-3 py-2 text-xs text-repressurizer-text-muted transition-colors hover:border-repressurizer-accent hover:text-repressurizer-accent"
+          >
+            <Plus size={12} weight="bold" />
+            New Category
+          </button>
+        )}
+      </div>
+
+      {/* Game detail overlay */}
+      {detailGame && (
+        <GameDetailPage game={detailGame} onClose={() => setDetailGame(null)} />
+      )}
+
+      {/* Category context menu */}
+      {contextMenu && (
+        <CategoryContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          collection={contextMenu.collection}
+          multiExportMode={
+            selectedCategoryKeys.length > 1 &&
+            selectedCategoryKeys.includes(contextMenu.collection.key)
+          }
+          exportSelectedCount={selectedCategoryKeys.length}
+          onClose={() => setContextMenu(null)}
+          onRename={(col) => {
+            setEditingKey(col.key);
+            setEditName(col.name);
+            setContextMenu(null);
+          }}
+          onDelete={(col) => {
+            setConfirmDelete(col.key);
+            setContextMenu(null);
+          }}
+          onExportCategory={(col) => {
+            openExportDialog({
+              initialScope: "category",
+              overrideCategoryKey: col.key,
+            });
+            setContextMenu(null);
+          }}
+          onExportSelected={() => {
+            openExportDialog({ initialScope: "categories_pick" });
+            setContextMenu(null);
+          }}
+          onDuplicate={(col) => {
+            setDuplicateFor(col);
+            setDuplicateName(`${col.name} (copy)`);
+            setContextMenu(null);
+          }}
+        />
+      )}
+
+      {/* Delete confirmation dialog */}
+      {confirmDelete && (
+        <DeleteConfirmDialog
+          name={collections.find((c) => c.key === confirmDelete)?.name ?? ""}
+          onConfirm={() => {
+            removeCategory(confirmDelete);
+            setConfirmDelete(null);
+          }}
+          onCancel={() => setConfirmDelete(null)}
+        />
+      )}
+
+      {showMerge && selectedCategoryKeys.length >= 2 && (
+        <MergeCategoriesDialog
+          selectedKeys={selectedCategoryKeys}
+          onClose={() => setShowMerge(false)}
+        />
+      )}
+
+      {duplicateFor && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          onClick={(e) => { if (e.target === e.currentTarget) setDuplicateFor(null); }}
+        >
+          <div className="w-full max-w-sm rounded-2xl border border-repressurizer-border bg-repressurizer-surface p-5 shadow-xl">
+            <p className="text-sm font-medium text-white mb-3">{t("duplicate.title")}</p>
+            <p className="text-xs text-repressurizer-text-muted mb-2 truncate">{duplicateFor.name}</p>
+            <input
+              autoFocus
+              value={duplicateName}
+              onChange={(e) => setDuplicateName(e.target.value)}
+              placeholder={t("duplicate.placeholder")}
+              className="w-full rounded-xl border border-repressurizer-border bg-repressurizer-bg px-3 py-2 text-sm text-repressurizer-text mb-4 focus:border-repressurizer-accent focus:outline-none"
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setDuplicateFor(null)}
+                className="btn-press rounded-lg px-3 py-1.5 text-sm text-repressurizer-text-muted hover:text-white"
+              >
+                {t("duplicate.cancel")}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const n = duplicateName.trim();
+                  if (n) duplicateCategory(duplicateFor.key, n);
+                  setDuplicateFor(null);
+                }}
+                className="btn-press rounded-lg bg-repressurizer-accent px-3 py-1.5 text-sm text-white hover:bg-repressurizer-accent-hover"
+              >
+                {t("duplicate.confirm")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </aside>
+  );
+}
+
+function formatTimeAgo(unixSecs: number): string {
+  const diffSecs = Math.floor(Date.now() / 1000) - unixSecs;
+  if (diffSecs < 3600) return `${Math.floor(diffSecs / 60)}m ago`;
+  if (diffSecs < 86400) return `${Math.floor(diffSecs / 3600)}h ago`;
+  return `${Math.floor(diffSecs / 86400)}d ago`;
+}
+
+function SidebarItem({
+  active,
+  onClick,
+  icon,
+  label,
+  count,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+  count: number;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm transition-colors ${
+        active
+          ? "bg-repressurizer-accent/10 text-white"
+          : "text-repressurizer-text hover:bg-repressurizer-surface-hover"
+      }`}
+    >
+      <span className={active ? "text-repressurizer-accent" : "text-repressurizer-text-faint"}>{icon}</span>
+      <span className="flex-1">{label}</span>
+      <span className="font-mono text-[10px] text-repressurizer-text-faint tabular-nums">{count}</span>
+    </button>
+  );
+}
+
+function CategoryContextMenu({
+  x,
+  y,
+  collection,
+  multiExportMode,
+  exportSelectedCount,
+  onClose,
+  onRename,
+  onDelete,
+  onExportCategory,
+  onExportSelected,
+  onDuplicate,
+}: {
+  x: number;
+  y: number;
+  collection: SteamCollection;
+  multiExportMode: boolean;
+  exportSelectedCount: number;
+  onClose: () => void;
+  onRename: (col: SteamCollection) => void;
+  onDelete: (col: SteamCollection) => void;
+  onExportCategory: (col: SteamCollection) => void;
+  onExportSelected: () => void;
+  onDuplicate: (col: SteamCollection) => void;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const t = useT();
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+    };
+    const handleEsc = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("mousedown", handleClick);
+    document.addEventListener("keydown", handleEsc);
+    return () => {
+      document.removeEventListener("mousedown", handleClick);
+      document.removeEventListener("keydown", handleEsc);
+    };
+  }, [onClose]);
+
+  const style: React.CSSProperties = {
+    position: "fixed",
+    left: Math.min(x, window.innerWidth - 200),
+    top: Math.min(y, window.innerHeight - (multiExportMode ? 140 : 200)),
+    zIndex: 100,
+  };
+
+  if (multiExportMode) {
+    return (
+      <div
+        ref={ref}
+        style={style}
+        className="min-w-[180px] animate-fade-in rounded-xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_8px_32px_rgba(0,0,0,0.5)]"
+      >
+        <div className="border-b border-repressurizer-border px-3 py-2">
+          <p className="truncate text-sm font-medium text-white">
+            {t("sidebar.category.multiTitle", { count: exportSelectedCount })}
+          </p>
+        </div>
+        <div className="py-1">
+          <button
+            onClick={() => onExportSelected()}
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-repressurizer-accent hover:bg-repressurizer-accent/10 transition-colors"
+          >
+            <Export size={14} weight="bold" />
+            {t("sidebar.category.exportSelected", { count: exportSelectedCount })}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      ref={ref}
+      style={style}
+      className="min-w-[180px] animate-fade-in rounded-xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_8px_32px_rgba(0,0,0,0.5)]"
+    >
+      <div className="border-b border-repressurizer-border px-3 py-2">
+        <p className="truncate text-sm font-medium text-white">
+          {String(collection.name ?? "")}
+        </p>
+      </div>
+      <div className="py-1">
+        <button
+          onClick={() => onExportCategory(collection)}
+          className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-repressurizer-text hover:bg-repressurizer-surface-hover transition-colors"
+        >
+          <Export size={14} className="text-repressurizer-text-muted" />
+          {t("sidebar.category.download")}
+        </button>
+        <button
+          onClick={() => onDuplicate(collection)}
+          className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-repressurizer-text hover:bg-repressurizer-surface-hover transition-colors"
+        >
+          <CopySimple size={14} className="text-repressurizer-text-muted" />
+          {t("sidebar.category.duplicate")}
+        </button>
+        <button
+          onClick={() => onRename(collection)}
+          className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-repressurizer-text hover:bg-repressurizer-surface-hover transition-colors"
+        >
+          <PencilSimple size={14} className="text-repressurizer-text-muted" />
+          Rename
+        </button>
+        <button
+          onClick={() => onDelete(collection)}
+          className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-repressurizer-danger hover:bg-repressurizer-danger/10 transition-colors"
+        >
+          <TrashSimple size={14} />
+          Delete
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function DeleteConfirmDialog({
+  name,
+  onConfirm,
+  onCancel,
+}: {
+  name: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="w-full max-w-xs animate-fade-in rounded-xl border border-repressurizer-border bg-repressurizer-surface p-5 shadow-[0_16px_48px_rgba(0,0,0,0.5)]">
+        <p className="mb-1 text-sm font-medium text-white">Delete category?</p>
+        <p className="mb-5 text-sm text-repressurizer-text-muted leading-relaxed">
+          "{name}" will be removed. Games won't be deleted.
+        </p>
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={onCancel}
+            className="btn-press rounded-lg px-3.5 py-1.5 text-sm text-repressurizer-text-muted transition-colors hover:text-white hover:bg-repressurizer-surface-hover"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            className="btn-press rounded-lg bg-repressurizer-danger px-3.5 py-1.5 text-sm text-white transition-colors hover:bg-repressurizer-danger/80"
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

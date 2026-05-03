@@ -1,0 +1,223 @@
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
+@import "tailwindcss";
+
+@theme {
+  /* ── Base surfaces (Dark — default) ── */
+  --color-repressurizer-bg: #09090b;
+  --color-repressurizer-surface: #131316;
+  --color-repressurizer-surface-hover: #1c1c21;
+  --color-repressurizer-surface-raised: #232329;
+  --color-repressurizer-border: #27272a;
+  --color-repressurizer-border-subtle: #1e1e22;
+
+  /* ── Text ── */
+  --color-repressurizer-text: #e4e4e7;
+  --color-repressurizer-text-muted: #71717a;
+  --color-repressurizer-text-faint: #52525b;
+
+  /* ── Accent: Emerald ── */
+  --color-repressurizer-accent: #10b981;
+  --color-repressurizer-accent-hover: #34d399;
+  --color-repressurizer-accent-muted: #065f46;
+
+  /* ── Semantic ── */
+  --color-repressurizer-success: #22c55e;
+  --color-repressurizer-warning: #f59e0b;
+  --color-repressurizer-danger: #ef4444;
+
+  /* ── Font families ── */
+  --font-sans: "Geist Variable", system-ui, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, monospace;
+}
+
+/* ── Theme: Dim ── */
+.theme-dim {
+  --color-repressurizer-bg: #15161a;
+  --color-repressurizer-surface: #1e1f25;
+  --color-repressurizer-surface-hover: #282a32;
+  --color-repressurizer-surface-raised: #31333d;
+  --color-repressurizer-border: #363842;
+  --color-repressurizer-border-subtle: #2a2c35;
+  --color-repressurizer-text: #e0e0e4;
+  --color-repressurizer-text-muted: #8b8d97;
+  --color-repressurizer-text-faint: #6b6d78;
+}
+
+/* ── Theme: Light ── */
+.theme-light {
+  --color-repressurizer-bg: #f5f5f7;
+  --color-repressurizer-surface: #ffffff;
+  --color-repressurizer-surface-hover: #f0f0f2;
+  --color-repressurizer-surface-raised: #e8e8ec;
+  --color-repressurizer-border: #d4d4d8;
+  --color-repressurizer-border-subtle: #e4e4e7;
+  --color-repressurizer-text: #18181b;
+  --color-repressurizer-text-muted: #71717a;
+  --color-repressurizer-text-faint: #a1a1aa;
+}
+
+/* Light theme: remap text-white to dark text so it's legible on light backgrounds */
+.theme-light .text-white { color: #18181b !important; }
+.theme-light .text-white\/70 { color: rgba(24,24,27,0.7) !important; }
+.theme-light .hover\:text-white:hover { color: #18181b !important; }
+
+/* Keep truly white text on colored backgrounds */
+.theme-light .bg-repressurizer-accent .text-white,
+.theme-light .bg-emerald-600\/80 .text-white,
+.theme-light .bg-amber-600\/80 .text-white,
+.theme-light .bg-red-600\/80 .text-white { color: #fff !important; }
+.theme-light .bg-black\/40 { color: #fff !important; }
+.theme-light [class*="bg-repressurizer-accent"].text-white { color: #fff !important; }
+
+/* Light theme overrides for specific elements */
+.theme-light ::selection {
+  background: rgba(16, 185, 129, 0.2);
+  color: #000;
+}
+
+.theme-light ::-webkit-scrollbar-thumb {
+  background: #c4c4cc;
+}
+
+.theme-light ::-webkit-scrollbar-thumb:hover {
+  background: #a1a1aa;
+}
+
+*,
+*::before,
+*::after {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  background-color: var(--color-repressurizer-bg);
+  color: var(--color-repressurizer-text);
+  font-family: var(--font-sans);
+}
+
+/* ── Selection ── */
+::selection {
+  background: rgba(16, 185, 129, 0.25);
+  color: #fff;
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-repressurizer-border);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-repressurizer-text-muted);
+}
+
+/* ── Layout containment ── */
+.game-grid {
+  contain: layout style paint;
+}
+
+/* ── Kill transitions during window resize to prevent layout thrashing ── */
+.resizing,
+.resizing * {
+  transition: none !important;
+  animation: none !important;
+}
+
+/* ── Card containment: isolate paint + skip off-screen rendering ── */
+.game-card {
+  contain: layout style paint;
+  content-visibility: auto;
+  contain-intrinsic-size: 240px 170px;
+}
+
+/* ── Skeleton shimmer ── */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-repressurizer-surface) 25%,
+    var(--color-repressurizer-surface-hover) 50%,
+    var(--color-repressurizer-surface) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.8s ease-in-out infinite;
+  border-radius: 6px;
+}
+
+/* ── Subtle fade-in for mounted elements ── */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.2s ease-out both;
+}
+
+/* ── Staggered fade (use --index CSS var) ── */
+.animate-stagger {
+  animation: fade-in 0.25s ease-out both;
+  animation-delay: calc(var(--index, 0) * 30ms);
+}
+
+/* ── Toast slide-in ── */
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.animate-toast-in {
+  animation: toast-in 0.25s ease-out both;
+}
+
+/* ── Breathing pulse for status dots ── */
+@keyframes breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.animate-breathe {
+  animation: breathe 2s ease-in-out infinite;
+}
+
+/* ── Tactile button press ── */
+.btn-press:active {
+  transform: scale(0.97) translateY(1px);
+}
+
+/* ── Focus ring utility ── */
+.focus-ring:focus-visible {
+  outline: 2px solid var(--color-repressurizer-accent);
+  outline-offset: 2px;
+}
+
+/* ── Drag handle for category reorder ── */
+.drag-handle {
+  cursor: grab;
+  touch-action: none;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.dragging-category {
+  opacity: 0.5;
+}
+
+.drag-over-category {
+  border-top: 2px solid var(--color-repressurizer-accent);
+}
