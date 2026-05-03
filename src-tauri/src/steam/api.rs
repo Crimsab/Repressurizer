@@ -420,6 +420,27 @@ pub struct WishlistItem {
     pub date_added: u64,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FamilyLibraryApp {
+    pub appid: u64,
+    pub name: Option<String>,
+    pub owner_steamids: Vec<String>,
+    pub exclude_reason: u32,
+    pub is_owned_by_current_user: bool,
+    pub is_family_shared: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FamilyLibraryResult {
+    pub auth_used: String,
+    pub owner_steamid: Option<String>,
+    pub total_apps: usize,
+    pub owned_apps: usize,
+    pub shared_apps: usize,
+    pub excluded_apps: usize,
+    pub apps: Vec<FamilyLibraryApp>,
+}
+
 #[derive(Debug, Deserialize)]
 struct WishlistV1Response {
     wishlist: Option<Vec<WishlistV1Item>>,
@@ -498,6 +519,139 @@ pub async fn fetch_wishlist(steam_id64: String) -> Result<Vec<WishlistItem>, Str
 
     items.sort_by_key(|i| i.priority);
     Ok(items)
+}
+
+#[tauri::command]
+pub async fn fetch_family_library(
+    api_key: String,
+    access_token: Option<String>,
+) -> Result<FamilyLibraryResult, String> {
+    let token = access_token.unwrap_or_default();
+    let use_access_token = !token.trim().is_empty();
+    let auth_value = if use_access_token { token.trim() } else { api_key.trim() };
+
+    if auth_value.is_empty() {
+        return Err("Missing Steam Web API key or Steam Store access token".to_string());
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct FamilyResponse {
+        response: Option<FamilyInner>,
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct FamilyInner {
+        owner_steamid: Option<String>,
+        #[serde(default)]
+        apps: Vec<FamilyAppRaw>,
+    }
+
+    #[derive(Debug, Deserialize)]
+    struct FamilyAppRaw {
+        appid: u64,
+        name: Option<String>,
+        #[serde(default)]
+        owner_steamids: Vec<String>,
+        #[serde(default)]
+        exclude_reason: u32,
+    }
+
+    let client = reqwest::Client::builder()
+        .user_agent("Repressurizer/0.1")
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+
+    let mut request = client
+        .get("https://api.steampowered.com/IFamilyGroupsService/GetSharedLibraryApps/v1/")
+        .query(&[
+            ("family_groupid", "0"),
+            ("include_own", "true"),
+            ("include_excluded", "true"),
+            ("include_free", "true"),
+            ("include_non_games", "true"),
+            ("format", "json"),
+        ]);
+
+    request = if use_access_token {
+        request.query(&[("access_token", auth_value)])
+    } else {
+        request.query(&[("key", auth_value)])
+    };
+
+    let response = request
+        .send()
+        .await
+        .map_err(|e| format!("Steam Family request failed: {}", e))?;
+
+    let status = response.status();
+    let text = response
+        .text()
+        .await
+        .map_err(|e| format!("Failed to read Steam Family response: {}", e))?;
+
+    if !status.is_success() {
+        return Err(format!(
+            "Steam Family API returned status {}: {}",
+            status,
+            text.chars().take(220).collect::<String>()
+        ));
+    }
+
+    if text.trim_start().starts_with('<') {
+        return Err("Steam Family API returned HTML instead of JSON".to_string());
+    }
+
+    let parsed: FamilyResponse =
+        serde_json::from_str(&text).map_err(|e| format!("Failed to parse Steam Family response: {}", e))?;
+    let inner = parsed
+        .response
+        .ok_or_else(|| "Steam Family response did not include a response object".to_string())?;
+
+    let owner_steamid = inner.owner_steamid;
+    let mut owned_apps = 0usize;
+    let mut shared_apps = 0usize;
+    let mut excluded_apps = 0usize;
+
+    let apps = inner
+        .apps
+        .into_iter()
+        .map(|app| {
+            let is_owned_by_current_user = owner_steamid
+                .as_ref()
+                .is_some_and(|owner| app.owner_steamids.iter().any(|id| id == owner));
+            let is_family_shared =
+                owner_steamid.is_some() && !is_owned_by_current_user && app.exclude_reason == 0;
+
+            if is_owned_by_current_user {
+                owned_apps += 1;
+            }
+            if is_family_shared {
+                shared_apps += 1;
+            }
+            if app.exclude_reason != 0 {
+                excluded_apps += 1;
+            }
+
+            FamilyLibraryApp {
+                appid: app.appid,
+                name: app.name,
+                owner_steamids: app.owner_steamids,
+                exclude_reason: app.exclude_reason,
+                is_owned_by_current_user,
+                is_family_shared,
+            }
+        })
+        .collect::<Vec<_>>();
+
+    Ok(FamilyLibraryResult {
+        auth_used: if use_access_token { "access_token" } else { "web_api_key" }.to_string(),
+        owner_steamid,
+        total_apps: apps.len(),
+        owned_apps,
+        shared_apps,
+        excluded_apps,
+        apps,
+    })
 }
 
 // === Vanity URL resolver ===

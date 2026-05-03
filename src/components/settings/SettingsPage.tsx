@@ -1,12 +1,17 @@
 import { useState, useEffect, useMemo } from "react";
+import { save } from "@tauri-apps/plugin-dialog";
+import { writeTextFile } from "@tauri-apps/plugin-fs";
+import { check, type Update } from "@tauri-apps/plugin-updater";
+import { relaunch } from "@tauri-apps/plugin-process";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useGameStore } from "../../stores/gameStore";
 import { useCategoryStore } from "../../stores/categoryStore";
+import { useFamilyStore } from "../../stores/familyStore";
 import { useFailedGamesStore, getIgnoredGameName, MAX_FAIL_RUNS } from "../../stores/failedGamesStore";
 import { useHltbIgnoredStore, getHltbIgnoredGameName, HLTB_MAX_FAILS } from "../../stores/hltbIgnoredStore";
 
-import { listBackups, restoreBackup, deleteBackup, createManualBackup, loadCollections, getCacheInfo } from "../../lib/tauri";
-import type { CacheInfo } from "../../lib/tauri";
+import { listBackups, restoreBackup, deleteBackup, createManualBackup, loadCollections, getCacheInfo, exportDiagnostics, fetchFamilyLibrary } from "../../lib/tauri";
+import type { CacheInfo, FamilyLibraryResult } from "../../lib/tauri";
 import type { BackupInfo } from "../../lib/types";
 import {
   X,
@@ -33,6 +38,9 @@ import {
   Sun,
   CloudMoon,
   Tray,
+  Bug,
+  CloudArrowDown,
+  UsersThree,
 } from "@phosphor-icons/react";
 import { ACCENT_PRESETS, applyAccentColor, applyTheme } from "../../stores/settingsStore";
 import { useT } from "../../lib/i18n";
@@ -45,6 +53,7 @@ interface SettingsPageProps {
 export function SettingsPage({ onClose }: SettingsPageProps) {
   const settings = useSettingsStore();
   const gameCount = useGameStore((s) => Object.keys(s.games).length);
+  const mergeGames = useGameStore((s) => s.mergeGames);
   const cachedDetailsCount = useGameStore((s) => Object.keys(s.details).length);
   const clearDetailsCache = useGameStore((s) => s.clearDetailsCache);
   const failedGamesStore = useFailedGamesStore();
@@ -65,6 +74,14 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
   const [tab, setTab] = useState<"general" | "appearance" | "backups" | "ignored">("general");
   const [customHex, setCustomHex] = useState(settings.accentColor);
   const [cacheInfo, setCacheInfo] = useState<CacheInfo | null>(null);
+  const [diagnosticsExporting, setDiagnosticsExporting] = useState(false);
+  const [checkingUpdates, setCheckingUpdates] = useState(false);
+  const [installingUpdate, setInstallingUpdate] = useState(false);
+  const [availableUpdate, setAvailableUpdate] = useState<Update | null>(null);
+  const [familyAccessToken, setFamilyAccessToken] = useState("");
+  const [familyChecking, setFamilyChecking] = useState(false);
+  const [familyResult, setFamilyResult] = useState<FamilyLibraryResult | null>(null);
+  const familyLastFetched = useFamilyStore((s) => s.lastFetched);
   const [pendingAction, setPendingAction] = useState<{
     type: "restore" | "delete" | "reset";
     backup?: BackupInfo;
@@ -150,6 +167,81 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
     settings.setSettings({ apiKey });
     setMessage("API key saved.");
     setTimeout(() => setMessage(""), 2000);
+  };
+
+  const handleExportDiagnostics = async () => {
+    setDiagnosticsExporting(true);
+    setMessage("");
+    try {
+      const content = await exportDiagnostics(settings.steamPath, settings.steamId3, settings.steamId64);
+      const path = await save({
+        defaultPath: `repressurizer-diagnostics-${new Date().toISOString().slice(0, 10)}.json`,
+        filters: [{ name: "JSON", extensions: ["json"] }],
+      });
+      if (!path) return;
+      await writeTextFile(path, content);
+      setMessage("Diagnostics exported.");
+      setTimeout(() => setMessage(""), 2000);
+    } catch (e) {
+      setMessage(`Diagnostics failed: ${e}`);
+    } finally {
+      setDiagnosticsExporting(false);
+    }
+  };
+
+  const handleCheckUpdates = async () => {
+    setCheckingUpdates(true);
+    setAvailableUpdate(null);
+    setMessage("");
+    try {
+      const update = await check();
+      setAvailableUpdate(update);
+      setMessage(update ? `Update ${update.version} is available.` : "Repressurizer is up to date.");
+    } catch (e) {
+      setMessage(`Update check failed: ${e}`);
+    } finally {
+      setCheckingUpdates(false);
+    }
+  };
+
+  const handleInstallUpdate = async () => {
+    if (!availableUpdate) return;
+    setInstallingUpdate(true);
+    setMessage("");
+    try {
+      await availableUpdate.downloadAndInstall();
+      await relaunch();
+    } catch (e) {
+      setMessage(`Update install failed: ${e}`);
+      setInstallingUpdate(false);
+    }
+  };
+
+  const handleProbeFamily = async () => {
+    setFamilyChecking(true);
+    setFamilyResult(null);
+    setMessage("");
+    try {
+      const result = await fetchFamilyLibrary(settings.apiKey, familyAccessToken.trim() || undefined);
+      setFamilyResult(result);
+      useFamilyStore.getState().setResult(result);
+      mergeGames(
+        result.apps
+          .filter((app) => app.is_family_shared && app.exclude_reason === 0)
+          .map((app) => ({
+            appid: app.appid,
+            name: app.name?.trim() || `App ${app.appid}`,
+            playtime_forever: 0,
+            img_icon_url: null,
+            rtime_last_played: 0,
+          }))
+      );
+      setMessage(`Steam Family loaded with ${result.auth_used}.`);
+    } catch (e) {
+      setMessage(`Steam Family probe failed: ${e}`);
+    } finally {
+      setFamilyChecking(false);
+    }
   };
 
   const handleReset = () => {
@@ -267,6 +359,51 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                       <span className="font-mono tabular-nums">{gameCount}</span> games, <span className="font-mono tabular-nums">{categoryCount}</span> categories (<span className="font-mono tabular-nums">{dynamicCount}</span> dynamic)
                     </p>
                   </div>
+                </div>
+              </div>
+
+              {/* Steam Family */}
+              <div className="space-y-3">
+                <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">Steam Family</h3>
+                <div className="rounded-xl bg-repressurizer-bg border border-repressurizer-border-subtle px-4 py-3 space-y-3">
+                  <div className="flex items-start gap-3">
+                    <UsersThree size={16} weight="duotone" className="mt-0.5 text-repressurizer-text-faint" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-repressurizer-text">Probe shared family library</p>
+                      <p className="mt-0.5 text-xs leading-relaxed text-repressurizer-text-faint">
+                        First tries your Steam Web API key. If Valve rejects it, paste a temporary Steam Store webapi token from an authenticated browser session.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      type="password"
+                      value={familyAccessToken}
+                      onChange={(e) => setFamilyAccessToken(e.target.value)}
+                      placeholder="Optional Steam Store access token"
+                      className="min-w-0 flex-1 rounded-lg border border-repressurizer-border bg-repressurizer-surface px-3 py-2 text-xs text-repressurizer-text placeholder:text-repressurizer-text-faint transition-colors focus:border-repressurizer-accent focus:outline-none"
+                    />
+                    <button
+                      onClick={handleProbeFamily}
+                      disabled={familyChecking || (!settings.apiKey && !familyAccessToken.trim())}
+                      className="btn-press shrink-0 rounded-lg bg-repressurizer-accent px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-repressurizer-accent-hover disabled:opacity-40"
+                    >
+                      {familyChecking ? "Checking..." : "Probe"}
+                    </button>
+                  </div>
+                  {familyResult && (
+                    <div className="grid grid-cols-4 gap-2 text-xs">
+                      <MiniStat label="Total" value={familyResult.total_apps} />
+                      <MiniStat label="Owned" value={familyResult.owned_apps} />
+                      <MiniStat label="Shared" value={familyResult.shared_apps} />
+                      <MiniStat label="Excluded" value={familyResult.excluded_apps} />
+                    </div>
+                  )}
+                  {familyLastFetched && !familyResult && (
+                    <p className="text-xs text-repressurizer-text-faint">
+                      Cached Family data loaded from {new Date(familyLastFetched).toLocaleString()}.
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -411,6 +548,47 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                   >
                     Save
                   </button>
+                </div>
+              </div>
+
+              {/* Maintenance */}
+              <div className="space-y-3">
+                <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">Maintenance</h3>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <button
+                    onClick={handleExportDiagnostics}
+                    disabled={diagnosticsExporting}
+                    className="btn-press flex items-start gap-3 rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3 text-left transition-colors hover:border-repressurizer-border disabled:opacity-50"
+                  >
+                    <Bug size={16} weight="duotone" className="mt-0.5 text-repressurizer-accent" />
+                    <span>
+                      <span className="block text-sm text-repressurizer-text">{diagnosticsExporting ? "Exporting diagnostics..." : "Export diagnostics"}</span>
+                      <span className="mt-0.5 block text-xs leading-relaxed text-repressurizer-text-faint">Writes a privacy-safe JSON report without API keys.</span>
+                    </span>
+                  </button>
+
+                  <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3">
+                    <button
+                      onClick={handleCheckUpdates}
+                      disabled={checkingUpdates || installingUpdate}
+                      className="btn-press flex w-full items-start gap-3 text-left transition-colors disabled:opacity-50"
+                    >
+                      <CloudArrowDown size={16} weight="duotone" className="mt-0.5 text-repressurizer-accent" />
+                      <span>
+                        <span className="block text-sm text-repressurizer-text">{checkingUpdates ? "Checking updates..." : "Check for updates"}</span>
+                        <span className="mt-0.5 block text-xs leading-relaxed text-repressurizer-text-faint">Uses the latest GitHub Release updater manifest.</span>
+                      </span>
+                    </button>
+                    {availableUpdate && (
+                      <button
+                        onClick={handleInstallUpdate}
+                        disabled={installingUpdate}
+                        className="btn-press mt-3 w-full rounded-lg bg-repressurizer-accent px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-repressurizer-accent-hover disabled:opacity-50"
+                      >
+                        {installingUpdate ? "Installing..." : `Install ${availableUpdate.version}`}
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -802,6 +980,15 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function MiniStat({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="rounded-lg border border-repressurizer-border-subtle bg-repressurizer-surface px-2.5 py-2">
+      <p className="text-[10px] uppercase tracking-wider text-repressurizer-text-faint">{label}</p>
+      <p className="mt-0.5 font-mono text-sm text-repressurizer-text tabular-nums">{value}</p>
+    </div>
+  );
+}
+
 function formatTime(ts: string): string {
   if (ts.length >= 15) {
     return `${ts.slice(9, 11)}:${ts.slice(11, 13)}:${ts.slice(13, 15)}`;
@@ -896,9 +1083,18 @@ function BackupsTab({
   if (backups.length === 0) {
     return (
       <div className="space-y-3">
-        <p className="text-xs text-repressurizer-text-faint">
-          A backup is created automatically every time you save.
-        </p>
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs text-repressurizer-text-faint">
+            A backup is created automatically every time you save.
+          </p>
+          <button
+            onClick={onManualBackup}
+            className="btn-press inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-repressurizer-accent/15 px-3 py-1.5 text-xs font-medium text-repressurizer-accent transition-colors hover:bg-repressurizer-accent/25"
+          >
+            <Plus size={12} weight="bold" />
+            Create Backup
+          </button>
+        </div>
         <div className="py-8 text-center animate-fade-in">
           <ClockCounterClockwise size={36} weight="duotone" className="mx-auto mb-3 text-repressurizer-text-faint" />
           <p className="text-sm text-repressurizer-text-muted">No backups found.</p>

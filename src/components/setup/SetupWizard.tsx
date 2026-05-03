@@ -8,7 +8,7 @@ import {
   fetchLibrary,
   loadCollections,
 } from "../../lib/tauri";
-import type { SteamUser } from "../../lib/types";
+import type { OwnedGame, SteamCollection, SteamUser } from "../../lib/types";
 import {
   GameController,
   MagnifyingGlass,
@@ -33,6 +33,8 @@ export function SetupWizard() {
   const [apiKey, setApiKey] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loadedGames, setLoadedGames] = useState<OwnedGame[]>([]);
+  const [loadedCollections, setLoadedCollections] = useState<SteamCollection[]>([]);
 
   const handleDetect = async () => {
     setLoading(true);
@@ -65,20 +67,27 @@ export function SetupWizard() {
       const collections = await loadCollections(steamPath, selectedUser);
       console.log("Got collections:", collections.length);
 
-      setGames(games);
-      setCollections(collections);
-      setSettings({
-        steamPath,
-        steamId3: selectedUser,
-        steamId64,
-        apiKey,
-        setupComplete: true,
-      });
+      setLoadedGames(games);
+      setLoadedCollections(collections);
+      setStep(2);
+      setLoading(false);
     } catch (e) {
       console.error("Setup error:", e);
       setError(`${e}`);
       setLoading(false);
     }
+  };
+
+  const finishSetup = () => {
+    setGames(loadedGames);
+    setCollections(loadedCollections);
+    setSettings({
+      steamPath,
+      steamId3: selectedUser,
+      steamId64,
+      apiKey,
+      setupComplete: true,
+    });
   };
 
   return (
@@ -102,6 +111,8 @@ export function SetupWizard() {
             <StepDot active={step >= 0} />
             <div className={`h-px flex-1 transition-colors ${step >= 1 ? "bg-repressurizer-accent" : "bg-repressurizer-border"}`} />
             <StepDot active={step >= 1} />
+            <div className={`h-px flex-1 transition-colors ${step >= 2 ? "bg-repressurizer-accent" : "bg-repressurizer-border"}`} />
+            <StepDot active={step >= 2} />
           </div>
 
           {error && (
@@ -277,6 +288,13 @@ export function SetupWizard() {
               </div>
 
               {/* Submit */}
+              <div className="rounded-xl border border-amber-500/20 bg-amber-500/8 px-4 py-3">
+                <p className="text-sm font-medium text-amber-300">Safety check</p>
+                <p className="mt-1 text-xs leading-relaxed text-repressurizer-text-muted">
+                  Repressurizer loads your library first and only writes Steam collections when you press Save later. Close Steam before saving changes, and keep automatic backups enabled.
+                </p>
+              </div>
+
               <button
                 onClick={handleComplete}
                 disabled={loading || !selectedUser || !steamId64 || !apiKey}
@@ -293,6 +311,41 @@ export function SetupWizard() {
                     Connect &amp; Load Library
                   </>
                 )}
+              </button>
+            </div>
+          )}
+
+          {step === 2 && (
+            <div className="space-y-5">
+              <div>
+                <h2 className="text-lg font-medium text-white tracking-tight">Ready to start</h2>
+                <p className="mt-1 text-sm text-repressurizer-text-muted">
+                  Your Steam library loaded successfully. Review the summary before opening the app.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3">
+                  <p className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">Games</p>
+                  <p className="mt-1 font-mono text-2xl font-semibold text-white tabular-nums">{loadedGames.length}</p>
+                </div>
+                <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3">
+                  <p className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">Collections</p>
+                  <p className="mt-1 font-mono text-2xl font-semibold text-white tabular-nums">{loadedCollections.length}</p>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3 text-xs leading-relaxed text-repressurizer-text-muted">
+                <p>Automatic backups are created before saves and can be restored from Settings.</p>
+                <p className="mt-1">For safest results, close Steam before pressing Save after editing collections.</p>
+              </div>
+
+              <button
+                onClick={finishSetup}
+                className="btn-press flex w-full items-center justify-center gap-2 rounded-xl bg-repressurizer-accent px-4 py-3 font-medium text-white transition-colors hover:bg-repressurizer-accent-hover"
+              >
+                <CheckCircle size={18} weight="bold" />
+                Open Repressurizer
               </button>
             </div>
           )}

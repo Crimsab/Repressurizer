@@ -1,6 +1,6 @@
 [package]
 name = "repressurizer"
-version = "0.1.0"
+version = "0.1.1"
 description = "Steam Library Manager"
 authors = ["you"]
 edition = "2021"
@@ -18,6 +18,7 @@ tauri-plugin-fs = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-shell = "2"
 tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 reqwest = { version = "0.12", features = ["json"] }

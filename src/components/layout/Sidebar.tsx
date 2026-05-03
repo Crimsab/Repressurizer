@@ -3,6 +3,7 @@ import { useCategoryStore } from "../../stores/categoryStore";
 import { useGameStore } from "../../stores/gameStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useExportUiStore } from "../../stores/exportUiStore";
+import { useFamilyStore } from "../../stores/familyStore";
 import type { OwnedGame, SteamCollection } from "../../lib/types";
 import { GameDetailPage } from "../games/GameDetailPage";
 import { MergeCategoriesDialog } from "../categories/MergeCategoriesDialog";
@@ -23,6 +24,7 @@ import {
   X,
   ArrowsMerge,
   CopySimple,
+  UsersThree,
 } from "@phosphor-icons/react";
 import { getHeaderImageUrl } from "../../lib/tauri";
 import { useT } from "../../lib/i18n";
@@ -149,6 +151,7 @@ export function Sidebar() {
   }, null);
   const hiddenCollection = collections.find((c) => c.id === "hidden");
   const hiddenCount = hiddenCollection?.added.length ?? 0;
+  const sharedFamilyCount = useFamilyStore((s) => s.sharedCount());
 
   const handleCreateCategory = () => {
     if (newCatName.trim()) {
@@ -293,6 +296,13 @@ export function Sidebar() {
               icon={<Lightning size={15} weight={activeCategory === "recently-played" ? "fill" : "duotone"} />}
               label="Recently Played"
               count={recentlyPlayedCount}
+            />
+            <SidebarItem
+              active={activeCategory === "steam-family"}
+              onClick={() => setActiveCategory("steam-family")}
+              icon={<UsersThree size={15} weight={activeCategory === "steam-family" ? "fill" : "duotone"} />}
+              label="Steam Family"
+              count={sharedFamilyCount}
             />
           </>
         )}

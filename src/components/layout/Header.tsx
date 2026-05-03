@@ -7,6 +7,7 @@ import { useFailedGamesStore } from "../../stores/failedGamesStore";
 import { useToastStore } from "../../stores/toastStore";
 import { useExportUiStore } from "../../stores/exportUiStore";
 import { saveCollections } from "../../lib/tauri";
+import type { OwnedGame, SteamCollection } from "../../lib/types";
 import { hasAdvancedFilters } from "../../lib/search";
 import { useT } from "../../lib/i18n";
 import { SettingsPage } from "../settings/SettingsPage";
@@ -82,10 +83,12 @@ export function Header() {
     return () => document.removeEventListener("mousedown", handler);
   }, [showSortMenu]);
 
-  const gameCount = useGameStore((s) => Object.keys(s.games).length);
+  const games = useGameStore((s) => s.games);
+  const gameCount = Object.keys(games).length;
   const cachedDetailsCount = useGameStore((s) => Object.keys(s.details).length);
   const ignoredCount = useFailedGamesStore((s) => s.ignoredIds().length);
   const collections = useCategoryStore((s) => s.collections);
+  const savedCollections = useCategoryStore((s) => s._saved);
   const dirty = useCategoryStore((s) => s.dirty);
   const markClean = useCategoryStore((s) => s.markClean);
   const undo = useCategoryStore((s) => s.undo);
@@ -106,6 +109,8 @@ export function Header() {
   const [showFriendCompare, setShowFriendCompare] = useState(false);
   const [showRecommend, setShowRecommend] = useState(false);
   const [showTimeline, setShowTimeline] = useState(false);
+  const [showSavePreview, setShowSavePreview] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const t = useT();
   const toast = useToastStore;
@@ -114,13 +119,19 @@ export function Header() {
     if (exportOpenVersion > 0) setShowExport(true);
   }, [exportOpenVersion]);
 
+  const savePreview = buildSavePreview(savedCollections, collections, games);
+
   const handleSave = async () => {
+    setSaving(true);
     try {
       await saveCollections(steamPath, steamId3, collections);
       markClean();
+      setShowSavePreview(false);
       toast.getState().success(t("toast.saveSuccess"));
     } catch (e) {
       toast.getState().error(t("toast.saveFailed", { error: String(e) }));
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -269,7 +280,7 @@ export function Header() {
 
           {/* Save */}
           <button
-            onClick={handleSave}
+            onClick={() => dirty && setShowSavePreview(true)}
             disabled={!dirty}
             className={`btn-press inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-xs font-medium transition-all ${
               dirty
@@ -280,7 +291,7 @@ export function Header() {
             {dirty ? (
               <>
                 <FloppyDisk size={14} weight="bold" />
-                Save
+                {saving ? "Saving..." : "Save"}
               </>
             ) : (
               <>
@@ -387,6 +398,200 @@ export function Header() {
       {showSettings && <SettingsPage onClose={() => setShowSettings(false)} />}
       {showRecommend && <WhatToPlayNext onClose={() => setShowRecommend(false)} />}
       {showTimeline && <PlayHistoryTimeline onClose={() => setShowTimeline(false)} />}
+      {showSavePreview && (
+        <SavePreviewDialog
+          preview={savePreview}
+          saving={saving}
+          onCancel={() => setShowSavePreview(false)}
+          onConfirm={handleSave}
+        />
+      )}
     </>
+  );
+}
+
+interface CollectionChangePreview {
+  collection: string;
+  added: string[];
+  removed: string[];
+}
+
+interface SavePreview {
+  addedCollections: string[];
+  removedCollections: string[];
+  changedCollections: CollectionChangePreview[];
+  addedGamesCount: number;
+  removedGamesCount: number;
+}
+
+function buildSavePreview(
+  saved: SteamCollection[],
+  current: SteamCollection[],
+  games: Record<number, OwnedGame>
+): SavePreview {
+  const savedStatic = saved.filter((c) => !c.is_dynamic);
+  const currentStatic = current.filter((c) => !c.is_dynamic);
+  const savedByKey = new Map(savedStatic.map((c) => [c.key, c]));
+  const currentByKey = new Map(currentStatic.map((c) => [c.key, c]));
+  const gameName = (id: number) => games[id]?.name ?? `#${id}`;
+
+  const addedCollections = currentStatic
+    .filter((c) => !savedByKey.has(c.key))
+    .map((c) => c.name);
+  const removedCollections = savedStatic
+    .filter((c) => !currentByKey.has(c.key))
+    .map((c) => c.name);
+
+  let addedGamesCount = 0;
+  let removedGamesCount = 0;
+  const changedCollections: CollectionChangePreview[] = [];
+
+  for (const currentCollection of currentStatic) {
+    const previous = savedByKey.get(currentCollection.key);
+    if (!previous) continue;
+
+    const before = new Set(previous.added);
+    const after = new Set(currentCollection.added);
+    const added = currentCollection.added.filter((id) => !before.has(id));
+    const removed = previous.added.filter((id) => !after.has(id));
+
+    if (added.length > 0 || removed.length > 0 || previous.name !== currentCollection.name) {
+      addedGamesCount += added.length;
+      removedGamesCount += removed.length;
+      changedCollections.push({
+        collection: previous.name === currentCollection.name
+          ? currentCollection.name
+          : `${previous.name} -> ${currentCollection.name}`,
+        added: added.map(gameName),
+        removed: removed.map(gameName),
+      });
+    }
+  }
+
+  return {
+    addedCollections,
+    removedCollections,
+    changedCollections,
+    addedGamesCount,
+    removedGamesCount,
+  };
+}
+
+function SavePreviewDialog({
+  preview,
+  saving,
+  onCancel,
+  onConfirm,
+}: {
+  preview: SavePreview;
+  saving: boolean;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  const hasDetails =
+    preview.addedCollections.length > 0 ||
+    preview.removedCollections.length > 0 ||
+    preview.changedCollections.length > 0;
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-6 backdrop-blur-sm">
+      <div className="w-full max-w-xl animate-fade-in rounded-2xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_24px_64px_rgba(0,0,0,0.6)]">
+        <div className="border-b border-repressurizer-border px-5 py-4">
+          <h2 className="text-base font-semibold tracking-tight text-white">Review Steam collection changes</h2>
+          <p className="mt-1 text-xs leading-relaxed text-repressurizer-text-faint">
+            Repressurizer will create a backup, then write these collection changes. Close Steam before continuing.
+          </p>
+        </div>
+
+        <div className="max-h-[55vh] space-y-4 overflow-auto p-5">
+          <div className="grid grid-cols-4 gap-2">
+            <PreviewMetric label="New collections" value={preview.addedCollections.length} />
+            <PreviewMetric label="Removed" value={preview.removedCollections.length} danger />
+            <PreviewMetric label="Games added" value={preview.addedGamesCount} />
+            <PreviewMetric label="Games removed" value={preview.removedGamesCount} danger />
+          </div>
+
+          {!hasDetails && (
+            <p className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3 text-sm text-repressurizer-text-muted">
+              No collection differences were detected, but the library is marked dirty. Saving will still refresh the Steam collection file and create a backup.
+            </p>
+          )}
+
+          {preview.addedCollections.length > 0 && (
+            <PreviewList title="Collections to add" items={preview.addedCollections} />
+          )}
+          {preview.removedCollections.length > 0 && (
+            <PreviewList title="Collections to remove" items={preview.removedCollections} danger />
+          )}
+
+          {preview.changedCollections.slice(0, 10).map((change) => (
+            <div key={change.collection} className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3">
+              <p className="truncate text-sm font-medium text-white">{change.collection}</p>
+              <div className="mt-2 grid gap-2 text-xs md:grid-cols-2">
+                <ChangeSample label="Add" items={change.added} />
+                <ChangeSample label="Remove" items={change.removed} danger />
+              </div>
+            </div>
+          ))}
+          {preview.changedCollections.length > 10 && (
+            <p className="text-xs text-repressurizer-text-faint">
+              {preview.changedCollections.length - 10} more changed collections are not shown.
+            </p>
+          )}
+        </div>
+
+        <div className="flex justify-end gap-2 border-t border-repressurizer-border px-5 py-4">
+          <button
+            onClick={onCancel}
+            disabled={saving}
+            className="btn-press rounded-lg px-4 py-2 text-sm text-repressurizer-text-muted transition-colors hover:bg-repressurizer-surface-hover hover:text-white disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={saving}
+            className="btn-press rounded-lg bg-repressurizer-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-repressurizer-accent-hover disabled:opacity-50"
+          >
+            {saving ? "Saving..." : "Create backup and save"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PreviewMetric({ label, value, danger = false }: { label: string; value: number; danger?: boolean }) {
+  return (
+    <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-3 py-2">
+      <p className="truncate text-[10px] uppercase tracking-wider text-repressurizer-text-faint">{label}</p>
+      <p className={`mt-1 font-mono text-lg font-semibold tabular-nums ${danger ? "text-repressurizer-danger" : "text-repressurizer-accent"}`}>
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function PreviewList({ title, items, danger = false }: { title: string; items: string[]; danger?: boolean }) {
+  return (
+    <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3">
+      <p className={`text-xs font-medium ${danger ? "text-repressurizer-danger" : "text-repressurizer-accent"}`}>{title}</p>
+      <p className="mt-1 truncate text-sm text-repressurizer-text-muted" title={items.join(", ")}>
+        {items.slice(0, 8).join(", ")}
+        {items.length > 8 ? `, +${items.length - 8} more` : ""}
+      </p>
+    </div>
+  );
+}
+
+function ChangeSample({ label, items, danger = false }: { label: string; items: string[]; danger?: boolean }) {
+  if (items.length === 0) {
+    return <p className="text-repressurizer-text-faint">{label}: none</p>;
+  }
+  return (
+    <p className={danger ? "text-repressurizer-danger/80" : "text-repressurizer-accent/90"} title={items.join(", ")}>
+      {label}: {items.slice(0, 4).join(", ")}
+      {items.length > 4 ? `, +${items.length - 4} more` : ""}
+    </p>
   );
 }

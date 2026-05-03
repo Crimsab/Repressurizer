@@ -4,17 +4,14 @@ on:
   push:
     branches:
       - main
-    paths:
-      - package.json
-      - src-tauri/tauri.conf.json
-      - src-tauri/Cargo.toml
   workflow_dispatch:
 
 permissions:
   contents: write
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   tag:
@@ -30,30 +27,18 @@ jobs:
       - name: Read package version
         id: version
         run: |
-          version="$(node -p "require('./package.json').version")"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
+          version="$(jq -r '.version' package.json)"
+          if [ -z "$version" ] || [ "$version" = "null" ]; then
+            echo "Could not read package.json version" >&2
+            exit 1
+          fi
           echo "tag=v$version" >> "$GITHUB_OUTPUT"
 
-      - name: Verify version files match
-        run: |
-          package_version="${{ steps.version.outputs.version }}"
-          tauri_version="$(node -p "require('./src-tauri/tauri.conf.json').version")"
-          cargo_version="$(awk -F '"' '/^version = / { print $2; exit }' src-tauri/Cargo.toml)"
-
-          if [ "$package_version" != "$tauri_version" ]; then
-            echo "package.json ($package_version) and tauri.conf.json ($tauri_version) versions differ"
-            exit 1
-          fi
-
-          if [ "$package_version" != "$cargo_version" ]; then
-            echo "package.json ($package_version) and Cargo.toml ($cargo_version) versions differ"
-            exit 1
-          fi
-
-      - name: Check whether tag exists
+      - name: Check existing tag
         id: existing
         run: |
-          if git rev-parse "${{ steps.version.outputs.tag }}" >/dev/null 2>&1; then
+          git fetch --tags --force
+          if git rev-parse -q --verify "refs/tags/${{ steps.version.outputs.tag }}" >/dev/null; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
@@ -64,15 +49,15 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -a "${{ steps.version.outputs.tag }}" -m "Repressurizer ${{ steps.version.outputs.tag }}"
+          git tag -a "${{ steps.version.outputs.tag }}" -m "Release ${{ steps.version.outputs.tag }}"
           git push origin "${{ steps.version.outputs.tag }}"
 
-      - name: Trigger release workflow
+      - name: Start release workflow
         if: steps.existing.outputs.exists == 'false'
         env:
           GH_TOKEN: ${{ github.token }}
         run: gh workflow run release.yml --ref "${{ steps.version.outputs.tag }}"
 
-      - name: Report existing tag
+      - name: Skip existing tag
         if: steps.existing.outputs.exists == 'true'
-        run: echo "Tag ${{ steps.version.outputs.tag }} already exists; skipping."
+        run: echo "Tag ${{ steps.version.outputs.tag }} already exists; no release tag created."

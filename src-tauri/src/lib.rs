@@ -22,6 +22,30 @@ fn app_data_dir() -> Option<PathBuf> {
     dirs::data_dir().map(|dir| dir.join("Repressurizer"))
 }
 
+fn steam_collections_path(steam_path: &str, steam_id3: &str) -> PathBuf {
+    PathBuf::from(steam_path)
+        .join("userdata")
+        .join(steam_id3)
+        .join("config")
+        .join("cloudstorage")
+        .join("cloud-storage-namespace-1.json")
+}
+
+fn redact_tail(value: &str) -> String {
+    if value.is_empty() {
+        return String::new();
+    }
+    let tail: String = value
+        .chars()
+        .rev()
+        .take(4)
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .collect();
+    format!("***{}", tail)
+}
+
 // Generic app data persistence — any store can save/load by key
 #[tauri::command]
 fn load_app_data(_app: tauri::AppHandle, key: String) -> Option<String> {
@@ -49,6 +73,78 @@ fn get_cache_info(_app: tauri::AppHandle) -> Option<CacheInfo> {
         hltb_bytes: file_size("hltb_cache.json"),
         failed_bytes: file_size("failed_games.json"),
     })
+}
+
+#[tauri::command]
+fn export_diagnostics(
+    _app: tauri::AppHandle,
+    steam_path: String,
+    steam_id3: String,
+    steam_id64: String,
+) -> Result<String, String> {
+    let data_dir = app_data_dir();
+    let collections_path = steam_collections_path(&steam_path, &steam_id3);
+    let collections_size = std::fs::metadata(&collections_path).map(|m| m.len()).ok();
+    let backup_count = collections_path
+        .parent()
+        .and_then(|dir| std::fs::read_dir(dir).ok())
+        .map(|entries| {
+            entries
+                .flatten()
+                .filter(|entry| {
+                    let name = entry.file_name().to_string_lossy().to_string();
+                    (name.starts_with("cloud-storage-namespace-1.backup-")
+                        || name.starts_with("cloud-storage-namespace-1.pre-restore-"))
+                        && name.ends_with(".json")
+                })
+                .count()
+        })
+        .unwrap_or(0);
+
+    let cache_size = |name: &str| -> u64 {
+        data_dir
+            .as_ref()
+            .and_then(|dir| std::fs::metadata(dir.join(name)).ok())
+            .map(|m| m.len())
+            .unwrap_or(0)
+    };
+
+    let payload = serde_json::json!({
+        "generated_at": chrono::Utc::now().to_rfc3339(),
+        "app": {
+            "name": "Repressurizer",
+            "version": env!("CARGO_PKG_VERSION"),
+        },
+        "system": {
+            "os": std::env::consts::OS,
+            "arch": std::env::consts::ARCH,
+        },
+        "steam": {
+            "path": steam_path,
+            "steam_id3": redact_tail(&steam_id3),
+            "steam_id64": redact_tail(&steam_id64),
+            "collections_file_exists": collections_path.exists(),
+            "collections_file_size": collections_size,
+            "backup_count": backup_count,
+        },
+        "app_data": {
+            "path": data_dir.as_ref().and_then(|p| p.to_str()).unwrap_or("").to_string(),
+            "details_cache_bytes": cache_size("details_cache.json"),
+            "hltb_cache_bytes": cache_size("hltb_cache.json"),
+            "failed_games_bytes": cache_size("failed_games.json"),
+            "achievements_bytes": cache_size("achievements.json"),
+            "friends_bytes": cache_size("friends.json"),
+            "wishlist_bytes": cache_size("wishlist.json"),
+            "settings_bytes": cache_size("settings.json"),
+        },
+        "privacy": {
+            "api_key_included": false,
+            "steam_ids_redacted": true,
+        }
+    });
+
+    serde_json::to_string_pretty(&payload)
+        .map_err(|e| format!("Failed to serialize diagnostics: {}", e))
 }
 
 #[tauri::command]
@@ -141,6 +237,7 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             // System tray setup
@@ -224,6 +321,7 @@ pub fn run() {
             api::fetch_achievements,
             api::fetch_achievements_summary,
             api::fetch_wishlist,
+            api::fetch_family_library,
             api::resolve_vanity_url,
             api::fetch_player_summary,
             commands::run_hours_categorizer,
@@ -244,6 +342,7 @@ pub fn run() {
             load_wishlist_cache,
             save_wishlist_cache,
             get_cache_info,
+            export_diagnostics,
             load_app_data,
             save_app_data,
             hltb::fetch_hltb,

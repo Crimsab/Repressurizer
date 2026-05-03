@@ -42,6 +42,7 @@ interface GameState {
   filters: FilterState;
 
   setGames: (games: OwnedGame[]) => void;
+  mergeGames: (games: OwnedGame[]) => void;
   setDetails: (appId: number, details: GameDetails) => void;
   setBulkDetails: (details: GameDetails[]) => void;
   clearDetailsCache: () => void;
@@ -86,6 +87,23 @@ export const useGameStore = create<GameState>((set, get) => ({
     }
     set({ games: map, loading: false, error: null });
   },
+
+  mergeGames: (games) =>
+    set((state) => {
+      const map = { ...state.games };
+      for (const game of games) {
+        const existing = map[game.appid];
+        map[game.appid] = existing
+          ? {
+              ...game,
+              ...existing,
+              name: existing.name || game.name,
+              img_icon_url: existing.img_icon_url ?? game.img_icon_url,
+            }
+          : game;
+      }
+      return { games: map };
+    }),
 
   setDetails: (appId, details) =>
     set((state) => {

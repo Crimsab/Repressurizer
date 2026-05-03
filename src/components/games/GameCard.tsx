@@ -3,9 +3,10 @@ import { useCategoryStore } from "../../stores/categoryStore";
 import { useGameStore } from "../../stores/gameStore";
 import { useStatusStore, STATUS_META } from "../../stores/statusStore";
 import { useTagsStore } from "../../stores/tagsStore";
+import { useFamilyStore } from "../../stores/familyStore";
 import { getHeaderImageUrl } from "../../lib/tauri";
 import type { OwnedGame } from "../../lib/types";
-import { X, Clock } from "@phosphor-icons/react";
+import { X, Clock, UsersThree } from "@phosphor-icons/react";
 
 interface GameCardProps {
   game: OwnedGame;
@@ -22,6 +23,7 @@ export function GameCard({ game, onContextMenu, onDoubleClick, onShiftClick }: G
   const removeGameFromCategory = useCategoryStore((s) => s.removeGameFromCategory);
   const status = useStatusStore((s) => s.statuses[game.appid] ?? "none");
   const statusMeta = STATUS_META[status];
+  const isFamilyShared = useFamilyStore((s) => s.isFamilyShared(game.appid));
   const lastClickTime = useRef(0);
 
   const categories = useMemo(
@@ -97,6 +99,12 @@ export function GameCard({ game, onContextMenu, onDoubleClick, onShiftClick }: G
         {status !== "none" && (
           <div className={`absolute top-1.5 right-1.5 rounded-md px-1.5 py-0.5 text-[10px] font-medium ${statusMeta.color} ${statusMeta.bg}`}>
             {statusMeta.label}
+          </div>
+        )}
+        {isFamilyShared && (
+          <div className="absolute left-1.5 top-1.5 inline-flex items-center gap-1 rounded-md bg-emerald-500/90 px-1.5 py-0.5 text-[10px] font-medium text-black shadow-sm">
+            <UsersThree size={10} weight="bold" />
+            Family
           </div>
         )}
       </div>

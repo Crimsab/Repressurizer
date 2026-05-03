@@ -6,11 +6,12 @@ import { useTagsStore } from "../../stores/tagsStore";
 import { useHltbStore } from "../../stores/hltbStore";
 import { useAchievementsStore } from "../../stores/achievementsStore";
 import { useReviewStore } from "../../stores/reviewStore";
+import { useFamilyStore } from "../../stores/familyStore";
 import { GameCard } from "./GameCard";
 import { ContextMenu } from "./ContextMenu";
 import { GameDetailPage } from "./GameDetailPage";
 import type { OwnedGame } from "../../lib/types";
-import { Spinner, MagnifyingGlass, FolderOpen, Clock } from "@phosphor-icons/react";
+import { Spinner, MagnifyingGlass, FolderOpen, Clock, UsersThree } from "@phosphor-icons/react";
 import { parseSearchQuery, matchesFilter, hasAdvancedFilters } from "../../lib/search";
 
 interface ContextMenuState {
@@ -35,6 +36,7 @@ export function GameGrid() {
   const achievementSummaries = useAchievementsStore((s) => s.summaries);
   const details = useGameStore((s) => s.details);
   const reviews = useReviewStore((s) => s.reviews);
+  const familyApps = useFamilyStore((s) => s.apps);
   const { activeCategory, collections } = useCategoryStore();
   const lastClickedId = useRef<number | null>(null);
 
@@ -71,6 +73,11 @@ export function GameGrid() {
     } else if (activeCategory === "recently-played") {
       const cutoff = Math.floor(Date.now() / 1000) - 30 * 24 * 60 * 60;
       gameList = gameList.filter((g) => g.rtime_last_played > cutoff && !hiddenIds.has(g.appid));
+    } else if (activeCategory === "steam-family") {
+      gameList = gameList.filter((g) => {
+        const familyApp = familyApps[g.appid];
+        return !!familyApp && familyApp.is_family_shared && familyApp.exclude_reason === 0 && !hiddenIds.has(g.appid);
+      });
     } else if (activeCategory === "hidden") {
       gameList = gameList.filter((g) => hiddenIds.has(g.appid));
     } else if (activeCategory && activeCategory !== "all") {
@@ -186,7 +193,7 @@ export function GameGrid() {
     });
 
     return gameList;
-  }, [games, activeCategory, collections, searchQuery, sortBy, sortAsc, filters, statuses, allGameTags, hltbData, achievementSummaries, details, reviews]);
+  }, [games, activeCategory, collections, familyApps, searchQuery, sortBy, sortAsc, filters, statuses, allGameTags, hltbData, achievementSummaries, details, reviews]);
 
   const orderedIds = useMemo(() => filteredGames.map((g) => g.appid), [filteredGames]);
 
@@ -298,6 +305,7 @@ function GameListRow({
   const collections = useCategoryStore((s) => s.collections);
   const status = useStatusStore((s) => s.statuses[game.appid] ?? "none");
   const statusMeta = STATUS_META[status];
+  const isFamilyShared = useFamilyStore((s) => s.isFamilyShared(game.appid));
 
   const categories = useMemo(
     () => collections.filter((c) => c.added.includes(game.appid) && !c.is_dynamic),
@@ -347,6 +355,12 @@ function GameListRow({
       {status !== "none" && (
         <span className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-medium ${statusMeta.color} ${statusMeta.bg}`}>
           {statusMeta.label}
+        </span>
+      )}
+      {isFamilyShared && (
+        <span className="inline-flex shrink-0 items-center gap-1 rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300">
+          <UsersThree size={10} weight="duotone" />
+          Family
         </span>
       )}
       <span className="inline-flex items-center gap-1 font-mono text-xs text-repressurizer-text-faint tabular-nums">

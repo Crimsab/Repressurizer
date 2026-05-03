@@ -300,6 +300,43 @@ export async function getCacheInfo(): Promise<CacheInfo | null> {
   return invoke<CacheInfo | null>("get_cache_info");
 }
 
+export async function exportDiagnostics(
+  steamPath: string,
+  steamId3: string,
+  steamId64: string
+): Promise<string> {
+  return invoke<string>("export_diagnostics", { steamPath, steamId3, steamId64 });
+}
+
+export interface FamilyLibraryApp {
+  appid: number;
+  name: string | null;
+  owner_steamids: string[];
+  exclude_reason: number;
+  is_owned_by_current_user: boolean;
+  is_family_shared: boolean;
+}
+
+export interface FamilyLibraryResult {
+  auth_used: "web_api_key" | "access_token" | string;
+  owner_steamid: string | null;
+  total_apps: number;
+  owned_apps: number;
+  shared_apps: number;
+  excluded_apps: number;
+  apps: FamilyLibraryApp[];
+}
+
+export async function fetchFamilyLibrary(
+  apiKey: string,
+  accessToken?: string
+): Promise<FamilyLibraryResult> {
+  return invoke<FamilyLibraryResult>("fetch_family_library", {
+    apiKey,
+    accessToken: accessToken || null,
+  });
+}
+
 export async function runScoreCategorizer(
   gameDetails: GameDetails[],
   useDefault: boolean

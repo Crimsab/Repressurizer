@@ -15,6 +15,7 @@ import { useTagsStore } from "./stores/tagsStore";
 import { useReviewStore } from "./stores/reviewStore";
 import { useHltbIgnoredStore } from "./stores/hltbIgnoredStore";
 import { useToastStore } from "./stores/toastStore";
+import { useFamilyStore } from "./stores/familyStore";
 import { fetchLibrary, loadCollections, createManualBackup } from "./lib/tauri";
 import { useT } from "./lib/i18n";
 import { SetupWizard } from "./components/setup/SetupWizard";
@@ -125,6 +126,7 @@ function AppContent() {
   const hydrateTags = useTagsStore((s) => s.hydrate);
   const hydrateReviews = useReviewStore((s) => s.hydrate);
   const hydrateHltbIgnored = useHltbIgnoredStore((s) => s.hydrate);
+  const hydrateFamily = useFamilyStore((s) => s.hydrate);
   const setCollections = useCategoryStore((s) => s.setCollections);
   const [reloading, setReloading] = useState(false);
   const [reloadError, setReloadError] = useState("");
@@ -151,6 +153,7 @@ function AppContent() {
     hydrateTags();
     hydrateReviews();
     hydrateHltbIgnored();
+    hydrateFamily();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -208,10 +211,13 @@ function AppContent() {
       Promise.all([
         fetchLibrary(settings.apiKey, settings.steamId64),
         loadCollections(settings.steamPath, settings.steamId3),
+        useFamilyStore.getState().hydrate(),
       ])
         .then(([games, collections]) => {
-          console.log("Reloaded:", games.length, "games,", collections.length, "collections");
-          setGames(games);
+          const familyGames = useFamilyStore.getState().sharedGamesAsOwned();
+          const mergedGames = [...games, ...familyGames];
+          console.log("Reloaded:", mergedGames.length, "games,", collections.length, "collections");
+          setGames(mergedGames);
           setCollections(collections);
           setReloading(false);
 
@@ -231,11 +237,11 @@ function AppContent() {
           const cachedHltb = useHltbStore.getState().data;
 
           if (settings.apiKey) {
-            const missingDetails = games.map((g) => g.appid).filter((id) => !cachedDetails[id]);
+            const missingDetails = mergedGames.map((g) => g.appid).filter((id) => !cachedDetails[id]);
             startDetailsFetch(missingDetails);
           }
 
-          const missingHltb = games
+          const missingHltb = mergedGames
             .filter((g) => !cachedHltb[g.appid])
             .map((g) => ({ appId: g.appid, name: g.name }));
           startHltbFetch(missingHltb);
