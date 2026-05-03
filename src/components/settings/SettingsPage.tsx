@@ -230,7 +230,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
     const startedAt = performance.now();
     console.groupCollapsed("[Repressurizer] Steam Family probe");
     console.info("Starting Steam Family probe", {
-      hasApiKey: Boolean(settings.apiKey),
+      hasSavedWebApiKey: Boolean(settings.apiKey),
       hasStoreWebApiToken: Boolean(familyAccessToken.trim()),
       steamId64: redactTail(settings.steamId64),
     });
@@ -393,16 +393,19 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-repressurizer-text">Probe shared family library</p>
                       <p className="mt-0.5 text-xs leading-relaxed text-repressurizer-text-faint">
-                        Uses your Steam Store webapi_token to resolve the real family group before loading shared apps. A normal Steam Web API key is only a fallback.
+                        Uses your saved Steam Web API key automatically. If Valve rejects it for Steam Family, paste a temporary Steam Store webapi_token here.
                       </p>
                     </div>
                   </div>
+                  <p className="rounded-lg border border-repressurizer-border-subtle bg-repressurizer-surface/50 px-3 py-2 text-xs text-repressurizer-text-muted">
+                    Saved Steam Web API key: <span className="font-medium text-repressurizer-text">{settings.apiKey ? "configured" : "missing"}</span>. Do not paste that same key again below.
+                  </p>
                   <div className="flex gap-2">
                     <input
                       type="password"
                       value={familyAccessToken}
                       onChange={(e) => setFamilyAccessToken(e.target.value)}
-                      placeholder="Steam Store webapi_token"
+                      placeholder="Optional Steam Store webapi_token"
                       className="min-w-0 flex-1 rounded-lg border border-repressurizer-border bg-repressurizer-surface px-3 py-2 text-xs text-repressurizer-text placeholder:text-repressurizer-text-faint transition-colors focus:border-repressurizer-accent focus:outline-none"
                     />
                     <button
