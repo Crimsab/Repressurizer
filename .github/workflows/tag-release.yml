@@ -38,7 +38,7 @@ jobs:
         run: |
           package_version="${{ steps.version.outputs.version }}"
           tauri_version="$(node -p "require('./src-tauri/tauri.conf.json').version")"
-          cargo_version="$(grep -m1 '^version = ' src-tauri/Cargo.toml | sed -E 's/version = \"(.*)\"/\\1/')"
+          cargo_version="$(awk -F '"' '/^version = / { print $2; exit }' src-tauri/Cargo.toml)"
 
           if [ "$package_version" != "$tauri_version" ]; then
             echo "package.json ($package_version) and tauri.conf.json ($tauri_version) versions differ"
