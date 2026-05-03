@@ -1,8 +1,8 @@
 # Repressurizer
 
-Repressurizer is a desktop Steam library manager for editing Steam collections, organizing backlogs, and deciding what to play next.
+Repressurizer is a modern desktop Steam library manager for editing Steam collections, organizing backlogs, and deciding what to play next.
 
-It is inspired by Depressurizer, but it is a separate Tauri app with a Rust backend and a React interface.
+It is a spiritual successor to Depressurizer: same useful idea, rebuilt as a separate Tauri app with a Rust backend and a React interface.
 
 ## Status
 
@@ -55,6 +55,8 @@ Release builds are produced by GitHub Actions as:
 
 - NSIS installer
 - portable Windows zip
+
+Version tags are created from `package.json` (`v0.1.0`, `v0.2.0`, ...). Each tag triggers a GitHub Release with generated changelog notes and Windows artifacts.
 
 ## Data And Backups
 
