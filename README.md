@@ -63,9 +63,6 @@ Release builds are produced by GitHub Actions as:
 
 Version tags are created from `package.json` (`v0.1.0`, `v0.2.0`, ...). Each tag triggers a GitHub Release with generated changelog notes and Windows artifacts.
 
-For quick test builds, run the `Preview` GitHub Actions workflow. It skips NSIS
-installer packaging and uploads only a portable preview exe/zip.
-
 For Steam Family setup and the optional Store `webapi_token` fallback, see [docs/steam-family.md](docs/steam-family.md).
 
 ## Data And Backups
