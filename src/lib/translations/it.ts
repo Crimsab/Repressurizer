@@ -211,6 +211,8 @@ const it: Record<keyof typeof en, string> = {
   "onboarding.sidebar.desc": "Sfoglia le tue collezioni, le liste smart, e trascina i giochi tra le categorie. Trascina le categorie per riordinarle.",
   "onboarding.search": "Ricerca Avanzata",
   "onboarding.search.desc": "Usa filtri avanzati come genre:rpg, status:playing, hours:>10 per trovare i giochi velocemente.",
+  "onboarding.family": "Steam Family",
+  "onboarding.family.desc": "Repressurizer puo mostrare i giochi condivisi nella Family quando Steam concede l'accesso. Controlliamo automaticamente e ti guidiamo se serve il token Store.",
   "onboarding.tools": "Strumenti Potenti",
   "onboarding.tools.desc": "Auto-categorizzazione, statistiche, achievement, liste desideri e altro — tutto accessibile dalla toolbar.",
   "onboarding.done": "Tutto pronto!",

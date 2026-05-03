@@ -955,6 +955,7 @@ function AppearanceTab({
   const t = useT();
 
   const handlePickPreset = (hex: string) => {
+    setCustomHex(hex);
     setSettings({ accentColor: hex });
     applyAccentColor(hex);
   };
@@ -980,6 +981,48 @@ function AppearanceTab({
         <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">Accent Color</h3>
         <p className="text-xs text-repressurizer-text-faint -mt-1">Changes the highlight color throughout the app</p>
 
+        <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3">
+          <div className="flex items-center gap-3">
+            <label className="relative block h-12 w-12 shrink-0 cursor-pointer overflow-hidden rounded-xl border border-repressurizer-border shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+              <span
+                className="block h-full w-full"
+                style={{ backgroundColor: /^#[0-9a-fA-F]{6}$/.test(customHex || accentColor) ? (customHex || accentColor) : "#10b981" }}
+              />
+              <input
+                type="color"
+                value={/^#[0-9a-fA-F]{6}$/.test(customHex || accentColor) ? (customHex || accentColor) : "#10b981"}
+                onChange={(e) => handleCustomHex(e.target.value)}
+                className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                aria-label="Pick accent color"
+              />
+            </label>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-repressurizer-text">Custom accent</p>
+              <p className="mt-0.5 text-xs text-repressurizer-text-faint">Click the swatch to pick a color. Hex stays available for precision.</p>
+            </div>
+            {accentColor && (
+              <button
+                onClick={handleResetColor}
+                title="Reset to default"
+                className="btn-press inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-repressurizer-border text-repressurizer-text-faint transition-colors hover:border-repressurizer-text-muted hover:text-repressurizer-text"
+              >
+                <X size={14} weight="bold" />
+              </button>
+            )}
+          </div>
+          <div className="mt-3">
+            <label className="mb-1.5 block text-xs text-repressurizer-text-muted">Hex value</label>
+            <input
+              type="text"
+              value={customHex}
+              onChange={(e) => handleCustomHex(e.target.value)}
+              placeholder="#10b981"
+              maxLength={7}
+              className="w-full rounded-lg border border-repressurizer-border bg-repressurizer-surface px-3 py-2 font-mono text-sm text-repressurizer-text transition-colors focus:border-repressurizer-accent focus:outline-none"
+            />
+          </div>
+        </div>
+
         {/* Presets */}
         <div className="flex flex-wrap gap-2">
           {ACCENT_PRESETS.map((p) => (
@@ -995,51 +1038,12 @@ function AppearanceTab({
               style={{ backgroundColor: p.accent }}
             >
               {accentColor === p.accent && (
-                <span className="absolute inset-0 flex items-center justify-center text-white text-[10px] font-bold">✓</span>
+                <span className="absolute inset-0 flex items-center justify-center text-white">
+                  <CheckCircle size={14} weight="fill" />
+                </span>
               )}
             </button>
           ))}
-
-          {/* Reset to default */}
-          {accentColor && (
-            <button
-              onClick={handleResetColor}
-              title="Reset to default"
-              className="h-8 w-8 rounded-full border-2 border-dashed border-repressurizer-border text-repressurizer-text-faint text-xs hover:border-repressurizer-text-muted hover:text-repressurizer-text-muted transition-colors flex items-center justify-center"
-            >
-              ✕
-            </button>
-          )}
-        </div>
-
-        {/* Custom hex */}
-        <div>
-          <label className="mb-1.5 block text-xs text-repressurizer-text-muted">Custom hex color</label>
-          <div className="flex gap-2">
-            <div className="relative flex-1">
-              <input
-                type="text"
-                value={customHex}
-                onChange={(e) => handleCustomHex(e.target.value)}
-                placeholder="#rrggbb"
-                maxLength={7}
-                className="w-full rounded-lg border border-repressurizer-border bg-repressurizer-bg px-3 py-2 font-mono text-sm text-repressurizer-text transition-colors focus:border-repressurizer-accent focus:outline-none"
-              />
-            </div>
-            {customHex && /^#[0-9a-fA-F]{6}$/.test(customHex) && (
-              <div
-                className="h-9 w-9 rounded-lg border border-repressurizer-border shrink-0"
-                style={{ backgroundColor: customHex }}
-              />
-            )}
-            <input
-              type="color"
-              value={customHex || "#10b981"}
-              onChange={(e) => handleCustomHex(e.target.value)}
-              className="h-9 w-9 cursor-pointer rounded-lg border border-repressurizer-border bg-repressurizer-bg p-0.5 shrink-0"
-              title="Color picker"
-            />
-          </div>
         </div>
       </div>
 

@@ -12,6 +12,7 @@ import {
   fetchHltb,
   currencyToCountryCode,
 } from "../../lib/tauri";
+import { extractReleaseYear } from "../../lib/search";
 import { SteamImage } from "./SteamImage";
 import { useHltbStore } from "../../stores/hltbStore";
 import type {
@@ -263,7 +264,7 @@ function InfoTab({
     setFetchingHltb(true);
     setHltbError("");
     try {
-      const data = await fetchHltb(name);
+      const data = await fetchHltb(name, game.appid, extractReleaseYear(details?.release_date));
       if (data) setHltbData(game.appid, data);
       else setHltbError("No HLTB data found");
     } catch (e) {

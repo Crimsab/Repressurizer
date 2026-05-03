@@ -89,3 +89,45 @@ test("opens settings maintenance and Steam Family controls without layout overfl
   await page.screenshot({ path: maintenancePath, fullPage: true });
   await testInfo.attach("settings-maintenance", { path: maintenancePath, contentType: "image/png" });
 });
+
+test("uses the color picker as the primary custom accent control", async ({ page }) => {
+  await page.goto("/");
+  await page.getByTitle("Settings").click();
+  await page.getByRole("button", { name: "Appearance" }).click();
+
+  const picker = page.getByLabel("Pick accent color");
+  await expect(picker).toBeAttached();
+  await picker.evaluate((input) => {
+    const el = input as HTMLInputElement;
+    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value")?.set;
+    setter?.call(el, "#38bdf8");
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+    el.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+
+  await expect(page.getByPlaceholder("#10b981")).toHaveValue("#38bdf8");
+  await expect
+    .poll(() => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--color-repressurizer-accent").trim()))
+    .toBe("#38bdf8");
+});
+
+test("guides Steam Family setup during onboarding", async ({ page }) => {
+  await page.addInitScript(() => {
+    const raw = window.localStorage.getItem("repressurizer-settings");
+    if (!raw) return;
+    const settings = JSON.parse(raw);
+    settings.onboardingComplete = false;
+    window.localStorage.setItem("repressurizer-settings", JSON.stringify(settings));
+  });
+
+  await page.goto("/");
+
+  await expect(page.getByRole("heading", { name: "Welcome to Repressurizer!" })).toBeVisible();
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+  await page.getByRole("button", { name: "Next", exact: true }).click();
+
+  await expect(page.getByRole("heading", { name: "Steam Family" })).toBeVisible();
+  await expect(page.getByText("Family library connected")).toBeVisible();
+  await expect(page.getByText("Steam Family ready: 1 shared game found.")).toBeVisible();
+});

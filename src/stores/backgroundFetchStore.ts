@@ -6,6 +6,7 @@ import { useAchievementsStore } from "./achievementsStore";
 import { useFailedGamesStore } from "./failedGamesStore";
 import { useHltbIgnoredStore } from "./hltbIgnoredStore";
 import { useSettingsStore } from "./settingsStore";
+import { extractReleaseYear } from "../lib/search";
 import type { GameDetails } from "../lib/types";
 
 // ── Config ────────────────────────────────────────────────────────────────────
@@ -365,7 +366,9 @@ async function _runHltbLoop(items: Array<{ appId: number; name: string }>) {
 
     await Promise.all(batch.map(async ({ name, appId }) => {
       try {
-        const result = await fetchHltb(name);
+        const details = useGameStore.getState().details[appId];
+        const releaseYear = extractReleaseYear(details?.release_date);
+        const result = await fetchHltb(name, appId, releaseYear);
         if (result) {
           useHltbStore.getState().setData(appId, result);
           const summary = result.main_story != null ? `${result.main_story}h` : "N/A";

@@ -209,6 +209,8 @@ const en = {
   "onboarding.sidebar.desc": "Browse your collections, smart lists, and drag games between categories. Drag categories to reorder them.",
   "onboarding.search": "Smart Search",
   "onboarding.search.desc": "Use advanced filters like genre:rpg, status:playing, hours:>10 to find games quickly.",
+  "onboarding.family": "Steam Family",
+  "onboarding.family.desc": "Repressurizer can show shared Family games when Steam grants access. We'll check automatically and guide you if a Store token is needed.",
   "onboarding.tools": "Powerful Tools",
   "onboarding.tools.desc": "Auto-categorize, statistics, achievements, wishlists, and more — all accessible from the toolbar.",
   "onboarding.done": "You're all set!",

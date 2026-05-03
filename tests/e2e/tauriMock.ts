@@ -46,6 +46,7 @@ export async function installTauriMock(page: Page) {
       onboardingComplete: true,
       categoryOrder: [],
       minimizeToTray: false,
+      includeSteamFamilyNonGames: false,
     };
 
     const games = [
@@ -89,6 +90,11 @@ export async function installTauriMock(page: Page) {
           name: "It Takes Two",
           owner_steamids: ["76561198111111111"],
           exclude_reason: 0,
+          playtime_forever: 120,
+          rtime_last_played: 1_777_000_000,
+          img_icon_hash: null,
+          app_type: 1,
+          is_non_game: false,
           is_owned_by_current_user: false,
           is_family_shared: true,
         },
@@ -133,6 +139,20 @@ export async function installTauriMock(page: Page) {
           }
           case "load_collections":
             return collections;
+          case "fetch_family_library":
+            return {
+              auth_used: "access_token",
+              family_groupid: "mock-family",
+              owner_steamid: "76561198000000000",
+              total_apps: 1,
+              owned_apps: 0,
+              shared_apps: 1,
+              excluded_apps: 0,
+              non_game_apps: 0,
+              playtime_entries: 1,
+              playtime_unavailable_reason: null,
+              apps: familyCache.apps,
+            };
           case "create_manual_backup":
           case "save_app_data":
             return null;

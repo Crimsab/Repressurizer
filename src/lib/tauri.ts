@@ -167,10 +167,20 @@ export interface HltbData {
   main_story: number | null;
   main_extra: number | null;
   completionist: number | null;
+  game_id?: number | null;
+  game_name?: string | null;
+  confidence?: number | null;
 }
 
-export async function fetchHltb(gameName: string): Promise<HltbData | null> {
-  return invoke<HltbData | null>("fetch_hltb", { gameName });
+export async function fetchHltb(
+  gameName: string,
+  appId?: number,
+  releaseYear?: number | null
+): Promise<HltbData | null> {
+  const payload: Record<string, unknown> = { gameName };
+  if (appId != null) payload.appId = appId;
+  if (releaseYear != null) payload.releaseYear = releaseYear;
+  return invoke<HltbData | null>("fetch_hltb", payload);
 }
 
 // --- Auto-Categorizer types and commands ---

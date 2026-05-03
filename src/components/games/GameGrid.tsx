@@ -452,7 +452,7 @@ function GameListRow({
         </span>
       )}
       {isFamilyShared && (
-        <span className="inline-flex shrink-0 items-center gap-1 rounded-md bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300">
+        <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-sky-400/20 bg-sky-400/12 px-1.5 py-0.5 text-[10px] font-medium text-sky-300">
           <UsersThree size={10} weight="duotone" />
           Family
         </span>

@@ -101,7 +101,7 @@ export function GameCard({ game, onContextMenu, onDoubleClick, onShiftClick, isP
           </div>
         )}
         {isFamilyShared && (
-          <div className="absolute left-1.5 top-1.5 inline-flex items-center gap-1 rounded-md bg-emerald-500/90 px-1.5 py-0.5 text-[10px] font-medium text-black shadow-sm">
+          <div className="absolute left-1.5 top-1.5 inline-flex items-center gap-1 rounded-md bg-sky-400/95 px-1.5 py-0.5 text-[10px] font-semibold text-slate-950 shadow-sm ring-1 ring-sky-200/40">
             <UsersThree size={10} weight="bold" />
             Family
           </div>
