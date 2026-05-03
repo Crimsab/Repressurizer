@@ -61,3 +61,7 @@ Release builds are produced by GitHub Actions as:
 Repressurizer stores its own cache/settings under the operating system data directory in a `Repressurizer` folder. Steam collection backups are stored next to the Steam collection file they protect.
 
 Steam collection edits affect local Steam data. Make a backup before testing against a real library.
+
+## License
+
+Repressurizer is licensed under the GNU General Public License v3.0. See [LICENSE](LICENSE).
