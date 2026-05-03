@@ -26,8 +26,8 @@ import {
   CopySimple,
   UsersThree,
 } from "@phosphor-icons/react";
-import { getHeaderImageUrl } from "../../lib/tauri";
 import { useT } from "../../lib/i18n";
+import { SteamImage } from "../games/SteamImage";
 
 interface CategoryContextMenuState {
   x: number;
@@ -236,11 +236,11 @@ export function Sidebar() {
             className="mb-2 w-full overflow-hidden rounded-xl border border-repressurizer-border bg-repressurizer-surface text-left transition-all hover:border-repressurizer-accent/50 hover:bg-repressurizer-surface-hover group"
           >
             <div className="relative h-14 overflow-hidden">
-              <img
-                src={getHeaderImageUrl(nowPlayingGame.appid)}
+              <SteamImage
+                appId={nowPlayingGame.appid}
                 alt=""
+                kind="header"
                 className="h-full w-full object-cover object-top opacity-90 group-hover:opacity-100 transition-opacity scale-105 group-hover:scale-100"
-                onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
               <span className="absolute top-1.5 right-1.5 rounded-md bg-repressurizer-accent px-1.5 py-0.5 text-[8px] font-bold text-black tracking-wide uppercase">

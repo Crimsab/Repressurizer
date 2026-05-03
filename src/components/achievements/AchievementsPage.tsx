@@ -2,9 +2,9 @@ import { useState, useMemo } from "react";
 import { useGameStore } from "../../stores/gameStore";
 import { useAchievementsStore } from "../../stores/achievementsStore";
 import { useBackgroundFetchStore } from "../../stores/backgroundFetchStore";
-import { getHeaderImageUrl } from "../../lib/tauri";
 import type { OwnedGame } from "../../lib/types";
 import { X, Trophy, ArrowsClockwise } from "@phosphor-icons/react";
+import { SteamImage } from "../games/SteamImage";
 
 interface AchievementsPageProps {
   onClose: () => void;
@@ -155,11 +155,11 @@ export function AchievementsPage({ onClose, onOpenGame }: AchievementsPageProps)
                   >
                     {/* Banner */}
                     <div className="h-9 w-16 shrink-0 overflow-hidden rounded-md bg-repressurizer-bg">
-                      <img
-                        src={getHeaderImageUrl(game.appid)}
+                      <SteamImage
+                        appId={game.appid}
                         alt=""
+                        kind="header"
                         className="h-full w-full object-cover"
-                        onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                       />
                     </div>
 

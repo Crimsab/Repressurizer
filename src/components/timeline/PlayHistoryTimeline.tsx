@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useGameStore } from "../../stores/gameStore";
-import { getHeaderImageUrl } from "../../lib/tauri";
 import { GameDetailPage } from "../games/GameDetailPage";
+import { SteamImage } from "../games/SteamImage";
 import type { OwnedGame } from "../../lib/types";
 import { X, CalendarBlank, Clock, SquaresFour, List, Rows } from "@phosphor-icons/react";
 
@@ -317,11 +317,11 @@ function GridView({
                 >
                   {/* Banner 16:9 */}
                   <div className="relative w-full overflow-hidden" style={{ aspectRatio: "16/9" }}>
-                    <img
-                      src={getHeaderImageUrl(g.appid)}
+                    <SteamImage
+                      appId={g.appid}
                       alt=""
+                      kind="header"
                       className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
-                      onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                     />
                     {/* Gradient overlay */}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
@@ -400,11 +400,11 @@ function ListView({
             >
               {/* Thumbnail */}
               <div className="w-11 h-6 shrink-0 overflow-hidden rounded bg-repressurizer-bg border border-repressurizer-border-subtle">
-                <img
-                  src={getHeaderImageUrl(g.appid)}
+                <SteamImage
+                  appId={g.appid}
                   alt=""
+                  kind="header"
                   className="h-full w-full object-cover"
-                  onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                 />
               </div>
 
@@ -479,11 +479,11 @@ function StripView({
                       style={{ width: 96, height: 54 }}
                       title={`${g.name} — ${formatHours(g.playtime)}`}
                     >
-                      <img
-                        src={getHeaderImageUrl(g.appid)}
+                      <SteamImage
+                        appId={g.appid}
                         alt=""
+                        kind="header"
                         className="h-full w-full object-cover opacity-75 group-hover:opacity-100 transition-opacity"
-                        onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                       />
                       {/* Hover overlay with name + hours */}
                       <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-end p-1.5 gap-0.5">

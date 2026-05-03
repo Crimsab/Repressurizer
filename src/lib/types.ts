@@ -48,6 +48,7 @@ export interface GameDetails {
   publishers: string[];
   platforms: PlatformSupport;
   header_image: string | null;
+  capsule_image: string | null;
   price_initial: number | null;
   price_final: number | null;
   price_currency: string | null;

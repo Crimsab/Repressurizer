@@ -106,11 +106,11 @@ export async function fetchGameDetails(
 }
 
 export function getHeaderImageUrl(appId: number): string {
-  return `https://steamcdn-a.akamaihd.net/steam/apps/${appId}/header.jpg`;
+  return `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/header.jpg`;
 }
 
 export function getCapsuleImageUrl(appId: number): string {
-  return `https://steamcdn-a.akamaihd.net/steam/apps/${appId}/capsule_231x87.jpg`;
+  return `https://cdn.akamai.steamstatic.com/steam/apps/${appId}/capsule_231x87.jpg`;
 }
 
 export async function fetchAchievements(

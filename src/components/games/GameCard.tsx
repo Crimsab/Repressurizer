@@ -4,9 +4,9 @@ import { useGameStore } from "../../stores/gameStore";
 import { useStatusStore, STATUS_META } from "../../stores/statusStore";
 import { useTagsStore } from "../../stores/tagsStore";
 import { useFamilyStore } from "../../stores/familyStore";
-import { getHeaderImageUrl } from "../../lib/tauri";
 import type { OwnedGame } from "../../lib/types";
 import { X, Clock, UsersThree } from "@phosphor-icons/react";
+import { SteamImage } from "./SteamImage";
 
 interface GameCardProps {
   game: OwnedGame;
@@ -83,15 +83,13 @@ export function GameCard({ game, onContextMenu, onDoubleClick, onShiftClick }: G
     >
       {/* Game image */}
       <div className="relative aspect-[46/21.5] overflow-hidden bg-repressurizer-surface">
-        <img
-          src={getHeaderImageUrl(game.appid)}
+        <SteamImage
+          appId={game.appid}
           alt={String(game.name ?? "")}
+          kind="header"
           loading="lazy"
           draggable={false}
           className="h-full w-full object-cover"
-          onError={(e) => {
-            (e.target as HTMLImageElement).style.display = "none";
-          }}
         />
         {isSelected && (
           <div className="absolute inset-0 bg-repressurizer-accent/15 pointer-events-none" />

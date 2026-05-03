@@ -2,8 +2,9 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { useGameStore } from "../../stores/gameStore";
 import { useWishlistStore } from "../../stores/wishlistStore";
 import { useSettingsStore } from "../../stores/settingsStore";
-import { fetchWishlist, fetchGameDetails, getHeaderImageUrl, currencyToCountryCode } from "../../lib/tauri";
+import { fetchWishlist, fetchGameDetails, currencyToCountryCode } from "../../lib/tauri";
 import { X, BookmarkSimple, ArrowsClockwise, SortAscending, Export } from "@phosphor-icons/react";
+import { SteamImage } from "../games/SteamImage";
 
 interface WishlistPageProps {
   onClose: () => void;
@@ -253,11 +254,11 @@ export function WishlistPage({ onClose }: WishlistPageProps) {
 
                     {/* Banner */}
                     <div className="h-8 w-14 shrink-0 overflow-hidden rounded-md bg-repressurizer-bg">
-                      <img
-                        src={getHeaderImageUrl(item.appid)}
+                      <SteamImage
+                        appId={item.appid}
                         alt=""
+                        kind="header"
                         className="h-full w-full object-cover"
-                        onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                       />
                     </div>
 

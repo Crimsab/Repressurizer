@@ -100,6 +100,8 @@ pub struct GameDetails {
     pub platforms: PlatformSupport,
     pub header_image: Option<String>,
     #[serde(default)]
+    pub capsule_image: Option<String>,
+    #[serde(default)]
     pub price_initial: Option<u64>,
     #[serde(default)]
     pub price_final: Option<u64>,
@@ -133,6 +135,7 @@ struct StoreAppData {
     publishers: Option<Vec<String>>,
     platforms: Option<StorePlatforms>,
     header_image: Option<String>,
+    capsule_image: Option<String>,
     price_overview: Option<StorePriceOverview>,
     #[serde(default)]
     is_free: Option<bool>,
@@ -192,7 +195,30 @@ pub async fn fetch_library(api_key: String, steam_id64: String) -> Result<Vec<Ow
         .await
         .map_err(|e| format!("Failed to parse response: {}", e))?;
 
-    Ok(data.response.games.unwrap_or_default())
+    Ok(data
+        .response
+        .games
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|game| !is_transient_library_app(game))
+        .collect())
+}
+
+fn is_transient_library_app(game: &OwnedGame) -> bool {
+    let name = game.name.to_ascii_lowercase();
+    let normalized = name.replace([':', '-', '_', '(', ')', '[', ']'], " ");
+    let words = normalized.split_whitespace().collect::<Vec<_>>();
+    let has_phrase = |phrase: &[&str]| words.windows(phrase.len()).any(|window| window == phrase);
+
+    has_phrase(&["open", "beta"])
+        || has_phrase(&["closed", "beta"])
+        || has_phrase(&["public", "beta"])
+        || has_phrase(&["technical", "test"])
+        || has_phrase(&["server", "test"])
+        || has_phrase(&["network", "test"])
+        || has_phrase(&["beta", "test"])
+        || words.contains(&"playtest")
+        || words.last() == Some(&"demo")
 }
 
 #[tauri::command]
@@ -271,6 +297,7 @@ pub async fn fetch_game_details(
             })
             .unwrap_or_default(),
         header_image: data.header_image.clone(),
+        capsule_image: data.capsule_image.clone(),
         price_initial: data.price_overview.as_ref().and_then(|p| p.initial),
         price_final: data.price_overview.as_ref().and_then(|p| p.final_price),
         price_currency: data
@@ -1013,6 +1040,60 @@ mod tests {
             .user_agent("Repressurizer/test")
             .build()
             .expect("test client")
+    }
+
+    fn owned_game(appid: u64, name: &str) -> OwnedGame {
+        OwnedGame {
+            appid,
+            name: name.to_string(),
+            playtime_forever: 0,
+            img_icon_url: None,
+            rtime_last_played: 0,
+        }
+    }
+
+    #[test]
+    fn transient_library_filter_hides_beta_apps() {
+        assert!(is_transient_library_app(&owned_game(
+            123,
+            "Battlefield 6 Open Beta"
+        )));
+        assert!(is_transient_library_app(&owned_game(
+            124,
+            "Some Game Playtest"
+        )));
+        assert!(is_transient_library_app(&owned_game(125, "Some Game Demo")));
+        assert!(!is_transient_library_app(&owned_game(
+            126,
+            "FINAL FANTASY VII"
+        )));
+    }
+
+    #[test]
+    fn store_app_response_parses_header_and_capsule_images() {
+        let parsed: HashMap<String, StoreAppResponse> = serde_json::from_value(json!({
+            "3280350": {
+                "success": true,
+                "data": {
+                    "name": "DEATH STRANDING 2: ON THE BEACH",
+                    "header_image": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/3280350/hash/header.jpg",
+                    "capsule_image": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/3280350/hash/capsule_231x87.jpg"
+                }
+            }
+        }))
+        .expect("store appdetails json");
+
+        let app = parsed.get("3280350").expect("appdetails entry");
+        let data = app.data.as_ref().expect("appdetails data");
+
+        assert_eq!(
+            data.header_image.as_deref(),
+            Some("https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/3280350/hash/header.jpg")
+        );
+        assert_eq!(
+            data.capsule_image.as_deref(),
+            Some("https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/3280350/hash/capsule_231x87.jpg")
+        );
     }
 
     #[tokio::test]

@@ -2,8 +2,8 @@ import { useMemo, useState } from "react";
 import { useGameStore } from "../../stores/gameStore";
 import { useHltbStore } from "../../stores/hltbStore";
 import { useStatusStore } from "../../stores/statusStore";
-import { getHeaderImageUrl } from "../../lib/tauri";
 import { X, Shuffle, Timer, GameController, Funnel } from "@phosphor-icons/react";
+import { SteamImage } from "../games/SteamImage";
 
 interface WhatToPlayNextProps {
   onClose: () => void;
@@ -195,11 +195,11 @@ export function WhatToPlayNext({ onClose }: WhatToPlayNextProps) {
                     {idx + 1}
                   </span>
                   <div className="h-9 w-16 shrink-0 overflow-hidden rounded-md bg-repressurizer-bg">
-                    <img
-                      src={getHeaderImageUrl(game.appid)}
+                    <SteamImage
+                      appId={game.appid}
                       alt=""
+                      kind="header"
                       className="h-full w-full object-cover"
-                      onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                     />
                   </div>
                   <div className="min-w-0 flex-1">

@@ -2,9 +2,10 @@ import { useState, useMemo } from "react";
 import { useGameStore } from "../../stores/gameStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useFriendsStore } from "../../stores/friendsStore";
-import { fetchLibrary, resolveVanityUrl, fetchPlayerSummary, getHeaderImageUrl } from "../../lib/tauri";
+import { fetchLibrary, resolveVanityUrl, fetchPlayerSummary } from "../../lib/tauri";
 import type { OwnedGame } from "../../lib/types";
 import { X, UsersThree, MagnifyingGlass, ArrowsClockwise } from "@phosphor-icons/react";
+import { SteamImage } from "../games/SteamImage";
 
 interface FriendCompareDialogProps {
   onClose: () => void;
@@ -295,8 +296,7 @@ export function FriendCompareDialog({ onClose }: FriendCompareDialogProps) {
               {both.filter((r) => filterGame(String(r.mine.name ?? ""))).map(({ mine, theirs }) => (
                 <div key={mine.appid} className="flex items-center gap-3 px-4 py-2.5">
                   <div className="h-8 w-14 shrink-0 overflow-hidden rounded-md bg-repressurizer-bg">
-                    <img src={getHeaderImageUrl(mine.appid)} alt="" className="h-full w-full object-cover"
-                      onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                    <SteamImage appId={mine.appid} alt="" kind="header" className="h-full w-full object-cover" />
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-white">{String(mine.name ?? "")}</p>
@@ -336,8 +336,7 @@ function GameRow({ game }: { game: OwnedGame }) {
   return (
     <div className="flex items-center gap-3 px-4 py-2.5">
       <div className="h-8 w-14 shrink-0 overflow-hidden rounded-md bg-repressurizer-bg">
-        <img src={getHeaderImageUrl(game.appid)} alt="" className="h-full w-full object-cover"
-          onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+        <SteamImage appId={game.appid} alt="" kind="header" className="h-full w-full object-cover" />
       </div>
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium text-white">{String(game.name ?? "")}</p>

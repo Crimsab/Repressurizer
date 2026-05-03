@@ -10,9 +10,9 @@ import {
   fetchGameDetails,
   fetchAchievements,
   fetchHltb,
-  getHeaderImageUrl,
   currencyToCountryCode,
 } from "../../lib/tauri";
+import { SteamImage } from "./SteamImage";
 import { useHltbStore } from "../../stores/hltbStore";
 import type {
   OwnedGame,
@@ -113,9 +113,11 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
       <div className="flex w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_24px_64px_rgba(0,0,0,0.6)] animate-fade-in" style={{ maxHeight: "90vh" }}>
         {/* Header image + overlay */}
         <div className="relative h-48 shrink-0 overflow-hidden bg-repressurizer-bg">
-          <img
-            src={getHeaderImageUrl(game.appid)}
+          <SteamImage
+            appId={game.appid}
             alt=""
+            kind="header"
+            loading="eager"
             className="h-full w-full object-cover opacity-50"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-repressurizer-surface via-repressurizer-surface/60 to-transparent" />

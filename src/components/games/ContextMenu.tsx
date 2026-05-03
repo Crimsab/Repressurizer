@@ -4,7 +4,7 @@ import { useCategoryStore } from "../../stores/categoryStore";
 import { useGameStore } from "../../stores/gameStore";
 import { useStatusStore, STATUS_META, type GameStatus } from "../../stores/statusStore";
 import type { OwnedGame } from "../../lib/types";
-import { Eye, ArrowSquareOut, Check, EyeSlash } from "@phosphor-icons/react";
+import { Eye, ArrowSquareOut, Check, EyeSlash, Play } from "@phosphor-icons/react";
 
 const STATUS_OPTIONS: GameStatus[] = ["none", "playing", "beaten", "completed", "abandoned"];
 
@@ -91,6 +91,11 @@ export function ContextMenu({ x, y, game, onClose, onViewDetails }: ContextMenuP
     onClose();
   };
 
+  const handleLaunchGame = async () => {
+    await open(`steam://rungameid/${game.appid}`);
+    onClose();
+  };
+
   return (
     <div
       ref={ref}
@@ -113,6 +118,15 @@ export function ContextMenu({ x, y, game, onClose, onViewDetails }: ContextMenuP
           >
             <Eye size={14} className="text-repressurizer-text-muted" />
             View Details
+          </button>
+        )}
+        {!isMulti && (
+          <button
+            onClick={handleLaunchGame}
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-repressurizer-text transition-colors hover:bg-repressurizer-surface-hover"
+          >
+            <Play size={14} className="text-repressurizer-text-muted" weight="fill" />
+            Launch with Steam
           </button>
         )}
         <button
