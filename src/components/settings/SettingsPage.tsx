@@ -1,8 +1,10 @@
 import { useState, useEffect, useMemo } from "react";
+import type { ClipboardEvent } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
 import { writeTextFile } from "@tauri-apps/plugin-fs";
 import { check, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
+import { open } from "@tauri-apps/plugin-shell";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useGameStore } from "../../stores/gameStore";
 import { useCategoryStore } from "../../stores/categoryStore";
@@ -13,6 +15,13 @@ import { useHltbIgnoredStore, getHltbIgnoredGameName, HLTB_MAX_FAILS } from "../
 
 import { listBackups, restoreBackup, deleteBackup, createManualBackup, loadCollections, getCacheInfo, exportDiagnostics, fetchFamilyLibrary } from "../../lib/tauri";
 import type { CacheInfo, FamilyLibraryResult } from "../../lib/tauri";
+import {
+  clearSteamFamilyToken,
+  extractStoreWebApiToken,
+  loadSteamFamilyToken,
+  saveSteamFamilyToken,
+  type SteamFamilyTokenCache,
+} from "../../lib/steamFamilyToken";
 import type { BackupInfo } from "../../lib/types";
 import {
   X,
@@ -85,6 +94,8 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
   const [installingUpdate, setInstallingUpdate] = useState(false);
   const [availableUpdate, setAvailableUpdate] = useState<Update | null>(null);
   const [familyAccessToken, setFamilyAccessToken] = useState("");
+  const [familyTokenSavedAt, setFamilyTokenSavedAt] = useState<number | null>(null);
+  const [familyTokenValidatedAt, setFamilyTokenValidatedAt] = useState<number | null>(null);
   const [familyChecking, setFamilyChecking] = useState(false);
   const [familyResult, setFamilyResult] = useState<FamilyLibraryResult | null>(null);
   const familyLastFetched = useFamilyStore((s) => s.lastFetched);
@@ -98,6 +109,19 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
     if (tab === "backups") loadBackups();
     if (tab === "general") getCacheInfo().then(setCacheInfo).catch(() => {});
   }, [tab]);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadSteamFamilyToken()
+      .then((cache) => {
+        if (cancelled || !cache) return;
+        applyFamilyTokenCache(cache);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const loadBackups = async () => {
     setLoadingBackups(true);
@@ -223,22 +247,83 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
     }
   };
 
+  const applyFamilyTokenCache = (cache: SteamFamilyTokenCache) => {
+    setFamilyAccessToken(cache.accessToken);
+    setFamilyTokenSavedAt(cache.savedAt);
+    setFamilyTokenValidatedAt(cache.lastValidatedAt);
+  };
+
+  const handleOpenFamilyTokenPage = async () => {
+    try {
+      await open("https://store.steampowered.com/pointssummary/ajaxgetasyncconfig");
+      setMessage("Steam token page opened.");
+      setTimeout(() => setMessage(""), 2000);
+    } catch (e) {
+      setMessage(`Could not open Steam token page: ${e}`);
+    }
+  };
+
+  const handleFamilyTokenPaste = (event: ClipboardEvent<HTMLInputElement>) => {
+    const pasted = event.clipboardData.getData("text");
+    const token = extractStoreWebApiToken(pasted);
+    if (token && token !== pasted.trim()) {
+      event.preventDefault();
+      setFamilyAccessToken(token);
+      setMessage("Steam Store token extracted from pasted JSON.");
+      setTimeout(() => setMessage(""), 2000);
+    }
+  };
+
+  const handleSaveFamilyToken = async () => {
+    const token = extractStoreWebApiToken(familyAccessToken);
+    if (!token) {
+      setMessage("Paste a Steam Store webapi_token first.");
+      return;
+    }
+    setFamilyAccessToken(token);
+    const cache = await saveSteamFamilyToken(token, false);
+    if (cache) {
+      applyFamilyTokenCache(cache);
+      setMessage("Steam Store token saved.");
+      setTimeout(() => setMessage(""), 2000);
+    }
+  };
+
+  const handleClearFamilyToken = async () => {
+    await clearSteamFamilyToken();
+    setFamilyAccessToken("");
+    setFamilyTokenSavedAt(null);
+    setFamilyTokenValidatedAt(null);
+    setMessage("Saved Steam Store token cleared.");
+    setTimeout(() => setMessage(""), 2000);
+  };
+
   const handleProbeFamily = async () => {
     setFamilyChecking(true);
     setFamilyResult(null);
     setMessage("");
+    const accessToken = extractStoreWebApiToken(familyAccessToken);
+    if (accessToken && accessToken !== familyAccessToken) {
+      setFamilyAccessToken(accessToken);
+    }
+    if (accessToken) {
+      const cache = await saveSteamFamilyToken(accessToken, false);
+      if (cache) applyFamilyTokenCache(cache);
+    }
     const startedAt = performance.now();
     console.groupCollapsed("[Repressurizer] Steam Family probe");
     console.info("Starting Steam Family probe", {
       hasSavedWebApiKey: Boolean(settings.apiKey),
-      hasStoreWebApiToken: Boolean(familyAccessToken.trim()),
+      hasStoreWebApiToken: Boolean(accessToken),
+      includeNonGames: familyIncludeNonGames,
       steamId64: redactTail(settings.steamId64),
     });
     try {
       const result = await fetchFamilyLibrary(
         settings.apiKey,
-        familyAccessToken.trim() || undefined,
-        settings.steamId64 || undefined
+        accessToken || undefined,
+        settings.steamId64 || undefined,
+        familyIncludeNonGames
       );
       console.info("Steam Family probe result", {
         authUsed: result.auth_used,
@@ -248,18 +333,28 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
         ownedApps: result.owned_apps,
         sharedApps: result.shared_apps,
         excludedApps: result.excluded_apps,
+        nonGameApps: result.non_game_apps,
+        playtimeEntries: result.playtime_entries,
+        playtimeUnavailable: Boolean(result.playtime_unavailable_reason),
         durationMs: Math.round(performance.now() - startedAt),
       });
       setFamilyResult(result);
       useFamilyStore.getState().setResult(result);
       mergeGames(familyAppsToOwnedGames(result.apps));
+      if (result.auth_used === "access_token" && accessToken) {
+        const cache = await saveSteamFamilyToken(accessToken, true);
+        if (cache) applyFamilyTokenCache(cache);
+      }
       setMessage(`Steam Family loaded with ${result.auth_used}.`);
     } catch (e) {
       console.error("Steam Family probe failed", {
         error: String(e),
         durationMs: Math.round(performance.now() - startedAt),
       });
-      setMessage(`Steam Family probe failed: ${e}`);
+      const tokenHint = accessToken
+        ? " Saved Steam Store token may be expired; paste a fresh one."
+        : "";
+      setMessage(`Steam Family probe failed: ${e}.${tokenHint}`);
     } finally {
       console.groupEnd();
       setFamilyChecking(false);
@@ -272,6 +367,9 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
       message: "Reset all settings? You will need to set up again.",
     });
   };
+
+  const hasFamilyStoreToken = Boolean(extractStoreWebApiToken(familyAccessToken));
+  const familyIncludeNonGames = settings.includeSteamFamilyNonGames ?? false;
 
   return (
     <div
@@ -393,24 +491,79 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-repressurizer-text">Probe shared family library</p>
                       <p className="mt-0.5 text-xs leading-relaxed text-repressurizer-text-faint">
-                        Uses your saved Steam Web API key automatically. If Valve rejects it for Steam Family, paste a temporary Steam Store webapi_token here.
+                        Uses your saved Steam Web API key first. A saved Steam Store webapi_token is reused automatically when Family needs Store auth.
                       </p>
                     </div>
                   </div>
-                  <p className="rounded-lg border border-repressurizer-border-subtle bg-repressurizer-surface/50 px-3 py-2 text-xs text-repressurizer-text-muted">
-                    Saved Steam Web API key: <span className="font-medium text-repressurizer-text">{settings.apiKey ? "configured" : "missing"}</span>. Do not paste that same key again below.
-                  </p>
-                  <div className="flex gap-2">
+                  <div className="grid gap-2 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-surface/50 px-3 py-2 text-xs text-repressurizer-text-muted sm:grid-cols-2">
+                    <p>
+                      Steam Web API key: <span className="font-medium text-repressurizer-text">{settings.apiKey ? "configured" : "missing"}</span>
+                    </p>
+                    <p>
+                      Store token:{" "}
+                      <span className="font-medium text-repressurizer-text">
+                        {familyTokenSavedAt ? `saved ${new Date(familyTokenSavedAt).toLocaleDateString()}` : "not saved"}
+                      </span>
+                      {familyTokenValidatedAt && (
+                        <span className="text-repressurizer-text-faint">, validated {new Date(familyTokenValidatedAt).toLocaleDateString()}</span>
+                      )}
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="block text-xs font-medium text-repressurizer-text-muted">
+                      Steam Store webapi_token
+                    </label>
                     <input
                       type="password"
                       value={familyAccessToken}
                       onChange={(e) => setFamilyAccessToken(e.target.value)}
-                      placeholder="Optional Steam Store webapi_token"
-                      className="min-w-0 flex-1 rounded-lg border border-repressurizer-border bg-repressurizer-surface px-3 py-2 text-xs text-repressurizer-text placeholder:text-repressurizer-text-faint transition-colors focus:border-repressurizer-accent focus:outline-none"
+                      onPaste={handleFamilyTokenPaste}
+                      placeholder="Paste token or full Steam JSON"
+                      className="w-full rounded-lg border border-repressurizer-border bg-repressurizer-surface px-3 py-2 text-xs text-repressurizer-text placeholder:text-repressurizer-text-faint transition-colors focus:border-repressurizer-accent focus:outline-none"
                     />
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        onClick={handleOpenFamilyTokenPage}
+                        className="btn-press inline-flex items-center gap-1.5 rounded-lg border border-repressurizer-border bg-repressurizer-surface px-3 py-1.5 text-xs font-medium text-repressurizer-text-muted transition-colors hover:text-repressurizer-text"
+                      >
+                        <Globe size={13} />
+                        Open token page
+                      </button>
+                      <button
+                        onClick={handleSaveFamilyToken}
+                        disabled={!hasFamilyStoreToken}
+                        className="btn-press rounded-lg border border-repressurizer-border bg-repressurizer-surface px-3 py-1.5 text-xs font-medium text-repressurizer-text-muted transition-colors hover:text-repressurizer-text disabled:opacity-40"
+                      >
+                        Save token
+                      </button>
+                      <button
+                        onClick={handleClearFamilyToken}
+                        disabled={!familyTokenSavedAt && !familyAccessToken}
+                        className="btn-press inline-flex items-center gap-1.5 rounded-lg border border-repressurizer-border bg-repressurizer-surface px-3 py-1.5 text-xs font-medium text-repressurizer-text-muted transition-colors hover:text-repressurizer-danger disabled:opacity-40"
+                      >
+                        <TrashSimple size={13} />
+                        Clear
+                      </button>
+                    </div>
+                  </div>
+                  <label className="flex items-start gap-3 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-surface/40 px-3 py-2.5">
+                    <input
+                      type="checkbox"
+                      checked={familyIncludeNonGames}
+                      onChange={(e) => settings.setSettings({ includeSteamFamilyNonGames: e.target.checked })}
+                      className="mt-0.5 h-4 w-4 accent-[var(--color-repressurizer-accent)]"
+                    />
+                    <span className="min-w-0">
+                      <span className="block text-xs font-medium text-repressurizer-text">Include tools and non-game apps</span>
+                      <span className="mt-0.5 block text-xs leading-relaxed text-repressurizer-text-faint">
+                        Hidden by default so map editors, SDKs, and utilities do not pollute the game list.
+                      </span>
+                    </span>
+                  </label>
+                  <div className="flex justify-end">
                     <button
                       onClick={handleProbeFamily}
-                      disabled={familyChecking || (!settings.apiKey && !familyAccessToken.trim())}
+                      disabled={familyChecking || (!settings.apiKey && !hasFamilyStoreToken)}
                       className="btn-press shrink-0 rounded-lg bg-repressurizer-accent px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-repressurizer-accent-hover disabled:opacity-40"
                     >
                       {familyChecking ? "Checking..." : "Probe"}
@@ -423,6 +576,18 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                       <MiniStat label="Shared" value={familyResult.shared_apps} />
                       <MiniStat label="Excluded" value={familyResult.excluded_apps} />
                     </div>
+                  )}
+                  {familyResult && (
+                    <p className="text-xs leading-relaxed text-repressurizer-text-faint">
+                      {familyResult.non_game_apps > 0 && !familyIncludeNonGames
+                        ? `${familyResult.non_game_apps} tool/non-game app${familyResult.non_game_apps === 1 ? "" : "s"} hidden. `
+                        : ""}
+                      {familyResult.playtime_entries > 0
+                        ? `Family playtime loaded for ${familyResult.playtime_entries} app${familyResult.playtime_entries === 1 ? "" : "s"}.`
+                        : familyResult.playtime_unavailable_reason
+                          ? "Family playtime was unavailable for this probe."
+                          : "No Family playtime entries returned."}
+                    </p>
                   )}
                   {familyLastFetched && !familyResult && (
                     <p className="text-xs text-repressurizer-text-faint">

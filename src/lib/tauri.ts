@@ -313,6 +313,11 @@ export interface FamilyLibraryApp {
   name: string | null;
   owner_steamids: string[];
   exclude_reason: number;
+  playtime_forever: number;
+  rtime_last_played: number;
+  img_icon_hash: string | null;
+  app_type: number;
+  is_non_game: boolean;
   is_owned_by_current_user: boolean;
   is_family_shared: boolean;
 }
@@ -325,18 +330,23 @@ export interface FamilyLibraryResult {
   owned_apps: number;
   shared_apps: number;
   excluded_apps: number;
+  non_game_apps: number;
+  playtime_entries: number;
+  playtime_unavailable_reason: string | null;
   apps: FamilyLibraryApp[];
 }
 
 export async function fetchFamilyLibrary(
   apiKey: string,
   accessToken?: string,
-  steamId64?: string
+  steamId64?: string,
+  includeNonGames = false
 ): Promise<FamilyLibraryResult> {
   return invoke<FamilyLibraryResult>("fetch_family_library", {
     apiKey,
     accessToken: accessToken || null,
     steamId64: steamId64 || null,
+    includeNonGames,
   });
 }
 

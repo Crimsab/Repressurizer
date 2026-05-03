@@ -196,16 +196,27 @@ pub async fn fetch_library(api_key: String, steam_id64: String) -> Result<Vec<Ow
 }
 
 #[tauri::command]
-pub async fn fetch_game_details(app_id: u64, country_code: Option<String>) -> Result<GameDetails, String> {
+pub async fn fetch_game_details(
+    app_id: u64,
+    country_code: Option<String>,
+) -> Result<GameDetails, String> {
     let cc = country_code.unwrap_or_default();
     let url = if cc.is_empty() {
-        format!("https://store.steampowered.com/api/appdetails?appids={}", app_id)
+        format!(
+            "https://store.steampowered.com/api/appdetails?appids={}",
+            app_id
+        )
     } else {
-        format!("https://store.steampowered.com/api/appdetails?appids={}&cc={}", app_id, cc)
+        format!(
+            "https://store.steampowered.com/api/appdetails?appids={}&cc={}",
+            app_id, cc
+        )
     };
 
     let client = reqwest::Client::builder()
-        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0")
+        .user_agent(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0",
+        )
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
@@ -262,7 +273,10 @@ pub async fn fetch_game_details(app_id: u64, country_code: Option<String>) -> Re
         header_image: data.header_image.clone(),
         price_initial: data.price_overview.as_ref().and_then(|p| p.initial),
         price_final: data.price_overview.as_ref().and_then(|p| p.final_price),
-        price_currency: data.price_overview.as_ref().and_then(|p| p.currency.clone()),
+        price_currency: data
+            .price_overview
+            .as_ref()
+            .and_then(|p| p.currency.clone()),
         is_free: data.is_free.unwrap_or(false),
     })
 }
@@ -325,7 +339,8 @@ pub async fn fetch_achievements(
         .await
         .map_err(|e| format!("Failed to read schema response: {}", e))?;
 
-    let schema_data: SchemaResponse = serde_json::from_str(&schema_text).unwrap_or(SchemaResponse { game: None });
+    let schema_data: SchemaResponse =
+        serde_json::from_str(&schema_text).unwrap_or(SchemaResponse { game: None });
 
     let schema_map: HashMap<String, &SchemaAchievement> = schema_data
         .game
@@ -336,7 +351,10 @@ pub async fn fetch_achievements(
         .unwrap_or_default();
 
     let total = player_achievements.len() as u32;
-    let achieved = player_achievements.iter().filter(|a| a.achieved == 1).count() as u32;
+    let achieved = player_achievements
+        .iter()
+        .filter(|a| a.achieved == 1)
+        .count() as u32;
 
     let mut achievements: Vec<AchievementInfo> = player_achievements
         .iter()
@@ -359,13 +377,11 @@ pub async fn fetch_achievements(
         .collect();
 
     // Sort: achieved first (by unlock time desc), then unachieved alphabetically
-    achievements.sort_by(|a, b| {
-        match (a.achieved, b.achieved) {
-            (true, false) => std::cmp::Ordering::Less,
-            (false, true) => std::cmp::Ordering::Greater,
-            (true, true) => b.unlock_time.cmp(&a.unlock_time),
-            (false, false) => a.name.cmp(&b.name),
-        }
+    achievements.sort_by(|a, b| match (a.achieved, b.achieved) {
+        (true, false) => std::cmp::Ordering::Less,
+        (false, true) => std::cmp::Ordering::Greater,
+        (true, true) => b.unlock_time.cmp(&a.unlock_time),
+        (false, false) => a.name.cmp(&b.name),
     });
 
     Ok(AchievementSummary {
@@ -397,8 +413,8 @@ pub async fn fetch_achievements_summary(
         .await
         .map_err(|e| format!("Failed to read response: {}", e))?;
 
-    let data: PlayerAchievementsResponse = serde_json::from_str(&text)
-        .map_err(|_| "No achievements for this game".to_string())?;
+    let data: PlayerAchievementsResponse =
+        serde_json::from_str(&text).map_err(|_| "No achievements for this game".to_string())?;
 
     let achievements = data
         .playerstats
@@ -426,6 +442,11 @@ pub struct FamilyLibraryApp {
     pub name: Option<String>,
     pub owner_steamids: Vec<String>,
     pub exclude_reason: u32,
+    pub playtime_forever: u64,
+    pub rtime_last_played: u64,
+    pub img_icon_hash: Option<String>,
+    pub app_type: u32,
+    pub is_non_game: bool,
     pub is_owned_by_current_user: bool,
     pub is_family_shared: bool,
 }
@@ -439,6 +460,9 @@ pub struct FamilyLibraryResult {
     pub owned_apps: usize,
     pub shared_apps: usize,
     pub excluded_apps: usize,
+    pub non_game_apps: usize,
+    pub playtime_entries: usize,
+    pub playtime_unavailable_reason: Option<String>,
     pub apps: Vec<FamilyLibraryApp>,
 }
 
@@ -538,6 +562,43 @@ struct FamilyAppRaw {
     owner_steamids: Vec<String>,
     #[serde(default)]
     exclude_reason: u32,
+    #[serde(default, deserialize_with = "deserialize_u64ish_default")]
+    rt_last_played: u64,
+    #[serde(default, deserialize_with = "deserialize_u64ish_default")]
+    rt_playtime: u64,
+    #[serde(default)]
+    img_icon_hash: Option<String>,
+    #[serde(default)]
+    app_type: u32,
+}
+
+#[derive(Debug, Deserialize)]
+struct PlaytimeSummaryResponse {
+    response: Option<PlaytimeSummaryInner>,
+}
+
+#[derive(Debug, Deserialize)]
+struct PlaytimeSummaryInner {
+    #[serde(default)]
+    entries: Vec<PlaytimeEntryRaw>,
+}
+
+#[derive(Debug, Deserialize)]
+struct PlaytimeEntryRaw {
+    #[serde(default)]
+    steamid: String,
+    #[serde(deserialize_with = "deserialize_u64ish")]
+    appid: u64,
+    #[serde(default, deserialize_with = "deserialize_u64ish_default")]
+    latest_played: u64,
+    #[serde(default, deserialize_with = "deserialize_u64ish_default")]
+    seconds_played: u64,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+struct PlaytimeAggregate {
+    seconds_played: u64,
+    latest_played: u64,
 }
 
 fn deserialize_u64ish<'de, D>(deserializer: D) -> Result<u64, D::Error>
@@ -555,6 +616,17 @@ where
             "expected integer, got {}",
             other
         ))),
+    }
+}
+
+fn deserialize_u64ish_default<'de, D>(deserializer: D) -> Result<u64, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    match Option::<serde_json::Value>::deserialize(deserializer)? {
+        Some(serde_json::Value::Number(n)) => Ok(n.as_u64().unwrap_or_default()),
+        Some(serde_json::Value::String(s)) => Ok(s.parse::<u64>().unwrap_or_default()),
+        _ => Ok(0),
     }
 }
 
@@ -615,7 +687,11 @@ pub async fn fetch_wishlist(steam_id64: String) -> Result<Vec<WishlistItem>, Str
     }
 
     if !status.is_success() {
-        return Err(format!("Wishlist API returned status {}: {}", status, &text[..text.len().min(200)]));
+        return Err(format!(
+            "Wishlist API returned status {}: {}",
+            status,
+            &text[..text.len().min(200)]
+        ));
     }
 
     // Response: { "response": { "items": [...] } } (new) or { "response": { "wishlist": [...] } } (old)
@@ -639,8 +715,15 @@ pub async fn fetch_wishlist(steam_id64: String) -> Result<Vec<WishlistItem>, Str
         .filter_map(|entry| {
             let appid = entry.get("appid")?.as_u64()?;
             let priority = entry.get("priority").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
-            let date_added = entry.get("date_added").and_then(|v| v.as_u64()).unwrap_or(0);
-            Some(WishlistItem { appid, priority, date_added })
+            let date_added = entry
+                .get("date_added")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0);
+            Some(WishlistItem {
+                appid,
+                priority,
+                date_added,
+            })
         })
         .collect();
 
@@ -653,6 +736,7 @@ pub async fn fetch_family_library(
     api_key: String,
     access_token: Option<String>,
     steam_id64: Option<String>,
+    include_non_games: Option<bool>,
 ) -> Result<FamilyLibraryResult, String> {
     let client = reqwest::Client::builder()
         .user_agent("Repressurizer/0.1")
@@ -665,6 +749,7 @@ pub async fn fetch_family_library(
         api_key,
         access_token,
         steam_id64,
+        include_non_games.unwrap_or(false),
     )
     .await
 }
@@ -675,26 +760,60 @@ async fn fetch_family_library_from_base(
     api_key: String,
     access_token: Option<String>,
     steam_id64: Option<String>,
+    include_non_games: bool,
 ) -> Result<FamilyLibraryResult, String> {
     let auth = SteamFamilyAuth::from_inputs(api_key, access_token)?;
     let steam_id64 = steam_id64.unwrap_or_default().trim().to_string();
     let family_groupid = fetch_family_groupid(client, base_url, &auth, &steam_id64).await?;
-    let shared =
-        fetch_shared_family_apps(client, base_url, &auth, &family_groupid, &steam_id64).await?;
+    let shared = fetch_shared_family_apps(
+        client,
+        base_url,
+        &auth,
+        &family_groupid,
+        &steam_id64,
+        include_non_games,
+    )
+    .await?;
+    let (playtime_by_app, playtime_unavailable_reason) =
+        match fetch_family_playtime_summary(client, base_url, &auth, &family_groupid, &steam_id64)
+            .await
+        {
+            Ok(playtimes) => (playtimes, None),
+            Err(error) => (
+                HashMap::new(),
+                Some(error.chars().take(240).collect::<String>()),
+            ),
+        };
 
     let mut owned_apps = 0usize;
     let mut shared_apps = 0usize;
     let mut excluded_apps = 0usize;
+    let mut non_game_apps = 0usize;
 
     let apps = shared
         .apps
         .into_iter()
-        .map(|app| {
+        .filter_map(|app| {
+            let is_non_game = app.app_type != 0 && app.app_type != 1;
+            if is_non_game {
+                non_game_apps += 1;
+            }
+            if is_non_game && !include_non_games {
+                return None;
+            }
+
             let is_owned_by_current_user =
                 !steam_id64.is_empty() && app.owner_steamids.iter().any(|id| id == &steam_id64);
             let has_family_owner = app.owner_steamids.iter().any(|id| id != &steam_id64);
             let is_family_shared =
                 app.exclude_reason == 0 && !is_owned_by_current_user && has_family_owner;
+            let summary = playtime_by_app.get(&app.appid).copied().unwrap_or_default();
+            let playtime_forever = if summary.seconds_played > 0 {
+                summary.seconds_played / 60
+            } else {
+                app.rt_playtime
+            };
+            let rtime_last_played = summary.latest_played.max(app.rt_last_played);
 
             if is_owned_by_current_user {
                 owned_apps += 1;
@@ -706,14 +825,19 @@ async fn fetch_family_library_from_base(
                 excluded_apps += 1;
             }
 
-            FamilyLibraryApp {
+            Some(FamilyLibraryApp {
                 appid: app.appid,
                 name: app.name,
                 owner_steamids: app.owner_steamids,
                 exclude_reason: app.exclude_reason,
+                playtime_forever,
+                rtime_last_played,
+                img_icon_hash: app.img_icon_hash,
+                app_type: app.app_type,
+                is_non_game,
                 is_owned_by_current_user,
                 is_family_shared,
-            }
+            })
         })
         .collect::<Vec<_>>();
 
@@ -729,6 +853,9 @@ async fn fetch_family_library_from_base(
         owned_apps,
         shared_apps,
         excluded_apps,
+        non_game_apps,
+        playtime_entries: playtime_by_app.len(),
+        playtime_unavailable_reason,
         apps,
     })
 }
@@ -771,14 +898,16 @@ async fn fetch_shared_family_apps(
     auth: &SteamFamilyAuth,
     family_groupid: &str,
     steam_id64: &str,
+    include_non_games: bool,
 ) -> Result<SharedLibraryInner, String> {
     let url = steam_api_url(base_url, "IFamilyGroupsService/GetSharedLibraryApps/v1/");
+    let include_non_games_value = if include_non_games { "true" } else { "false" };
     let mut request = auth.apply(client.get(url)).query(&[
         ("family_groupid", family_groupid),
         ("include_own", "true"),
         ("include_excluded", "true"),
         ("include_free", "true"),
-        ("include_non_games", "true"),
+        ("include_non_games", include_non_games_value),
         ("language", "english"),
         ("format", "json"),
     ]);
@@ -794,6 +923,37 @@ async fn fetch_shared_family_apps(
     parsed.response.ok_or_else(|| {
         "Steam Family library response did not include a response object".to_string()
     })
+}
+
+async fn fetch_family_playtime_summary(
+    client: &reqwest::Client,
+    base_url: &str,
+    auth: &SteamFamilyAuth,
+    family_groupid: &str,
+    steam_id64: &str,
+) -> Result<HashMap<u64, PlaytimeAggregate>, String> {
+    let url = steam_api_url(base_url, "IFamilyGroupsService/GetPlaytimeSummary/v1/");
+    let request = auth
+        .apply(client.get(url))
+        .query(&[("family_groupid", family_groupid), ("format", "json")]);
+
+    let text = send_family_request(request, "Steam Family playtime", auth).await?;
+    let parsed: PlaytimeSummaryResponse = serde_json::from_str(&text)
+        .map_err(|e| format!("Failed to parse Steam Family playtime response: {}", e))?;
+    let entries = parsed.response.map(|r| r.entries).unwrap_or_default();
+    let mut by_app: HashMap<u64, PlaytimeAggregate> = HashMap::new();
+
+    for entry in entries {
+        if !steam_id64.is_empty() && entry.steamid != steam_id64 {
+            continue;
+        }
+
+        let current = by_app.entry(entry.appid).or_default();
+        current.seconds_played = current.seconds_played.saturating_add(entry.seconds_played);
+        current.latest_played = current.latest_played.max(entry.latest_played);
+    }
+
+    Ok(by_app)
 }
 
 fn steam_api_url(base_url: &str, path: &str) -> String {
@@ -880,6 +1040,7 @@ mod tests {
             .and(query_param("steamid", "765000"))
             .and(query_param("include_own", "true"))
             .and(query_param("include_excluded", "true"))
+            .and(query_param("include_non_games", "false"))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({
                 "response": {
                     "apps": [
@@ -887,19 +1048,60 @@ mod tests {
                             "appid": "620",
                             "name": "Portal 2",
                             "owner_steamids": ["765111"],
-                            "exclude_reason": 0
+                            "exclude_reason": 0,
+                            "rt_playtime": 15,
+                            "rt_last_played": 100,
+                            "app_type": 1,
+                            "img_icon_hash": "portal2-icon"
                         },
                         {
                             "appid": 70,
                             "name": "Half-Life",
                             "owner_steamids": ["765000"],
-                            "exclude_reason": 0
+                            "exclude_reason": 0,
+                            "rt_playtime": 30,
+                            "rt_last_played": 200,
+                            "app_type": 1
                         },
                         {
                             "appid": 400,
                             "name": "Portal",
                             "owner_steamids": ["765111"],
-                            "exclude_reason": 3
+                            "exclude_reason": 3,
+                            "app_type": 1
+                        },
+                        {
+                            "appid": 211,
+                            "name": "Source SDK",
+                            "owner_steamids": ["765111"],
+                            "exclude_reason": 0,
+                            "app_type": 2
+                        }
+                    ]
+                }
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        Mock::given(method("GET"))
+            .and(path("/IFamilyGroupsService/GetPlaytimeSummary/v1/"))
+            .and(query_param("access_token", "store-token"))
+            .and(query_param("family_groupid", "123456"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "response": {
+                    "entries": [
+                        {
+                            "steamid": "765000",
+                            "appid": "620",
+                            "latest_played": 500,
+                            "seconds_played": 7200
+                        },
+                        {
+                            "steamid": "765111",
+                            "appid": "620",
+                            "latest_played": 900,
+                            "seconds_played": 999999
                         }
                     ]
                 }
@@ -914,6 +1116,7 @@ mod tests {
             String::new(),
             Some("store-token".to_string()),
             Some("765000".to_string()),
+            false,
         )
         .await
         .expect("family library");
@@ -925,14 +1128,23 @@ mod tests {
         assert_eq!(result.owned_apps, 1);
         assert_eq!(result.shared_apps, 1);
         assert_eq!(result.excluded_apps, 1);
+        assert_eq!(result.non_game_apps, 1);
+        assert_eq!(result.playtime_entries, 1);
         assert!(result
             .apps
             .iter()
             .any(|app| app.appid == 620 && app.is_family_shared));
+        assert!(result.apps.iter().any(|app| {
+            app.appid == 620
+                && app.playtime_forever == 120
+                && app.rtime_last_played == 500
+                && app.img_icon_hash.as_deref() == Some("portal2-icon")
+        }));
         assert!(result
             .apps
             .iter()
             .any(|app| app.appid == 70 && app.is_owned_by_current_user));
+        assert!(!result.apps.iter().any(|app| app.appid == 211));
     }
 
     #[tokio::test]
@@ -957,6 +1169,7 @@ mod tests {
             String::new(),
             Some("store-token".to_string()),
             Some("765000".to_string()),
+            false,
         )
         .await
         .expect_err("not member");
@@ -982,6 +1195,7 @@ mod tests {
             "developer-key".to_string(),
             None,
             Some("765000".to_string()),
+            false,
         )
         .await
         .expect_err("rejected key");
@@ -1022,7 +1236,9 @@ pub async fn resolve_vanity_url(api_key: String, vanity_url: String) -> Result<S
 
     let resp: VanityOuter = serde_json::from_str(&text).map_err(|e| e.to_string())?;
     if resp.response.success == 1 {
-        resp.response.steamid.ok_or_else(|| "No Steam ID returned".to_string())
+        resp.response
+            .steamid
+            .ok_or_else(|| "No Steam ID returned".to_string())
     } else {
         Err("Profile not found or is private".to_string())
     }
@@ -1039,7 +1255,10 @@ pub struct PlayerSummary {
 }
 
 #[tauri::command]
-pub async fn fetch_player_summary(api_key: String, steam_id64: String) -> Result<PlayerSummary, String> {
+pub async fn fetch_player_summary(
+    api_key: String,
+    steam_id64: String,
+) -> Result<PlayerSummary, String> {
     let client = reqwest::Client::new();
     let url = format!(
         "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?key={}&steamids={}",
@@ -1074,7 +1293,11 @@ pub async fn fetch_player_summary(api_key: String, steam_id64: String) -> Result
     }
 
     let resp: Outer = serde_json::from_str(&text).map_err(|e| e.to_string())?;
-    let player = resp.response.players.into_iter().next()
+    let player = resp
+        .response
+        .players
+        .into_iter()
+        .next()
         .ok_or("Player not found")?;
 
     Ok(PlayerSummary {

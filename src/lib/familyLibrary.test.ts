@@ -8,6 +8,11 @@ function familyApp(overrides: Partial<FamilyLibraryApp>): FamilyLibraryApp {
     name: "Portal 2",
     owner_steamids: [],
     exclude_reason: 0,
+    playtime_forever: 0,
+    rtime_last_played: 0,
+    img_icon_hash: null,
+    app_type: 1,
+    is_non_game: false,
     is_owned_by_current_user: false,
     is_family_shared: true,
     ...overrides,
@@ -16,7 +21,13 @@ function familyApp(overrides: Partial<FamilyLibraryApp>): FamilyLibraryApp {
 
 describe("family library helpers", () => {
   it("keeps only currently available shared family apps", () => {
-    const shared = familyApp({ appid: 620, name: "Portal 2" });
+    const shared = familyApp({
+      appid: 620,
+      name: "Portal 2",
+      playtime_forever: 123,
+      rtime_last_played: 456,
+      img_icon_hash: "portal-icon",
+    });
     const owned = familyApp({ appid: 70, name: "Half-Life", is_owned_by_current_user: true, is_family_shared: false });
     const excluded = familyApp({ appid: 400, name: "Portal", exclude_reason: 3 });
 
@@ -27,9 +38,9 @@ describe("family library helpers", () => {
       {
         appid: 620,
         name: "Portal 2",
-        playtime_forever: 0,
-        img_icon_url: null,
-        rtime_last_played: 0,
+        playtime_forever: 123,
+        img_icon_url: "portal-icon",
+        rtime_last_played: 456,
       },
     ]);
   });

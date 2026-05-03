@@ -107,4 +107,6 @@ export interface AppSettings {
   categoryOrder: string[];
   // System tray
   minimizeToTray: boolean;
+  // Steam Family
+  includeSteamFamilyNonGames: boolean;
 }

@@ -20,8 +20,15 @@ not the same thing as your Steam Web API key.
 Steam Family endpoints can reject a normal Steam Web API key. When that happens,
 Repressurizer can use the Store `webapi_token` as an `access_token`.
 
-Repressurizer does not save this token permanently. Treat it like a session
-secret: do not share it, paste it into chats, commit it, or put it in screenshots.
+Repressurizer saves this token in its local app data after you save or probe it,
+then reuses it automatically. If Steam expires or rejects the saved token, the
+Family probe will fail and you can paste a fresh one.
+
+On Windows, the token file is stored under:
+`%APPDATA%\Repressurizer\steam_family_token.json`.
+
+Treat it like a session secret: do not share it, paste it into chats, commit it,
+or put it in screenshots.
 
 ## How To Get The Store `webapi_token`
 
@@ -43,10 +50,14 @@ Use this only if the normal Steam Web API key fails in Steam Family.
    }
    ```
 
-5. Copy only the value inside `webapi_token`.
+5. Copy either the value inside `webapi_token` or the whole JSON response.
 6. In Repressurizer, open Settings > Steam Family.
-7. Paste it into the optional `Steam Store webapi_token` field.
+7. Paste it into the `Steam Store webapi_token` field.
 8. Click `Probe`.
+
+The `Open token page` button in Repressurizer opens the same Steam URL for you.
+Pasting the full JSON is supported; Repressurizer extracts `data.webapi_token`
+automatically.
 
 If the page does not show JSON, or `webapi_token` is missing, make sure you are
 logged into the real Steam Store domain and refresh the page.
@@ -61,6 +72,12 @@ The Steam Family flow is:
    `IFamilyGroupsService/GetSharedLibraryApps`.
 3. Mark apps as owned, shared, or excluded based on the returned owners and
    exclusion flags.
+4. Hide tools and non-game apps by default. You can enable them with the
+   `Include tools and non-game apps` option.
+5. Try to load Family playtime with
+   `IFamilyGroupsService/GetPlaytimeSummary`. If Steam does not return playtime
+   data, Repressurizer keeps the Family apps visible and reports that playtime
+   was unavailable.
 
 The app masks Steam IDs and family group IDs in console logs and never prints the
 token.

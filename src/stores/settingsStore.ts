@@ -28,6 +28,7 @@ const defaults: AppSettings = {
   onboardingComplete: false,
   categoryOrder: [],
   minimizeToTray: false,
+  includeSteamFamilyNonGames: false,
 };
 
 function loadFromStorage(): AppSettings {
