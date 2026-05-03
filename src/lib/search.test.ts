@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hasAdvancedFilters, matchesFilter, parseSearchQuery } from "./search";
+import { hasAdvancedFilters, matchesFilter, normalizeSearchText, parseSearchQuery } from "./search";
 import type { GameDetails, OwnedGame } from "./types";
 
 const game: OwnedGame = {
@@ -52,6 +52,29 @@ describe("search", () => {
     expect(match("fantasy")).toBe(true);
     expect(match("/final.*vii/i")).toBe(true);
     expect(match("/dragon.*quest/i")).toBe(false);
+  });
+
+  it("matches dotted acronym game names with plain search text", () => {
+    const stalker: OwnedGame = {
+      appid: 4500,
+      name: "S.T.A.L.K.E.R.: Shadow of Chernobyl",
+      playtime_forever: 0,
+      img_icon_url: null,
+      rtime_last_played: 0,
+    };
+    const stalker2: OwnedGame = {
+      appid: 1643320,
+      name: "S.T.A.L.K.E.R. 2: Heart of Chornobyl",
+      playtime_forever: 0,
+      img_icon_url: null,
+      rtime_last_played: 0,
+    };
+
+    expect(normalizeSearchText(stalker.name)).toBe("stalker shadow of chernobyl");
+    expect(matchesFilter(stalker, undefined, {}, {}, {}, parseSearchQuery("stalker"))).toBe(true);
+    expect(matchesFilter(stalker, undefined, {}, {}, {}, parseSearchQuery("shadow chernobyl"))).toBe(true);
+    expect(matchesFilter(stalker2, undefined, {}, {}, {}, parseSearchQuery("stalker 2"))).toBe(true);
+    expect(matchesFilter(stalker2, undefined, {}, {}, {}, parseSearchQuery("heart chornobyl"))).toBe(true);
   });
 
   it("does not crash on invalid regex", () => {

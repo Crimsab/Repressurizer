@@ -162,6 +162,24 @@ function matchesNumeric(value: number | null | undefined, filter: NumericFilter 
   return true;
 }
 
+export function normalizeSearchText(value: string): string {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\b(?:[a-zA-Z]\.){3,}/g, (match) => match.replace(/\./g, ""))
+    .replace(/&/g, " and ")
+    .replace(/[^a-zA-Z0-9]+/g, " ")
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function matchesSearchText(target: string, query: string): boolean {
+  if (!query) return true;
+  if (target.includes(query)) return true;
+  return query.split(" ").every((token) => target.includes(token));
+}
+
 /**
  * Parse a search query string into structured filters.
  *
@@ -300,8 +318,9 @@ export function matchesFilter(
 ): boolean {
   if (filter.invalidRegex) return false;
 
-  const searchableName = `${game.name} ${details?.name ?? ""}`.trim().toLowerCase();
-  if (filter.text && !searchableName.includes(filter.text.toLowerCase())) return false;
+  const searchableName = normalizeSearchText(`${game.name} ${details?.name ?? ""}`);
+  const searchText = normalizeSearchText(filter.text);
+  if (!matchesSearchText(searchableName, searchText)) return false;
   if (filter.nameRegex) {
     filter.nameRegex.lastIndex = 0;
     if (!filter.nameRegex.test(`${game.name} ${details?.name ?? ""}`.trim())) return false;
