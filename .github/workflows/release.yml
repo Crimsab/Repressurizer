@@ -118,6 +118,7 @@ jobs:
           $manifest | ConvertTo-Json -Depth 8 | Set-Content -Path artifacts\latest.json -Encoding utf8
 
       - name: Upload workflow artifacts
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: repressurizer-windows
