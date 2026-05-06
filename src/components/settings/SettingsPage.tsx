@@ -831,7 +831,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                   Steam Details — Ignored ({ignoredIds.length})
                 </h3>
                 <p className="text-xs text-repressurizer-text-faint">
-                  Games that failed to fetch details from Steam {MAX_FAIL_RUNS}+ times. Usually removed from the store.
+                  Games with {MAX_FAIL_RUNS}+ confirmed unavailable Steam Store responses. Transient network/rate-limit errors are retried later.
                 </p>
 
                 {ignoredIds.length === 0 ? (
@@ -875,7 +875,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                   HLTB — Ignored ({hltbIgnoredIds.length})
                 </h3>
                 <p className="text-xs text-repressurizer-text-faint">
-                  Games not found on HowLongToBeat after {HLTB_MAX_FAILS}+ search{HLTB_MAX_FAILS > 1 ? "es" : ""}. Skipped on future fetches.
+                  Games not found on HowLongToBeat after {HLTB_MAX_FAILS}+ confirmed search{HLTB_MAX_FAILS > 1 ? "es" : ""}. Skipped on future fetches.
                 </p>
 
                 {hltbIgnoredIds.length === 0 ? (

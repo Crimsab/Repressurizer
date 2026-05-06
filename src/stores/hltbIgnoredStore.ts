@@ -20,8 +20,8 @@ function saveIgnored(fails: Record<number, number>) {
   invoke("save_app_data", { key: "hltb_ignored.json", data: JSON.stringify(fails) }).catch(() => {});
 }
 
-/** After this many "not found" results, auto-ignore the game */
-export const HLTB_MAX_FAILS = 1;
+/** After this many confirmed "not found" results, auto-ignore the game */
+export const HLTB_MAX_FAILS = 3;
 
 interface HltbIgnoredState {
   fails: Record<number, number>;

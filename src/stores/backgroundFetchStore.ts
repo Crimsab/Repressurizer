@@ -250,22 +250,13 @@ async function _runDetailsLoop(missingIds: number[]) {
       onDetailsSuccess();
       ok = true;
       succeeded++;
-    } catch (e) {
-      console.warn(`[Details] ✗ ${name} (${id}): ${e}`);
-      if (isPermanentError(e)) {
-        // Game removed from Steam — record immediately, skip retry
-        console.log(`[Details] Permanent failure for ${name} (${id}), skipping retry`);
-        addToRecent("detailsRecentNames", `✗ ${name} (removed)`);
-        useFailedGamesStore.getState().recordFailure(id);
-        const failed = _getState().detailsFailed + 1;
-        _setState({ detailsFailed: failed });
-      } else {
+      } catch (e) {
+        console.warn(`[Details] ✗ ${name} (${id}): ${e}`);
         onDetailsFail(id);
         retryQueue.push(id);
         if (_extraDelayMs >= DETAILS_SLOWDOWN_THRESHOLD_MS) {
           addToRecent("detailsRecentNames", `⚠ Slowing down (${Math.round(_extraDelayMs / 1000)}s delay)`);
         }
-      }
     }
 
     fetched++;
@@ -314,12 +305,17 @@ async function _runDetailsLoop(missingIds: number[]) {
         succeeded++;
         _setState({ detailsSucceeded: succeeded });
       } catch (e) {
-        console.warn(`[Details] ✗ retry ${name} (${id}): ${e} — recording permanent failure`);
-        onDetailsFail(id);
         const failed = _getState().detailsFailed + 1;
         _setState({ detailsFailed: failed });
-        // Record permanent failure — after MAX_FAIL_RUNS, game will be skipped
-        failedGamesStore.recordFailure(id);
+        if (isPermanentError(e)) {
+          console.warn(`[Details] ✗ retry ${name} (${id}): ${e} — confirmed unavailable`);
+          addToRecent("detailsRecentNames", `✗ ${name} (unavailable)`);
+          failedGamesStore.recordFailure(id);
+        } else {
+          console.warn(`[Details] ✗ retry ${name} (${id}): ${e} — transient, will retry next run`);
+          addToRecent("detailsRecentNames", `⚠ ${name} (retry later)`);
+          onDetailsFail(id);
+        }
       }
 
       if (buffer.length >= 10 || i === retryQueue.length - 1) {

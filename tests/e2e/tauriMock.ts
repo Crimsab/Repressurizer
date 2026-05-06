@@ -20,9 +20,14 @@ export async function installTauriMock(page: Page) {
     await route.fulfill({ contentType: "image/svg+xml", body: svg });
   };
 
-  await page.route("https://cdn.akamai.steamstatic.com/steam/apps/*/header.jpg", fulfillSteamHeader);
-  await page.route("https://steamcdn-a.akamaihd.net/steam/apps/*/header.jpg", fulfillSteamHeader);
-  await page.route("https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/**/header.jpg*", fulfillSteamHeader);
+  if (process.env.REPRESSURIZER_REAL_STEAM_IMAGES !== "1") {
+    await page.route("https://cdn.akamai.steamstatic.com/steam/apps/*/header.jpg", fulfillSteamHeader);
+    await page.route("https://cdn.akamai.steamstatic.com/steam/apps/*/capsule_231x87.jpg", fulfillSteamHeader);
+    await page.route("https://steamcdn-a.akamaihd.net/steam/apps/*/header.jpg", fulfillSteamHeader);
+    await page.route("https://steamcdn-a.akamaihd.net/steam/apps/*/capsule_231x87.jpg", fulfillSteamHeader);
+    await page.route("https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/**/header.jpg*", fulfillSteamHeader);
+    await page.route("https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/**/capsule_231x87.jpg*", fulfillSteamHeader);
+  }
 
   await page.addInitScript(() => {
     const settings = {
@@ -50,11 +55,16 @@ export async function installTauriMock(page: Page) {
     };
 
     const games = [
-      { appid: 10, name: "Disco Elysium", playtime_forever: 720, img_icon_url: null, rtime_last_played: 1_775_000_000 },
-      { appid: 20, name: "Hades", playtime_forever: 1800, img_icon_url: null, rtime_last_played: 1_776_000_000 },
-      { appid: 30, name: "Outer Wilds", playtime_forever: 0, img_icon_url: null, rtime_last_played: 0 },
+      { appid: 632470, name: "Disco Elysium - The Final Cut", playtime_forever: 720, img_icon_url: null, rtime_last_played: 1_775_000_000 },
+      { appid: 1145360, name: "Hades", playtime_forever: 1800, img_icon_url: null, rtime_last_played: 1_776_000_000 },
+      { appid: 753640, name: "Outer Wilds", playtime_forever: 0, img_icon_url: null, rtime_last_played: 0 },
+      { appid: 39140, name: "FINAL FANTASY VII", playtime_forever: 0, img_icon_url: null, rtime_last_played: 0 },
       { appid: 12100, name: "Grand Theft Auto III", playtime_forever: 90, img_icon_url: null, rtime_last_played: 0 },
       { appid: 1546970, name: "Grand Theft Auto III – The Definitive Edition", playtime_forever: 0, img_icon_url: null, rtime_last_played: 0 },
+      { appid: 1462040, name: "FINAL FANTASY VII REMAKE INTERGRADE", playtime_forever: 240, img_icon_url: null, rtime_last_played: 0 },
+      { appid: 3280350, name: "DEATH STRANDING 2: ON THE BEACH", playtime_forever: 0, img_icon_url: null, rtime_last_played: 0 },
+      { appid: 2499860, name: "DRAGON QUEST VII Reimagined", playtime_forever: 0, img_icon_url: null, rtime_last_played: 0 },
+      { appid: 1643320, name: "S.T.A.L.K.E.R. 2: Heart of Chornobyl", playtime_forever: 0, img_icon_url: null, rtime_last_played: 0 },
     ];
 
     const collections = [
@@ -62,7 +72,7 @@ export async function installTauriMock(page: Page) {
         id: "rpg",
         key: "rpg",
         name: "RPG",
-        added: [10, 39140],
+        added: [632470, 39140, 1462040, 2499860],
         removed: [],
         timestamp: 1,
         is_deleted: false,
@@ -72,7 +82,7 @@ export async function installTauriMock(page: Page) {
         id: "favorites",
         key: "favorite",
         name: "Favorites",
-        added: [20],
+        added: [1145360, 753640],
         removed: [],
         timestamp: 1,
         is_deleted: false,
@@ -86,7 +96,7 @@ export async function installTauriMock(page: Page) {
       lastFetched: Date.now(),
       apps: [
         {
-          appid: 40,
+          appid: 1426210,
           name: "It Takes Two",
           owner_steamids: ["76561198111111111"],
           exclude_reason: 0,
@@ -111,26 +121,47 @@ export async function installTauriMock(page: Page) {
           case "fetch_game_details": {
             const appId = Number(args?.appId ?? args?.app_id ?? 0);
             const names: Record<number, string> = {
-              10: "Disco Elysium",
-              20: "Hades",
-              30: "Outer Wilds",
-              40: "It Takes Two",
+              1426210: "It Takes Two",
+              632470: "Disco Elysium - The Final Cut",
+              753640: "Outer Wilds",
+              1145360: "Hades",
               12100: "Grand Theft Auto III",
               39140: "FINAL FANTASY VII",
+              1462040: "FINAL FANTASY VII REMAKE INTERGRADE",
               1546970: "Grand Theft Auto III – The Definitive Edition",
+              1643320: "S.T.A.L.K.E.R. 2: Heart of Chornobyl",
+              2499860: "DRAGON QUEST VII Reimagined",
+              3280350: "DEATH STRANDING 2: ON THE BEACH",
+            };
+            const years: Record<number, string> = {
+              39140: "Jul 24, 2013",
+              1462040: "Jun 17, 2022",
+              1643320: "Nov 20, 2024",
+              3280350: "Mar 19, 2026",
+              2499860: "Feb 5, 2026",
+            };
+            const hashedImages: Record<number, { header: string; capsule: string }> = {
+              3280350: {
+                header: "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/3280350/6270c77b0729e2df0a17d660286eeddfd9169386/header.jpg",
+                capsule: "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/3280350/6e07f61e2585bae97d2406d45666a7ee70543792/capsule_231x87.jpg",
+              },
+              2499860: {
+                header: "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/2499860/ea0c655407c078a8994b7e91256c79d90169133a/header.jpg",
+                capsule: "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/2499860/9d1e5917fb47c7af55a5134a6f7eb302fea2fb16/capsule_231x87.jpg",
+              },
             };
             return {
               app_id: appId,
               name: names[appId] ?? `App ${appId}`,
-              genres: appId === 39140 ? ["RPG"] : ["Adventure"],
+              genres: [39140, 1462040, 2499860].includes(appId) ? ["RPG"] : ["Adventure"],
               categories: ["Single-player"],
-              release_date: appId === 39140 ? "Jul 24, 2013" : "Jan 4, 2008",
+              release_date: years[appId] ?? "Jan 4, 2008",
               metacritic_score: appId === 12100 ? 93 : null,
-              developers: ["Mock Studio"],
-              publishers: ["Mock Publisher"],
+              developers: ["Demo Studio"],
+              publishers: ["Demo Publisher"],
               platforms: { windows: true, mac: false, linux: false },
-              header_image: `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appId}/header.jpg`,
-              capsule_image: `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appId}/capsule_231x87.jpg`,
+              header_image: hashedImages[appId]?.header ?? `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appId}/header.jpg`,
+              capsule_image: hashedImages[appId]?.capsule ?? `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appId}/capsule_231x87.jpg`,
               price_initial: null,
               price_final: null,
               price_currency: null,
@@ -165,9 +196,12 @@ export async function installTauriMock(page: Page) {
           case "load_hltb_cache":
             return JSON.stringify({
               10: { main_story: 22, main_extra: 32, completionist: 55 },
-              20: { main_story: 22, main_extra: 50, completionist: 95 },
-              30: { main_story: 16, main_extra: 22, completionist: 28 },
-              40: { main_story: 14, main_extra: 16, completionist: 20 },
+              1426210: { main_story: 14, main_extra: 16, completionist: 20 },
+              632470: { main_story: 22, main_extra: 32, completionist: 55 },
+              753640: { main_story: 16, main_extra: 22, completionist: 28 },
+              1145360: { main_story: 22, main_extra: 50, completionist: 95 },
+              1643320: { main_story: 36, main_extra: 60, completionist: 100 },
+              3280350: { main_story: 40, main_extra: 60, completionist: 100 },
             });
           case "load_app_data":
             return args?.key === "steam_family.json" ? JSON.stringify(familyCache) : null;

@@ -22,15 +22,18 @@ test("loads the main library surface with mocked Steam data", async ({ page }, t
   await expect(page.getByText("Disco Elysium")).toBeVisible();
   await expect(page.getByText("Hades")).toBeVisible();
   await expect(page.getByText("It Takes Two")).toBeVisible();
+  await expect(page.getByText("DEATH STRANDING 2")).toBeVisible();
+  await expect(page.getByText("DRAGON QUEST VII")).toBeVisible();
+  await expect(page.getByText("S.T.A.L.K.E.R. 2")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "FINAL FANTASY VII", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Grand Theft Auto III", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Grand Theft Auto III – The Definitive Edition", exact: true })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "App 39140", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Steam Family" })).toBeVisible();
 
   await expectNoHorizontalOverflow(page);
   const cards = page.locator(".game-card");
-  await expect(cards).toHaveCount(7);
-  for (let i = 0; i < 7; i += 1) {
+  await expect(cards).toHaveCount(11);
+  for (let i = 0; i < 11; i += 1) {
     const box = await cards.nth(i).boundingBox();
     expect(box?.width).toBeGreaterThan(180);
     expect(box?.height).toBeGreaterThan(120);
@@ -38,6 +41,13 @@ test("loads the main library surface with mocked Steam data", async ({ page }, t
   await expect
     .poll(() => page.locator(".game-card img").first().evaluate((img) => (img as HTMLImageElement).naturalWidth))
     .toBeGreaterThan(0);
+  await expect
+    .poll(() =>
+      page.locator(".game-card img").evaluateAll((images) =>
+        images.filter((img) => (img as HTMLImageElement).naturalWidth > 0).length
+      )
+    )
+    .toBeGreaterThanOrEqual(9);
 
   const screenshotPath = testInfo.outputPath("dashboard.png");
   await page.screenshot({ path: screenshotPath, fullPage: true });

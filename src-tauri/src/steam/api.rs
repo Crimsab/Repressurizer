@@ -1,4 +1,4 @@
-use serde::{de, Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, de};
 use std::collections::HashMap;
 
 // === Achievement types ===
@@ -226,25 +226,53 @@ pub async fn fetch_game_details(
     app_id: u64,
     country_code: Option<String>,
 ) -> Result<GameDetails, String> {
-    let cc = country_code.unwrap_or_default();
-    let url = if cc.is_empty() {
-        format!(
-            "https://store.steampowered.com/api/appdetails?appids={}",
-            app_id
-        )
-    } else {
-        format!(
-            "https://store.steampowered.com/api/appdetails?appids={}&cc={}",
-            app_id, cc
-        )
-    };
-
     let client = reqwest::Client::builder()
         .user_agent(
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0",
         )
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+
+    let requested_cc = country_code.unwrap_or_default().trim().to_ascii_lowercase();
+    let mut attempts = Vec::new();
+    if !requested_cc.is_empty() {
+        attempts.push(Some(requested_cc.as_str()));
+    }
+    attempts.push(None);
+    if requested_cc != "us" {
+        attempts.push(Some("us"));
+    }
+
+    let mut last_error = String::new();
+    for cc in attempts {
+        match fetch_game_details_with_country(&client, app_id, cc).await {
+            Ok(details) => return Ok(details),
+            Err(error) => {
+                last_error = error;
+            }
+        }
+    }
+
+    Err(last_error)
+}
+
+async fn fetch_game_details_with_country(
+    client: &reqwest::Client,
+    app_id: u64,
+    country_code: Option<&str>,
+) -> Result<GameDetails, String> {
+    let url = match country_code {
+        Some(cc) if !cc.is_empty() => {
+            format!(
+                "https://store.steampowered.com/api/appdetails?appids={}&cc={}",
+                app_id, cc
+            )
+        }
+        _ => format!(
+            "https://store.steampowered.com/api/appdetails?appids={}",
+            app_id
+        ),
+    };
 
     let response = client
         .get(&url)
@@ -257,8 +285,12 @@ pub async fn fetch_game_details(
         .await
         .map_err(|e| format!("Failed to read response: {}", e))?;
 
-    let parsed: HashMap<String, StoreAppResponse> = serde_json::from_str(&text)
-        .map_err(|e| format!("Failed to parse store response: {}", e))?;
+    parse_game_details_response(app_id, &text)
+}
+
+fn parse_game_details_response(app_id: u64, text: &str) -> Result<GameDetails, String> {
+    let parsed: HashMap<String, StoreAppResponse> =
+        serde_json::from_str(text).map_err(|e| format!("Failed to parse store response: {}", e))?;
 
     let app_data = parsed
         .get(&app_id.to_string())
@@ -543,7 +575,9 @@ impl SteamFamilyAuth {
             Self::WebApiKey(_) => {
                 "Steam Families usually needs the authenticated user's Steam Store webapi_token; a normal Steam Web API key may be rejected."
             }
-            Self::AccessToken(_) => "The Steam Store webapi_token may be expired or not tied to this Steam account.",
+            Self::AccessToken(_) => {
+                "The Steam Store webapi_token may be expired or not tied to this Steam account."
+            }
         }
     }
 
@@ -1088,11 +1122,15 @@ mod tests {
 
         assert_eq!(
             data.header_image.as_deref(),
-            Some("https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/3280350/hash/header.jpg")
+            Some(
+                "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/3280350/hash/header.jpg"
+            )
         );
         assert_eq!(
             data.capsule_image.as_deref(),
-            Some("https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/3280350/hash/capsule_231x87.jpg")
+            Some(
+                "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/3280350/hash/capsule_231x87.jpg"
+            )
         );
     }
 
@@ -1211,20 +1249,24 @@ mod tests {
         assert_eq!(result.excluded_apps, 1);
         assert_eq!(result.non_game_apps, 1);
         assert_eq!(result.playtime_entries, 1);
-        assert!(result
-            .apps
-            .iter()
-            .any(|app| app.appid == 620 && app.is_family_shared));
+        assert!(
+            result
+                .apps
+                .iter()
+                .any(|app| app.appid == 620 && app.is_family_shared)
+        );
         assert!(result.apps.iter().any(|app| {
             app.appid == 620
                 && app.playtime_forever == 120
                 && app.rtime_last_played == 500
                 && app.img_icon_hash.as_deref() == Some("portal2-icon")
         }));
-        assert!(result
-            .apps
-            .iter()
-            .any(|app| app.appid == 70 && app.is_owned_by_current_user));
+        assert!(
+            result
+                .apps
+                .iter()
+                .any(|app| app.appid == 70 && app.is_owned_by_current_user)
+        );
         assert!(!result.apps.iter().any(|app| app.appid == 211));
     }
 
@@ -1283,6 +1325,50 @@ mod tests {
 
         assert!(error.contains("webapi_token"));
         assert!(error.contains("normal Steam Web API key"));
+    }
+
+    #[test]
+    fn parses_successful_store_details_with_images() {
+        let raw = r#"{
+          "3590": {
+            "success": true,
+            "data": {
+              "name": "Plants vs. Zombies GOTY Edition",
+              "genres": [{"description": "Strategy"}],
+              "categories": [{"description": "Single-player"}],
+              "release_date": {"date": "May 5, 2009"},
+              "metacritic": {"score": 87},
+              "developers": ["PopCap Games"],
+              "publishers": ["PopCap Games"],
+              "platforms": {"windows": true, "mac": true, "linux": false},
+              "header_image": "https://cdn.akamai.steamstatic.com/steam/apps/3590/header.jpg",
+              "capsule_image": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/3590/capsule_231x87.jpg",
+              "is_free": false
+            }
+          }
+        }"#;
+
+        let details = parse_game_details_response(3590, raw).expect("details");
+
+        assert_eq!(details.name, "Plants vs. Zombies GOTY Edition");
+        assert_eq!(details.genres, vec!["Strategy"]);
+        assert_eq!(details.metacritic_score, Some(87));
+        assert!(details.platforms.windows);
+        assert!(details.header_image.unwrap().contains("/3590/header.jpg"));
+        assert!(
+            details
+                .capsule_image
+                .unwrap()
+                .contains("/3590/capsule_231x87.jpg")
+        );
+    }
+
+    #[test]
+    fn treats_store_success_false_as_unavailable() {
+        let raw = r#"{"43160":{"success":false}}"#;
+        let error = parse_game_details_response(43160, raw).expect_err("unavailable");
+
+        assert!(error.contains("Store API returned failure"));
     }
 }
 
