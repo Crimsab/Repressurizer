@@ -17,6 +17,16 @@ It is a spiritual successor to Depressurizer: same useful idea, rebuilt as a sep
 
 Early Windows release. Repressurizer can read and write local Steam collection data, but it is still young software: keep backups enabled, use the preview before saving, and close Steam before applying collection changes.
 
+## Download
+
+Always download the newest build from the [latest release page](https://github.com/Crimsab/Repressurizer/releases/latest).
+
+- Recommended: `Repressurizer_..._x64-setup.exe` for the normal Windows installer.
+- Portable: `Repressurizer-portable-windows-x64.zip` if you prefer to run it without installing.
+- Auto-update metadata: `latest.json` is used by the built-in updater.
+
+Older releases remain available on the [releases page](https://github.com/Crimsab/Repressurizer/releases).
+
 ## Features
 
 ### Steam Collection Editing
@@ -125,6 +135,14 @@ Auto-categorizing uses cached metadata when possible, fetches missing Steam deta
 - A Steam Web API key for library details: <https://steamcommunity.com/dev/apikey>
 
 Linux and macOS support are possible, but Windows is the supported target for the first release.
+
+## Known Limitations
+
+- Windows is the only supported platform for now.
+- Steam Family data depends on Steam endpoints that may require a Store `webapi_token` for some accounts.
+- HLTB and Steam Store metadata are fetched from unofficial/public endpoints and can occasionally rate-limit, move, or return incomplete data.
+- Some delisted or region-restricted games may have partial metadata even when they still exist in your library.
+- The app is unsigned, so Windows SmartScreen may warn on early releases.
 
 ## Safety
 
