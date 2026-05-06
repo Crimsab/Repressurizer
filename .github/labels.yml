@@ -14,7 +14,7 @@
   color: "5319e7"
   description: Steam metadata, covers, store details, or delisted detection.
 - name: steam-store
-  color: "4c1"
+  color: "44cc11"
   description: Steam Store API or region behavior.
 - name: steam-family
   color: "0e8a16"
