@@ -4,10 +4,10 @@
 
 - Publish Windows installer and portable builds through GitHub Actions. [done]
 - Auto-create version tags from `package.json`; tags trigger GitHub Releases with generated changelog notes. [done]
-- Add a public README with screenshots, safety notes, and a clear relationship to Depressurizer.
+- Add a public README with screenshots, safety notes, and a clear relationship to Depressurizer. [done]
 - Verify collection save/restore behavior against a real Steam install before public release.
-- Reduce broad filesystem permissions before release where practical.
-- Add screenshots or a short demo GIF before making the repository public.
+- Reduce broad filesystem permissions before release where practical, or document why the first public build still needs broad local file access.
+- Add screenshots or a short demo GIF before making the repository public. [done]
 - Verify updater install path on a tagged Windows build.
 
 ## Safety And Maintenance

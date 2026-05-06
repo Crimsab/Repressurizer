@@ -4,9 +4,11 @@ Repressurizer is a modern desktop Steam library manager for editing Steam collec
 
 It is a spiritual successor to Depressurizer: same useful idea, rebuilt as a separate Tauri app with a Rust backend and a React interface.
 
+![Repressurizer library dashboard](docs/assets/dashboard.png)
+
 ## Status
 
-Early release build. The app can read and write Steam collection data, but you should keep backups enabled and close Steam before saving collection changes.
+Early Windows release. Repressurizer can read and write local Steam collection data, but it is still young software: keep backups enabled, use the preview before saving, and close Steam before applying collection changes.
 
 ## Features
 
@@ -20,6 +22,8 @@ Early release build. The app can read and write Steam collection data, but you s
 - Probe Steam Family shared games with the saved Web API key or an optional Store `webapi_token`.
 - Export games, categories, and library summaries.
 
+![Repressurizer settings and maintenance](docs/assets/settings.png)
+
 ## Requirements
 
 - Windows 10/11.
@@ -28,6 +32,19 @@ Early release build. The app can read and write Steam collection data, but you s
 - A Steam Web API key for library details: <https://steamcommunity.com/dev/apikey>
 
 Linux and macOS support are possible, but Windows is the supported target for the first release.
+
+## Safety
+
+Repressurizer is designed around local files. It needs file access so it can detect Steam installs, read collection data, write collection changes, and create/restore backups. The first-run setup explains this before any save operation.
+
+Before public testing:
+
+- Close Steam before saving collection changes.
+- Keep automatic backups enabled.
+- Use the save preview to inspect what will change.
+- Keep a manual backup if you are testing against a library you care about.
+
+Diagnostics exports are redacted and should not include Steam Web API keys, Store tokens, or full Steam IDs.
 
 ## Development
 
@@ -70,6 +87,10 @@ For Steam Family setup and the optional Store `webapi_token` fallback, see [docs
 Repressurizer stores its own cache/settings under the operating system data directory in a `Repressurizer` folder. Steam collection backups are stored next to the Steam collection file they protect.
 
 Steam collection edits affect local Steam data. Make a backup before testing against a real library.
+
+## Attribution
+
+Repressurizer is inspired by Depressurizer, which is licensed under GPLv3. Repressurizer is a separate project and is not affiliated with Valve, Steam, or the Depressurizer maintainers.
 
 ## License
 
