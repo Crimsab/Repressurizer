@@ -1,0 +1,42 @@
+- name: bug
+  color: d73a4a
+  description: Something is broken.
+- name: enhancement
+  color: a2eeef
+  description: New feature or improvement.
+- name: needs-triage
+  color: fbca04
+  description: Needs maintainer review.
+- name: needs-diagnostics
+  color: fef2c0
+  description: Needs redacted diagnostics/logs.
+- name: metadata
+  color: 5319e7
+  description: Steam metadata, covers, store details, or delisted detection.
+- name: steam-store
+  color: 4c1
+  description: Steam Store API or region behavior.
+- name: steam-family
+  color: 0e8a16
+  description: Steam Family shared library support.
+- name: hltb
+  color: 1d76db
+  description: HowLongToBeat matching or fetching.
+- name: installer
+  color: c5def5
+  description: Installer, portable build, updater, or release packaging.
+- name: windows
+  color: 0078d4
+  description: Windows-specific behavior.
+- name: backups
+  color: f9d0c4
+  description: Backup, restore, save preview, or collection safety.
+- name: ui
+  color: c2e0c6
+  description: User interface or visual behavior.
+- name: good first issue
+  color: 7057ff
+  description: Good for a first contribution.
+- name: blocked-upstream
+  color: bfdadc
+  description: Blocked by Steam, HLTB, Tauri, or another upstream service.

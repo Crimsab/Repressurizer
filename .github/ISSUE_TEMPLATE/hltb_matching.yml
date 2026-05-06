@@ -1,0 +1,50 @@
+name: HLTB matching issue
+description: Report a missing or wrong HowLongToBeat match.
+title: "hltb: "
+labels: ["hltb", "needs-triage"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Repressurizer version
+      placeholder: "v0.1.3"
+    validations:
+      required: true
+  - type: input
+    id: appid
+    attributes:
+      label: Steam App ID
+      placeholder: "4500"
+    validations:
+      required: true
+  - type: input
+    id: game
+    attributes:
+      label: Steam game name
+      placeholder: "S.T.A.L.K.E.R.: Shadow of Chernobyl"
+    validations:
+      required: true
+  - type: dropdown
+    id: issue-type
+    attributes:
+      label: What is wrong?
+      options:
+        - Not found
+        - Wrong game matched
+        - Wrong playtime values
+        - Ignored too early
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: hltb-url
+    attributes:
+      label: Correct HLTB URL, if known
+      placeholder: "https://howlongtobeat.com/game/..."
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+      description: What did Repressurizer show, and what should it have shown?
+    validations:
+      required: true

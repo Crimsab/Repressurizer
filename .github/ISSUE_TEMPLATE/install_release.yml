@@ -1,0 +1,52 @@
+name: Install, updater, or release issue
+description: Report installer, portable, update, SmartScreen, or launch problems.
+title: "release: "
+labels: ["installer", "windows", "needs-triage"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Repressurizer version or release asset
+      placeholder: "v0.1.3 / Repressurizer_0.1.3_x64-setup.exe"
+    validations:
+      required: true
+  - type: dropdown
+    id: package
+    attributes:
+      label: Build type
+      options:
+        - Installer
+        - Portable zip
+        - Portable exe
+        - Built-in updater
+        - Unknown
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: "Windows 11 24H2"
+    validations:
+      required: true
+  - type: dropdown
+    id: problem-type
+    attributes:
+      label: Problem type
+      options:
+        - SmartScreen warning
+        - Installer failed
+        - Portable failed to launch
+        - App crashed on startup
+        - Updater failed
+        - Missing release asset
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+      description: Include the exact error message and any screenshots.
+    validations:
+      required: true

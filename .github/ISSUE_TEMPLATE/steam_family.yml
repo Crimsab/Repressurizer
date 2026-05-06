@@ -1,0 +1,57 @@
+name: Steam Family issue
+description: Report Steam Family detection, shared games, or Store token problems.
+title: "steam-family: "
+labels: ["steam-family", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not paste your Steam Web API key or Store `webapi_token`. Diagnostics should be redacted before posting.
+  - type: input
+    id: version
+    attributes:
+      label: Repressurizer version
+      placeholder: "v0.1.3"
+    validations:
+      required: true
+  - type: dropdown
+    id: auth
+    attributes:
+      label: Auth method used
+      options:
+        - Normal Steam Web API key
+        - Store webapi_token
+        - Tried both
+        - Not sure
+    validations:
+      required: true
+  - type: dropdown
+    id: family-status
+    attributes:
+      label: Are you currently in a Steam Family?
+      options:
+        - "Yes"
+        - "No"
+        - Not sure
+    validations:
+      required: true
+  - type: dropdown
+    id: nongames
+    attributes:
+      label: Include non-game apps setting
+      options:
+        - Off
+        - On
+        - Not sure
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Include the visible error message and whether shared games appear in Steam itself.
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Redacted diagnostics
+      render: text

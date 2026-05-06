@@ -1,0 +1,39 @@
+name: Feature request
+description: Suggest a useful improvement or new workflow.
+title: "feat: "
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or workflow
+      description: What are you trying to do, and what is awkward today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the behavior you would like.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Any workaround or different design that might work?
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Collections
+        - Auto-categorizing
+        - Search/filtering
+        - Steam Family
+        - HLTB
+        - Achievements
+        - Wishlist/friends
+        - Backups/safety
+        - UI/UX
+        - Other

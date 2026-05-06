@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Download the latest release
+    url: https://github.com/Crimsab/Repressurizer/releases/latest
+    about: Always test against the latest build before opening a new issue.
+  - name: Steam Family setup notes
+    url: https://github.com/Crimsab/Repressurizer/blob/main/docs/steam-family.md
+    about: Read this before opening Steam Family issues.
+  - name: Security or privacy report
+    url: https://github.com/Crimsab/Repressurizer/security/policy
+    about: Please do not post tokens, API keys, or private Steam data in public issues.

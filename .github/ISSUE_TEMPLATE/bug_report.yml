@@ -1,0 +1,65 @@
+name: Bug report
+description: Report a reproducible Repressurizer bug.
+title: "bug: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve Repressurizer. Please remove API keys, Store tokens, full Steam IDs, and personal paths from screenshots/logs.
+  - type: input
+    id: version
+    attributes:
+      label: Repressurizer version
+      description: Use Help/About, Settings, or the release filename.
+      placeholder: "v0.1.3"
+    validations:
+      required: true
+  - type: dropdown
+    id: package
+    attributes:
+      label: Build type
+      options:
+        - Installer
+        - Portable zip
+        - Portable exe
+        - Local dev build
+        - Unknown
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: "Windows 11 24H2"
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: Describe the bug and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open Repressurizer
+        2. Load library
+        3. Click ...
+        4. See ...
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics or logs
+      description: Paste redacted diagnostics from Settings if available. Do not include API keys, Store tokens, or full Steam IDs.
+      render: text
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
+      description: Drag screenshots here if they help explain the issue.

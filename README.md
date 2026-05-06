@@ -27,6 +27,12 @@ Always download the newest build from the [latest release page](https://github.c
 
 Older releases remain available on the [releases page](https://github.com/Crimsab/Repressurizer/releases).
 
+## Quick Start
+
+1. Install Repressurizer or unzip the portable build.
+2. Open Settings and add a Steam Web API key from <https://steamcommunity.com/dev/apikey>.
+3. Load your Steam library, keep backups enabled, and use the save preview before writing collection changes.
+
 ## Features
 
 ### Steam Collection Editing
@@ -157,6 +163,8 @@ Before public testing:
 
 Diagnostics exports are redacted and should not include Steam Web API keys, Store tokens, or full Steam IDs.
 
+For local data and network behavior, see [docs/privacy.md](docs/privacy.md).
+
 ## Development
 
 Use Bun for JavaScript dependencies and scripts.
@@ -192,6 +200,8 @@ Release builds are produced by GitHub Actions as:
 Version tags are created from `package.json` (`v0.1.0`, `v0.2.0`, ...). Each tag triggers a GitHub Release with generated changelog notes and Windows artifacts.
 
 For Steam Family setup and the optional Store `webapi_token` fallback, see [docs/steam-family.md](docs/steam-family.md).
+
+For contribution guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md). For private vulnerability reporting guidance, see [SECURITY.md](SECURITY.md).
 
 ## Data And Backups
 
