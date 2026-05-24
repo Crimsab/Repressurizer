@@ -111,6 +111,33 @@ export async function installTauriMock(page: Page) {
       ],
     };
 
+    const appData: Record<string, string> = {
+      "play_history.json": JSON.stringify({
+        version: 1,
+        snapshots: {
+          1145360: {
+            appid: 1145360,
+            name: "Hades",
+            playtime: 1800,
+            lastPlayed: 1_776_000_000,
+            observedAt: 1_776_000_100,
+          },
+        },
+        sessions: [
+          {
+            id: "1145360-1776000100-1800",
+            appid: 1145360,
+            name: "Hades",
+            minutes: 65,
+            playedAt: 1_776_000_000,
+            observedAt: 1_776_000_100,
+            previousPlaytime: 1735,
+            currentPlaytime: 1800,
+          },
+        ],
+      }),
+    };
+
     window.localStorage.setItem("repressurizer-settings", JSON.stringify(settings));
 
     const tauriInternals = {
@@ -185,7 +212,6 @@ export async function installTauriMock(page: Page) {
               apps: familyCache.apps,
             };
           case "create_manual_backup":
-          case "save_app_data":
             return null;
           case "load_details_cache":
           case "load_failed_cache":
@@ -204,7 +230,11 @@ export async function installTauriMock(page: Page) {
               3280350: { main_story: 40, main_extra: 60, completionist: 100 },
             });
           case "load_app_data":
-            return args?.key === "steam_family.json" ? JSON.stringify(familyCache) : null;
+            if (args?.key === "steam_family.json") return JSON.stringify(familyCache);
+            return appData[String(args?.key ?? "")] ?? null;
+          case "save_app_data":
+            if (args?.key && typeof args.data === "string") appData[String(args.key)] = args.data;
+            return null;
           case "fetch_hltb":
             return { main_story: 12, main_extra: 18, completionist: 30 };
           default:

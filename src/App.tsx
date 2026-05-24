@@ -16,6 +16,7 @@ import { useReviewStore } from "./stores/reviewStore";
 import { useHltbIgnoredStore } from "./stores/hltbIgnoredStore";
 import { useToastStore } from "./stores/toastStore";
 import { useFamilyStore } from "./stores/familyStore";
+import { usePlayHistoryStore } from "./stores/playHistoryStore";
 import { fetchLibrary, loadCollections, createManualBackup } from "./lib/tauri";
 import { mergeCollectionOnlyGames } from "./lib/libraryMerge";
 import { useT } from "./lib/i18n";
@@ -128,6 +129,7 @@ function AppContent() {
   const hydrateReviews = useReviewStore((s) => s.hydrate);
   const hydrateHltbIgnored = useHltbIgnoredStore((s) => s.hydrate);
   const hydrateFamily = useFamilyStore((s) => s.hydrate);
+  const hydratePlayHistory = usePlayHistoryStore((s) => s.hydrate);
   const setCollections = useCategoryStore((s) => s.setCollections);
   const [reloading, setReloading] = useState(false);
   const [reloadError, setReloadError] = useState("");
@@ -155,6 +157,7 @@ function AppContent() {
     hydrateReviews();
     hydrateHltbIgnored();
     hydrateFamily();
+    hydratePlayHistory();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -220,6 +223,7 @@ function AppContent() {
           const mergedGames = mergeCollectionOnlyGames([...games, ...familyGames], collections, cachedDetails);
           console.log("Reloaded:", mergedGames.length, "games,", collections.length, "collections");
           setGames(mergedGames);
+          usePlayHistoryStore.getState().observeLibrary(mergedGames);
           setCollections(collections);
           setReloading(false);
 

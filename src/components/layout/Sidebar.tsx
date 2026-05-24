@@ -490,7 +490,7 @@ export function Sidebar() {
               e.preventDefault();
               handleCreateCategory();
             }}
-            className="flex gap-1"
+            className="flex min-w-0 gap-1"
           >
             <input
               autoFocus
@@ -500,11 +500,12 @@ export function Sidebar() {
                 if (!newCatName.trim()) setShowNewCat(false);
               }}
               placeholder="Category name"
-              className="flex-1 rounded-lg border border-repressurizer-border bg-repressurizer-bg px-3 py-1.5 text-sm text-repressurizer-text placeholder:text-repressurizer-text-faint focus:border-repressurizer-accent focus:outline-none"
+              className="min-w-0 flex-1 rounded-lg border border-repressurizer-border bg-repressurizer-bg px-3 py-1.5 text-sm text-repressurizer-text placeholder:text-repressurizer-text-faint focus:border-repressurizer-accent focus:outline-none"
             />
             <button
               type="submit"
-              className="btn-press rounded-lg bg-repressurizer-accent px-3 py-1.5 text-sm text-white hover:bg-repressurizer-accent-hover"
+              aria-label="Create category"
+              className="btn-press flex h-8 w-9 shrink-0 items-center justify-center rounded-lg bg-repressurizer-accent text-sm text-white hover:bg-repressurizer-accent-hover"
             >
               <Plus size={14} weight="bold" />
             </button>

@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useGameStore } from "../../stores/gameStore";
+import { usePlayHistoryStore } from "../../stores/playHistoryStore";
 import { GameDetailPage } from "../games/GameDetailPage";
 import { SteamImage } from "../games/SteamImage";
 import type { OwnedGame } from "../../lib/types";
@@ -16,7 +17,7 @@ type ViewMode = "grid" | "list" | "strip";
 interface GameEntry {
   appid: number;
   name: string;
-  playtime: number; // minutes total
+  playtime: number; // minutes tracked during this period
   lastPlayed: number; // unix timestamp
 }
 
@@ -53,41 +54,46 @@ function formatHours(minutes: number): string {
 
 export function PlayHistoryTimeline({ onClose }: PlayHistoryTimelineProps) {
   const gamesMap = useGameStore((s) => s.games);
+  const sessions = usePlayHistoryStore((s) => s.data.sessions);
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [detailGame, setDetailGame] = useState<OwnedGame | null>(null);
 
-  // Build monthly data from rtime_last_played
-  // Note: Steam only provides the *last* play date per game, so each game
-  // appears in exactly one month (the month it was last played).
+  // Build monthly data from locally tracked playtime deltas. Steam only gives
+  // lifetime playtime, so older hours become a baseline and only later increases
+  // are added to the timeline.
   const months = useMemo((): MonthData[] => {
-    const list = Object.values(gamesMap).filter((g) => g.rtime_last_played > 0);
-    const byMonth = new Map<string, GameEntry[]>();
+    const byMonth = new Map<string, Map<number, GameEntry>>();
 
-    for (const g of list) {
-      const d = new Date(g.rtime_last_played * 1000);
+    for (const session of sessions) {
+      if (session.minutes <= 0 || session.playedAt <= 0) continue;
+      const game = gamesMap[session.appid];
+      const d = new Date(session.playedAt * 1000);
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
-      if (!byMonth.has(key)) byMonth.set(key, []);
-      byMonth.get(key)!.push({
-        appid: g.appid,
-        name: String(g.name ?? ""),
-        playtime: g.playtime_forever,
-        lastPlayed: g.rtime_last_played,
-      });
-    }
-
-    // Sort each month by playtime desc (most-played games first)
-    for (const games of byMonth.values()) {
-      games.sort((a, b) => b.playtime - a.playtime);
+      if (!byMonth.has(key)) byMonth.set(key, new Map());
+      const monthGames = byMonth.get(key)!;
+      const existing = monthGames.get(session.appid);
+      if (existing) {
+        existing.playtime += session.minutes;
+        existing.lastPlayed = Math.max(existing.lastPlayed, session.playedAt);
+      } else {
+        monthGames.set(session.appid, {
+          appid: session.appid,
+          name: String(game?.name ?? session.name ?? ""),
+          playtime: session.minutes,
+          lastPlayed: session.playedAt,
+        });
+      }
     }
 
     return [...byMonth.entries()]
       .sort(([a], [b]) => b.localeCompare(a))
-      .map(([key, games]) => {
+      .map(([key, gameMap]) => {
         const [year, month] = key.split("-");
         const idx = parseInt(month) - 1;
+        const games = [...gameMap.values()].sort((a, b) => b.playtime - a.playtime);
         return { key, label: `${MONTH_NAMES[idx]} ${year}`, shortLabel: MONTH_SHORT[idx], year, games };
       });
-  }, [gamesMap]);
+  }, [gamesMap, sessions]);
 
   // Activity chart — last 24 months
   const activityChart = useMemo(() => {
@@ -116,8 +122,8 @@ export function PlayHistoryTimeline({ onClose }: PlayHistoryTimelineProps) {
   [months]);
 
   const totalGamesTracked = useMemo(
-    () => Object.values(gamesMap).filter((g) => g.rtime_last_played > 0).length,
-    [gamesMap],
+    () => new Set(sessions.map((s) => s.appid)).size,
+    [sessions],
   );
 
   const openGame = (appid: number) => {
@@ -253,7 +259,7 @@ export function PlayHistoryTimeline({ onClose }: PlayHistoryTimelineProps) {
               <div className="flex flex-col items-center justify-center gap-3 py-20 text-repressurizer-text-faint">
                 <Clock size={40} weight="duotone" className="opacity-30" />
                 <p className="text-sm">No play history data</p>
-                <p className="text-xs">Games need "Last Played" timestamps from Steam</p>
+                <p className="text-xs">New playtime will appear after the next Steam library refresh</p>
               </div>
             ) : viewMode === "grid" ? (
               <GridView months={months} onOpenGame={openGame} />

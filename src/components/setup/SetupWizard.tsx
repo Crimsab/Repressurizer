@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useGameStore } from "../../stores/gameStore";
 import { useCategoryStore } from "../../stores/categoryStore";
+import { usePlayHistoryStore } from "../../stores/playHistoryStore";
 import {
   detectSteam,
   detectSteamAt,
@@ -82,6 +83,7 @@ export function SetupWizard() {
 
   const finishSetup = () => {
     setGames(loadedGames);
+    usePlayHistoryStore.getState().observeLibrary(loadedGames);
     setCollections(loadedCollections);
     setSettings({
       steamPath,

@@ -74,6 +74,38 @@ test("supports regex search and advanced duplicate filters", async ({ page }) =>
   await expect(page.locator(".game-card")).toHaveCount(2);
 });
 
+test("creates a category from the compact sidebar plus button", async ({ page }) => {
+  await page.addInitScript(() => {
+    const raw = window.localStorage.getItem("repressurizer-settings");
+    if (!raw) return;
+    const settings = JSON.parse(raw);
+    settings.sidebarWidth = 160;
+    window.localStorage.setItem("repressurizer-settings", JSON.stringify(settings));
+  });
+
+  await page.goto("/");
+
+  await page.getByRole("button", { name: "New Category" }).click();
+  await page.getByPlaceholder("Category name").fill("Dishonored");
+  await page.getByRole("button", { name: "Create category" }).click();
+
+  await expect(page.getByRole("button", { name: /Dishonored/ })).toBeVisible();
+});
+
+test("play history shows tracked deltas instead of lifetime playtime", async ({ page }) => {
+  await page.goto("/");
+
+  await page.getByTitle("Play History Timeline").click();
+
+  const timeline = page.locator(".fixed.inset-0").filter({
+    has: page.getByRole("heading", { name: "Play History" }),
+  });
+  await expect(timeline.getByRole("heading", { name: "Play History" })).toBeVisible();
+  await expect(timeline.getByRole("button", { name: /Hades/ })).toBeVisible();
+  await expect(timeline.getByText("1.1h").first()).toBeVisible();
+  await expect(timeline.getByText("30.0h")).toBeHidden();
+});
+
 test("opens settings maintenance and Steam Family controls without layout overflow", async ({ page }, testInfo) => {
   await page.goto("/");
   await page.getByTitle("Settings").click();
