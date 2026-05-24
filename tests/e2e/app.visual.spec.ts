@@ -111,6 +111,9 @@ test("opens settings maintenance and Steam Family controls without layout overfl
   await page.getByTitle("Settings").click();
 
   await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
+  await expect(page.getByText("Crimsab (123456)")).toBeVisible();
+  await expect(page.getByText("Steam App Index")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Refresh" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Steam Family" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Maintenance" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Export diagnostics" })).toBeVisible();

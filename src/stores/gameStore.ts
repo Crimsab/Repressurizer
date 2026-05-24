@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type { OwnedGame, GameDetails } from "../lib/types";
 import type { GameStatus } from "./statusStore";
 import { displayNameFromDetails, isPlaceholderGameName } from "../lib/libraryMerge";
+import { useSteamAppIndexStore } from "./steamAppIndexStore";
 
 function persistDetailsCache(details: Record<number, GameDetails>) {
   invoke("save_details_cache", { data: JSON.stringify(details) }).catch(() => {});
@@ -108,10 +109,11 @@ export const useGameStore = create<GameState>((set, get) => ({
   setGames: (games) =>
     set((state) => {
       const map: Record<number, OwnedGame> = {};
+      const appIndex = useSteamAppIndexStore.getState().data;
       for (const g of games) {
         map[g.appid] = {
           ...g,
-          name: displayNameFromDetails(g, state.details[g.appid]),
+          name: displayNameFromDetails(g, state.details[g.appid], appIndex),
         };
       }
       return { games: map, loading: false, error: null };
@@ -120,6 +122,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   mergeGames: (games) =>
     set((state) => {
       const map = { ...state.games };
+      const appIndex = useSteamAppIndexStore.getState().data;
       for (const game of games) {
         const existing = map[game.appid];
         const merged = existing
@@ -138,7 +141,7 @@ export const useGameStore = create<GameState>((set, get) => ({
           : game;
         map[game.appid] = {
           ...merged,
-          name: displayNameFromDetails(merged, state.details[game.appid]),
+          name: displayNameFromDetails(merged, state.details[game.appid], appIndex),
         };
       }
       return { games: map };
@@ -150,7 +153,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       const games = { ...state.games };
       const game = games[appId];
       if (game && (game.is_collection_only || isPlaceholderGameName(appId, game.name))) {
-        games[appId] = { ...game, name: displayNameFromDetails(game, details) };
+        games[appId] = { ...game, name: displayNameFromDetails(game, details, useSteamAppIndexStore.getState().data) };
       }
       persistDetailsCache(next);
       return { details: next, games };
@@ -164,7 +167,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         next[d.app_id] = d;
         const game = games[d.app_id];
         if (game && (game.is_collection_only || isPlaceholderGameName(d.app_id, game.name))) {
-          games[d.app_id] = { ...game, name: displayNameFromDetails(game, d) };
+          games[d.app_id] = { ...game, name: displayNameFromDetails(game, d, useSteamAppIndexStore.getState().data) };
         }
       }
       persistDetailsCache(next);

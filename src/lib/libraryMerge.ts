@@ -1,4 +1,5 @@
 import type { GameDetails, OwnedGame, SteamCollection } from "./types";
+import type { SteamAppIndexData } from "./steamAppIndex";
 
 function placeholderName(appId: number): string {
   return `App ${appId}`;
@@ -9,10 +10,18 @@ export function isPlaceholderGameName(appId: number, name: string | null | undef
   return !trimmed || trimmed === placeholderName(appId) || trimmed === `Unknown (#${appId})`;
 }
 
-export function displayNameFromDetails(game: OwnedGame, details: GameDetails | undefined): string {
+export function displayNameFromDetails(
+  game: OwnedGame,
+  details: GameDetails | undefined,
+  appIndex?: SteamAppIndexData,
+): string {
   const detailName = details?.name?.trim();
   if (detailName && (game.is_collection_only || isPlaceholderGameName(game.appid, game.name))) {
     return detailName;
+  }
+  const indexedName = appIndex?.apps[game.appid]?.name?.trim();
+  if (indexedName && (game.is_collection_only || isPlaceholderGameName(game.appid, game.name))) {
+    return indexedName;
   }
   return game.name;
 }
@@ -20,13 +29,14 @@ export function displayNameFromDetails(game: OwnedGame, details: GameDetails | u
 export function mergeCollectionOnlyGames(
   games: OwnedGame[],
   collections: SteamCollection[],
-  details: Record<number, GameDetails> = {}
+  details: Record<number, GameDetails> = {},
+  appIndex?: SteamAppIndexData,
 ): OwnedGame[] {
   const byId = new Map<number, OwnedGame>();
   for (const game of games) {
     byId.set(game.appid, {
       ...game,
-      name: displayNameFromDetails(game, details[game.appid]),
+      name: displayNameFromDetails(game, details[game.appid], appIndex),
     });
   }
 
@@ -35,7 +45,7 @@ export function mergeCollectionOnlyGames(
       if (!Number.isFinite(appId) || appId <= 0 || byId.has(appId)) continue;
       byId.set(appId, {
         appid: appId,
-        name: details[appId]?.name?.trim() || placeholderName(appId),
+        name: details[appId]?.name?.trim() || appIndex?.apps[appId]?.name?.trim() || placeholderName(appId),
         playtime_forever: 0,
         img_icon_url: null,
         rtime_last_played: 0,

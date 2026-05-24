@@ -57,6 +57,18 @@ describe("libraryMerge", () => {
     expect(merged.find((g) => g.appid === 39140)?.name).toBe("FINAL FANTASY VII");
   });
 
+  it("uses the Steam app index to name collection-only games when details are missing", () => {
+    const merged = mergeCollectionOnlyGames([baseGame], [collection], {}, {
+      version: 1,
+      fetchedAt: Date.now(),
+      apps: {
+        39140: { appid: 39140, name: "FINAL FANTASY VII" },
+      },
+    });
+
+    expect(merged.find((g) => g.appid === 39140)?.name).toBe("FINAL FANTASY VII");
+  });
+
   it("recognizes placeholder names", () => {
     expect(isPlaceholderGameName(39140, "App 39140")).toBe(true);
     expect(isPlaceholderGameName(39140, "Unknown (#39140)")).toBe(true);

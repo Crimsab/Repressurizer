@@ -1,14 +1,14 @@
-mod steam;
 mod categorizer;
 mod hltb;
+mod steam;
 
-use steam::collections;
-use steam::detector;
-use steam::api;
 use categorizer::commands;
-use tauri::Manager;
 use serde::Serialize;
 use std::path::PathBuf;
+use steam::api;
+use steam::collections;
+use steam::detector;
+use tauri::Manager;
 
 #[derive(Serialize)]
 struct CacheInfo {
@@ -317,6 +317,7 @@ pub fn run() {
             collections::delete_backup,
             collections::create_manual_backup,
             api::fetch_library,
+            api::fetch_steam_app_list,
             api::fetch_game_details,
             api::fetch_achievements,
             api::fetch_achievements_summary,

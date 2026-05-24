@@ -1,4 +1,4 @@
-use serde::{Deserialize, Deserializer, Serialize, de};
+use serde::{de, Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
 
 // === Achievement types ===
@@ -85,6 +85,27 @@ struct OwnedGamesInner {
     #[allow(dead_code)]
     game_count: Option<u64>,
     games: Option<Vec<OwnedGame>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SteamAppListItem {
+    pub appid: u64,
+    pub name: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct SteamAppListResponse {
+    response: SteamAppListInner,
+}
+
+#[derive(Debug, Deserialize)]
+struct SteamAppListInner {
+    #[serde(default)]
+    apps: Vec<SteamAppListItem>,
+    #[serde(default)]
+    have_more_results: bool,
+    #[serde(default)]
+    last_appid: u64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -202,6 +223,71 @@ pub async fn fetch_library(api_key: String, steam_id64: String) -> Result<Vec<Ow
         .into_iter()
         .filter(|game| !is_transient_library_app(game))
         .collect())
+}
+
+#[tauri::command]
+pub async fn fetch_steam_app_list(api_key: String) -> Result<Vec<SteamAppListItem>, String> {
+    let key = api_key.trim();
+    if key.is_empty() {
+        return Err("Steam Web API key is required to refresh the Steam app index.".to_string());
+    }
+
+    let client = reqwest::Client::builder()
+        .user_agent("Repressurizer/0.1")
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+
+    let mut apps = Vec::new();
+    let mut last_appid = 0u64;
+
+    loop {
+        let response = client
+            .get("https://api.steampowered.com/IStoreService/GetAppList/v1/")
+            .query(&[
+                ("key", key),
+                ("include_games", "true"),
+                ("include_dlc", "true"),
+                ("include_software", "true"),
+                ("include_videos", "false"),
+                ("include_hardware", "false"),
+                ("max_results", "50000"),
+            ])
+            .query(&[("last_appid", last_appid.to_string())])
+            .send()
+            .await
+            .map_err(|e| format!("Steam app list request failed: {}", e))?;
+
+        let status = response.status();
+        let text = response
+            .text()
+            .await
+            .map_err(|e| format!("Failed to read Steam app list response: {}", e))?;
+
+        if !status.is_success() {
+            return Err(format!(
+                "Steam app list returned status {}: {}",
+                status,
+                text.chars().take(180).collect::<String>()
+            ));
+        }
+
+        let page: SteamAppListResponse = serde_json::from_str(&text)
+            .map_err(|e| format!("Failed to parse Steam app list: {}", e))?;
+        apps.extend(page.response.apps);
+
+        if !page.response.have_more_results || page.response.last_appid == 0 {
+            break;
+        }
+        if page.response.last_appid <= last_appid {
+            break;
+        }
+        last_appid = page.response.last_appid;
+    }
+
+    apps.retain(|app| !app.name.trim().is_empty());
+    apps.sort_by_key(|app| app.appid);
+    apps.dedup_by_key(|app| app.appid);
+    Ok(apps)
 }
 
 fn is_transient_library_app(game: &OwnedGame) -> bool {
@@ -1132,6 +1218,25 @@ mod tests {
                 "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/3280350/hash/capsule_231x87.jpg"
             )
         );
+    }
+
+    #[test]
+    fn store_app_list_response_parses_paginated_apps() {
+        let parsed: SteamAppListResponse = serde_json::from_value(json!({
+            "response": {
+                "apps": [
+                    { "appid": 10, "name": "Counter-Strike" },
+                    { "appid": 20, "name": "Team Fortress Classic" }
+                ],
+                "have_more_results": true,
+                "last_appid": 20
+            }
+        }))
+        .expect("store app list json");
+
+        assert_eq!(parsed.response.apps.len(), 2);
+        assert!(parsed.response.have_more_results);
+        assert_eq!(parsed.response.last_appid, 20);
     }
 
     #[tokio::test]

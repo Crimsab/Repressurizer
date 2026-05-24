@@ -34,6 +34,7 @@ export async function installTauriMock(page: Page) {
       steamPath: "C:\\\\Program Files (x86)\\\\Steam",
       steamId3: "123456",
       steamId64: "76561198000000000",
+      steamPersonaName: "Crimsab",
       apiKey: "mock-key",
       setupComplete: true,
       showDynamicCategories: false,
@@ -145,6 +146,13 @@ export async function installTauriMock(page: Page) {
         switch (cmd) {
           case "fetch_library":
             return games;
+          case "fetch_steam_app_list":
+            if (!args?.apiKey) throw new Error("Steam Web API key is required");
+            return [
+              { appid: 43160, name: "Metro: Last Light Complete Edition" },
+              { appid: 632470, name: "Disco Elysium - The Final Cut" },
+              { appid: 1145360, name: "Hades" },
+            ];
           case "fetch_game_details": {
             const appId = Number(args?.appId ?? args?.app_id ?? 0);
             const names: Record<number, string> = {

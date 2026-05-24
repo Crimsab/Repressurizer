@@ -85,6 +85,7 @@ export interface AppSettings {
   steamPath: string;
   steamId3: string;
   steamId64: string;
+  steamPersonaName: string;
   apiKey: string;
   setupComplete: boolean;
   showDynamicCategories: boolean;

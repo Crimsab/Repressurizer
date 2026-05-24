@@ -88,6 +88,15 @@ export async function fetchLibrary(
   return invoke<OwnedGame[]>("fetch_library", { apiKey, steamId64 });
 }
 
+export interface SteamAppListItem {
+  appid: number;
+  name: string;
+}
+
+export async function fetchSteamAppList(apiKey: string): Promise<SteamAppListItem[]> {
+  return invoke<SteamAppListItem[]>("fetch_steam_app_list", { apiKey });
+}
+
 // Map currency setting to Steam country code for regional pricing
 const CURRENCY_TO_CC: Record<string, string> = {
   EUR: "de", USD: "us", GBP: "gb", JPY: "jp", CAD: "ca",

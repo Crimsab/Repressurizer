@@ -3,6 +3,7 @@ import { useSettingsStore } from "../../stores/settingsStore";
 import { useGameStore } from "../../stores/gameStore";
 import { useCategoryStore } from "../../stores/categoryStore";
 import { usePlayHistoryStore } from "../../stores/playHistoryStore";
+import { useSteamAppIndexStore } from "../../stores/steamAppIndexStore";
 import {
   detectSteam,
   detectSteamAt,
@@ -31,6 +32,7 @@ export function SetupWizard() {
   const [steamPath, setSteamPath] = useState("");
   const [users, setUsers] = useState<SteamUser[]>([]);
   const [selectedUser, setSelectedUser] = useState("");
+  const [selectedPersonaName, setSelectedPersonaName] = useState("");
   const [steamId64, setSteamId64] = useState("");
   const [apiKey, setApiKey] = useState("");
   const [error, setError] = useState("");
@@ -47,6 +49,7 @@ export function SetupWizard() {
       setUsers(info.users);
       if (info.users.length === 1) {
         setSelectedUser(info.users[0].id3);
+        setSelectedPersonaName(info.users[0].persona_name);
         setSteamId64(info.users[0].id64);
       }
       setStep(1);
@@ -70,7 +73,9 @@ export function SetupWizard() {
       console.log("Got collections:", collections.length);
 
       const details = useGameStore.getState().details;
-      setLoadedGames(mergeCollectionOnlyGames(games, collections, details));
+      await useSteamAppIndexStore.getState().hydrate();
+      const appIndex = useSteamAppIndexStore.getState().data;
+      setLoadedGames(mergeCollectionOnlyGames(games, collections, details, appIndex));
       setLoadedCollections(collections);
       setStep(2);
       setLoading(false);
@@ -89,6 +94,7 @@ export function SetupWizard() {
       steamPath,
       steamId3: selectedUser,
       steamId64,
+      steamPersonaName: selectedPersonaName,
       apiKey,
       setupComplete: true,
     });
@@ -174,6 +180,7 @@ export function SetupWizard() {
                       setUsers(info.users);
                       if (info.users.length === 1) {
                         setSelectedUser(info.users[0].id3);
+                        setSelectedPersonaName(info.users[0].persona_name);
                         setSteamId64(info.users[0].id64);
                       }
                       setStep(1);
@@ -217,6 +224,7 @@ export function SetupWizard() {
                         key={user.id3}
                         onClick={() => {
                           setSelectedUser(user.id3);
+                          setSelectedPersonaName(user.persona_name);
                           setSteamId64(user.id64);
                         }}
                         className={`btn-press w-full rounded-xl border px-4 py-3 text-left transition-all ${

@@ -11,6 +11,7 @@ const defaults: AppSettings = {
   steamPath: "",
   steamId3: "",
   steamId64: "",
+  steamPersonaName: "",
   apiKey: "",
   setupComplete: false,
   showDynamicCategories: false,

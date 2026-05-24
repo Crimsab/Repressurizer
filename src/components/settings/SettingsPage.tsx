@@ -9,7 +9,9 @@ import { useSettingsStore } from "../../stores/settingsStore";
 import { useGameStore } from "../../stores/gameStore";
 import { useCategoryStore } from "../../stores/categoryStore";
 import { useFamilyStore } from "../../stores/familyStore";
+import { useSteamAppIndexStore } from "../../stores/steamAppIndexStore";
 import { familyAppsToOwnedGames } from "../../lib/familyLibrary";
+import { isSteamAppIndexStale } from "../../lib/steamAppIndex";
 import { useFailedGamesStore, getIgnoredGameName, MAX_FAIL_RUNS } from "../../stores/failedGamesStore";
 import { useHltbIgnoredStore, getHltbIgnoredGameName, HLTB_MAX_FAILS } from "../../stores/hltbIgnoredStore";
 
@@ -69,6 +71,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
   const settings = useSettingsStore();
   const gameCount = useGameStore((s) => Object.keys(s.games).length);
   const mergeGames = useGameStore((s) => s.mergeGames);
+  const setGames = useGameStore((s) => s.setGames);
   const cachedDetailsCount = useGameStore((s) => Object.keys(s.details).length);
   const clearDetailsCache = useGameStore((s) => s.clearDetailsCache);
   const failedGamesStore = useFailedGamesStore();
@@ -99,6 +102,9 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
   const [familyChecking, setFamilyChecking] = useState(false);
   const [familyResult, setFamilyResult] = useState<FamilyLibraryResult | null>(null);
   const familyLastFetched = useFamilyStore((s) => s.lastFetched);
+  const steamAppIndex = useSteamAppIndexStore((s) => s.data);
+  const steamAppIndexRefreshing = useSteamAppIndexStore((s) => s.refreshing);
+  const steamAppIndexError = useSteamAppIndexStore((s) => s.error);
   const [pendingAction, setPendingAction] = useState<{
     type: "restore" | "delete" | "reset";
     backup?: BackupInfo;
@@ -197,6 +203,19 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
     settings.setSettings({ apiKey });
     setMessage("API key saved.");
     setTimeout(() => setMessage(""), 2000);
+  };
+
+  const handleRefreshSteamAppIndex = async () => {
+    setMessage("");
+    try {
+      await useSteamAppIndexStore.getState().refresh(settings.apiKey);
+      const current = Object.values(useGameStore.getState().games);
+      if (current.length > 0) setGames(current);
+      setMessage("Steam app index refreshed.");
+      setTimeout(() => setMessage(""), 2000);
+    } catch (e) {
+      setMessage(`Steam app index refresh failed: ${e}`);
+    }
   };
 
   const handleExportDiagnostics = async () => {
@@ -370,6 +389,8 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
 
   const hasFamilyStoreToken = Boolean(extractStoreWebApiToken(familyAccessToken));
   const familyIncludeNonGames = settings.includeSteamFamilyNonGames ?? false;
+  const steamAppIndexCount = Object.keys(steamAppIndex.apps).length;
+  const steamAppIndexStale = isSteamAppIndexStale(steamAppIndex);
 
   return (
     <div
@@ -467,7 +488,11 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                   </div>
                   <div>
                     <span className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">User</span>
-                    <p className="mt-1 font-mono text-xs text-repressurizer-text-muted">{settings.steamId3}</p>
+                    <p className="mt-1 truncate font-mono text-xs text-repressurizer-text-muted">
+                      {settings.steamPersonaName
+                        ? `${settings.steamPersonaName} (${settings.steamId3})`
+                        : settings.steamId3}
+                    </p>
                   </div>
                   <div>
                     <span className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">Steam ID64</span>
@@ -688,6 +713,31 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
 
               {/* Cache */}
               <div className="space-y-3">
+                <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">Steam App Index</h3>
+                <div className="flex items-center gap-3 rounded-xl bg-repressurizer-bg border border-repressurizer-border-subtle px-4 py-3">
+                  <CloudArrowDown size={15} weight="duotone" className="text-repressurizer-text-faint shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-repressurizer-text">
+                      <span className="font-mono tabular-nums">{steamAppIndexCount}</span> Steam apps indexed
+                    </p>
+                    <p className="mt-0.5 text-xs text-repressurizer-text-faint">
+                      {steamAppIndex.fetchedAt > 0
+                        ? `Last refreshed ${new Date(steamAppIndex.fetchedAt).toLocaleDateString()}${steamAppIndexStale ? " · refresh recommended" : ""}`
+                        : "Used to resolve collection-only app names instantly."}
+                    </p>
+                    {steamAppIndexError && (
+                      <p className="mt-1 text-xs text-repressurizer-danger">{steamAppIndexError}</p>
+                    )}
+                  </div>
+                  <button
+                    onClick={handleRefreshSteamAppIndex}
+                    disabled={steamAppIndexRefreshing}
+                    className="btn-press shrink-0 rounded-lg bg-repressurizer-accent/15 px-3 py-1.5 text-xs font-medium text-repressurizer-accent transition-colors hover:bg-repressurizer-accent/25 disabled:opacity-40"
+                  >
+                    {steamAppIndexRefreshing ? "Refreshing..." : "Refresh"}
+                  </button>
+                </div>
+
                 <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">Game Details Cache</h3>
                 <div className="flex items-center gap-3 rounded-xl bg-repressurizer-bg border border-repressurizer-border-subtle px-4 py-3">
                   <Database size={15} weight="duotone" className="text-repressurizer-text-faint shrink-0" />

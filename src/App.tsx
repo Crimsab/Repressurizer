@@ -17,7 +17,8 @@ import { useHltbIgnoredStore } from "./stores/hltbIgnoredStore";
 import { useToastStore } from "./stores/toastStore";
 import { useFamilyStore } from "./stores/familyStore";
 import { usePlayHistoryStore } from "./stores/playHistoryStore";
-import { fetchLibrary, loadCollections, createManualBackup } from "./lib/tauri";
+import { useSteamAppIndexStore } from "./stores/steamAppIndexStore";
+import { fetchLibrary, loadCollections, createManualBackup, fetchPlayerSummary } from "./lib/tauri";
 import { mergeCollectionOnlyGames } from "./lib/libraryMerge";
 import { useT } from "./lib/i18n";
 import { SetupWizard } from "./components/setup/SetupWizard";
@@ -130,6 +131,7 @@ function AppContent() {
   const hydrateHltbIgnored = useHltbIgnoredStore((s) => s.hydrate);
   const hydrateFamily = useFamilyStore((s) => s.hydrate);
   const hydratePlayHistory = usePlayHistoryStore((s) => s.hydrate);
+  const hydrateSteamAppIndex = useSteamAppIndexStore((s) => s.hydrate);
   const setCollections = useCategoryStore((s) => s.setCollections);
   const [reloading, setReloading] = useState(false);
   const [reloadError, setReloadError] = useState("");
@@ -142,6 +144,17 @@ function AppContent() {
   const theme = useSettingsStore((s) => s.theme);
   useEffect(() => { applyAccentColor(accentColor); }, [accentColor]);
   useEffect(() => { applyTheme(theme ?? "dark"); }, [theme]);
+
+  useEffect(() => {
+    if (settings.steamPersonaName || !settings.apiKey || !settings.steamId64) return;
+    fetchPlayerSummary(settings.apiKey, settings.steamId64)
+      .then((summary) => {
+        if (summary.personaname) {
+          settings.setSettings({ steamPersonaName: summary.personaname });
+        }
+      })
+      .catch(() => {});
+  }, [settings.steamPersonaName, settings.apiKey, settings.steamId64]);
 
   // Load cached data from Rust file cache on startup
   useEffect(() => {
@@ -158,6 +171,7 @@ function AppContent() {
     hydrateHltbIgnored();
     hydrateFamily();
     hydratePlayHistory();
+    hydrateSteamAppIndex();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -220,11 +234,16 @@ function AppContent() {
         .then(([games, collections]) => {
           const familyGames = useFamilyStore.getState().sharedGamesAsOwned();
           const cachedDetails = useGameStore.getState().details;
-          const mergedGames = mergeCollectionOnlyGames([...games, ...familyGames], collections, cachedDetails);
+          const appIndex = useSteamAppIndexStore.getState().data;
+          const mergedGames = mergeCollectionOnlyGames([...games, ...familyGames], collections, cachedDetails, appIndex);
           console.log("Reloaded:", mergedGames.length, "games,", collections.length, "collections");
           setGames(mergedGames);
           usePlayHistoryStore.getState().observeLibrary(mergedGames);
           setCollections(collections);
+          useSteamAppIndexStore.getState().ensureFresh(settings.apiKey).then(() => {
+            const current = Object.values(useGameStore.getState().games);
+            if (current.length > 0) useGameStore.getState().setGames(current);
+          }).catch(() => {});
           setReloading(false);
 
           // Show onboarding for first-time users
