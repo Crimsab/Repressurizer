@@ -39,6 +39,7 @@ import {
   FolderSimplePlus,
   Timer,
 } from "@phosphor-icons/react";
+import { useT, type TranslationKey } from "../../lib/i18n";
 
 // ============================================================
 // Types
@@ -49,18 +50,18 @@ type Step = "choose" | "configure" | "fetch" | "preview" | "done";
 
 const CATEGORIZERS: {
   value: CategorizerType;
-  label: string;
-  description: string;
+  labelKey: TranslationKey;
+  descriptionKey: TranslationKey;
   needsDetails: boolean;
   needsHltb: boolean;
   icon: typeof Clock;
 }[] = [
-  { value: "hours", label: "By Playtime", description: "Group games into buckets by hours played", needsDetails: false, needsHltb: false, icon: Clock },
-  { value: "genre", label: "By Genre", description: "Create a category for each Steam genre", needsDetails: true, needsHltb: false, icon: Tag },
-  { value: "tags", label: "By Tags", description: "Create categories from Steam feature tags", needsDetails: true, needsHltb: false, icon: Playlist },
-  { value: "year", label: "By Year", description: "Group games by release year or decade", needsDetails: true, needsHltb: false, icon: Calendar },
-  { value: "score", label: "By Metacritic", description: "Sort games by Metacritic score (Must-Play → Poor)", needsDetails: true, needsHltb: false, icon: Star },
-  { value: "hltb", label: "By HLTB Duration", description: "Group by HowLongToBeat main story length", needsDetails: false, needsHltb: true, icon: Timer },
+  { value: "hours", labelKey: "auto.byPlaytime", descriptionKey: "auto.byPlaytime.desc", needsDetails: false, needsHltb: false, icon: Clock },
+  { value: "genre", labelKey: "auto.byGenre", descriptionKey: "auto.byGenre.desc", needsDetails: true, needsHltb: false, icon: Tag },
+  { value: "tags", labelKey: "auto.byTags", descriptionKey: "auto.byTags.desc", needsDetails: true, needsHltb: false, icon: Playlist },
+  { value: "year", labelKey: "auto.byYear", descriptionKey: "auto.byYear.desc", needsDetails: true, needsHltb: false, icon: Calendar },
+  { value: "score", labelKey: "auto.byScore", descriptionKey: "auto.byScore.desc", needsDetails: true, needsHltb: false, icon: Star },
+  { value: "hltb", labelKey: "auto.byHltb", descriptionKey: "auto.byHltb.desc", needsDetails: false, needsHltb: true, icon: Timer },
 ];
 
 const DEFAULT_HLTB_CONFIG: HoursConfig = {
@@ -117,6 +118,7 @@ interface AutoCategorizeDialogProps {
 }
 
 export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
+  const t = useT();
   const games = useGameStore((s) => s.games);
   const details = useGameStore((s) => s.details);
   const { addGamesToCategory, addCategory, collections } = useCategoryStore();
@@ -195,7 +197,7 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
 
       if (missing.length > 0) {
         if (!apiKey) {
-          setFetchError("A Steam API key is required to fetch game details. Add one in Settings.");
+          setFetchError(t("auto.detailsRequired"));
           setStep("fetch");
           return;
         }
@@ -259,10 +261,10 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
       persist.set({ lastResult: res });
       gotoStep("preview");
     } catch (e) {
-      setRunError(`Categorization failed: ${e}`);
+      setRunError(t("auto.categorizationFailed", { error: String(e) }));
       gotoStep("configure");
     }
-  }, [type, games, details, hltbData, hoursConfig, genreConfig, tagsConfig, yearConfig, hltbConfig]);
+  }, [type, games, details, hltbData, hoursConfig, genreConfig, tagsConfig, yearConfig, hltbConfig, t]);
 
   // ---- Step: apply ----
   const handleApply = async () => {
@@ -304,7 +306,7 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
         <div className="flex items-center justify-between border-b border-repressurizer-border px-6 py-4">
           <div className="flex items-center gap-2">
             <Robot size={18} weight="duotone" className="text-repressurizer-accent" />
-            <h2 className="text-base font-semibold text-white tracking-tight">Auto-Categorize</h2>
+            <h2 className="text-base font-semibold text-white tracking-tight">{t("auto.title")}</h2>
           </div>
           <button onClick={onClose} className="btn-press flex items-center justify-center w-7 h-7 rounded-lg text-repressurizer-text-muted transition-colors hover:text-white hover:bg-repressurizer-surface-hover">
             <X size={16} weight="bold" />
@@ -358,14 +360,15 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
 // Step indicator
 // ============================================================
 
-const STEPS: { key: Step; label: string }[] = [
-  { key: "choose", label: "Choose" },
-  { key: "configure", label: "Configure" },
-  { key: "preview", label: "Preview" },
-  { key: "done", label: "Apply" },
+const STEPS: { key: Step; labelKey: TranslationKey }[] = [
+  { key: "choose", labelKey: "auto.step.choose" },
+  { key: "configure", labelKey: "auto.step.configure" },
+  { key: "preview", labelKey: "auto.step.preview" },
+  { key: "done", labelKey: "auto.step.apply" },
 ];
 
 function StepBar({ step }: { step: Step }) {
+  const t = useT();
   const shown = STEPS.filter((s) => s.key !== "fetch");
   const idx = shown.findIndex((s) => s.key === step) !== -1
     ? shown.findIndex((s) => s.key === step)
@@ -383,7 +386,7 @@ function StepBar({ step }: { step: Step }) {
             }`}>
               {i < idx ? <Check size={10} weight="bold" /> : i + 1}
             </span>
-            {s.label}
+            {t(s.labelKey)}
           </div>
           {i < shown.length - 1 && (
             <div className={`mx-3 h-px w-8 ${i < idx ? "bg-repressurizer-accent/40" : "bg-repressurizer-border-subtle"}`} />
@@ -399,6 +402,7 @@ function StepBar({ step }: { step: Step }) {
 // ============================================================
 
 function ChooseStep({ onChoose }: { onChoose: (t: CategorizerType) => void }) {
+  const t = useT();
   const gameCount = useGameStore((s) => Object.keys(s.games).length);
   const games = useGameStore((s) => s.games);
   const details = useGameStore((s) => s.details);
@@ -424,8 +428,7 @@ function ChooseStep({ onChoose }: { onChoose: (t: CategorizerType) => void }) {
       {/* Details cache status */}
       <div className="mb-2 flex items-center gap-3 rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-2.5">
         <div className="flex-1 text-xs text-repressurizer-text-muted">
-          <span className="font-mono text-repressurizer-text tabular-nums">{cachedCount}</span>
-          <span className="text-repressurizer-text-faint"> / {gameCount} games have details cached</span>
+          <span className="text-repressurizer-text-faint">{t("auto.cacheStatus", { cached: cachedCount, total: gameCount })}</span>
         </div>
         {detailsRunning ? (
           <span className="inline-flex items-center gap-1.5 rounded-md bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-500">
@@ -435,18 +438,18 @@ function ChooseStep({ onChoose }: { onChoose: (t: CategorizerType) => void }) {
         ) : missingCount > 0 ? (
           <div className="flex items-center gap-1.5">
             <span className="rounded-md bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-500">
-              {missingCount} need fetching
+              {t("auto.needFetching", { count: missingCount })}
             </span>
             <button
               onClick={handleFetchDetails}
               className="rounded-md bg-repressurizer-accent/15 px-2 py-0.5 text-[10px] font-medium text-repressurizer-accent hover:bg-repressurizer-accent/25 transition-colors"
             >
-              Fetch Now
+              {t("auto.fetchNow")}
             </button>
           </div>
         ) : (
           <span className="rounded-md bg-repressurizer-accent/10 px-2 py-0.5 text-[10px] font-medium text-repressurizer-accent">
-            ✓ all cached
+            ✓ {t("auto.allCached")}
           </span>
         )}
       </div>
@@ -455,7 +458,7 @@ function ChooseStep({ onChoose }: { onChoose: (t: CategorizerType) => void }) {
       <div className="mb-4 flex items-center gap-3 rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-2.5">
         <div className="flex-1 text-xs text-repressurizer-text-muted">
           <span className="font-mono text-repressurizer-text tabular-nums">{hltbCount}</span>
-          <span className="text-repressurizer-text-faint"> / {gameCount} games have HLTB data</span>
+          <span className="text-repressurizer-text-faint"> {t("auto.hltbCached", { count: hltbCount })}</span>
         </div>
         {hltbRunning ? (
           <span className="inline-flex items-center gap-1.5 rounded-md bg-sky-500/10 px-2 py-0.5 text-[10px] font-medium text-sky-400">
@@ -464,16 +467,16 @@ function ChooseStep({ onChoose }: { onChoose: (t: CategorizerType) => void }) {
           </span>
         ) : hltbCount > 0 ? (
           <span className="rounded-md bg-repressurizer-accent/10 px-2 py-0.5 text-[10px] font-medium text-repressurizer-accent">
-            {hltbCount} cached
+            {t("auto.hltbCached", { count: hltbCount })}
           </span>
         ) : (
           <span className="rounded-md bg-repressurizer-surface-hover px-2 py-0.5 text-[10px] font-medium text-repressurizer-text-faint">
-            none cached
+            {t("common.none")}
           </span>
         )}
       </div>
 
-      <p className="mb-3 text-sm text-repressurizer-text-muted">Pick a strategy to automatically create and populate categories.</p>
+      <p className="mb-3 text-sm text-repressurizer-text-muted">{t("auto.choose.desc")}</p>
       {CATEGORIZERS.map((c) => {
         const Icon = c.icon;
         return (
@@ -484,17 +487,17 @@ function ChooseStep({ onChoose }: { onChoose: (t: CategorizerType) => void }) {
           >
             <Icon size={20} weight="duotone" className="shrink-0 text-repressurizer-accent" />
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-white">{c.label}</p>
-              <p className="text-xs text-repressurizer-text-faint mt-0.5">{c.description}</p>
+              <p className="text-sm font-medium text-white">{t(c.labelKey)}</p>
+              <p className="text-xs text-repressurizer-text-faint mt-0.5">{t(c.descriptionKey)}</p>
             </div>
             {c.needsDetails && (
               <span className="shrink-0 rounded-md bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-500">
-                needs API
+                {t("auto.needsDetails")}
               </span>
             )}
             {c.needsHltb && (
               <span className="shrink-0 rounded-md bg-sky-500/10 px-2 py-0.5 text-[10px] font-medium text-sky-400">
-                needs HLTB
+                HLTB
               </span>
             )}
             <ArrowRight size={16} className="shrink-0 text-repressurizer-text-faint" />
@@ -524,6 +527,7 @@ function ConfigureStep({
   onBack: () => void;
   onNext: () => void;
 }) {
+  const t = useT();
   return (
     <div className="space-y-5">
       {error && (
@@ -537,10 +541,10 @@ function ConfigureStep({
       {type === "genre" && <GenreConfigForm config={genreConfig} onChange={setGenreConfig} />}
       {type === "tags" && <TagsConfigForm config={tagsConfig} onChange={setTagsConfig} />}
       {type === "year" && <YearConfigForm config={yearConfig} onChange={setYearConfig} />}
-      {type === "hltb" && <HoursConfigForm config={hltbConfig} onChange={setHltbConfig} label="HLTB Duration Buckets" />}
+      {type === "hltb" && <HoursConfigForm config={hltbConfig} onChange={setHltbConfig} label={t("auto.hltbBuckets")} />}
       {type === "score" && (
         <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg p-4 text-sm text-repressurizer-text-muted">
-          <p className="font-medium text-repressurizer-text mb-2">Metacritic Score Buckets</p>
+          <p className="font-medium text-repressurizer-text mb-2">{t("auto.metacriticBuckets")}</p>
           <div className="space-y-1.5 text-xs">
             {[
               { name: "Must-Play", range: "90-100" },
@@ -555,17 +559,17 @@ function ConfigureStep({
               </div>
             ))}
           </div>
-          <p className="mt-3 text-repressurizer-text-faint">Games without a Metacritic score are skipped.</p>
+          <p className="mt-3 text-repressurizer-text-faint">{t("auto.metacriticSkipped")}</p>
         </div>
       )}
 
       <div className="flex justify-between pt-2">
         <button onClick={onBack} className="btn-press inline-flex items-center gap-1.5 rounded-lg border border-repressurizer-border px-4 py-2 text-sm text-repressurizer-text-muted transition-colors hover:text-white hover:bg-repressurizer-surface-hover">
           <ArrowLeft size={14} />
-          Back
+          {t("auto.back")}
         </button>
         <button onClick={onNext} className="btn-press inline-flex items-center gap-1.5 rounded-xl bg-repressurizer-accent px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-repressurizer-accent-hover">
-          Run
+          {t("auto.run")}
           <ArrowRight size={14} />
         </button>
       </div>
@@ -576,23 +580,25 @@ function ConfigureStep({
 // ---- Sub-forms ----
 
 function PrefixInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const t = useT();
   return (
     <div>
       <label className="mb-1.5 block text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">
-        Category Prefix <span className="normal-case text-repressurizer-text-faint/60">(optional)</span>
+        {t("auto.categoryPrefix")} <span className="normal-case text-repressurizer-text-faint/60">{t("auto.optional")}</span>
       </label>
       <input
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder='e.g. "Hours: " → "Hours: Unplayed"'
+        placeholder={t("auto.prefixPlaceholder")}
         className="w-full rounded-lg border border-repressurizer-border bg-repressurizer-bg px-3 py-2 text-sm text-repressurizer-text placeholder:text-repressurizer-text-faint focus:border-repressurizer-accent focus:outline-none"
       />
     </div>
   );
 }
 
-function HoursConfigForm({ config, onChange, label = "Time Buckets" }: { config: HoursConfig; onChange: (c: HoursConfig) => void; label?: string }) {
+function HoursConfigForm({ config, onChange, label }: { config: HoursConfig; onChange: (c: HoursConfig) => void; label?: string }) {
+  const t = useT();
   const updateRule = (i: number, field: string, val: string) => {
     const rules = config.rules.map((r, idx) =>
       idx === i ? { ...r, [field]: field === "name" ? val : parseFloat(val) || 0 } : r
@@ -607,15 +613,15 @@ function HoursConfigForm({ config, onChange, label = "Time Buckets" }: { config:
       <PrefixInput value={config.prefix ?? ""} onChange={(v) => onChange({ ...config, prefix: v })} />
       <div>
         <div className="mb-2 flex items-center justify-between">
-          <label className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{label}</label>
+          <label className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{label ?? t("auto.timeBuckets")}</label>
           <button onClick={addRule} className="btn-press inline-flex items-center gap-1 rounded-lg bg-repressurizer-accent/15 px-2 py-1 text-xs text-repressurizer-accent hover:bg-repressurizer-accent/25">
-            <Plus size={11} weight="bold" /> Add
+            <Plus size={11} weight="bold" /> {t("auto.add")}
           </button>
         </div>
         <div className="space-y-2">
           {config.rules.map((rule, i) => (
             <div key={i} className="flex gap-2">
-              <input value={rule.name} onChange={(e) => updateRule(i, "name", e.target.value)} className="flex-1 rounded-lg border border-repressurizer-border bg-repressurizer-bg px-3 py-1.5 text-sm text-repressurizer-text focus:border-repressurizer-accent focus:outline-none" placeholder="Name" />
+              <input value={rule.name} onChange={(e) => updateRule(i, "name", e.target.value)} className="flex-1 rounded-lg border border-repressurizer-border bg-repressurizer-bg px-3 py-1.5 text-sm text-repressurizer-text focus:border-repressurizer-accent focus:outline-none" placeholder={t("auto.name")} />
               <input type="number" value={rule.min_hours} onChange={(e) => updateRule(i, "min_hours", e.target.value)} className="w-20 rounded-lg border border-repressurizer-border bg-repressurizer-bg px-3 py-1.5 text-sm text-repressurizer-text focus:border-repressurizer-accent focus:outline-none font-mono" placeholder="min" />
               <input type="number" value={rule.max_hours} onChange={(e) => updateRule(i, "max_hours", e.target.value)} className="w-20 rounded-lg border border-repressurizer-border bg-repressurizer-bg px-3 py-1.5 text-sm text-repressurizer-text focus:border-repressurizer-accent focus:outline-none font-mono" placeholder="max (0=∞)" />
               <button onClick={() => removeRule(i)} className="btn-press flex items-center justify-center w-8 h-8 rounded-lg text-repressurizer-danger/60 hover:text-repressurizer-danger hover:bg-repressurizer-danger/10">
@@ -624,30 +630,31 @@ function HoursConfigForm({ config, onChange, label = "Time Buckets" }: { config:
             </div>
           ))}
         </div>
-        <p className="mt-2 text-xs text-repressurizer-text-faint">Set max to 0 for an open-ended bucket (e.g. 60h+).</p>
+        <p className="mt-2 text-xs text-repressurizer-text-faint">{t("auto.maxOpenHint")}</p>
       </div>
     </div>
   );
 }
 
 function GenreConfigForm({ config, onChange }: { config: GenreConfig; onChange: (c: GenreConfig) => void }) {
+  const t = useT();
   const [newIgnored, setNewIgnored] = useState("");
   return (
     <div className="space-y-4">
       <PrefixInput value={config.prefix ?? ""} onChange={(v) => onChange({ ...config, prefix: v })} />
       <div>
-        <label className="mb-1.5 block text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">Max categories per game</label>
+        <label className="mb-1.5 block text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("auto.maxCategories")}</label>
         <input
           type="number"
           min={1}
           value={config.max_categories ?? ""}
           onChange={(e) => onChange({ ...config, max_categories: e.target.value ? parseInt(e.target.value) : undefined })}
-          placeholder="Unlimited"
+          placeholder={t("auto.unlimited")}
           className="w-32 rounded-lg border border-repressurizer-border bg-repressurizer-bg px-3 py-2 text-sm text-repressurizer-text focus:border-repressurizer-accent focus:outline-none font-mono"
         />
       </div>
       <TagListInput
-        label="Ignored genres"
+        label={t("auto.ignoredGenres")}
         items={config.ignored_genres}
         newItem={newIgnored}
         setNewItem={setNewIgnored}
@@ -659,23 +666,24 @@ function GenreConfigForm({ config, onChange }: { config: GenreConfig; onChange: 
 }
 
 function TagsConfigForm({ config, onChange }: { config: TagsConfig; onChange: (c: TagsConfig) => void }) {
+  const t = useT();
   const [newTag, setNewTag] = useState("");
   return (
     <div className="space-y-4">
       <PrefixInput value={config.prefix ?? ""} onChange={(v) => onChange({ ...config, prefix: v })} />
       <div>
-        <label className="mb-1.5 block text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">Max tags per game</label>
+        <label className="mb-1.5 block text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("auto.maxTags")}</label>
         <input
           type="number"
           min={1}
           value={config.max_tags ?? ""}
           onChange={(e) => onChange({ ...config, max_tags: e.target.value ? parseInt(e.target.value) : undefined })}
-          placeholder="Unlimited"
+          placeholder={t("auto.unlimited")}
           className="w-32 rounded-lg border border-repressurizer-border bg-repressurizer-bg px-3 py-2 text-sm text-repressurizer-text focus:border-repressurizer-accent focus:outline-none font-mono"
         />
       </div>
       <TagListInput
-        label='Only include these tags (empty = all tags)'
+        label={t("auto.includeTags")}
         items={config.included_tags}
         newItem={newTag}
         setNewItem={setNewTag}
@@ -687,11 +695,12 @@ function TagsConfigForm({ config, onChange }: { config: TagsConfig; onChange: (c
 }
 
 function YearConfigForm({ config, onChange }: { config: YearConfig; onChange: (c: YearConfig) => void }) {
+  const t = useT();
   return (
     <div className="space-y-4">
       <PrefixInput value={config.prefix ?? ""} onChange={(v) => onChange({ ...config, prefix: v })} />
       <div>
-        <label className="mb-1.5 block text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">Grouping</label>
+        <label className="mb-1.5 block text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("auto.grouping")}</label>
         <div className="flex gap-2">
           {(["None", "HalfDecade", "Decade"] as YearGrouping[]).map((g) => (
             <button
@@ -703,7 +712,7 @@ function YearConfigForm({ config, onChange }: { config: YearConfig; onChange: (c
                   : "border-repressurizer-border-subtle bg-repressurizer-bg text-repressurizer-text-muted hover:border-repressurizer-border"
               }`}
             >
-              {g === "None" ? "Year" : g === "HalfDecade" ? "5-year" : "Decade"}
+              {g === "None" ? t("auto.group.year") : g === "HalfDecade" ? t("auto.group.halfDecade") : t("auto.group.decade")}
             </button>
           ))}
         </div>
@@ -715,7 +724,7 @@ function YearConfigForm({ config, onChange }: { config: YearConfig; onChange: (c
           onChange={(e) => onChange({ ...config, include_unknown: e.target.checked })}
           className="h-4 w-4 rounded border-repressurizer-border bg-repressurizer-bg accent-repressurizer-accent"
         />
-        <span className="text-sm text-repressurizer-text">Include games with no release date</span>
+        <span className="text-sm text-repressurizer-text">{t("auto.includeUnknownYear")}</span>
       </label>
     </div>
   );
@@ -727,6 +736,7 @@ function TagListInput({
   label: string; items: string[]; newItem: string; setNewItem: (v: string) => void;
   onAdd: () => void; onRemove: (v: string) => void;
 }) {
+  const t = useT();
   return (
     <div>
       <label className="mb-1.5 block text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{label}</label>
@@ -736,7 +746,7 @@ function TagListInput({
           value={newItem}
           onChange={(e) => setNewItem(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && onAdd()}
-          placeholder="Type and press Enter"
+          placeholder={t("auto.typeEnter")}
           className="flex-1 rounded-lg border border-repressurizer-border bg-repressurizer-bg px-3 py-1.5 text-sm text-repressurizer-text placeholder:text-repressurizer-text-faint focus:border-repressurizer-accent focus:outline-none"
         />
         <button onClick={onAdd} className="btn-press flex items-center justify-center w-8 h-8 rounded-lg bg-repressurizer-accent/15 text-repressurizer-accent hover:bg-repressurizer-accent/25">
@@ -766,6 +776,7 @@ function TagListInput({
 function FetchStep({ progress, total, error, waiting }: {
   progress: number; total: number; error: string; waiting: boolean;
 }) {
+  const t = useT();
   const percent = total > 0 ? Math.round((progress / total) * 100) : 0;
 
   if (error) {
@@ -783,14 +794,14 @@ function FetchStep({ progress, total, error, waiting }: {
     return (
       <div className="flex flex-col items-center justify-center py-10 text-center">
         <Spinner size={28} className="animate-spin text-repressurizer-accent mb-3" />
-        <p className="text-sm text-repressurizer-text">Running categorizer…</p>
+        <p className="text-sm text-repressurizer-text">{t("auto.running")}</p>
       </div>
     );
   }
 
   return (
     <div className="space-y-4 py-4">
-      <p className="text-sm text-repressurizer-text-muted">Fetching game details from Steam API…</p>
+      <p className="text-sm text-repressurizer-text-muted">{t("auto.fetchingDetails")}</p>
       <div className="h-2 w-full overflow-hidden rounded-full bg-repressurizer-bg">
         <div
           className="h-full rounded-full bg-repressurizer-accent transition-all"
@@ -800,7 +811,7 @@ function FetchStep({ progress, total, error, waiting }: {
       <p className="text-xs text-repressurizer-text-faint tabular-nums">
         {progress} / {total} games ({percent}%)
       </p>
-      <p className="text-xs text-repressurizer-text-faint">You can close this dialog — fetching continues in the background.</p>
+      <p className="text-xs text-repressurizer-text-faint">{t("auto.fetchingBackground")}</p>
     </div>
   );
 }
@@ -814,6 +825,7 @@ function PreviewStep({ result, onBack, onApply }: {
   onBack: () => void;
   onApply: () => void;
 }) {
+  const t = useT();
   const games = useGameStore((s) => s.games);
   const entries = Object.entries(result.assignments).sort((a, b) => b[1].length - a[1].length);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -832,9 +844,9 @@ function PreviewStep({ result, onBack, onApply }: {
       {/* Summary */}
       <div className="grid grid-cols-3 gap-3">
         {[
-          { label: "Categories", value: entries.length },
-          { label: "Games Categorized", value: result.games_categorized },
-          { label: "Games Processed", value: result.games_processed },
+          { label: t("auto.categories"), value: entries.length },
+          { label: t("auto.gamesCategorized"), value: result.games_categorized },
+          { label: t("auto.gamesProcessed"), value: result.games_processed },
         ].map((s) => (
           <div key={s.label} className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3 text-center">
             <p className="font-mono text-xl font-semibold text-repressurizer-accent tabular-nums">{s.value}</p>
@@ -855,7 +867,7 @@ function PreviewStep({ result, onBack, onApply }: {
               >
                 <FolderSimplePlus size={14} weight="duotone" className="shrink-0 text-repressurizer-accent" />
                 <span className="flex-1 text-sm text-repressurizer-text truncate">{name}</span>
-                <span className="font-mono text-xs text-repressurizer-text-faint tabular-nums">{ids.length} games</span>
+                <span className="font-mono text-xs text-repressurizer-text-faint tabular-nums">{t("auto.gamesCount", { count: ids.length })}</span>
                 <span className="text-repressurizer-text-faint text-[10px] ml-1">{isOpen ? "▲" : "▼"}</span>
               </button>
               {isOpen && (
@@ -876,15 +888,15 @@ function PreviewStep({ result, onBack, onApply }: {
       </div>
 
       <p className="text-xs text-repressurizer-text-faint">
-        Games will be added to existing categories with matching names, or new categories will be created.
+        {t("auto.previewHint")}
       </p>
 
       <div className="flex justify-between">
         <button onClick={onBack} className="btn-press inline-flex items-center gap-1.5 rounded-lg border border-repressurizer-border px-4 py-2 text-sm text-repressurizer-text-muted transition-colors hover:text-white hover:bg-repressurizer-surface-hover">
-          <ArrowLeft size={14} /> Back
+          <ArrowLeft size={14} /> {t("auto.back")}
         </button>
         <button onClick={onApply} className="btn-press inline-flex items-center gap-1.5 rounded-xl bg-repressurizer-accent px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-repressurizer-accent-hover">
-          <Check size={14} weight="bold" /> Apply
+          <Check size={14} weight="bold" /> {t("auto.step.apply")}
         </button>
       </div>
     </div>
@@ -896,19 +908,20 @@ function PreviewStep({ result, onBack, onApply }: {
 // ============================================================
 
 function DoneStep({ result, onClose }: { result: CategorizeResult; onClose: () => void }) {
+  const t = useT();
   return (
     <div className="flex flex-col items-center justify-center py-8 text-center">
       <div className="flex h-14 w-14 items-center justify-center rounded-full bg-repressurizer-accent/15 mb-4">
         <Check size={28} weight="bold" className="text-repressurizer-accent" />
       </div>
-      <p className="text-base font-semibold text-white mb-1">Done!</p>
+      <p className="text-base font-semibold text-white mb-1">{t("auto.done")}</p>
       <p className="text-sm text-repressurizer-text-muted mb-6">
-        Created {Object.keys(result.assignments).length} categories for {result.games_categorized} games.
+        {t("auto.doneSummary", { categories: Object.keys(result.assignments).length, games: result.games_categorized })}
         <br />
-        Remember to save to keep the changes.
+        {t("auto.rememberSave")}
       </p>
       <button onClick={onClose} className="btn-press rounded-xl bg-repressurizer-accent px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-repressurizer-accent-hover">
-        Close
+        {t("auto.close")}
       </button>
     </div>
   );

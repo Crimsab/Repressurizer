@@ -22,8 +22,10 @@ import {
   CheckCircle,
   User,
 } from "@phosphor-icons/react";
+import { useT } from "../../lib/i18n";
 
 export function SetupWizard() {
+  const t = useT();
   const setSettings = useSettingsStore((s) => s.setSettings);
   const setGames = useGameStore((s) => s.setGames);
   const setCollections = useCategoryStore((s) => s.setCollections);
@@ -54,7 +56,7 @@ export function SetupWizard() {
       }
       setStep(1);
     } catch (e) {
-      setError(`Failed to detect Steam: ${e}`);
+      setError(t("setup.detectFailed", { error: String(e) }));
     } finally {
       setLoading(false);
     }
@@ -110,7 +112,7 @@ export function SetupWizard() {
             Repressurizer
           </h1>
           <p className="mt-1 text-sm text-repressurizer-text-muted">
-            Steam Library Manager
+            {t("app.subtitle")}
           </p>
         </div>
 
@@ -134,9 +136,9 @@ export function SetupWizard() {
           {step === 0 && (
             <div className="space-y-4">
               <div>
-                <h2 className="text-lg font-medium text-white tracking-tight">Find Steam</h2>
+                <h2 className="text-lg font-medium text-white tracking-tight">{t("setup.findSteam")}</h2>
                 <p className="mt-1 text-sm text-repressurizer-text-muted">
-                  We'll locate your Steam installation automatically.
+                  {t("setup.findSteam.desc")}
                 </p>
               </div>
 
@@ -150,12 +152,12 @@ export function SetupWizard() {
                 ) : (
                   <MagnifyingGlass size={18} weight="bold" />
                 )}
-                {loading ? "Detecting..." : "Auto-Detect Steam"}
+                {loading ? t("setup.detecting") : t("setup.autoDetect")}
               </button>
 
               <div className="flex items-center gap-3 text-xs text-repressurizer-text-faint">
                 <div className="h-px flex-1 bg-repressurizer-border" />
-                or enter path manually
+                {t("setup.orManual")}
                 <div className="h-px flex-1 bg-repressurizer-border" />
               </div>
 
@@ -185,7 +187,7 @@ export function SetupWizard() {
                       }
                       setStep(1);
                     } catch (e) {
-                      setError(`Invalid Steam path: ${e}`);
+                      setError(t("setup.invalidPath", { error: String(e) }));
                     } finally {
                       setLoading(false);
                     }
@@ -194,7 +196,7 @@ export function SetupWizard() {
                   className="btn-press flex w-full items-center justify-center gap-2 rounded-xl border border-repressurizer-border px-4 py-2.5 text-sm text-repressurizer-text transition-colors hover:bg-repressurizer-surface-hover disabled:opacity-50"
                 >
                   {loading ? <Spinner size={16} className="animate-spin" /> : <ArrowRight size={16} />}
-                  {loading ? "Checking..." : "Use this path"}
+                  {loading ? t("setup.checking") : t("setup.usePath")}
                 </button>
               )}
             </div>
@@ -205,7 +207,7 @@ export function SetupWizard() {
               {/* Steam path (readonly) */}
               <div>
                 <label className="mb-1.5 block text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">
-                  Steam Path
+                  {t("setup.steamPath")}
                 </label>
                 <div className="rounded-lg bg-repressurizer-bg border border-repressurizer-border-subtle px-3.5 py-2 text-sm font-mono text-repressurizer-text-muted truncate">
                   {steamPath}
@@ -216,7 +218,7 @@ export function SetupWizard() {
               {users.length > 0 && (
                 <div>
                   <label className="mb-1.5 block text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">
-                    Select User Profile
+                    {t("setup.selectUser")}
                   </label>
                   <div className="space-y-2">
                     {users.map((user) => (
@@ -250,7 +252,7 @@ export function SetupWizard() {
                           {user.has_collections && (
                             <span className="inline-flex items-center gap-1 text-[10px] text-repressurizer-success">
                               <CheckCircle size={12} weight="fill" />
-                              collections
+                              {t("setup.collections")}
                             </span>
                           )}
                         </div>
@@ -263,7 +265,7 @@ export function SetupWizard() {
               {/* Steam ID64 */}
               <div>
                 <label className="mb-1.5 block text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">
-                  Steam ID64
+                  {t("setup.steamId64")}
                 </label>
                 <input
                   type="text"
@@ -277,7 +279,7 @@ export function SetupWizard() {
               {/* API Key */}
               <div>
                 <label className="mb-1.5 block text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">
-                  Steam Web API Key
+                  {t("setup.apiKey")}
                 </label>
                 <div className="relative">
                   <Key size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-repressurizer-text-faint pointer-events-none" />
@@ -285,7 +287,7 @@ export function SetupWizard() {
                     type="password"
                     value={apiKey}
                     onChange={(e) => setApiKey(e.target.value)}
-                    placeholder="Your API key"
+                    placeholder={t("setup.apiKey.placeholder")}
                     className="w-full rounded-xl border border-repressurizer-border bg-repressurizer-bg pl-9 pr-4 py-2.5 text-sm text-repressurizer-text placeholder:text-repressurizer-text-faint transition-colors focus:border-repressurizer-accent focus:outline-none"
                   />
                 </div>
@@ -295,15 +297,15 @@ export function SetupWizard() {
                   rel="noreferrer"
                   className="mt-1.5 inline-block text-xs text-repressurizer-accent hover:text-repressurizer-accent-hover transition-colors"
                 >
-                  Get your API key here
+                  {t("setup.apiKey.link")}
                 </a>
               </div>
 
               {/* Submit */}
               <div className="rounded-xl border border-amber-500/20 bg-amber-500/8 px-4 py-3">
-                <p className="text-sm font-medium text-amber-300">Safety check</p>
+                <p className="text-sm font-medium text-amber-300">{t("setup.safety.title")}</p>
                 <p className="mt-1 text-xs leading-relaxed text-repressurizer-text-muted">
-                  Repressurizer loads your library first and only writes Steam collections when you press Save later. Close Steam before saving changes, and keep automatic backups enabled.
+                  {t("setup.safety.desc")}
                 </p>
               </div>
 
@@ -315,12 +317,12 @@ export function SetupWizard() {
                 {loading ? (
                   <>
                     <Spinner size={18} className="animate-spin" />
-                    Loading library...
+                    {t("setup.loadingLibrary")}
                   </>
                 ) : (
                   <>
                     <ArrowRight size={18} weight="bold" />
-                    Connect &amp; Load Library
+                    {t("setup.connect")}
                   </>
                 )}
               </button>
@@ -330,26 +332,26 @@ export function SetupWizard() {
           {step === 2 && (
             <div className="space-y-5">
               <div>
-                <h2 className="text-lg font-medium text-white tracking-tight">Ready to start</h2>
+                <h2 className="text-lg font-medium text-white tracking-tight">{t("setup.ready")}</h2>
                 <p className="mt-1 text-sm text-repressurizer-text-muted">
-                  Your Steam library loaded successfully. Review the summary before opening the app.
+                  {t("setup.ready.desc")}
                 </p>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3">
-                  <p className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">Games</p>
+                  <p className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("setup.games")}</p>
                   <p className="mt-1 font-mono text-2xl font-semibold text-white tabular-nums">{loadedGames.length}</p>
                 </div>
                 <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3">
-                  <p className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">Collections</p>
+                  <p className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("setup.collections.title")}</p>
                   <p className="mt-1 font-mono text-2xl font-semibold text-white tabular-nums">{loadedCollections.length}</p>
                 </div>
               </div>
 
               <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3 text-xs leading-relaxed text-repressurizer-text-muted">
-                <p>Automatic backups are created before saves and can be restored from Settings.</p>
-                <p className="mt-1">For safest results, close Steam before pressing Save after editing collections.</p>
+                <p>{t("setup.backups.note")}</p>
+                <p className="mt-1">{t("setup.saveSafety.note")}</p>
               </div>
 
               <button
@@ -357,7 +359,7 @@ export function SetupWizard() {
                 className="btn-press flex w-full items-center justify-center gap-2 rounded-xl bg-repressurizer-accent px-4 py-3 font-medium text-white transition-colors hover:bg-repressurizer-accent-hover"
               >
                 <CheckCircle size={18} weight="bold" />
-                Open Repressurizer
+                {t("setup.open")}
               </button>
             </div>
           )}

@@ -5,6 +5,7 @@ import { useSettingsStore } from "../../stores/settingsStore";
 import { fetchWishlist, fetchGameDetails, currencyToCountryCode } from "../../lib/tauri";
 import { X, BookmarkSimple, ArrowsClockwise, SortAscending, Export } from "@phosphor-icons/react";
 import { SteamImage } from "../games/SteamImage";
+import { useT } from "../../lib/i18n";
 
 interface WishlistPageProps {
   onClose: () => void;
@@ -12,17 +13,18 @@ interface WishlistPageProps {
 
 type SortMode = "priority" | "date" | "name";
 
-function timeAgo(unixSecs: number): string {
+function timeAgo(unixSecs: number, t: ReturnType<typeof useT>): string {
   const diff = Math.floor(Date.now() / 1000) - unixSecs;
-  if (diff < 86400) return "Today";
+  if (diff < 86400) return t("time.today");
   const days = Math.floor(diff / 86400);
-  if (days < 30) return `${days}d ago`;
+  if (days < 30) return t("time.daysAgo", { count: days });
   const months = Math.floor(days / 30);
-  if (months < 12) return `${months}mo ago`;
-  return `${Math.floor(months / 12)}y ago`;
+  if (months < 12) return t("time.monthsAgo", { count: months });
+  return t("time.yearsAgo", { count: Math.floor(months / 12) });
 }
 
 export function WishlistPage({ onClose }: WishlistPageProps) {
+  const t = useT();
   const { steamId64, currency } = useSettingsStore();
   const details = useGameStore((s) => s.details);
   const items = useWishlistStore((s) => s.items);
@@ -90,7 +92,7 @@ export function WishlistPage({ onClose }: WishlistPageProps) {
 
   const handleRefresh = async () => {
     if (!steamId64) {
-      setError("Set your Steam ID in Settings first.");
+      setError(t("wishlist.setSteamId"));
       return;
     }
     setLoading(true);
@@ -138,17 +140,17 @@ export function WishlistPage({ onClose }: WishlistPageProps) {
         <div className="flex items-center justify-between border-b border-repressurizer-border-subtle px-5 py-3.5">
           <div className="flex items-center gap-2.5">
             <BookmarkSimple size={18} className="text-repressurizer-accent" weight="fill" />
-            <h2 className="text-base font-semibold text-white">Wishlist</h2>
+            <h2 className="text-base font-semibold text-white">{t("wishlist.title")}</h2>
             {items.length > 0 && (
               <span className="rounded-full bg-repressurizer-bg px-2 py-0.5 text-[11px] font-mono text-repressurizer-text-faint">
-                {items.length} games
+                {t("statusbar.games", { count: items.length })}
               </span>
             )}
           </div>
           <div className="flex items-center gap-2">
             {lastFetched && (
               <span className="text-[10px] text-repressurizer-text-faint">
-                Updated {timeAgo(Math.floor(lastFetched / 1000))}
+                {t("wishlist.updated", { time: timeAgo(Math.floor(lastFetched / 1000), t) })}
               </span>
             )}
             {items.length > 0 && (
@@ -175,7 +177,7 @@ export function WishlistPage({ onClose }: WishlistPageProps) {
               className="inline-flex items-center gap-1.5 rounded-lg border border-repressurizer-border bg-repressurizer-bg px-2.5 py-1 text-[11px] font-medium text-repressurizer-text-muted transition-colors hover:text-white disabled:opacity-40"
             >
               <ArrowsClockwise size={12} className={loading ? "animate-spin" : ""} />
-              Refresh
+              {t("wishlist.refresh")}
             </button>
             <button
               onClick={onClose}
@@ -191,7 +193,7 @@ export function WishlistPage({ onClose }: WishlistPageProps) {
           <div className="flex items-center gap-2 border-b border-repressurizer-border-subtle px-4 py-2">
             <input
               type="text"
-              placeholder="Search..."
+              placeholder={t("wishlist.search")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="flex-1 rounded-lg border border-repressurizer-border bg-repressurizer-bg px-3 py-1 text-sm text-repressurizer-text placeholder:text-repressurizer-text-faint focus:border-repressurizer-accent focus:outline-none"
@@ -209,7 +211,7 @@ export function WishlistPage({ onClose }: WishlistPageProps) {
                     : "border-repressurizer-border-subtle bg-repressurizer-bg text-repressurizer-text-muted hover:text-repressurizer-text"
                 }`}
               >
-                {s === "priority" ? "Priority" : s === "date" ? "Added" : "Name"}
+                {s === "priority" ? t("wishlist.sort.priority") : s === "date" ? t("wishlist.sort.added") : t("wishlist.sort.name")}
               </button>
             ))}
           </div>
@@ -219,7 +221,7 @@ export function WishlistPage({ onClose }: WishlistPageProps) {
         <div className="flex-1 overflow-auto">
           {error && (
             <div className="m-4 rounded-xl border border-repressurizer-warning/20 bg-repressurizer-warning/5 p-4">
-              <p className="mb-1 text-sm font-medium text-repressurizer-warning">Wishlist unavailable</p>
+              <p className="mb-1 text-sm font-medium text-repressurizer-warning">{t("wishlist.unavailable")}</p>
               <p className="text-xs text-repressurizer-text-muted leading-relaxed">{error}</p>
               <a
                 href={`https://store.steampowered.com/wishlist/profiles/${steamId64}/`}
@@ -227,14 +229,14 @@ export function WishlistPage({ onClose }: WishlistPageProps) {
                 rel="noreferrer"
                 className="mt-2 inline-block text-xs text-repressurizer-accent hover:underline"
               >
-                View your wishlist on Steam →
+                {t("wishlist.viewSteam")}
               </a>
             </div>
           )}
           {!loading && items.length === 0 && !error && (
             <div className="flex flex-col items-center justify-center gap-3 py-20 text-repressurizer-text-faint">
               <BookmarkSimple size={40} weight="duotone" className="opacity-30" />
-              <p className="text-sm">Click "Refresh" to load your Steam wishlist</p>
+              <p className="text-sm">{t("wishlist.empty")}</p>
             </div>
           )}
           {sortedItems.length > 0 && (
@@ -273,7 +275,7 @@ export function WishlistPage({ onClose }: WishlistPageProps) {
                     {/* Added date */}
                     {item.date_added > 0 && (
                       <span className="shrink-0 text-[11px] text-repressurizer-text-faint">
-                        {timeAgo(item.date_added)}
+                        {timeAgo(item.date_added, t)}
                       </span>
                     )}
                   </div>

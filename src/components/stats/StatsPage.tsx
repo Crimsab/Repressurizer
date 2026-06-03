@@ -10,6 +10,7 @@ import {
   CurrencyEur, Tag, Desktop, Star, CalendarBlank, Buildings,
   CurrencyCircleDollar, Skull, Medal,
 } from "@phosphor-icons/react";
+import { useT, type TranslationKey } from "../../lib/i18n";
 
 const CURRENCY_SYMBOLS: Record<string, string> = {
   EUR: "€", USD: "$", GBP: "£", JPY: "¥", CAD: "C$",
@@ -27,6 +28,7 @@ interface StatsPageProps {
 }
 
 export function StatsPage({ onClose }: StatsPageProps) {
+  const t = useT();
   const games = useGameStore((s) => s.games);
   const details = useGameStore((s) => s.details);
   const collections = useCategoryStore((s) => s.collections);
@@ -83,7 +85,7 @@ export function StatsPage({ onClose }: StatsPageProps) {
         <div className="flex items-center justify-between border-b border-repressurizer-border px-6 py-4">
           <div className="flex items-center gap-2">
             <ChartBar size={18} weight="duotone" className="text-repressurizer-accent" />
-            <h2 className="text-base font-semibold text-white tracking-tight">Library Statistics</h2>
+            <h2 className="text-base font-semibold text-white tracking-tight">{t("stats.title")}</h2>
           </div>
           <button
             onClick={onClose}
@@ -98,32 +100,32 @@ export function StatsPage({ onClose }: StatsPageProps) {
           <div className="grid grid-cols-5 gap-3">
             <StatCard
               icon={<GameController size={18} weight="duotone" />}
-              label="Total Games"
+              label={t("stats.totalGames")}
               value={stats.totalGames.toLocaleString()}
             />
             <StatCard
               icon={<Clock size={18} weight="duotone" />}
-              label="Total Hours"
+              label={t("stats.totalHours")}
               value={stats.totalPlaytimeHours.toLocaleString()}
             />
             <StatCard
               icon={<Trophy size={18} weight="duotone" />}
-              label="Avg Hours/Game"
+              label={t("stats.avgHoursGame")}
               value={stats.averageHoursPerGame.toString()}
             />
             <StatCard
               icon={<FolderOpen size={18} weight="duotone" />}
-              label="Unplayed"
+              label={t("stats.unplayed")}
               value={`${stats.unplayedCount} (${stats.unplayedPercent}%)`}
               accent={stats.unplayedPercent > 50 ? "warning" : undefined}
             />
             <StatCard
               icon={<CurrencyEur size={18} weight="duotone" />}
-              label="Library Value"
+              label={t("stats.libraryValue")}
               value={stats.pricedGamesCount > 0 ? formatPrice(stats.libraryValue, currency) : "—"}
               subtitle={stats.pricedGamesCount > 0
-                ? `${stats.pricedGamesCount} priced + ${stats.freeGamesCount} free`
-                : "Fetch game details first"
+                ? t("stats.priceSubtitle", { priced: stats.pricedGamesCount, free: stats.freeGamesCount })
+                : t("stats.fetchDetailsFirst")
               }
             />
           </div>
@@ -131,20 +133,20 @@ export function StatsPage({ onClose }: StatsPageProps) {
           {/* Status breakdown */}
           {Object.values(statuses).length > 0 && (
             <div>
-              <h3 className="mb-3 text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">Status Breakdown</h3>
+              <h3 className="mb-3 text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("stats.statusBreakdown")}</h3>
               <div className="flex gap-2 flex-wrap">
                 {[
-                  { key: "playing",   label: "Playing",   color: "text-sky-400",      bg: "bg-sky-400/15" },
-                  { key: "beaten",    label: "Beaten",    color: "text-violet-400",   bg: "bg-violet-400/15" },
-                  { key: "completed", label: "Completed", color: "text-repressurizer-accent", bg: "bg-repressurizer-accent/15" },
-                  { key: "abandoned", label: "Abandoned", color: "text-repressurizer-text-faint", bg: "bg-repressurizer-surface-hover" },
-                ].map(({ key, label, color, bg }) => {
+                  { key: "playing",   labelKey: "status.playing",   color: "text-sky-400",      bg: "bg-sky-400/15" },
+                  { key: "beaten",    labelKey: "status.beaten",    color: "text-violet-400",   bg: "bg-violet-400/15" },
+                  { key: "completed", labelKey: "status.completed", color: "text-repressurizer-accent", bg: "bg-repressurizer-accent/15" },
+                  { key: "abandoned", labelKey: "status.abandoned", color: "text-repressurizer-text-faint", bg: "bg-repressurizer-surface-hover" },
+                ].map(({ key, labelKey, color, bg }) => {
                   const count = statusCounts[key as keyof typeof statusCounts] ?? 0;
                   if (count === 0) return null;
                   return (
                     <div key={key} className={`flex items-center gap-2 rounded-xl border border-repressurizer-border-subtle px-4 py-2.5 ${bg}`}>
                       <span className={`text-sm font-semibold ${color}`}>{count}</span>
-                      <span className={`text-xs ${color}`}>{label}</span>
+                      <span className={`text-xs ${color}`}>{t(labelKey as TranslationKey)}</span>
                     </div>
                   );
                 })}
@@ -155,7 +157,7 @@ export function StatsPage({ onClose }: StatsPageProps) {
           <div className="grid grid-cols-2 gap-6">
             {/* Playtime distribution */}
             <div>
-              <h3 className="mb-3 text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">Playtime Distribution</h3>
+              <h3 className="mb-3 text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("stats.playtimeDistribution")}</h3>
               <div className="space-y-2">
                 {stats.playtimeBuckets.map((bucket) => (
                   <div key={bucket.label} className="flex items-center gap-2">
@@ -174,7 +176,7 @@ export function StatsPage({ onClose }: StatsPageProps) {
 
             {/* Top 10 most played */}
             <div>
-              <h3 className="mb-3 text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">Top 10 Most Played</h3>
+              <h3 className="mb-3 text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("stats.topPlayed")}</h3>
               <div className="space-y-1.5">
                 {stats.topPlayed.map((game, i) => (
                   <div key={i} className="flex items-center gap-2">
@@ -206,7 +208,7 @@ export function StatsPage({ onClose }: StatsPageProps) {
                   <div>
                     <h3 className="mb-3 flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">
                       <Tag size={12} weight="duotone" />
-                      Top Genres
+                      {t("stats.topGenres")}
                     </h3>
                     <div className="space-y-2">
                       {stats.topGenres.map((genre) => (
@@ -230,7 +232,7 @@ export function StatsPage({ onClose }: StatsPageProps) {
                   <div>
                     <h3 className="mb-3 flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">
                       <CalendarBlank size={12} weight="duotone" />
-                      Games by Decade
+                      {t("stats.gamesByDecade")}
                     </h3>
                     <div className="space-y-2">
                       {stats.releaseDecades.map((decade) => (
@@ -255,7 +257,7 @@ export function StatsPage({ onClose }: StatsPageProps) {
                 <div>
                   <h3 className="mb-3 flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">
                     <Desktop size={12} weight="duotone" />
-                    Platform Support
+                    {t("stats.platformSupport")}
                   </h3>
                   <div className="space-y-2">
                     {[
@@ -293,8 +295,8 @@ export function StatsPage({ onClose }: StatsPageProps) {
                       }`}>
                         {stats.averageMetacritic}
                       </p>
-                      <p className="text-[11px] text-repressurizer-text-faint mt-1">Average Score</p>
-                      <p className="text-[10px] text-repressurizer-text-faint mt-0.5">{stats.metacriticCount} games with scores</p>
+                      <p className="text-[11px] text-repressurizer-text-faint mt-1">{t("stats.averageScore")}</p>
+                      <p className="text-[10px] text-repressurizer-text-faint mt-0.5">{t("stats.gamesWithScores", { count: stats.metacriticCount })}</p>
                     </div>
                   </div>
                 )}
@@ -304,7 +306,7 @@ export function StatsPage({ onClose }: StatsPageProps) {
                   <div>
                     <h3 className="mb-3 flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">
                       <Buildings size={12} weight="duotone" />
-                      Top Publishers
+                      {t("stats.topPublishers")}
                     </h3>
                     <div className="space-y-1.5">
                       {stats.topPublishers.slice(0, 8).map((pub_, i) => (
@@ -324,7 +326,7 @@ export function StatsPage({ onClose }: StatsPageProps) {
           {hasDetails && stats.pricedGamesCount === 0 && (
             <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3 text-center">
               <p className="text-xs text-repressurizer-text-faint">
-                Your cached game details lack price data. Clear the details cache in Settings → Data, then re-run Auto-Categorize to unlock Cost/Hour and Shame Wall stats.
+                {t("stats.noPriceData")}
               </p>
             </div>
           )}
@@ -335,7 +337,7 @@ export function StatsPage({ onClose }: StatsPageProps) {
                 <div>
                   <h3 className="mb-3 flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">
                     <CurrencyCircleDollar size={12} weight="duotone" />
-                    Best Value (Cost/Hour)
+                    {t("stats.bestValue")}
                   </h3>
                   <div className="space-y-1.5">
                     {stats.bestCostPerHour.map((g, i) => (
@@ -356,9 +358,9 @@ export function StatsPage({ onClose }: StatsPageProps) {
                 <div>
                   <h3 className="mb-3 flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">
                     <Skull size={12} weight="duotone" />
-                    Shame Wall
+                    {t("stats.shameWall")}
                   </h3>
-                  <p className="text-[10px] text-repressurizer-text-faint mb-2">Most expensive games never played</p>
+                  <p className="text-[10px] text-repressurizer-text-faint mb-2">{t("stats.shameWall.desc")}</p>
                   <div className="space-y-1.5">
                     {stats.shameWall.map((g, i) => (
                       <div key={i} className="flex items-center gap-2">
@@ -371,7 +373,7 @@ export function StatsPage({ onClose }: StatsPageProps) {
                     ))}
                   </div>
                   <p className="mt-2 text-[10px] text-repressurizer-text-faint font-mono tabular-nums">
-                    Total wasted: <span className="text-repressurizer-danger">{formatPrice(stats.shameWall.reduce((s, g) => s + g.price, 0), currency)}</span>
+                    {t("stats.totalWasted")}: <span className="text-repressurizer-danger">{formatPrice(stats.shameWall.reduce((s, g) => s + g.price, 0), currency)}</span>
                   </p>
                 </div>
               )}
@@ -383,7 +385,7 @@ export function StatsPage({ onClose }: StatsPageProps) {
             <div className="max-w-xs">
               <h3 className="mb-3 flex items-center gap-1.5 text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">
                 <Medal size={12} weight="duotone" />
-                Achievements
+                {t("stats.achievements")}
               </h3>
               <div className="rounded-xl bg-repressurizer-bg border border-repressurizer-border-subtle px-4 py-3 space-y-3">
                 <div className="text-center">
@@ -392,7 +394,7 @@ export function StatsPage({ onClose }: StatsPageProps) {
                     <span className="text-sm text-repressurizer-text-faint font-normal"> / {achievementStats.totalAchievements.toLocaleString()}</span>
                   </p>
                   <p className="text-[11px] text-repressurizer-text-faint mt-0.5">
-                    {achievementStats.completionPercent}% completion
+                    {t("stats.completion", { percent: achievementStats.completionPercent })}
                   </p>
                 </div>
                 <div className="h-2 w-full rounded-full overflow-hidden bg-repressurizer-surface">
@@ -402,8 +404,8 @@ export function StatsPage({ onClose }: StatsPageProps) {
                   />
                 </div>
                 <div className="flex justify-between text-[10px] text-repressurizer-text-faint">
-                  <span>{achievementStats.gamesWithAchievements} games tracked</span>
-                  <span className="text-amber-400">{achievementStats.perfectGames} perfect</span>
+                  <span>{t("stats.gamesTracked", { count: achievementStats.gamesWithAchievements })}</span>
+                  <span className="text-amber-400">{t("stats.perfect", { count: achievementStats.perfectGames })}</span>
                 </div>
               </div>
             </div>
@@ -413,7 +415,7 @@ export function StatsPage({ onClose }: StatsPageProps) {
           {stats.categoryStats.length > 0 && (
             <div>
               <h3 className="mb-3 text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">
-                Categories by Size (top 10)
+                {t("stats.categoriesBySize")}
               </h3>
               <div className="space-y-2">
                 {stats.categoryStats.slice(0, 10).map((cat) => (
@@ -436,7 +438,7 @@ export function StatsPage({ onClose }: StatsPageProps) {
           {!hasDetails && (
             <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3 text-center">
               <p className="text-xs text-repressurizer-text-faint">
-                Fetch game details (via Auto-Categorize) to unlock genre, platform, publisher, metacritic, and library value statistics.
+                {t("stats.noDetailsHint")}
               </p>
             </div>
           )}
