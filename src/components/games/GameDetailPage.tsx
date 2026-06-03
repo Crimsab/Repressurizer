@@ -12,6 +12,7 @@ import {
   fetchHltb,
   currencyToCountryCode,
 } from "../../lib/tauri";
+import { useT } from "../../lib/i18n";
 import { extractReleaseYear } from "../../lib/search";
 import { SteamImage } from "./SteamImage";
 import { useHltbStore } from "../../stores/hltbStore";
@@ -45,6 +46,7 @@ interface GameDetailPageProps {
 }
 
 export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
+  const t = useT();
   const { apiKey, steamId64, currency } = useSettingsStore();
   const collections = useCategoryStore((s) => s.collections);
   const addGameToCategory = useCategoryStore((s) => s.addGameToCategory);
@@ -100,7 +102,7 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
   const hours = (game.playtime_forever / 60).toFixed(1);
   const lastPlayed = game.rtime_last_played
     ? new Date(game.rtime_last_played * 1000).toLocaleDateString()
-    : "Never";
+    : t("gameDetails.never");
 
   const achPercent =
     achievements && achievements.total > 0
@@ -130,11 +132,11 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
             <div className="mt-2 flex items-center gap-4 text-sm text-repressurizer-text-muted">
               <span className="inline-flex items-center gap-1">
                 <Clock size={13} />
-                <span className="font-mono tabular-nums">{hours}h</span> played
+                {t("gameDetails.header.playedHours", { hours })}
               </span>
               <span className="inline-flex items-center gap-1">
                 <CalendarBlank size={13} />
-                Last played: {lastPlayed}
+                {t("gameDetails.header.lastPlayed", { date: lastPlayed })}
               </span>
               {details?.metacritic_score && (
                 <span
@@ -169,7 +171,7 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
                 : "text-repressurizer-text-muted hover:text-white"
             }`}
           >
-            Details
+            {t("gameDetails.infoTab")}
           </button>
           <button
             onClick={() => setTab("achievements")}
@@ -180,7 +182,7 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
             }`}
           >
             <Trophy size={14} weight={tab === "achievements" ? "fill" : "regular"} />
-            Achievements
+            {t("achievements.title")}
             {achievements && achievements.total > 0 && (
               <span className="rounded-md bg-repressurizer-accent/15 px-1.5 py-0.5 text-[10px] font-mono text-repressurizer-accent tabular-nums">
                 {achievements.achieved}/{achievements.total}
@@ -193,7 +195,7 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
             className="btn-press inline-flex items-center gap-1.5 px-4 py-2.5 text-sm text-repressurizer-text-muted transition-colors hover:text-white"
           >
             <ArrowSquareOut size={14} />
-            Steam Store
+            {t("gameDetails.steamStore")}
           </button>
         </div>
 
@@ -266,7 +268,7 @@ function InfoTab({
     try {
       const data = await fetchHltb(name, game.appid, extractReleaseYear(details?.release_date));
       if (data) setHltbData(game.appid, data);
-      else setHltbError("No HLTB data found");
+      else setHltbError(t("gameDetails.noHltbFound"));
     } catch (e) {
       setHltbError(String(e));
     } finally {
@@ -280,6 +282,7 @@ function InfoTab({
   const getAllTags = useTagsStore((s) => s.getAllTags);
   const [tagInput, setTagInput] = useState("");
   const allTags = getAllTags();
+  const t = useT();
 
   const handleAddTag = () => {
     const trimmed = tagInput.trim().toLowerCase();
@@ -292,31 +295,31 @@ function InfoTab({
   return (
     <div className="space-y-6">
       {/* Quick stats */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <StatCard
-          label="App ID"
-          value={`#${game.appid}`}
-          icon={<Hash size={16} weight="duotone" />}
-        />
-        <StatCard
-          label="Playtime"
-          value={`${(game.playtime_forever / 60).toFixed(1)}h`}
-          icon={<Clock size={16} weight="duotone" />}
-        />
-        <StatCard
-          label="Last Played"
-          value={
-            game.rtime_last_played
-              ? new Date(game.rtime_last_played * 1000).toLocaleDateString()
-              : "Never"
-          }
-          icon={<CalendarBlank size={16} weight="duotone" />}
-        />
-        <StatCard
-          label="Release"
-          value={details?.release_date ?? (loading ? "..." : "Unknown")}
-          icon={<CalendarBlank size={16} weight="duotone" />}
-        />
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <StatCard
+            label={t("gameDetails.stat.appId")}
+            value={`#${game.appid}`}
+            icon={<Hash size={16} weight="duotone" />}
+          />
+          <StatCard
+            label={t("gameDetails.stat.playtime")}
+            value={`${(game.playtime_forever / 60).toFixed(1)}h`}
+            icon={<Clock size={16} weight="duotone" />}
+          />
+          <StatCard
+            label={t("gameDetails.stat.lastPlayed")}
+            value={
+              game.rtime_last_played
+                ? new Date(game.rtime_last_played * 1000).toLocaleDateString()
+                : t("gameDetails.never")
+            }
+            icon={<CalendarBlank size={16} weight="duotone" />}
+          />
+          <StatCard
+            label={t("gameDetails.stat.release")}
+            value={details?.release_date ?? (loading ? "..." : t("gameDetails.unknown"))}
+            icon={<CalendarBlank size={16} weight="duotone" />}
+          />
       </div>
 
       {/* HLTB + Metacritic + Price — single row */}
@@ -325,36 +328,36 @@ function InfoTab({
           {/* HowLongToBeat */}
           <div className="flex-1">
             <div className="flex items-center justify-between mb-2">
-              <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium flex items-center gap-1.5">
-                <Timer size={12} />
-                HowLongToBeat
-              </h3>
-              <button
-                onClick={handleFetchHltb}
+                <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium flex items-center gap-1.5">
+                  <Timer size={12} />
+                  {t("gameDetails.hltb")}
+                </h3>
+                <button
+                  onClick={handleFetchHltb}
                 disabled={fetchingHltb}
                 className="inline-flex items-center gap-1 rounded-lg border border-repressurizer-border px-2 py-0.5 text-[11px] text-repressurizer-text-muted transition-colors hover:text-white disabled:opacity-40"
-              >
-                <ArrowsClockwise size={11} className={fetchingHltb ? "animate-spin" : ""} />
-                {hltbData ? "Refresh" : "Fetch"}
-              </button>
-            </div>
-            {hltbData ? (
-              <div className="flex gap-4 text-sm">
-                {hltbData.main_story != null && (
-                  <div>
-                    <p className="text-[10px] text-repressurizer-text-faint mb-0.5">Main</p>
-                    <p className="font-mono tabular-nums text-repressurizer-text">{hltbData.main_story}h</p>
-                  </div>
-                )}
-                {hltbData.main_extra != null && (
-                  <div>
-                    <p className="text-[10px] text-repressurizer-text-faint mb-0.5">+Extras</p>
-                    <p className="font-mono tabular-nums text-repressurizer-text">{hltbData.main_extra}h</p>
-                  </div>
-                )}
+                >
+                  <ArrowsClockwise size={11} className={fetchingHltb ? "animate-spin" : ""} />
+                  {hltbData ? t("common.refresh") : t("common.fetch")}
+                </button>
+              </div>
+              {hltbData ? (
+                <div className="flex gap-4 text-sm">
+                  {hltbData.main_story != null && (
+                    <div>
+                      <p className="text-[10px] text-repressurizer-text-faint mb-0.5">{t("gameDetails.main")}</p>
+                      <p className="font-mono tabular-nums text-repressurizer-text">{hltbData.main_story}h</p>
+                    </div>
+                  )}
+                  {hltbData.main_extra != null && (
+                    <div>
+                      <p className="text-[10px] text-repressurizer-text-faint mb-0.5">{t("gameDetails.extras")}</p>
+                      <p className="font-mono tabular-nums text-repressurizer-text">{hltbData.main_extra}h</p>
+                    </div>
+                  )}
                 {hltbData.completionist != null && (
                   <div>
-                    <p className="text-[10px] text-repressurizer-text-faint mb-0.5">100%</p>
+                    <p className="text-[10px] text-repressurizer-text-faint mb-0.5">{t("gameDetails.completionist")}</p>
                     <p className="font-mono tabular-nums text-repressurizer-text">{hltbData.completionist}h</p>
                   </div>
                 )}
@@ -362,7 +365,7 @@ function InfoTab({
             ) : hltbError ? (
               <p className="text-xs text-repressurizer-danger">{hltbError}</p>
             ) : (
-              <p className="text-xs text-repressurizer-text-faint">No data — click Fetch</p>
+              <p className="text-xs text-repressurizer-text-faint">{t("gameDetails.noDataFetch")}</p>
             )}
           </div>
 
@@ -371,7 +374,7 @@ function InfoTab({
             <div>
               <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium flex items-center gap-1.5 mb-2">
                 <Star size={12} weight="duotone" />
-                Metacritic
+                {t("gameDetails.metacritic.title")}
               </h3>
               <div className="flex items-center gap-2">
                 <span
@@ -386,8 +389,8 @@ function InfoTab({
                   {details.metacritic_score}
                 </span>
                 <span className="text-[10px] text-repressurizer-text-faint leading-tight">
-                  {details.metacritic_score >= 75 ? "Favorable" :
-                   details.metacritic_score >= 50 ? "Mixed" : "Unfavorable"}
+                  {details.metacritic_score >= 75 ? t("gameDetails.metacritic.favorable") :
+                   details.metacritic_score >= 50 ? t("gameDetails.metacritic.mixed") : t("gameDetails.metacritic.unfavorable")}
                 </span>
               </div>
             </div>
@@ -397,12 +400,12 @@ function InfoTab({
           {details && (details.price_initial != null || details.is_free) && (
             <div>
               <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium mb-2">
-                Price
+                {t("gameDetails.price")}
               </h3>
               <p className="text-sm font-mono tabular-nums text-repressurizer-text">
-                {details.is_free ? "Free to Play" : details.price_initial != null
+                {details.is_free ? t("gameDetails.freeToPlay") : details.price_initial != null
                   ? `${(details.price_initial / 100).toFixed(2)} ${details.price_currency ?? ""}`.trim()
-                  : "Unknown"}
+                  : t("gameDetails.unknown")}
               </p>
             </div>
           )}
@@ -426,9 +429,9 @@ function InfoTab({
           {/* Genres */}
           {details.genres.length > 0 && (
             <div>
-              <h3 className="mb-2 text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">
-                Genres
-              </h3>
+                <h3 className="mb-2 text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">
+                  {t("gameDetails.genres")}
+                </h3>
               <div className="flex flex-wrap gap-1.5">
                 {details.genres.map((g) => (
                   <span
@@ -447,7 +450,7 @@ function InfoTab({
             {details.developers.length > 0 && (
               <div>
                 <h3 className="mb-1 text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">
-                  Developer
+                  {t("gameDetails.developer")}
                 </h3>
                 <p className="text-sm text-repressurizer-text">
                   {details.developers.join(", ")}
@@ -457,7 +460,7 @@ function InfoTab({
             {details.publishers.length > 0 && (
               <div>
                 <h3 className="mb-1 text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">
-                  Publisher
+                  {t("gameDetails.publisher")}
                 </h3>
                 <p className="text-sm text-repressurizer-text">
                   {details.publishers.join(", ")}
@@ -468,23 +471,23 @@ function InfoTab({
 
           {/* Platforms */}
           <div>
-            <h3 className="mb-2 text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">
-              Platforms
-            </h3>
+              <h3 className="mb-2 text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">
+                {t("gameDetails.platforms")}
+              </h3>
             <div className="flex gap-2">
               {details.platforms.windows && (
                 <span className="inline-flex items-center gap-1.5 rounded-lg bg-repressurizer-surface-raised px-2.5 py-1 text-xs text-repressurizer-text">
-                  <WindowsLogo size={13} weight="fill" /> Windows
+                  <WindowsLogo size={13} weight="fill" /> {t("gameDetails.platform.windows")}
                 </span>
               )}
               {details.platforms.mac && (
                 <span className="inline-flex items-center gap-1.5 rounded-lg bg-repressurizer-surface-raised px-2.5 py-1 text-xs text-repressurizer-text">
-                  <AppleLogo size={13} weight="fill" /> macOS
+                  <AppleLogo size={13} weight="fill" /> {t("gameDetails.platform.mac")}
                 </span>
               )}
               {details.platforms.linux && (
                 <span className="inline-flex items-center gap-1.5 rounded-lg bg-repressurizer-surface-raised px-2.5 py-1 text-xs text-repressurizer-text">
-                  <LinuxLogo size={13} weight="fill" /> Linux
+                  <LinuxLogo size={13} weight="fill" /> {t("gameDetails.platform.linux")}
                 </span>
               )}
             </div>
@@ -494,7 +497,7 @@ function InfoTab({
           {details.categories.length > 0 && (
             <div>
               <h3 className="mb-2 text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">
-                Features
+                {t("gameDetails.features")}
               </h3>
               <div className="flex flex-wrap gap-1.5">
                 {details.categories.map((c) => (
@@ -509,17 +512,17 @@ function InfoTab({
             </div>
           )}
         </div>
-      ) : (
-        <div className="text-sm text-repressurizer-text-muted">
-          Could not load game details.
-        </div>
-      )}
+        ) : (
+          <div className="text-sm text-repressurizer-text-muted">
+            {t("gameDetails.loadFailed")}
+          </div>
+        )}
 
-      {/* Your categories */}
-      <div className="border-t border-repressurizer-border pt-5">
-        <h3 className="mb-3 text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">
-          Your Categories
-        </h3>
+        {/* Your categories */}
+        <div className="border-t border-repressurizer-border pt-5">
+          <h3 className="mb-3 text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">
+            {t("gameDetails.categories")}
+          </h3>
         <div className="flex flex-wrap gap-1.5">
           {editableCollections.map((col) => {
             const inCat = gameCatKeys.has(col.key);
@@ -546,10 +549,10 @@ function InfoTab({
       </div>
 
       {/* Personal Tags */}
-      <div className="border-t border-repressurizer-border pt-5">
-        <h3 className="mb-2 text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">
-          Tags
-        </h3>
+        <div className="border-t border-repressurizer-border pt-5">
+          <h3 className="mb-2 text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">
+            {t("gameDetails.tags")}
+          </h3>
         <div className="flex flex-wrap gap-1.5 mb-2">
           {gameTags.map((tag) => (
             <span
@@ -574,7 +577,7 @@ function InfoTab({
             onKeyDown={(e) => {
               if (e.key === "Enter") { e.preventDefault(); handleAddTag(); }
             }}
-            placeholder="Add tag…"
+            placeholder={t("gameDetails.addTag")}
             list="tag-suggestions"
             className="flex-1 rounded-lg border border-repressurizer-border bg-repressurizer-bg px-3 py-1.5 text-xs text-repressurizer-text placeholder:text-repressurizer-text-faint focus:border-repressurizer-accent focus:outline-none transition-colors"
           />
@@ -588,7 +591,7 @@ function InfoTab({
             disabled={!tagInput.trim()}
             className="btn-press rounded-lg bg-sky-500/15 px-3 py-1.5 text-xs text-sky-400 hover:bg-sky-500/25 disabled:opacity-40 transition-colors"
           >
-            Add
+            {t("common.add")}
           </button>
         </div>
       </div>
@@ -597,14 +600,14 @@ function InfoTab({
       <RatingWidget appId={game.appid} />
 
       {/* Notes */}
-      <div className="border-t border-repressurizer-border pt-5">
-        <h3 className="mb-2 text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">
-          Notes
-        </h3>
+        <div className="border-t border-repressurizer-border pt-5">
+          <h3 className="mb-2 text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">
+            {t("gameDetails.notes")}
+          </h3>
         <textarea
           value={noteText}
           onChange={(e) => handleNoteChange(e.target.value)}
-          placeholder="Add your own notes about this game…"
+          placeholder={t("gameDetails.notesPlaceholder")}
           rows={3}
           className="w-full resize-none rounded-xl border border-repressurizer-border bg-repressurizer-bg px-3 py-2.5 text-sm text-repressurizer-text placeholder:text-repressurizer-text-faint focus:border-repressurizer-accent focus:outline-none transition-colors"
         />
@@ -614,6 +617,7 @@ function InfoTab({
 }
 
 function RatingWidget({ appId }: { appId: number }) {
+  const t = useT();
   const rating = useReviewStore((s) => s.reviews[appId]?.rating ?? 0);
   const setRating = useReviewStore((s) => s.setRating);
   const clearRating = useReviewStore((s) => s.clearRating);
@@ -626,14 +630,14 @@ function RatingWidget({ appId }: { appId: number }) {
       <div className="flex items-center justify-between mb-2">
         <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium flex items-center gap-1.5">
           <Star size={12} weight="duotone" />
-          Your Rating
+          {t("review.title")}
         </h3>
         {rating > 0 && (
           <button
             onClick={() => clearRating(appId)}
             className="text-[11px] text-repressurizer-text-faint hover:text-repressurizer-text-muted transition-colors"
           >
-            Clear
+            {t("review.clear")}
           </button>
         )}
       </div>
@@ -677,6 +681,7 @@ function AchievementsTab({
   error: string;
   percent: number;
 }) {
+  const t = useT();
   const [search, setSearch] = useState("");
 
   if (loading) {
@@ -703,13 +708,13 @@ function AchievementsTab({
 
   if (!achievements || achievements.total === 0) {
     return (
-      <div className="py-8 text-center animate-fade-in">
-        <Trophy size={36} weight="duotone" className="mx-auto mb-3 text-repressurizer-text-faint" />
-        <p className="text-sm text-repressurizer-text-muted">
-          This game has no achievements.
-        </p>
-      </div>
-    );
+        <div className="py-8 text-center animate-fade-in">
+          <Trophy size={36} weight="duotone" className="mx-auto mb-3 text-repressurizer-text-faint" />
+          <p className="text-sm text-repressurizer-text-muted">
+            {t("achievements.noData")}
+          </p>
+        </div>
+      );
   }
 
   const q = search.toLowerCase();
@@ -727,7 +732,10 @@ function AchievementsTab({
       <div className="rounded-xl bg-repressurizer-bg p-4 border border-repressurizer-border-subtle">
         <div className="mb-2.5 flex items-center justify-between">
           <span className="text-sm font-medium text-white">
-            {achievements.achieved} / {achievements.total} achievements
+            {t("gameDetails.achievementCount", {
+              achieved: achievements.achieved,
+              total: achievements.total,
+            })}
           </span>
           <span className="font-mono text-sm font-bold text-repressurizer-accent tabular-nums">
             {percent}%
@@ -750,7 +758,7 @@ function AchievementsTab({
         />
         <input
           type="text"
-          placeholder="Search achievements..."
+          placeholder={t("gameDetails.searchAchievements")}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="w-full rounded-lg border border-repressurizer-border bg-repressurizer-bg pl-9 pr-3 py-2 text-sm text-repressurizer-text placeholder:text-repressurizer-text-faint transition-colors focus:border-repressurizer-accent focus:outline-none"
@@ -761,7 +769,7 @@ function AchievementsTab({
       <div className="space-y-1">
         {filtered.length === 0 ? (
           <p className="py-4 text-center text-sm text-repressurizer-text-muted">
-            No achievements match "{search}"
+            {t("grid.noMatch", { query: search })}
           </p>
         ) : (
           filtered.map((ach) => (
@@ -774,6 +782,7 @@ function AchievementsTab({
 }
 
 function AchievementRow({ achievement }: { achievement: AchievementInfo }) {
+  const t = useT();
   const unlockDate = achievement.unlock_time
     ? new Date(achievement.unlock_time * 1000).toLocaleDateString()
     : null;
@@ -819,7 +828,7 @@ function AchievementRow({ achievement }: { achievement: AchievementInfo }) {
       ) : (
         <span className="shrink-0 inline-flex items-center gap-1 text-xs text-repressurizer-text-faint">
           <Lock size={11} />
-          Locked
+          {t("gameDetails.locked")}
         </span>
       )}
     </div>

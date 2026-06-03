@@ -55,7 +55,7 @@ import {
   UsersThree,
 } from "@phosphor-icons/react";
 import { ACCENT_PRESETS, applyAccentColor, applyTheme } from "../../stores/settingsStore";
-import { useT } from "../../lib/i18n";
+import { useT, t } from "../../lib/i18n";
 import type { AppTheme, AppLocale } from "../../lib/types";
 
 interface SettingsPageProps {
@@ -68,6 +68,7 @@ function redactTail(value: string | null | undefined): string | null {
 }
 
 export function SettingsPage({ onClose }: SettingsPageProps) {
+  const t = useT();
   const settings = useSettingsStore();
   const gameCount = useGameStore((s) => Object.keys(s.games).length);
   const mergeGames = useGameStore((s) => s.mergeGames);
@@ -89,6 +90,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
   const [loadingBackups, setLoadingBackups] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [message, setMessage] = useState("");
+  const [messageTone, setMessageTone] = useState<"success" | "error">("success");
   const [tab, setTab] = useState<"general" | "appearance" | "backups" | "ignored">("general");
   const [customHex, setCustomHex] = useState(settings.accentColor);
   const [cacheInfo, setCacheInfo] = useState<CacheInfo | null>(null);
@@ -129,13 +131,19 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
     };
   }, []);
 
+  const flashMessage = (text: string, tone: "success" | "error", clearAfterMs?: number) => {
+    setMessage(text);
+    setMessageTone(tone);
+    if (clearAfterMs) window.setTimeout(() => setMessage(""), clearAfterMs);
+  };
+
   const loadBackups = async () => {
     setLoadingBackups(true);
     try {
       const list = await listBackups(settings.steamPath, settings.steamId3);
       setBackups(list);
     } catch (e) {
-      setMessage(`Failed to load backups: ${e}`);
+      flashMessage(t("settings.message.loadBackupsFailed", { error: String(e) }), "error");
     }
     setLoadingBackups(false);
   };
@@ -144,7 +152,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
     setPendingAction({
       type: "restore",
       backup,
-      message: `Restore backup from ${formatTimestamp(backup.timestamp)}? This will overwrite your current collections. A pre-restore backup will be created automatically.`,
+      message: t("backups.restoreConfirm", { date: formatTimestamp(backup.timestamp) }),
     });
   };
 
@@ -152,7 +160,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
     setPendingAction({
       type: "delete",
       backup,
-      message: `Delete backup from ${formatTimestamp(backup.timestamp)}? This cannot be undone.`,
+      message: t("backups.deleteConfirm", { date: formatTimestamp(backup.timestamp) }),
     });
   };
 
@@ -168,20 +176,19 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
         await restoreBackup(settings.steamPath, settings.steamId3, action.backup.filename);
         const collections = await loadCollections(settings.steamPath, settings.steamId3);
         setCollections(collections);
-        setMessage("Backup restored successfully! Reload Steam to see changes.");
+        flashMessage(t("settings.message.restored"), "success");
         loadBackups();
       } catch (e) {
-        setMessage(`Restore failed: ${e}`);
+        flashMessage(t("settings.message.restoreFailed", { error: String(e) }), "error");
       }
       setRestoring(false);
     } else if (action.type === "delete" && action.backup) {
       try {
         await deleteBackup(settings.steamPath, settings.steamId3, action.backup.filename);
-        setMessage("Backup deleted.");
+        flashMessage(t("settings.message.deleted"), "success", 2000);
         loadBackups();
-        setTimeout(() => setMessage(""), 2000);
       } catch (e) {
-        setMessage(`Delete failed: ${e}`);
+        flashMessage(t("settings.message.deleteFailed", { error: String(e) }), "error");
       }
     } else if (action.type === "reset") {
       settings.reset();
@@ -191,18 +198,16 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
   const handleManualBackup = async () => {
     try {
       await createManualBackup(settings.steamPath, settings.steamId3, "");
-      setMessage("Manual backup created.");
+      flashMessage(t("settings.message.created"), "success", 2000);
       loadBackups();
-      setTimeout(() => setMessage(""), 2000);
     } catch (e) {
-      setMessage(`Backup failed: ${e}`);
+      flashMessage(t("settings.message.backupFailed", { error: String(e) }), "error");
     }
   };
 
   const handleSaveApiKey = () => {
     settings.setSettings({ apiKey });
-    setMessage("API key saved.");
-    setTimeout(() => setMessage(""), 2000);
+    flashMessage(t("settings.message.apiKeySaved"), "success", 2000);
   };
 
   const handleRefreshSteamAppIndex = async () => {
@@ -211,10 +216,9 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
       await useSteamAppIndexStore.getState().refresh(settings.apiKey);
       const current = Object.values(useGameStore.getState().games);
       if (current.length > 0) setGames(current);
-      setMessage("Steam app index refreshed.");
-      setTimeout(() => setMessage(""), 2000);
+      flashMessage(t("settings.message.appIndexRefreshed"), "success", 2000);
     } catch (e) {
-      setMessage(`Steam app index refresh failed: ${e}`);
+      flashMessage(t("settings.message.appIndexRefreshFailed", { error: String(e) }), "error");
     }
   };
 
@@ -229,10 +233,9 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
       });
       if (!path) return;
       await writeTextFile(path, content);
-      setMessage("Diagnostics exported.");
-      setTimeout(() => setMessage(""), 2000);
+      flashMessage(t("settings.message.diagnosticsExported"), "success", 2000);
     } catch (e) {
-      setMessage(`Diagnostics failed: ${e}`);
+      flashMessage(t("settings.message.diagnosticsFailed", { error: String(e) }), "error");
     } finally {
       setDiagnosticsExporting(false);
     }
@@ -245,9 +248,14 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
     try {
       const update = await check();
       setAvailableUpdate(update);
-      setMessage(update ? `Update ${update.version} is available.` : "Repressurizer is up to date.");
+      flashMessage(
+        update
+          ? t("settings.message.updateAvailable", { version: update.version })
+          : t("settings.message.upToDate"),
+        "success"
+      );
     } catch (e) {
-      setMessage(`Update check failed: ${e}`);
+      flashMessage(t("settings.message.updateCheckFailed", { error: String(e) }), "error");
     } finally {
       setCheckingUpdates(false);
     }
@@ -261,7 +269,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
       await availableUpdate.downloadAndInstall();
       await relaunch();
     } catch (e) {
-      setMessage(`Update install failed: ${e}`);
+      flashMessage(t("settings.message.updateInstallFailed", { error: String(e) }), "error");
       setInstallingUpdate(false);
     }
   };
@@ -275,10 +283,9 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
   const handleOpenFamilyTokenPage = async () => {
     try {
       await open("https://store.steampowered.com/pointssummary/ajaxgetasyncconfig");
-      setMessage("Steam token page opened.");
-      setTimeout(() => setMessage(""), 2000);
+      flashMessage(t("settings.message.tokenPageOpened"), "success", 2000);
     } catch (e) {
-      setMessage(`Could not open Steam token page: ${e}`);
+      flashMessage(t("settings.message.tokenPageOpenFailed", { error: String(e) }), "error");
     }
   };
 
@@ -288,23 +295,21 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
     if (token && token !== pasted.trim()) {
       event.preventDefault();
       setFamilyAccessToken(token);
-      setMessage("Steam Store token extracted from pasted JSON.");
-      setTimeout(() => setMessage(""), 2000);
+      flashMessage(t("settings.message.tokenExtracted"), "success", 2000);
     }
   };
 
   const handleSaveFamilyToken = async () => {
     const token = extractStoreWebApiToken(familyAccessToken);
     if (!token) {
-      setMessage("Paste a Steam Store webapi_token first.");
+      flashMessage(t("settings.message.tokenPasteFirst"), "error");
       return;
     }
     setFamilyAccessToken(token);
     const cache = await saveSteamFamilyToken(token, false);
     if (cache) {
       applyFamilyTokenCache(cache);
-      setMessage("Steam Store token saved.");
-      setTimeout(() => setMessage(""), 2000);
+      flashMessage(t("settings.message.tokenSaved"), "success", 2000);
     }
   };
 
@@ -313,8 +318,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
     setFamilyAccessToken("");
     setFamilyTokenSavedAt(null);
     setFamilyTokenValidatedAt(null);
-    setMessage("Saved Steam Store token cleared.");
-    setTimeout(() => setMessage(""), 2000);
+    flashMessage(t("settings.message.tokenCleared"), "success", 2000);
   };
 
   const handleProbeFamily = async () => {
@@ -330,8 +334,8 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
       if (cache) applyFamilyTokenCache(cache);
     }
     const startedAt = performance.now();
-    console.groupCollapsed("[Repressurizer] Steam Family probe");
-    console.info("Starting Steam Family probe", {
+    console.groupCollapsed("[Repressurizer] family probe");
+    console.info("Starting family probe", {
       hasSavedWebApiKey: Boolean(settings.apiKey),
       hasStoreWebApiToken: Boolean(accessToken),
       includeNonGames: familyIncludeNonGames,
@@ -344,7 +348,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
         settings.steamId64 || undefined,
         familyIncludeNonGames
       );
-      console.info("Steam Family probe result", {
+      console.info("Family probe result", {
         authUsed: result.auth_used,
         familyGroupId: redactTail(result.family_groupid),
         ownerSteamId: redactTail(result.owner_steamid),
@@ -364,16 +368,14 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
         const cache = await saveSteamFamilyToken(accessToken, true);
         if (cache) applyFamilyTokenCache(cache);
       }
-      setMessage(`Steam Family loaded with ${result.auth_used}.`);
+      flashMessage(t("settings.message.familyLoaded", { auth: result.auth_used }), "success");
     } catch (e) {
-      console.error("Steam Family probe failed", {
+      console.error("Family probe failed", {
         error: String(e),
         durationMs: Math.round(performance.now() - startedAt),
       });
-      const tokenHint = accessToken
-        ? " Saved Steam Store token may be expired; paste a fresh one."
-        : "";
-      setMessage(`Steam Family probe failed: ${e}.${tokenHint}`);
+      const tokenHint = accessToken ? t("settings.family.tokenExpiredHint") : "";
+      flashMessage(t("settings.message.familyProbeFailed", { error: String(e), hint: tokenHint }), "error");
     } finally {
       console.groupEnd();
       setFamilyChecking(false);
@@ -383,7 +385,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
   const handleReset = () => {
     setPendingAction({
       type: "reset",
-      message: "Reset all settings? You will need to set up again.",
+      message: t("settings.reset.confirm"),
     });
   };
 
@@ -400,7 +402,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
       <div className="relative flex w-full max-w-2xl flex-col rounded-2xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_24px_64px_rgba(0,0,0,0.6)] animate-fade-in" style={{ maxHeight: "85vh" }}>
         {/* Header */}
         <div className="flex items-center justify-between border-b border-repressurizer-border px-6 py-4">
-          <h2 className="text-base font-semibold text-white tracking-tight">Settings</h2>
+          <h2 className="text-base font-semibold text-white tracking-tight">{t("settings.title")}</h2>
           <button
             onClick={onClose}
             className="btn-press flex items-center justify-center w-7 h-7 rounded-lg text-repressurizer-text-muted transition-colors hover:text-white hover:bg-repressurizer-surface-hover"
@@ -420,7 +422,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
             }`}
           >
             <Info size={14} />
-            General
+            {t("settings.general")}
           </button>
           <button
             onClick={() => setTab("appearance")}
@@ -431,7 +433,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
             }`}
           >
             <Palette size={14} />
-            Appearance
+            {t("settings.appearance")}
           </button>
           <button
             onClick={() => setTab("backups")}
@@ -442,7 +444,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
             }`}
           >
             <ClockCounterClockwise size={14} />
-            Backups
+            {t("settings.backups")}
           </button>
           <button
             onClick={() => setTab("ignored")}
@@ -453,7 +455,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
             }`}
           >
             <Warning size={14} />
-            Ignored
+            {t("settings.ignored")}
             {(ignoredIds.length + hltbIgnoredIds.length) > 0 && (
               <span className="ml-1 rounded-full bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-medium text-amber-400 tabular-nums">
                 {ignoredIds.length + hltbIgnoredIds.length}
@@ -466,11 +468,11 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
         <div className="flex-1 overflow-auto p-6">
           {message && (
             <div className={`mb-4 flex items-center gap-2 rounded-xl border p-3.5 text-sm ${
-              message.includes("failed") || message.includes("Failed")
+              messageTone === "error"
                 ? "border-repressurizer-danger/20 bg-repressurizer-danger/8 text-repressurizer-danger"
                 : "border-repressurizer-success/20 bg-repressurizer-success/8 text-repressurizer-success"
             }`}>
-              {message.includes("failed") || message.includes("Failed")
+              {messageTone === "error"
                 ? <Warning size={16} weight="fill" />
                 : <CheckCircle size={16} weight="fill" />}
               {message}
@@ -483,11 +485,11 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
               <div className="rounded-xl bg-repressurizer-bg border border-repressurizer-border-subtle p-4">
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
-                    <span className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">Steam Path</span>
+                    <span className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("settings.steamPath")}</span>
                     <p className="mt-1 truncate font-mono text-xs text-repressurizer-text-muted">{settings.steamPath}</p>
                   </div>
                   <div>
-                    <span className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">User</span>
+                    <span className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("settings.user")}</span>
                     <p className="mt-1 truncate font-mono text-xs text-repressurizer-text-muted">
                       {settings.steamPersonaName
                         ? `${settings.steamPersonaName} (${settings.steamId3})`
@@ -495,55 +497,59 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                     </p>
                   </div>
                   <div>
-                    <span className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">Steam ID64</span>
+                    <span className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("settings.steamId64")}</span>
                     <p className="mt-1 font-mono text-xs text-repressurizer-text-muted">{settings.steamId64}</p>
                   </div>
                   <div>
-                    <span className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">Library</span>
+                    <span className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("settings.library")}</span>
                     <p className="mt-1 text-xs text-repressurizer-text-muted">
-                      <span className="font-mono tabular-nums">{gameCount}</span> games, <span className="font-mono tabular-nums">{categoryCount}</span> categories (<span className="font-mono tabular-nums">{dynamicCount}</span> dynamic)
+                      {t("settings.library.summary", {
+                        games: gameCount,
+                        categories: categoryCount,
+                        dynamic: dynamicCount,
+                      })}
                     </p>
                   </div>
                 </div>
               </div>
 
-              {/* Steam Family */}
+              {/* Family access */}
               <div className="space-y-3">
-                <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">Steam Family</h3>
+                <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("settings.family.title")}</h3>
                 <div className="rounded-xl bg-repressurizer-bg border border-repressurizer-border-subtle px-4 py-3 space-y-3">
                   <div className="flex items-start gap-3">
                     <UsersThree size={16} weight="duotone" className="mt-0.5 text-repressurizer-text-faint" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm text-repressurizer-text">Probe shared family library</p>
+                      <p className="text-sm text-repressurizer-text">{t("settings.family.probe")}</p>
                       <p className="mt-0.5 text-xs leading-relaxed text-repressurizer-text-faint">
-                        Uses your saved Steam Web API key first. A saved Steam Store webapi_token is reused automatically when Family needs Store auth.
+                        {t("settings.family.probe.desc")}
                       </p>
                     </div>
                   </div>
                   <div className="grid gap-2 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-surface/50 px-3 py-2 text-xs text-repressurizer-text-muted sm:grid-cols-2">
                     <p>
-                      Steam Web API key: <span className="font-medium text-repressurizer-text">{settings.apiKey ? "configured" : "missing"}</span>
+                      {t("settings.family.apiKeyStatus")} <span className="font-medium text-repressurizer-text">{settings.apiKey ? t("settings.family.apiKeyConfigured") : t("settings.family.apiKeyMissing")}</span>
                     </p>
                     <p>
-                      Store token:{" "}
+                      {t("settings.family.storeTokenStatus")}{" "}
                       <span className="font-medium text-repressurizer-text">
-                        {familyTokenSavedAt ? `saved ${new Date(familyTokenSavedAt).toLocaleDateString()}` : "not saved"}
+                        {familyTokenSavedAt ? t("settings.family.savedOn", { date: new Date(familyTokenSavedAt).toLocaleDateString() }) : t("settings.family.notSaved")}
                       </span>
                       {familyTokenValidatedAt && (
-                        <span className="text-repressurizer-text-faint">, validated {new Date(familyTokenValidatedAt).toLocaleDateString()}</span>
+                        <span className="text-repressurizer-text-faint">, {t("settings.family.validatedOn", { date: new Date(familyTokenValidatedAt).toLocaleDateString() })}</span>
                       )}
                     </p>
                   </div>
                   <div className="space-y-2">
                     <label className="block text-xs font-medium text-repressurizer-text-muted">
-                      Steam Store webapi_token
+                      {t("settings.family.tokenLabel")}
                     </label>
                     <input
                       type="password"
                       value={familyAccessToken}
                       onChange={(e) => setFamilyAccessToken(e.target.value)}
                       onPaste={handleFamilyTokenPaste}
-                      placeholder="Paste token or full Steam JSON"
+                      placeholder={t("settings.family.tokenPlaceholder")}
                       className="w-full rounded-lg border border-repressurizer-border bg-repressurizer-surface px-3 py-2 text-xs text-repressurizer-text placeholder:text-repressurizer-text-faint transition-colors focus:border-repressurizer-accent focus:outline-none"
                     />
                     <div className="flex flex-wrap gap-2">
@@ -552,14 +558,14 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                         className="btn-press inline-flex items-center gap-1.5 rounded-lg border border-repressurizer-border bg-repressurizer-surface px-3 py-1.5 text-xs font-medium text-repressurizer-text-muted transition-colors hover:text-repressurizer-text"
                       >
                         <Globe size={13} />
-                        Open token page
+                        {t("settings.family.openTokenPage")}
                       </button>
                       <button
                         onClick={handleSaveFamilyToken}
                         disabled={!hasFamilyStoreToken}
                         className="btn-press rounded-lg border border-repressurizer-border bg-repressurizer-surface px-3 py-1.5 text-xs font-medium text-repressurizer-text-muted transition-colors hover:text-repressurizer-text disabled:opacity-40"
                       >
-                        Save token
+                        {t("settings.family.saveToken")}
                       </button>
                       <button
                         onClick={handleClearFamilyToken}
@@ -567,7 +573,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                         className="btn-press inline-flex items-center gap-1.5 rounded-lg border border-repressurizer-border bg-repressurizer-surface px-3 py-1.5 text-xs font-medium text-repressurizer-text-muted transition-colors hover:text-repressurizer-danger disabled:opacity-40"
                       >
                         <TrashSimple size={13} />
-                        Clear
+                        {t("settings.family.clearToken")}
                       </button>
                     </div>
                   </div>
@@ -579,9 +585,9 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                       className="mt-0.5 h-4 w-4 accent-[var(--color-repressurizer-accent)]"
                     />
                     <span className="min-w-0">
-                      <span className="block text-xs font-medium text-repressurizer-text">Include tools and non-game apps</span>
+                      <span className="block text-xs font-medium text-repressurizer-text">{t("settings.family.includeNonGames")}</span>
                       <span className="mt-0.5 block text-xs leading-relaxed text-repressurizer-text-faint">
-                        Hidden by default so map editors, SDKs, and utilities do not pollute the game list.
+                        {t("settings.family.includeNonGames.desc")}
                       </span>
                     </span>
                   </label>
@@ -591,32 +597,36 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                       disabled={familyChecking || (!settings.apiKey && !hasFamilyStoreToken)}
                       className="btn-press shrink-0 rounded-lg bg-repressurizer-accent px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-repressurizer-accent-hover disabled:opacity-40"
                     >
-                      {familyChecking ? "Checking..." : "Probe"}
+                      {familyChecking ? t("settings.family.checking") : t("settings.family.probeButton")}
                     </button>
                   </div>
                   {familyResult && (
                     <div className="grid grid-cols-4 gap-2 text-xs">
-                      <MiniStat label="Total" value={familyResult.total_apps} />
-                      <MiniStat label="Owned" value={familyResult.owned_apps} />
-                      <MiniStat label="Shared" value={familyResult.shared_apps} />
-                      <MiniStat label="Excluded" value={familyResult.excluded_apps} />
+                      <MiniStat label={t("settings.family.total")} value={familyResult.total_apps} />
+                      <MiniStat label={t("settings.family.owned")} value={familyResult.owned_apps} />
+                      <MiniStat label={t("settings.family.shared")} value={familyResult.shared_apps} />
+                      <MiniStat label={t("settings.family.excluded")} value={familyResult.excluded_apps} />
                     </div>
                   )}
                   {familyResult && (
                     <p className="text-xs leading-relaxed text-repressurizer-text-faint">
                       {familyResult.non_game_apps > 0 && !familyIncludeNonGames
-                        ? `${familyResult.non_game_apps} tool/non-game app${familyResult.non_game_apps === 1 ? "" : "s"} hidden. `
+                        ? `${familyResult.non_game_apps === 1
+                          ? t("settings.family.nonGamesHidden", { count: familyResult.non_game_apps })
+                          : t("settings.family.nonGamesHidden.many", { count: familyResult.non_game_apps })} `
                         : ""}
                       {familyResult.playtime_entries > 0
-                        ? `Family playtime loaded for ${familyResult.playtime_entries} app${familyResult.playtime_entries === 1 ? "" : "s"}.`
+                        ? familyResult.playtime_entries === 1
+                          ? t("settings.family.playtimeLoaded.one", { count: familyResult.playtime_entries })
+                          : t("settings.family.playtimeLoaded", { count: familyResult.playtime_entries })
                         : familyResult.playtime_unavailable_reason
-                          ? "Family playtime was unavailable for this probe."
-                          : "No Family playtime entries returned."}
+                          ? t("settings.family.playtimeUnavailable")
+                          : t("settings.family.playtimeNone")}
                     </p>
                   )}
                   {familyLastFetched && !familyResult && (
                     <p className="text-xs text-repressurizer-text-faint">
-                      Cached Family data loaded from {new Date(familyLastFetched).toLocaleString()}.
+                      {t("settings.family.cachedAt", { time: new Date(familyLastFetched).toLocaleString() })}
                     </p>
                   )}
                 </div>
@@ -624,18 +634,18 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
 
               {/* Display */}
               <div className="space-y-3">
-                <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">Display</h3>
+                <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("settings.display")}</h3>
                 <ToggleRow
                   icon={<Eye size={15} weight="duotone" />}
-                  label="Show dynamic categories"
-                  description="Display Steam's auto-generated categories (prefixed with ~) in the sidebar"
+                  label={t("settings.showDynamic")}
+                  description={t("settings.showDynamic.desc")}
                   checked={settings.showDynamicCategories}
                   onChange={(v) => settings.setSettings({ showDynamicCategories: v })}
                 />
                 <ToggleRow
                   icon={<Heart size={15} weight="duotone" />}
-                  label="Pin Favorites"
-                  description="Keep the Favorites collection pinned at the top of the sidebar"
+                  label={t("settings.pinFavorites")}
+                  description={t("settings.pinFavorites.desc")}
                   checked={settings.pinFavorites}
                   onChange={(v) => settings.setSettings({ pinFavorites: v })}
                 />
@@ -643,12 +653,12 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
 
               {/* Currency */}
               <div className="space-y-3">
-                <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">Currency</h3>
+                <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("settings.currency")}</h3>
                 <div className="rounded-xl bg-repressurizer-bg border border-repressurizer-border-subtle px-4 py-3 space-y-2">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm text-repressurizer-text">Default currency</p>
-                      <p className="mt-0.5 text-xs text-repressurizer-text-faint">Used for library value calculations in Statistics</p>
+                      <p className="text-sm text-repressurizer-text">{t("settings.defaultCurrency")}</p>
+                      <p className="mt-0.5 text-xs text-repressurizer-text-faint">{t("settings.currency.desc")}</p>
                     </div>
                     <select
                       value={settings.currency ?? "EUR"}
@@ -672,10 +682,10 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
 
               {/* Fetch Speed */}
               <div className="space-y-3">
-                <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">Fetch Speed</h3>
+                <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("settings.fetchSpeed")}</h3>
                 <div className="rounded-xl bg-repressurizer-bg border border-repressurizer-border-subtle px-4 py-3 space-y-2">
                   <div className="flex items-center justify-between">
-                    <p className="text-sm text-repressurizer-text">HLTB concurrent requests</p>
+                    <p className="text-sm text-repressurizer-text">{t("settings.hltbConcurrency")}</p>
                     <span className="font-mono text-sm text-repressurizer-accent tabular-nums">{settings.hltbConcurrency ?? 5}</span>
                   </div>
                   <input
@@ -688,12 +698,12 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                     className="w-full accent-repressurizer-accent"
                   />
                   <p className="text-xs text-repressurizer-text-faint">
-                    How many HLTB lookups to run in parallel. Higher = faster but may get rate-limited.
+                    {t("settings.hltbConcurrency.desc")}
                   </p>
                 </div>
                 <div className="rounded-xl bg-repressurizer-bg border border-repressurizer-border-subtle px-4 py-3 space-y-2">
                   <div className="flex items-center justify-between">
-                    <p className="text-sm text-repressurizer-text">Achievements concurrent requests</p>
+                    <p className="text-sm text-repressurizer-text">{t("settings.achievementsConcurrency")}</p>
                     <span className="font-mono text-sm text-repressurizer-accent tabular-nums">{settings.achievementsConcurrency ?? 5}</span>
                   </div>
                   <input
@@ -706,24 +716,24 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                     className="w-full accent-repressurizer-accent"
                   />
                   <p className="text-xs text-repressurizer-text-faint">
-                    How many achievement lookups to run in parallel. Steam API key allows high throughput.
+                    {t("settings.achievementsConcurrency.desc")}
                   </p>
                 </div>
               </div>
 
-              {/* Cache */}
+              {/* Data cache */}
               <div className="space-y-3">
-                <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">Steam App Index</h3>
+                <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("settings.appIndex.title")}</h3>
                 <div className="flex items-center gap-3 rounded-xl bg-repressurizer-bg border border-repressurizer-border-subtle px-4 py-3">
                   <CloudArrowDown size={15} weight="duotone" className="text-repressurizer-text-faint shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-repressurizer-text">
-                      <span className="font-mono tabular-nums">{steamAppIndexCount}</span> Steam apps indexed
+                      {t("settings.appIndex.indexed", { count: steamAppIndexCount })}
                     </p>
                     <p className="mt-0.5 text-xs text-repressurizer-text-faint">
                       {steamAppIndex.fetchedAt > 0
-                        ? `Last refreshed ${new Date(steamAppIndex.fetchedAt).toLocaleDateString()}${steamAppIndexStale ? " · refresh recommended" : ""}`
-                        : "Used to resolve collection-only app names instantly."}
+                        ? `${t("settings.appIndex.lastRefreshed", { date: new Date(steamAppIndex.fetchedAt).toLocaleDateString() })}${steamAppIndexStale ? ` · ${t("settings.appIndex.refreshRecommended")}` : ""}`
+                        : t("settings.appIndex.desc")}
                     </p>
                     {steamAppIndexError && (
                       <p className="mt-1 text-xs text-repressurizer-danger">{steamAppIndexError}</p>
@@ -734,34 +744,34 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                     disabled={steamAppIndexRefreshing}
                     className="btn-press shrink-0 rounded-lg bg-repressurizer-accent/15 px-3 py-1.5 text-xs font-medium text-repressurizer-accent transition-colors hover:bg-repressurizer-accent/25 disabled:opacity-40"
                   >
-                    {steamAppIndexRefreshing ? "Refreshing..." : "Refresh"}
+                    {steamAppIndexRefreshing ? t("settings.appIndex.refreshing") : t("settings.appIndex.refresh")}
                   </button>
                 </div>
 
-                <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">Game Details Cache</h3>
+                <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("settings.cache")}</h3>
                 <div className="flex items-center gap-3 rounded-xl bg-repressurizer-bg border border-repressurizer-border-subtle px-4 py-3">
                   <Database size={15} weight="duotone" className="text-repressurizer-text-faint shrink-0" />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-repressurizer-text">
                       <span className="font-mono tabular-nums">{cachedDetailsCount}</span> games cached
                     </p>
-                    <p className="mt-0.5 text-xs text-repressurizer-text-faint">Used by Auto-Categorize for genre, tags, year and score</p>
+                    <p className="mt-0.5 text-xs text-repressurizer-text-faint">{t("settings.cache.desc")}</p>
                   </div>
                   <button
                     onClick={clearDetailsCache}
                     disabled={cachedDetailsCount === 0}
                     className="btn-press shrink-0 rounded-lg border border-repressurizer-danger/30 px-3 py-1.5 text-xs text-repressurizer-danger transition-colors hover:bg-repressurizer-danger/10 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
-                    Clear Cache
+                    {t("settings.clearCache")}
                   </button>
                 </div>
                 {cacheInfo && (
                   <div className="rounded-xl bg-repressurizer-bg border border-repressurizer-border-subtle px-4 py-3 space-y-2">
                     <p className="text-[10px] font-mono text-repressurizer-text-faint break-all">{cacheInfo.path}</p>
                     <div className="flex gap-4 text-xs text-repressurizer-text-muted">
-                      <span>Details: <span className="font-mono text-repressurizer-text">{formatSize(cacheInfo.details_bytes)}</span></span>
-                      <span>HLTB: <span className="font-mono text-repressurizer-text">{formatSize(cacheInfo.hltb_bytes)}</span></span>
-                      <span>Ignored: <span className="font-mono text-repressurizer-text">{formatSize(cacheInfo.failed_bytes)}</span></span>
+                      <span>{t("settings.cache.detailsSize")}: <span className="font-mono text-repressurizer-text">{formatSize(cacheInfo.details_bytes)}</span></span>
+                      <span>{t("settings.cache.hltbSize")}: <span className="font-mono text-repressurizer-text">{formatSize(cacheInfo.hltb_bytes)}</span></span>
+                      <span>{t("settings.cache.ignoredSize")}: <span className="font-mono text-repressurizer-text">{formatSize(cacheInfo.failed_bytes)}</span></span>
                     </div>
                   </div>
                 )}
@@ -770,7 +780,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
               {/* API Key */}
               <div>
                 <label className="mb-1.5 block text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">
-                  Steam Web API Key
+                  {t("settings.apiKey")}
                 </label>
                 <div className="flex gap-2">
                   <div className="relative flex-1">
@@ -786,14 +796,14 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                     onClick={handleSaveApiKey}
                     className="btn-press rounded-lg bg-repressurizer-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-repressurizer-accent-hover"
                   >
-                    Save
+                    {t("settings.apiKey.save")}
                   </button>
                 </div>
               </div>
 
-              {/* Maintenance */}
+              {/* Support tools */}
               <div className="space-y-3">
-                <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">Maintenance</h3>
+                <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("settings.maintenance.title")}</h3>
                 <div className="grid gap-3 md:grid-cols-2">
                   <button
                     onClick={handleExportDiagnostics}
@@ -802,8 +812,8 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                   >
                     <Bug size={16} weight="duotone" className="mt-0.5 text-repressurizer-accent" />
                     <span>
-                      <span className="block text-sm text-repressurizer-text">{diagnosticsExporting ? "Exporting diagnostics..." : "Export diagnostics"}</span>
-                      <span className="mt-0.5 block text-xs leading-relaxed text-repressurizer-text-faint">Writes a privacy-safe JSON report without API keys.</span>
+                      <span className="block text-sm text-repressurizer-text">{diagnosticsExporting ? t("settings.maintenance.exportingDiagnostics") : t("settings.maintenance.exportDiagnostics")}</span>
+                      <span className="mt-0.5 block text-xs leading-relaxed text-repressurizer-text-faint">{t("settings.maintenance.exportDesc")}</span>
                     </span>
                   </button>
 
@@ -815,8 +825,8 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                     >
                       <CloudArrowDown size={16} weight="duotone" className="mt-0.5 text-repressurizer-accent" />
                       <span>
-                        <span className="block text-sm text-repressurizer-text">{checkingUpdates ? "Checking updates..." : "Check for updates"}</span>
-                        <span className="mt-0.5 block text-xs leading-relaxed text-repressurizer-text-faint">Uses the latest GitHub Release updater manifest.</span>
+                        <span className="block text-sm text-repressurizer-text">{checkingUpdates ? t("settings.maintenance.checkingUpdates") : t("settings.maintenance.checkUpdates")}</span>
+                        <span className="mt-0.5 block text-xs leading-relaxed text-repressurizer-text-faint">{t("settings.maintenance.checkUpdatesDesc")}</span>
                       </span>
                     </button>
                     {availableUpdate && (
@@ -825,7 +835,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                         disabled={installingUpdate}
                         className="btn-press mt-3 w-full rounded-lg bg-repressurizer-accent px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-repressurizer-accent-hover disabled:opacity-50"
                       >
-                        {installingUpdate ? "Installing..." : `Install ${availableUpdate.version}`}
+                        {installingUpdate ? t("settings.maintenance.installing") : t("settings.maintenance.installVersion", { version: availableUpdate.version })}
                       </button>
                     )}
                   </div>
@@ -839,18 +849,18 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                   className="btn-press inline-flex items-center gap-1.5 rounded-lg border border-repressurizer-danger/30 px-4 py-2 text-sm text-repressurizer-danger transition-colors hover:bg-repressurizer-danger/10"
                 >
                   <ArrowCounterClockwise size={14} />
-                  Reset All Settings
+                  {t("settings.reset")}
                 </button>
                 <p className="mt-1.5 text-xs text-repressurizer-text-faint">
-                  Clears saved credentials and returns to setup.
+                  {t("settings.reset.desc")}
                 </p>
               </div>
 
               {/* About */}
               <div className="border-t border-repressurizer-border pt-5 text-xs text-repressurizer-text-muted">
                 <p className="font-medium text-repressurizer-text">Repressurizer v{__APP_VERSION__}</p>
-                <p className="mt-1 text-repressurizer-text-faint">Personal Steam Library Manager</p>
-                <p className="text-repressurizer-text-faint">Dynamic categories (prefixed with ~) are managed by Steam and are read-only.</p>
+                <p className="mt-1 text-repressurizer-text-faint">{t("settings.about")}</p>
+                <p className="text-repressurizer-text-faint">{t("settings.dynamicNote")}</p>
               </div>
             </div>
           )}
@@ -887,7 +897,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                 {ignoredIds.length === 0 ? (
                   <div className="flex items-center gap-2 py-4 text-repressurizer-text-faint">
                     <CheckCircle size={16} weight="duotone" className="text-repressurizer-accent/50" />
-                    <p className="text-xs">No ignored games</p>
+                    <p className="text-xs">{t("ignored.none")}</p>
                   </div>
                 ) : (
                   <>
@@ -922,16 +932,16 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
               {/* HLTB ignored */}
               <div className="space-y-3 border-t border-repressurizer-border pt-5">
                 <h3 className="text-xs font-semibold text-repressurizer-text-muted uppercase tracking-wider">
-                  HLTB — Ignored ({hltbIgnoredIds.length})
+                  {t("ignored.hltbTitle", { count: hltbIgnoredIds.length })}
                 </h3>
                 <p className="text-xs text-repressurizer-text-faint">
-                  Games not found on HowLongToBeat after {HLTB_MAX_FAILS}+ confirmed search{HLTB_MAX_FAILS > 1 ? "es" : ""}. Skipped on future fetches.
+                  {t("ignored.hltbDesc", { count: HLTB_MAX_FAILS })}
                 </p>
 
                 {hltbIgnoredIds.length === 0 ? (
                   <div className="flex items-center gap-2 py-4 text-repressurizer-text-faint">
                     <CheckCircle size={16} weight="duotone" className="text-repressurizer-accent/50" />
-                    <p className="text-xs">No ignored games</p>
+                    <p className="text-xs">{t("ignored.none")}</p>
                   </div>
                 ) : (
                   <>
@@ -973,7 +983,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                   onClick={() => setPendingAction(null)}
                   className="btn-press rounded-lg px-4 py-1.5 text-sm text-repressurizer-text-muted transition-colors hover:text-white hover:bg-repressurizer-surface-hover"
                 >
-                  Cancel
+                  {t("common.cancel")}
                 </button>
                 <button
                   onClick={handleConfirmAction}
@@ -983,7 +993,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                       : "bg-repressurizer-accent hover:bg-repressurizer-accent-hover"
                   }`}
                 >
-                  {pendingAction.type === "restore" ? "Restore" : pendingAction.type === "delete" ? "Delete" : "Reset"}
+                  {pendingAction.type === "restore" ? t("common.restore") : pendingAction.type === "delete" ? t("common.delete") : t("common.reset")}
                 </button>
               </div>
             </div>
@@ -1028,8 +1038,8 @@ function AppearanceTab({
     <div className="space-y-6">
       {/* Accent color */}
       <div className="space-y-3">
-        <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">Accent Color</h3>
-        <p className="text-xs text-repressurizer-text-faint -mt-1">Changes the highlight color throughout the app</p>
+        <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("appearance.accentColor")}</h3>
+        <p className="text-xs text-repressurizer-text-faint -mt-1">{t("appearance.accentColor.desc")}</p>
 
         <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3">
           <div className="flex items-center gap-3">
@@ -1043,17 +1053,17 @@ function AppearanceTab({
                 value={/^#[0-9a-fA-F]{6}$/.test(customHex || accentColor) ? (customHex || accentColor) : "#10b981"}
                 onChange={(e) => handleCustomHex(e.target.value)}
                 className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                aria-label="Pick accent color"
+                aria-label={t("appearance.customAccent")}
               />
             </label>
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-repressurizer-text">Custom accent</p>
-              <p className="mt-0.5 text-xs text-repressurizer-text-faint">Click the swatch to pick a color. Hex stays available for precision.</p>
+              <p className="text-sm font-medium text-repressurizer-text">{t("appearance.customAccent")}</p>
+              <p className="mt-0.5 text-xs text-repressurizer-text-faint">{t("appearance.customAccent.desc")}</p>
             </div>
             {accentColor && (
               <button
                 onClick={handleResetColor}
-                title="Reset to default"
+                title={t("appearance.resetColor")}
                 className="btn-press inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-repressurizer-border text-repressurizer-text-faint transition-colors hover:border-repressurizer-text-muted hover:text-repressurizer-text"
               >
                 <X size={14} weight="bold" />
@@ -1061,7 +1071,7 @@ function AppearanceTab({
             )}
           </div>
           <div className="mt-3">
-            <label className="mb-1.5 block text-xs text-repressurizer-text-muted">Hex value</label>
+            <label className="mb-1.5 block text-xs text-repressurizer-text-muted">{t("appearance.hexValue")}</label>
             <input
               type="text"
               value={customHex}
@@ -1099,25 +1109,25 @@ function AppearanceTab({
 
       {/* UI visibility */}
       <div className="space-y-3">
-        <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">Visibility</h3>
+        <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("appearance.visibility")}</h3>
         <ToggleRow
           icon={<Stack size={15} weight="duotone" />}
-          label="Show Smart Lists"
-          description="Backlog and Recently Played shortcuts in the sidebar"
+          label={t("appearance.smartLists")}
+          description={t("appearance.smartLists.desc")}
           checked={showSmartLists}
           onChange={(v) => setSettings({ showSmartLists: v })}
         />
         <ToggleRow
           icon={<Monitor size={15} weight="duotone" />}
-          label="Show Now Playing"
-          description="Display the last-played game card at the top of the sidebar"
+          label={t("appearance.nowPlaying")}
+          description={t("appearance.nowPlaying.desc")}
           checked={showNowPlaying}
           onChange={(v) => setSettings({ showNowPlaying: v })}
         />
         <ToggleRow
           icon={<Funnel size={15} weight="duotone" />}
-          label="Show Filter Bar"
-          description="Show the filter and sort bar below the header"
+          label={t("appearance.filterBar")}
+          description={t("appearance.filterBar.desc")}
           checked={showFilterBar}
           onChange={(v) => setSettings({ showFilterBar: v })}
         />
@@ -1158,6 +1168,7 @@ function AppearanceTab({
           {([
             { value: "en", label: "English", flag: "🇬🇧" },
             { value: "it", label: "Italiano", flag: "🇮🇹" },
+            { value: "zh-CN", label: "简体中文", flag: "🇨🇳" },
           ] as { value: AppLocale; label: string; flag: string }[]).map((opt) => (
             <button
               key={opt.value}
@@ -1198,11 +1209,11 @@ function AppearanceTab({
 
       {/* System tray */}
       <div className="space-y-3">
-        <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">System Tray</h3>
+        <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("settings.systemTray")}</h3>
         <ToggleRow
           icon={<Tray size={15} weight="duotone" />}
-          label="Minimize to tray on close"
-          description="When you close the window, Repressurizer will minimize to the system tray instead of quitting"
+          label={t("settings.minimizeToTray")}
+          description={t("settings.minimizeToTray.desc")}
           checked={minimizeToTray ?? false}
           onChange={(v) => setSettings({ minimizeToTray: v })}
         />
@@ -1273,6 +1284,7 @@ function BackupsTab({
   onDelete: (b: BackupInfo) => void;
   onManualBackup: () => void;
 }) {
+  const t = useT();
   const games = useGameStore((s) => s.games);
 
   const [favorites, setFavorites] = useState<Set<string>>(() => {
@@ -1329,19 +1341,19 @@ function BackupsTab({
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-3">
           <p className="text-xs text-repressurizer-text-faint">
-            A backup is created automatically every time you save.
+            {t("backups.desc")}
           </p>
           <button
             onClick={onManualBackup}
             className="btn-press inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-repressurizer-accent/15 px-3 py-1.5 text-xs font-medium text-repressurizer-accent transition-colors hover:bg-repressurizer-accent/25"
           >
             <Plus size={12} weight="bold" />
-            Create Backup
+            {t("backups.create")}
           </button>
         </div>
         <div className="py-8 text-center animate-fade-in">
           <ClockCounterClockwise size={36} weight="duotone" className="mx-auto mb-3 text-repressurizer-text-faint" />
-          <p className="text-sm text-repressurizer-text-muted">No backups found.</p>
+          <p className="text-sm text-repressurizer-text-muted">{t("backups.noBackups")}</p>
         </div>
       </div>
     );
@@ -1353,14 +1365,14 @@ function BackupsTab({
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-xs text-repressurizer-text-faint">
-          Backups are created automatically on save. Star important ones to pin them.
+          {t("backups.pinDesc")}
         </p>
         <button
           onClick={onManualBackup}
           className="btn-press inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-repressurizer-accent/15 px-3 py-1.5 text-xs font-medium text-repressurizer-accent transition-colors hover:bg-repressurizer-accent/25"
         >
           <Plus size={12} weight="bold" />
-          Create Backup
+          {t("backups.create")}
         </button>
       </div>
 
@@ -1369,7 +1381,7 @@ function BackupsTab({
         <div>
           <h3 className="mb-2 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-amber-500">
             <Star size={12} weight="fill" />
-            Pinned
+            {t("backups.pinned")}
           </h3>
           <div className="space-y-1">
             {favoriteBackups.map((backup) => (
@@ -1449,7 +1461,7 @@ function BackupRow({
       <button
         onClick={() => onToggleFavorite(backup.filename)}
         className={`mt-0.5 shrink-0 transition-colors ${isFavorite ? "text-amber-500" : "text-repressurizer-border hover:text-amber-500/50"}`}
-        title={isFavorite ? "Unpin" : "Pin"}
+        title={isFavorite ? t("common.unpin") : t("common.pin")}
       >
         <Star size={14} weight={isFavorite ? "fill" : "regular"} />
       </button>
@@ -1463,7 +1475,7 @@ function BackupRow({
           </span>
           {backup.is_pre_restore && (
             <span className="rounded-md bg-amber-600/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-500">
-              pre-restore
+              {t("backups.preRestore")}
             </span>
           )}
         </div>
@@ -1480,14 +1492,14 @@ function BackupRow({
           className="btn-press inline-flex items-center gap-1 rounded-lg bg-repressurizer-accent/10 px-2.5 py-1 text-xs text-repressurizer-accent transition-colors hover:bg-repressurizer-accent/20 disabled:opacity-50"
         >
           <ArrowCounterClockwise size={11} />
-          Restore
+          {t("backups.restore")}
         </button>
         <button
           onClick={() => onDelete(backup)}
           className="btn-press inline-flex items-center gap-1 rounded-lg bg-repressurizer-danger/8 px-2.5 py-1 text-xs text-repressurizer-danger transition-colors hover:bg-repressurizer-danger/15"
         >
           <TrashSimple size={11} />
-          Delete
+          {t("backups.delete")}
         </button>
       </div>
     </div>
@@ -1538,7 +1550,7 @@ function renderDescription(
   games: Record<number, import("../../lib/types").OwnedGame>
 ): string {
   if (!description) return "";
-  if (description === "Pre-restore snapshot") return description;
+  if (description === "Pre-restore snapshot") return t("backups.preRestoreSnapshot");
 
   if (description.startsWith("{")) {
     try {
@@ -1547,10 +1559,10 @@ function renderDescription(
       const gameName = (id: number) => games[id]?.name ?? `#${id}`;
 
       if (d.added_collections?.length > 0) {
-        parts.push(`Added: ${d.added_collections.join(", ")}`);
+        parts.push(`${t("backups.added")} ${d.added_collections.join(", ")}`);
       }
       if (d.removed_collections?.length > 0) {
-        parts.push(`Removed: ${d.removed_collections.join(", ")}`);
+        parts.push(`${t("backups.removed")} ${d.removed_collections.join(", ")}`);
       }
 
       for (const c of d.game_changes ?? []) {
@@ -1559,20 +1571,20 @@ function renderDescription(
           items.push(`+${gameName(id)}`);
         }
         if ((c.added?.length ?? 0) > 5) {
-          items.push(`+${c.added.length - 5} more`);
+          items.push(`+${t("common.moreCount", { count: c.added.length - 5 })}`);
         }
         for (const id of (c.removed ?? []).slice(0, 5)) {
           items.push(`-${gameName(id)}`);
         }
         if ((c.removed?.length ?? 0) > 5) {
-          items.push(`-${c.removed.length - 5} more`);
+          items.push(`-${t("common.moreCount", { count: c.removed.length - 5 })}`);
         }
         if (items.length > 0) {
           parts.push(`${c.collection}: ${items.join(", ")}`);
         }
       }
 
-      return parts.join(" | ") || "No changes";
+      return parts.join(" | ") || t("backups.noChanges");
     } catch {
       return description;
     }

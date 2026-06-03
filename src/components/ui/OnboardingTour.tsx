@@ -57,7 +57,7 @@ export function OnboardingTour({ onComplete }: OnboardingTourProps) {
 
   const runFamilyProbe = async (fromAuto = false) => {
     setFamilyStatus("checking");
-    setFamilyMessage(fromAuto ? "Checking saved Steam Family access..." : "Checking Steam Family...");
+    setFamilyMessage(fromAuto ? t("onboarding.family.checkSaved") : t("onboarding.family.checking"));
     setFamilyResult(null);
 
     try {
@@ -69,7 +69,7 @@ export function OnboardingTour({ onComplete }: OnboardingTourProps) {
 
       if (!settings.apiKey && !accessToken) {
         setFamilyStatus("needs-token");
-        setFamilyMessage("Steam Family usually needs the Steam Store webapi_token. Open the token page, copy the JSON, paste it here, then retry.");
+        setFamilyMessage(t("onboarding.family.needsToken"));
         return;
       }
 
@@ -94,25 +94,25 @@ export function OnboardingTour({ onComplete }: OnboardingTourProps) {
       setFamilyStatus("ready");
       setFamilyMessage(
         result.shared_apps > 0
-          ? `Steam Family ready: ${result.shared_apps} shared game${result.shared_apps === 1 ? "" : "s"} found.`
-          : "Steam Family checked. No shared games were returned for this account."
+          ? t("onboarding.family.readyShared", { count: result.shared_apps, suffix: result.shared_apps === 1 ? "" : "s" })
+          : t("onboarding.family.readyNone")
       );
     } catch (error) {
       const text = String(error);
       if (text.toLowerCase().includes("not a member")) {
         setFamilyStatus("not-member");
-        setFamilyMessage("This Steam account does not look like a member of a Steam Family group.");
+        setFamilyMessage(t("onboarding.family.notMember"));
         return;
       }
 
       if (!extractStoreWebApiToken(familyToken)) {
         setFamilyStatus("needs-token");
-        setFamilyMessage("Steam rejected the normal Web API key for Family data. Paste the Steam Store webapi_token and retry.");
+        setFamilyMessage(t("onboarding.family.normalKeyRejected"));
         return;
       }
 
       setFamilyStatus("error");
-      setFamilyMessage(`Steam Family check failed: ${text}`);
+      setFamilyMessage(t("onboarding.family.checkFailed", { error: text }));
     }
   };
 
@@ -129,7 +129,7 @@ export function OnboardingTour({ onComplete }: OnboardingTourProps) {
       event.preventDefault();
       setFamilyToken(token);
       setFamilyStatus("idle");
-      setFamilyMessage("Steam Store token extracted from pasted JSON.");
+      setFamilyMessage(t("onboarding.family.tokenExtracted"));
     }
   };
 
@@ -181,19 +181,19 @@ export function OnboardingTour({ onComplete }: OnboardingTourProps) {
               )}
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-medium text-repressurizer-text">
-                  {familyStatus === "ready" ? "Family library connected" : familyStatus === "checking" ? "Detecting Family access" : "Family setup optional"}
+                  {familyStatus === "ready" ? t("onboarding.family.connected") : familyStatus === "checking" ? t("onboarding.family.detecting") : t("onboarding.family.optional")}
                 </p>
                 <p className="mt-0.5 text-xs leading-relaxed text-repressurizer-text-faint">
-                  {familyMessage || "Repressurizer can show games available through Steam Family when Steam allows access."}
+                  {familyMessage || t("onboarding.family.availableHint")}
                 </p>
               </div>
             </div>
 
             {familyResult && (
               <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
-                <MiniFamilyStat label="Shared" value={familyResult.shared_apps} />
-                <MiniFamilyStat label="Owned" value={familyResult.owned_apps} />
-                <MiniFamilyStat label="Hidden" value={familyResult.non_game_apps} />
+                <MiniFamilyStat label={t("onboarding.family.shared")} value={familyResult.shared_apps} />
+                <MiniFamilyStat label={t("onboarding.family.owned")} value={familyResult.owned_apps} />
+                <MiniFamilyStat label={t("onboarding.family.hidden")} value={familyResult.non_game_apps} />
               </div>
             )}
 
@@ -206,7 +206,7 @@ export function OnboardingTour({ onComplete }: OnboardingTourProps) {
                     value={familyToken}
                     onChange={(e) => setFamilyToken(e.target.value)}
                     onPaste={handleFamilyTokenPaste}
-                    placeholder="Paste webapi_token or Steam JSON"
+                    placeholder={t("onboarding.family.tokenPlaceholder")}
                     className="w-full rounded-lg border border-repressurizer-border bg-repressurizer-surface px-3 py-2 pl-9 text-xs text-repressurizer-text placeholder:text-repressurizer-text-faint transition-colors focus:border-repressurizer-accent focus:outline-none"
                   />
                 </div>
@@ -216,14 +216,14 @@ export function OnboardingTour({ onComplete }: OnboardingTourProps) {
                     className="btn-press inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-repressurizer-border px-3 py-1.5 text-xs text-repressurizer-text-muted transition-colors hover:bg-repressurizer-surface-hover hover:text-repressurizer-text"
                   >
                     <Globe size={13} />
-                    Open token page
+                    {t("onboarding.family.openTokenPage")}
                   </button>
                   <button
                     onClick={() => runFamilyProbe(false)}
                     disabled={familyStatus === "checking" || (!settings.apiKey && !extractStoreWebApiToken(familyToken))}
                     className="btn-press flex-1 rounded-lg bg-sky-400 px-3 py-1.5 text-xs font-semibold text-slate-950 transition-colors hover:bg-sky-300 disabled:opacity-40"
                   >
-                    Retry probe
+                    {t("onboarding.family.retry")}
                   </button>
                 </div>
               </div>

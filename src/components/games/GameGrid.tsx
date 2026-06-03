@@ -8,6 +8,7 @@ import { useAchievementsStore } from "../../stores/achievementsStore";
 import { useReviewStore } from "../../stores/reviewStore";
 import { useFamilyStore } from "../../stores/familyStore";
 import { MAX_FAIL_RUNS, useFailedGamesStore } from "../../stores/failedGamesStore";
+import { useT } from "../../lib/i18n";
 import { GameCard } from "./GameCard";
 import { ContextMenu } from "./ContextMenu";
 import { GameDetailPage } from "./GameDetailPage";
@@ -23,6 +24,7 @@ interface ContextMenuState {
 }
 
 export function GameGrid() {
+  const t = useT();
   const games = useGameStore((s) => s.games);
   const searchQuery = useGameStore((s) => s.searchQuery);
   const sortBy = useGameStore((s) => s.sortBy);
@@ -290,7 +292,7 @@ export function GameGrid() {
       <div className="flex h-full items-center justify-center">
         <div className="text-center animate-fade-in">
           <Spinner size={28} className="mx-auto mb-3 text-repressurizer-accent animate-spin" />
-          <p className="text-sm text-repressurizer-text-muted">Loading games...</p>
+          <p className="text-sm text-repressurizer-text-muted">{t("grid.loading")}</p>
         </div>
       </div>
     );
@@ -303,13 +305,13 @@ export function GameGrid() {
           {searchQuery ? (
             <>
               <MagnifyingGlass size={36} weight="duotone" className="mx-auto mb-3 text-repressurizer-text-faint" />
-              <p className="text-sm text-repressurizer-text-muted">No games match "{searchQuery}"</p>
+              <p className="text-sm text-repressurizer-text-muted">{t("grid.noMatch", { query: searchQuery })}</p>
             </>
           ) : (
             <>
               <FolderOpen size={36} weight="duotone" className="mx-auto mb-3 text-repressurizer-text-faint" />
-              <p className="text-sm text-repressurizer-text-muted">No games in this category</p>
-              <p className="mt-1 text-xs text-repressurizer-text-faint">Drag games here to add them</p>
+              <p className="text-sm text-repressurizer-text-muted">{t("grid.empty")}</p>
+              <p className="mt-1 text-xs text-repressurizer-text-faint">{t("grid.emptyHint")}</p>
             </>
           )}
         </div>

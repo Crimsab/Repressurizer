@@ -14,8 +14,8 @@ import { SettingsPage } from "../settings/SettingsPage";
 import { ExportDialog } from "../export/ExportDialog";
 import { AutoCategorizeDialog } from "../categories/AutoCategorizeDialog";
 import { StatsPage } from "../stats/StatsPage";
-import { AchievementsPage } from "../achievements/AchievementsPage";
-import { WishlistPage } from "../wishlist/WishlistPage";
+import { CompletionPage } from "../achievements/AchievementsPage";
+import { SavedListPage } from "../wishlist/WishlistPage";
 import { FriendCompareDialog } from "../friends/FriendCompareDialog";
 import { WhatToPlayNext } from "../recommend/WhatToPlayNext";
 import { PlayHistoryTimeline } from "../timeline/PlayHistoryTimeline";
@@ -47,17 +47,6 @@ import {
   Tag,
   TextAa,
 } from "@phosphor-icons/react";
-
-const SORT_OPTIONS: { value: SortBy; label: string; icon: React.ReactNode; hint?: string }[] = [
-  { value: "name",         label: "Name",          icon: <TextAa size={12} /> },
-  { value: "playtime",     label: "Hours Played",  icon: <Clock size={12} /> },
-  { value: "lastPlayed",   label: "Last Played",   icon: <CalendarBlank size={12} /> },
-  { value: "appid",        label: "Newest",        icon: <Sparkle size={12} />, hint: "by App ID" },
-  { value: "metacritic",   label: "Metacritic",    icon: <Star size={12} />, hint: "requires details" },
-  { value: "hltb",         label: "HLTB Length",   icon: <Hourglass size={12} />, hint: "main story hours" },
-  { value: "achievements", label: "Achievements",  icon: <Trophy size={12} />, hint: "completion %" },
-  { value: "status",       label: "Status",        icon: <Tag size={12} /> },
-];
 
 export function Header() {
   const searchQuery = useGameStore((s) => s.searchQuery);
@@ -114,6 +103,16 @@ export function Header() {
 
   const t = useT();
   const toast = useToastStore;
+  const sortOptions: { value: SortBy; label: string; icon: React.ReactNode; hint?: string }[] = [
+    { value: "name",         label: t("sort.name"),         icon: <TextAa size={12} /> },
+    { value: "playtime",     label: t("sort.playtime"),     icon: <Clock size={12} /> },
+    { value: "lastPlayed",   label: t("sort.lastPlayed"),   icon: <CalendarBlank size={12} /> },
+    { value: "appid",        label: t("sort.newest"),       icon: <Sparkle size={12} />, hint: t("sort.hint.appid") },
+    { value: "metacritic",   label: t("sort.metacritic"),   icon: <Star size={12} />, hint: t("sort.hint.metacritic") },
+    { value: "hltb",         label: t("sort.hltb"),         icon: <Hourglass size={12} />, hint: t("sort.hint.hltb") },
+    { value: "achievements", label: t("sort.achievements"), icon: <Trophy size={12} />, hint: t("sort.hint.achievements") },
+    { value: "status",       label: t("sort.status"),       icon: <Tag size={12} /> },
+  ];
 
   useEffect(() => {
     if (exportOpenVersion > 0) setShowExport(true);
@@ -172,7 +171,7 @@ export function Header() {
           <div className="flex rounded-lg border border-repressurizer-border overflow-hidden">
             <button
               onClick={() => setViewMode("grid")}
-              title="Grid view"
+              title={t("header.gridView")}
               className={`btn-press flex items-center justify-center w-8 h-8 transition-colors ${
                 viewMode === "grid"
                   ? "bg-repressurizer-accent/15 text-repressurizer-accent"
@@ -183,7 +182,7 @@ export function Header() {
             </button>
             <button
               onClick={() => setViewMode("list")}
-              title="List view"
+              title={t("header.listView")}
               className={`btn-press flex items-center justify-center w-8 h-8 border-l border-repressurizer-border transition-colors ${
                 viewMode === "list"
                   ? "bg-repressurizer-accent/15 text-repressurizer-accent"
@@ -202,16 +201,16 @@ export function Header() {
                 className="h-8 flex items-center gap-1.5 pl-2.5 pr-2 text-xs text-repressurizer-text hover:bg-repressurizer-surface-hover transition-colors"
               >
                 <span className="text-repressurizer-text-faint">
-                  {SORT_OPTIONS.find((o) => o.value === sortBy)?.icon}
+                  {sortOptions.find((o) => o.value === sortBy)?.icon}
                 </span>
                 <span className="max-w-[80px] truncate">
-                  {SORT_OPTIONS.find((o) => o.value === sortBy)?.label}
+                  {sortOptions.find((o) => o.value === sortBy)?.label}
                 </span>
                 <CaretDown size={10} className={`text-repressurizer-text-faint transition-transform ${showSortMenu ? "rotate-180" : ""}`} />
               </button>
               <button
                 onClick={toggleSortAsc}
-                title={sortAsc ? "Ascending" : "Descending"}
+                title={sortAsc ? t("sort.ascending") : t("sort.descending")}
                 className="btn-press flex items-center justify-center w-8 h-8 border-l border-repressurizer-border text-repressurizer-text-muted transition-colors hover:text-white hover:bg-repressurizer-surface-hover"
               >
                 {sortAsc ? <SortAscending size={16} /> : <SortDescending size={16} />}
@@ -221,7 +220,7 @@ export function Header() {
             {showSortMenu && (
               <div className="absolute top-full mt-1.5 left-0 z-50 min-w-[200px] animate-fade-in rounded-xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_8px_32px_rgba(0,0,0,0.5)]">
                 <div className="p-1.5">
-                  {SORT_OPTIONS.map((opt) => (
+                  {sortOptions.map((opt) => (
                     <button
                       key={opt.value}
                       onClick={() => { setSortBy(opt.value); setShowSortMenu(false); }}
@@ -255,7 +254,7 @@ export function Header() {
               <button
                 onClick={undo}
                 disabled={historyLen === 0}
-                title="Undo (Ctrl+Z)"
+                title={t("header.undo")}
                 className="btn-press flex items-center justify-center w-8 h-8 rounded-lg text-repressurizer-text-muted transition-colors hover:text-white hover:bg-repressurizer-surface-hover disabled:opacity-25 disabled:hover:text-repressurizer-text-muted disabled:hover:bg-transparent"
               >
                 <ArrowUUpLeft size={16} />
@@ -263,14 +262,14 @@ export function Header() {
               <button
                 onClick={redo}
                 disabled={futureLen === 0}
-                title="Redo (Ctrl+Y)"
+                title={t("header.redo")}
                 className="btn-press flex items-center justify-center w-8 h-8 rounded-lg text-repressurizer-text-muted transition-colors hover:text-white hover:bg-repressurizer-surface-hover disabled:opacity-25 disabled:hover:text-repressurizer-text-muted disabled:hover:bg-transparent"
               >
                 <ArrowUUpRight size={16} />
               </button>
               <button
                 onClick={discardChanges}
-                title="Discard all changes"
+                title={t("header.discard")}
                 className="btn-press flex items-center justify-center w-8 h-8 rounded-lg text-repressurizer-danger/70 transition-colors hover:text-repressurizer-danger hover:bg-repressurizer-danger/10"
               >
                 <Trash size={16} />
@@ -291,12 +290,12 @@ export function Header() {
             {dirty ? (
               <>
                 <FloppyDisk size={14} weight="bold" />
-                {saving ? "Saving..." : "Save"}
+                {saving ? t("header.saving") : t("header.save")}
               </>
             ) : (
               <>
                 <Check size={14} weight="bold" />
-                Saved
+                {t("header.saved")}
               </>
             )}
           </button>
@@ -304,7 +303,7 @@ export function Header() {
           {/* Auto-Categorize */}
           <button
             onClick={() => setShowAutoCat(true)}
-            title={`Auto-Categorize — ${cachedDetailsCount}/${gameCount} details cached`}
+            title={t("toolbar.autoCategorize.status", { cached: cachedDetailsCount, total: gameCount })}
             className="btn-press relative flex items-center justify-center w-8 h-8 rounded-lg text-repressurizer-text-muted transition-colors hover:text-white hover:bg-repressurizer-surface-hover"
           >
             <Robot size={16} />
@@ -318,7 +317,7 @@ export function Header() {
           {/* Achievements */}
           <button
             onClick={() => setShowAchievements(true)}
-            title="Achievements"
+            title={t("toolbar.achievements")}
             className="btn-press flex items-center justify-center w-8 h-8 rounded-lg text-repressurizer-text-muted transition-colors hover:text-white hover:bg-repressurizer-surface-hover"
           >
             <Trophy size={16} />
@@ -327,7 +326,7 @@ export function Header() {
           {/* Wishlist */}
           <button
             onClick={() => setShowWishlist(true)}
-            title="Wishlist"
+            title={t("toolbar.wishlist")}
             className="btn-press flex items-center justify-center w-8 h-8 rounded-lg text-repressurizer-text-muted transition-colors hover:text-white hover:bg-repressurizer-surface-hover"
           >
             <BookmarkSimple size={16} />
@@ -336,7 +335,7 @@ export function Header() {
           {/* Friend Compare */}
           <button
             onClick={() => setShowFriendCompare(true)}
-            title="Friend Comparison"
+            title={t("toolbar.friendCompare")}
             className="btn-press flex items-center justify-center w-8 h-8 rounded-lg text-repressurizer-text-muted transition-colors hover:text-white hover:bg-repressurizer-surface-hover"
           >
             <UsersThree size={16} />
@@ -345,7 +344,7 @@ export function Header() {
           {/* What to Play Next */}
           <button
             onClick={() => setShowRecommend(true)}
-            title="What to Play Next"
+            title={t("toolbar.recommend")}
             className="btn-press flex items-center justify-center w-8 h-8 rounded-lg text-repressurizer-text-muted transition-colors hover:text-white hover:bg-repressurizer-surface-hover"
           >
             <GameController size={16} />
@@ -354,7 +353,7 @@ export function Header() {
           {/* Play History */}
           <button
             onClick={() => setShowTimeline(true)}
-            title="Play History Timeline"
+            title={t("toolbar.timeline")}
             className="btn-press flex items-center justify-center w-8 h-8 rounded-lg text-repressurizer-text-muted transition-colors hover:text-white hover:bg-repressurizer-surface-hover"
           >
             <CalendarBlank size={16} />
@@ -363,7 +362,7 @@ export function Header() {
           {/* Stats */}
           <button
             onClick={() => setShowStats(true)}
-            title="Statistics"
+            title={t("toolbar.stats")}
             className="btn-press flex items-center justify-center w-8 h-8 rounded-lg text-repressurizer-text-muted transition-colors hover:text-white hover:bg-repressurizer-surface-hover"
           >
             <ChartBar size={16} />
@@ -372,7 +371,7 @@ export function Header() {
           {/* Export */}
           <button
             onClick={() => openExportDialog()}
-            title="Export"
+            title={t("toolbar.export")}
             className="btn-press flex items-center justify-center w-8 h-8 rounded-lg text-repressurizer-text-muted transition-colors hover:text-white hover:bg-repressurizer-surface-hover"
           >
             <Export size={16} />
@@ -381,7 +380,7 @@ export function Header() {
           {/* Settings */}
           <button
             onClick={() => setShowSettings(true)}
-            title="Settings"
+            title={t("toolbar.settings")}
             className="btn-press flex items-center justify-center w-8 h-8 rounded-lg text-repressurizer-text-muted transition-colors hover:text-white hover:bg-repressurizer-surface-hover"
           >
             <GearSix size={16} />
@@ -389,8 +388,8 @@ export function Header() {
         </div>
       </header>
 
-      {showAchievements && <AchievementsPage onClose={() => setShowAchievements(false)} />}
-      {showWishlist && <WishlistPage onClose={() => setShowWishlist(false)} />}
+      {showAchievements && <CompletionPage onClose={() => setShowAchievements(false)} />}
+      {showWishlist && <SavedListPage onClose={() => setShowWishlist(false)} />}
       {showFriendCompare && <FriendCompareDialog onClose={() => setShowFriendCompare(false)} />}
       {showStats && <StatsPage onClose={() => setShowStats(false)} />}
       {showAutoCat && <AutoCategorizeDialog onClose={() => setShowAutoCat(false)} />}
@@ -421,6 +420,7 @@ function SavePreviewDialog({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const t = useT();
   const hasDetails =
     preview.addedCollections.length > 0 ||
     preview.removedCollections.length > 0 ||
@@ -430,45 +430,45 @@ function SavePreviewDialog({
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-6 backdrop-blur-sm">
       <div className="w-full max-w-xl animate-fade-in rounded-2xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_24px_64px_rgba(0,0,0,0.6)]">
         <div className="border-b border-repressurizer-border px-5 py-4">
-          <h2 className="text-base font-semibold tracking-tight text-white">Review Steam collection changes</h2>
+          <h2 className="text-base font-semibold tracking-tight text-white">{t("savePreview.title")}</h2>
           <p className="mt-1 text-xs leading-relaxed text-repressurizer-text-faint">
-            Repressurizer will create a backup, then write these collection changes. Close Steam before continuing.
+            {t("savePreview.desc")}
           </p>
         </div>
 
         <div className="max-h-[55vh] space-y-4 overflow-auto p-5">
           <div className="grid grid-cols-4 gap-2">
-            <PreviewMetric label="New collections" value={preview.addedCollections.length} />
-            <PreviewMetric label="Removed" value={preview.removedCollections.length} danger />
-            <PreviewMetric label="Games added" value={preview.addedGamesCount} />
-            <PreviewMetric label="Games removed" value={preview.removedGamesCount} danger />
+            <PreviewMetric label={t("savePreview.metric.newCollections")} value={preview.addedCollections.length} />
+            <PreviewMetric label={t("savePreview.metric.removedCollections")} value={preview.removedCollections.length} danger />
+            <PreviewMetric label={t("savePreview.metric.gamesAdded")} value={preview.addedGamesCount} />
+            <PreviewMetric label={t("savePreview.metric.gamesRemoved")} value={preview.removedGamesCount} danger />
           </div>
 
           {!hasDetails && (
             <p className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3 text-sm text-repressurizer-text-muted">
-              No collection differences were detected, but the library is marked dirty. Saving will still refresh the Steam collection file and create a backup.
+              {t("savePreview.noDiff")}
             </p>
           )}
 
           {preview.addedCollections.length > 0 && (
-            <PreviewList title="Collections to add" items={preview.addedCollections} />
+            <PreviewList title={t("savePreview.collectionsToAdd")} items={preview.addedCollections} />
           )}
           {preview.removedCollections.length > 0 && (
-            <PreviewList title="Collections to remove" items={preview.removedCollections} danger />
+            <PreviewList title={t("savePreview.collectionsToRemove")} items={preview.removedCollections} danger />
           )}
 
           {preview.changedCollections.slice(0, 10).map((change) => (
             <div key={change.collection} className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3">
               <p className="truncate text-sm font-medium text-white">{change.collection}</p>
               <div className="mt-2 grid gap-2 text-xs md:grid-cols-2">
-                <ChangeSample label="Add" items={change.added} />
-                <ChangeSample label="Remove" items={change.removed} danger />
+                <ChangeSample label={t("savePreview.add")} items={change.added} danger={false} />
+                <ChangeSample label={t("savePreview.remove")} items={change.removed} danger />
               </div>
             </div>
           ))}
           {preview.changedCollections.length > 10 && (
             <p className="text-xs text-repressurizer-text-faint">
-              {preview.changedCollections.length - 10} more changed collections are not shown.
+              {t("savePreview.moreShown", { count: preview.changedCollections.length - 10 })}
             </p>
           )}
         </div>
@@ -479,14 +479,14 @@ function SavePreviewDialog({
             disabled={saving}
             className="btn-press rounded-lg px-4 py-2 text-sm text-repressurizer-text-muted transition-colors hover:bg-repressurizer-surface-hover hover:text-white disabled:opacity-50"
           >
-            Cancel
+            {t("category.cancel")}
           </button>
           <button
             onClick={onConfirm}
             disabled={saving}
             className="btn-press rounded-lg bg-repressurizer-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-repressurizer-accent-hover disabled:opacity-50"
           >
-            {saving ? "Saving..." : "Create backup and save"}
+            {saving ? t("header.saving") : t("savePreview.confirm")}
           </button>
         </div>
       </div>
@@ -506,25 +506,27 @@ function PreviewMetric({ label, value, danger = false }: { label: string; value:
 }
 
 function PreviewList({ title, items, danger = false }: { title: string; items: string[]; danger?: boolean }) {
+  const t = useT();
   return (
     <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3">
       <p className={`text-xs font-medium ${danger ? "text-repressurizer-danger" : "text-repressurizer-accent"}`}>{title}</p>
       <p className="mt-1 truncate text-sm text-repressurizer-text-muted" title={items.join(", ")}>
         {items.slice(0, 8).join(", ")}
-        {items.length > 8 ? `, +${items.length - 8} more` : ""}
+        {items.length > 8 ? `, ${t("common.moreCount", { count: items.length - 8 })}` : ""}
       </p>
     </div>
   );
 }
 
 function ChangeSample({ label, items, danger = false }: { label: string; items: string[]; danger?: boolean }) {
+  const t = useT();
   if (items.length === 0) {
-    return <p className="text-repressurizer-text-faint">{label}: none</p>;
+    return <p className="text-repressurizer-text-faint">{label}: {t("savePreview.none")}</p>;
   }
   return (
     <p className={danger ? "text-repressurizer-danger/80" : "text-repressurizer-accent/90"} title={items.join(", ")}>
       {label}: {items.slice(0, 4).join(", ")}
-      {items.length > 4 ? `, +${items.length - 4} more` : ""}
+      {items.length > 4 ? `, ${t("common.moreCount", { count: items.length - 4 })}` : ""}
     </p>
   );
 }

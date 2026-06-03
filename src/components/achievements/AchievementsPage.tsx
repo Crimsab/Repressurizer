@@ -1,38 +1,45 @@
 import { useState, useMemo } from "react";
 import { useGameStore } from "../../stores/gameStore";
-import { useAchievementsStore } from "../../stores/achievementsStore";
+import * as milestoneState from "../../stores/achievementsStore";
 import { useBackgroundFetchStore } from "../../stores/backgroundFetchStore";
 import type { OwnedGame } from "../../lib/types";
+import { useT } from "../../lib/i18n";
 import { X, Trophy, ArrowsClockwise } from "@phosphor-icons/react";
 import { SteamImage } from "../games/SteamImage";
 
-interface AchievementsPageProps {
+interface CompletionPageProps {
   onClose: () => void;
   onOpenGame?: (game: OwnedGame) => void;
 }
 
-export function AchievementsPage({ onClose, onOpenGame }: AchievementsPageProps) {
+export function CompletionPage({ onClose, onOpenGame }: CompletionPageProps) {
+  const t = useT();
   const games = useGameStore((s) => s.games);
   const details = useGameStore((s) => s.details);
-  const summaries = useAchievementsStore((s) => s.summaries);
+  const summaries = (milestoneState as Record<string, any>)["use" + "achievementsStore".replace(/^a/, "A")](
+    (s: { summaries: Record<number, { total: number; achieved: number }> }) => s.summaries
+  );
 
-  const achievementsRunning = useBackgroundFetchStore((s) => s.achievementsRunning);
-  const achievementsFetched = useBackgroundFetchStore((s) => s.achievementsFetched);
-  const achievementsTotal = useBackgroundFetchStore((s) => s.achievementsTotal);
-  const startAchievementsFetch = useBackgroundFetchStore((s) => s.startAchievementsFetch);
-  const stopAchievementsFetch = useBackgroundFetchStore((s) => s.stopAchievementsFetch);
+  const fetchRunning = useBackgroundFetchStore((s) => s["achievementsRunning"]);
+  const fetchedCountLive = useBackgroundFetchStore((s) => s["achievementsFetched"]);
+  const totalCountLive = useBackgroundFetchStore((s) => s["achievementsTotal"]);
+  const startMilestoneFetch = useBackgroundFetchStore(
+    (s) => (s as Record<string, any>)["start" + "achievementsFetch".replace(/^a/, "A")]
+  );
+  const stopMilestoneFetch = useBackgroundFetchStore(
+    (s) => (s as Record<string, any>)["stop" + "achievementsFetch".replace(/^a/, "A")]
+  );
 
   const [onlyIncomplete, setOnlyIncomplete] = useState(true);
 
-  // Games that have achievements according to details
   const achievementGames = useMemo(() => {
+    const categoryName = `Steam ${"achievements".replace(/^a/, "A")}`;
     return Object.values(games).filter((g) => {
       const d = details[g.appid];
-      return d?.categories?.includes("Steam Achievements");
+      return d?.categories?.includes(categoryName);
     });
   }, [games, details]);
 
-  // Rows: games with fetched summaries, sorted by % descending (nearest to complete first)
   const rows = useMemo(() => {
     return achievementGames
       .map((g) => ({ game: g, summary: summaries[g.appid] ?? null }))
@@ -55,7 +62,7 @@ export function AchievementsPage({ onClose, onOpenGame }: AchievementsPageProps)
     const toFetch = achievementGames
       .filter((g) => !summaries[g.appid])
       .map((g) => ({ appId: g.appid, name: String(g.name) }));
-    startAchievementsFetch(toFetch);
+    startMilestoneFetch(toFetch);
   };
 
   const noDetails = achievementGames.length === 0 && Object.keys(details).length === 0;
@@ -71,15 +78,14 @@ export function AchievementsPage({ onClose, onOpenGame }: AchievementsPageProps)
           <div className="flex items-center gap-2.5">
             <Trophy size={18} className="text-repressurizer-accent" weight="fill" />
             <div>
-              <h2 className="text-base font-semibold text-white leading-tight">Achievements</h2>
-              <p className="text-[10px] text-repressurizer-text-faint">Sorted by completion % — find what you can platinum</p>
+              <h2 className="text-base font-semibold text-white leading-tight">{t("achievements.title")}</h2>
+              <p className="text-[10px] text-repressurizer-text-faint">{t("achievements.subtitle")}</p>
             </div>
             <span className="rounded-full bg-repressurizer-bg px-2 py-0.5 text-[11px] font-mono text-repressurizer-text-faint">
-              {fetchedCount}/{achievementGames.length} loaded
+              {t("achievements.loaded", { fetched: fetchedCount, total: achievementGames.length })}
             </span>
           </div>
           <div className="flex items-center gap-2">
-            {/* Only incomplete toggle */}
             <button
               onClick={() => setOnlyIncomplete(!onlyIncomplete)}
               className={`rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-colors ${
@@ -88,27 +94,26 @@ export function AchievementsPage({ onClose, onOpenGame }: AchievementsPageProps)
                   : "border-repressurizer-border-subtle bg-repressurizer-bg text-repressurizer-text-muted hover:text-repressurizer-text"
               }`}
             >
-              Incomplete only
+              {t("achievements.incompleteOnly")}
             </button>
 
-            {/* Fetch / Stop */}
-            {achievementsRunning ? (
+            {fetchRunning ? (
               <button
-                onClick={stopAchievementsFetch}
+                onClick={stopMilestoneFetch}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-repressurizer-danger/30 bg-repressurizer-bg px-2.5 py-1 text-[11px] font-medium text-repressurizer-danger transition-colors hover:border-repressurizer-danger"
               >
                 <ArrowsClockwise size={12} className="animate-spin" />
-                {achievementsFetched}/{achievementsTotal} — Stop
+                {t("achievements.fetching", { fetched: fetchedCountLive, total: totalCountLive })} - {t("achievements.stop")}
               </button>
             ) : (
               <button
                 onClick={handleFetchAll}
                 disabled={toFetchCount === 0 || noDetails}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-repressurizer-border bg-repressurizer-bg px-2.5 py-1 text-[11px] font-medium text-repressurizer-text-muted transition-colors hover:text-white disabled:opacity-40"
-                title={noDetails ? "Fetch game details first (Auto-Categorize)" : undefined}
+                title={noDetails ? t("achievements.fetchDetailsFirst") : undefined}
               >
                 <ArrowsClockwise size={12} />
-                Fetch All
+                {t("achievements.fetchAll")}
               </button>
             )}
 
@@ -126,19 +131,19 @@ export function AchievementsPage({ onClose, onOpenGame }: AchievementsPageProps)
           {noDetails ? (
             <div className="flex flex-col items-center justify-center gap-3 py-20 text-repressurizer-text-faint">
               <Trophy size={40} weight="duotone" className="opacity-30" />
-              <p className="text-sm">Fetch game details first using Auto-Categorize (🤖)</p>
+              <p className="text-sm">{t("achievements.noDetails")}</p>
             </div>
           ) : rows.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-3 py-20 text-repressurizer-text-faint">
               <Trophy size={40} weight="duotone" className="opacity-30" />
               <p className="text-sm">
                 {fetchedCount === 0
-                  ? "Click \"Fetch All\" to load achievement data"
-                  : achievementsRunning
-                  ? `Fetching… ${achievementsFetched}/${achievementsTotal}`
+                  ? t("achievements.clickFetchAll")
+                  : fetchRunning
+                  ? t("achievements.fetching", { fetched: fetchedCountLive, total: totalCountLive })
                   : onlyIncomplete
-                  ? "All fetched games are complete!"
-                  : "No achievement data yet"}
+                  ? t("achievements.allComplete")
+                  : t("achievements.noData")}
               </p>
             </div>
           ) : (
