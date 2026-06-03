@@ -79,7 +79,7 @@ export interface AchievementSummary {
 }
 
 export type AppTheme = "dark" | "dim" | "light";
-export type AppLocale = "en" | "it";
+export type AppLocale = string;
 
 export interface AppSettings {
   steamPath: string;

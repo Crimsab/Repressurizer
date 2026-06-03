@@ -4,10 +4,12 @@ import { STATUS_META, type GameStatus } from "../../stores/statusStore";
 import { useTagsStore } from "../../stores/tagsStore";
 import { useHltbStore } from "../../stores/hltbStore";
 import { Funnel, SlidersHorizontal, X } from "@phosphor-icons/react";
+import { useT, type TranslationKey } from "../../lib/i18n";
 
 const STATUS_FILTER_OPTIONS: GameStatus[] = ["playing", "beaten", "completed", "abandoned"];
 
 export function FilterBar() {
+  const t = useT();
   const filters = useGameStore((s) => s.filters);
   const setFilters = useGameStore((s) => s.setFilters);
   const resetFilters = useGameStore((s) => s.resetFilters);
@@ -44,12 +46,12 @@ export function FilterBar() {
     <div className="flex items-center gap-2 border-b border-repressurizer-border-subtle bg-repressurizer-bg/50 px-4 py-1.5 flex-wrap">
       <div className="flex items-center gap-1 shrink-0 text-repressurizer-text-faint">
         <Funnel size={13} weight={hasActiveFilters ? "fill" : "regular"} className={hasActiveFilters ? "text-repressurizer-accent" : ""} />
-        <span className="text-[11px] uppercase tracking-wider font-medium">Filters</span>
+        <span className="text-[11px] uppercase tracking-wider font-medium">{t("filter.title")}</span>
       </div>
 
       {/* Playtime range */}
       <div className="flex items-center gap-1.5 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-bg px-2 py-1">
-        <span className="text-[11px] text-repressurizer-text-faint">Hours:</span>
+        <span className="text-[11px] text-repressurizer-text-faint">{t("filter.hours")}</span>
         <input
           type="number"
           min={0}
@@ -78,7 +80,7 @@ export function FilterBar() {
             : "border-repressurizer-border-subtle bg-repressurizer-bg text-repressurizer-text-muted hover:border-repressurizer-border hover:text-repressurizer-text"
         }`}
       >
-        Unplayed only
+        {t("filter.unplayedOnly")}
       </button>
 
       {/* Status filter */}
@@ -96,7 +98,7 @@ export function FilterBar() {
                   : "border-repressurizer-border-subtle bg-repressurizer-bg text-repressurizer-text-muted hover:border-repressurizer-border hover:text-repressurizer-text"
               }`}
             >
-              {meta.label}
+              {t(`status.${s}` as TranslationKey)}
             </button>
           );
         })}
@@ -105,7 +107,7 @@ export function FilterBar() {
       {/* Tag filter */}
       {allTags.length > 0 && (
         <div className="flex items-center gap-1 flex-wrap">
-          <span className="text-[11px] text-repressurizer-text-faint shrink-0">Tags:</span>
+          <span className="text-[11px] text-repressurizer-text-faint shrink-0">{t("filter.tags")}</span>
           {allTags.map((tag) => {
             const active = filters.tagFilter.includes(tag);
             return (
@@ -128,7 +130,7 @@ export function FilterBar() {
       {/* HLTB duration filter — only shown when there's HLTB data */}
       {hltbCachedCount > 0 && (
         <div className="flex items-center gap-1.5 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-bg px-2 py-1">
-          <span className="text-[11px] text-repressurizer-text-faint">HLTB:</span>
+          <span className="text-[11px] text-repressurizer-text-faint">{t("filter.hltb")}</span>
           <input
             type="number"
             min={0}
@@ -159,7 +161,7 @@ export function FilterBar() {
         }`}
       >
         <SlidersHorizontal size={12} />
-        Advanced
+        {t("filter.advanced")}
       </button>
 
       {/* Clear */}
@@ -169,7 +171,7 @@ export function FilterBar() {
           className="ml-auto flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] text-repressurizer-text-muted transition-colors hover:text-repressurizer-danger"
         >
           <X size={11} weight="bold" />
-          Clear
+          {t("filter.clear")}
         </button>
       )}
 
@@ -213,6 +215,7 @@ function AdvancedFiltersDialog({
   resetFilters: () => void;
   onClose: () => void;
 }) {
+  const t = useT();
   const togglePlatform = (platform: FilterState["platforms"][number]) => {
     setFilters({
       platforms: filters.platforms.includes(platform)
@@ -232,7 +235,7 @@ function AdvancedFiltersDialog({
         <div className="flex items-center justify-between border-b border-repressurizer-border px-5 py-3">
           <div className="flex items-center gap-2">
             <SlidersHorizontal size={15} className="text-repressurizer-accent" />
-            <h2 className="text-sm font-semibold tracking-tight text-white">Advanced Filters</h2>
+            <h2 className="text-sm font-semibold tracking-tight text-white">{t("filter.advanced.title")}</h2>
           </div>
           <button
             onClick={onClose}
@@ -244,17 +247,17 @@ function AdvancedFiltersDialog({
 
         <div className="max-h-[72vh] space-y-5 overflow-auto p-5">
           <section className="space-y-2">
-            <SectionTitle>Release</SectionTitle>
+            <SectionTitle>{t("filter.release")}</SectionTitle>
             <div className="grid grid-cols-2 gap-2">
               <NumberField
-                label="Min year"
+                label={t("filter.minYear")}
                 value={filters.minReleaseYear}
                 min={1970}
                 max={2100}
                 onChange={(value) => setFilters({ minReleaseYear: value })}
               />
               <NumberField
-                label="Max year"
+                label={t("filter.maxYear")}
                 value={filters.maxReleaseYear}
                 min={1970}
                 max={2100}
@@ -264,24 +267,24 @@ function AdvancedFiltersDialog({
           </section>
 
           <section className="space-y-2">
-            <SectionTitle>Scores</SectionTitle>
+            <SectionTitle>{t("filter.scores")}</SectionTitle>
             <div className="grid grid-cols-2 gap-2">
               <NumberField
-                label="Min Metacritic"
+                label={t("filter.minMetacritic")}
                 value={filters.minMetacritic}
                 min={0}
                 max={100}
                 onChange={(value) => setFilters({ minMetacritic: value })}
               />
               <NumberField
-                label="Max Metacritic"
+                label={t("filter.maxMetacritic")}
                 value={filters.maxMetacritic}
                 min={0}
                 max={100}
                 onChange={(value) => setFilters({ maxMetacritic: value })}
               />
               <NumberField
-                label="Min achievements"
+                label={t("filter.minAchievements")}
                 value={filters.minAchievementPct}
                 min={0}
                 max={100}
@@ -289,7 +292,7 @@ function AdvancedFiltersDialog({
                 onChange={(value) => setFilters({ minAchievementPct: value })}
               />
               <NumberField
-                label="Max achievements"
+                label={t("filter.maxAchievements")}
                 value={filters.maxAchievementPct}
                 min={0}
                 max={100}
@@ -300,7 +303,7 @@ function AdvancedFiltersDialog({
           </section>
 
           <section className="space-y-2">
-            <SectionTitle>Platform</SectionTitle>
+            <SectionTitle>{t("filter.platform")}</SectionTitle>
             <div className="flex flex-wrap gap-2">
               {(["windows", "mac", "linux"] as const).map((platform) => (
                 <ToggleChip
@@ -315,37 +318,37 @@ function AdvancedFiltersDialog({
           </section>
 
           <section className="space-y-2">
-            <SectionTitle>Library State</SectionTitle>
+            <SectionTitle>{t("filter.libraryState")}</SectionTitle>
             <div className="flex flex-wrap gap-2">
               <ToggleChip
                 active={filters.onlyFamilyShared}
                 onClick={() => setFilters({ onlyFamilyShared: !filters.onlyFamilyShared })}
               >
-                Family shared
+                {t("filter.familyShared")}
               </ToggleChip>
               <ToggleChip
                 active={filters.onlyPossibleDuplicates}
                 onClick={() => setFilters({ onlyPossibleDuplicates: !filters.onlyPossibleDuplicates })}
               >
-                Possible duplicates
+                {t("filter.possibleDuplicates")}
               </ToggleChip>
               <ToggleChip
                 active={filters.onlyCollectionOnly}
                 onClick={() => setFilters({ onlyCollectionOnly: !filters.onlyCollectionOnly })}
               >
-                Local collection only
+                {t("filter.localCollectionOnly")}
               </ToggleChip>
               <ToggleChip
                 active={filters.onlyMissingDetails}
                 onClick={() => setFilters({ onlyMissingDetails: !filters.onlyMissingDetails })}
               >
-                Missing metadata
+                {t("filter.missingMetadata")}
               </ToggleChip>
               <ToggleChip
                 active={filters.onlyDelisted}
                 onClick={() => setFilters({ onlyDelisted: !filters.onlyDelisted })}
               >
-                Likely delisted
+                {t("filter.likelyDelisted")}
               </ToggleChip>
             </div>
           </section>
@@ -356,13 +359,13 @@ function AdvancedFiltersDialog({
             onClick={resetFilters}
             className="btn-press rounded-lg px-3 py-1.5 text-xs font-medium text-repressurizer-text-muted transition-colors hover:text-repressurizer-danger"
           >
-            Clear all
+            {t("filter.advanced.clearAll")}
           </button>
           <button
             onClick={onClose}
             className="btn-press rounded-lg bg-repressurizer-accent px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-repressurizer-accent-hover"
           >
-            Done
+            {t("filter.advanced.done")}
           </button>
         </div>
       </div>

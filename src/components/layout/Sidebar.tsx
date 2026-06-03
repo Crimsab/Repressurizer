@@ -224,7 +224,7 @@ export function Sidebar() {
       <div
         onMouseDown={handleResizeMouseDown}
         className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-repressurizer-accent/30 transition-colors z-10"
-        title="Drag to resize"
+        title={t("sidebar.dragResize")}
       />
 
       <div className="flex-1 overflow-auto px-2 py-2">
@@ -244,7 +244,7 @@ export function Sidebar() {
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
               <span className="absolute top-1.5 right-1.5 rounded-md bg-repressurizer-accent px-1.5 py-0.5 text-[8px] font-bold text-black tracking-wide uppercase">
-                Recent
+                {t("sidebar.recent")}
               </span>
             </div>
             <div className="px-2.5 py-2">
@@ -253,7 +253,7 @@ export function Sidebar() {
                 <Clock size={9} className="text-repressurizer-accent shrink-0" />
                 <span className="text-repressurizer-text">{(nowPlayingGame.playtime_forever / 60).toFixed(1)}h</span>
                 <span className="text-repressurizer-border">·</span>
-                {formatTimeAgo(nowPlayingGame.rtime_last_played)}
+                {formatTimeAgo(nowPlayingGame.rtime_last_played, t)}
               </p>
             </div>
           </button>
@@ -264,7 +264,7 @@ export function Sidebar() {
           active={activeCategory === "all"}
           onClick={() => setActiveCategory("all")}
           icon={<GameController size={15} weight={activeCategory === "all" ? "fill" : "duotone"} />}
-          label="All"
+          label={t("sidebar.all")}
           count={gameCount}
         />
 
@@ -273,7 +273,7 @@ export function Sidebar() {
           active={activeCategory === "uncategorized"}
           onClick={() => setActiveCategory("uncategorized")}
           icon={<Question size={15} weight={activeCategory === "uncategorized" ? "fill" : "duotone"} />}
-          label="Uncategorized"
+          label={t("sidebar.uncategorized")}
           count={uncategorizedCount}
         />
 
@@ -282,26 +282,26 @@ export function Sidebar() {
             <div className="my-2 mx-2 border-t border-repressurizer-border-subtle" />
 
             {/* Smart Lists */}
-            <p className="mb-1 px-2.5 text-[10px] uppercase tracking-wider text-repressurizer-text-faint font-medium">Smart Lists</p>
+            <p className="mb-1 px-2.5 text-[10px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("sidebar.smartLists")}</p>
             <SidebarItem
               active={activeCategory === "backlog"}
               onClick={() => setActiveCategory("backlog")}
               icon={<Stack size={15} weight={activeCategory === "backlog" ? "fill" : "duotone"} />}
-              label="Backlog"
+              label={t("sidebar.backlog")}
               count={backlogCount}
             />
             <SidebarItem
               active={activeCategory === "recently-played"}
               onClick={() => setActiveCategory("recently-played")}
               icon={<Lightning size={15} weight={activeCategory === "recently-played" ? "fill" : "duotone"} />}
-              label="Recently Played"
+              label={t("sidebar.recentlyPlayed")}
               count={recentlyPlayedCount}
             />
             <SidebarItem
               active={activeCategory === "steam-family"}
               onClick={() => setActiveCategory("steam-family")}
               icon={<UsersThree size={15} weight={activeCategory === "steam-family" ? "fill" : "duotone"} />}
-              label="Steam Family"
+              label={t("sidebar.steamFamily")}
               count={sharedFamilyCount}
             />
           </>
@@ -423,7 +423,7 @@ export function Sidebar() {
                 )}
                 <span className="flex-1 truncate">{col.name}</span>
                 <span className="font-mono text-[10px] text-repressurizer-text-faint tabular-nums pr-1">
-                  {col.is_dynamic ? "auto" : col.added.length}
+                  {col.is_dynamic ? t("sidebar.auto") : col.added.length}
                 </span>
               </button>
             )}
@@ -437,7 +437,7 @@ export function Sidebar() {
               active={activeCategory === "hidden"}
               onClick={() => setActiveCategory("hidden")}
               icon={<EyeSlash size={15} weight={activeCategory === "hidden" ? "fill" : "duotone"} />}
-              label="Hidden"
+              label={t("sidebar.hidden")}
               count={hiddenCount}
             />
           </>
@@ -499,12 +499,12 @@ export function Sidebar() {
               onBlur={() => {
                 if (!newCatName.trim()) setShowNewCat(false);
               }}
-              placeholder="Category name"
+              placeholder={t("sidebar.categoryName")}
               className="min-w-0 flex-1 rounded-lg border border-repressurizer-border bg-repressurizer-bg px-3 py-1.5 text-sm text-repressurizer-text placeholder:text-repressurizer-text-faint focus:border-repressurizer-accent focus:outline-none"
             />
             <button
               type="submit"
-              aria-label="Create category"
+              aria-label={t("sidebar.createCategory")}
               className="btn-press flex h-8 w-9 shrink-0 items-center justify-center rounded-lg bg-repressurizer-accent text-sm text-white hover:bg-repressurizer-accent-hover"
             >
               <Plus size={14} weight="bold" />
@@ -516,7 +516,7 @@ export function Sidebar() {
             className="btn-press flex w-full items-center justify-center gap-1.5 rounded-lg border border-dashed border-repressurizer-border px-3 py-2 text-xs text-repressurizer-text-muted transition-colors hover:border-repressurizer-accent hover:text-repressurizer-accent"
           >
             <Plus size={12} weight="bold" />
-            New Category
+            {t("sidebar.newCategory")}
           </button>
         )}
       </div>
@@ -627,11 +627,11 @@ export function Sidebar() {
   );
 }
 
-function formatTimeAgo(unixSecs: number): string {
+function formatTimeAgo(unixSecs: number, t: ReturnType<typeof useT>): string {
   const diffSecs = Math.floor(Date.now() / 1000) - unixSecs;
-  if (diffSecs < 3600) return `${Math.floor(diffSecs / 60)}m ago`;
-  if (diffSecs < 86400) return `${Math.floor(diffSecs / 3600)}h ago`;
-  return `${Math.floor(diffSecs / 86400)}d ago`;
+  if (diffSecs < 3600) return t("time.minutesAgo", { count: Math.floor(diffSecs / 60) });
+  if (diffSecs < 86400) return t("time.hoursAgo", { count: Math.floor(diffSecs / 3600) });
+  return t("time.daysAgo", { count: Math.floor(diffSecs / 86400) });
 }
 
 function SidebarItem({
@@ -769,14 +769,14 @@ function CategoryContextMenu({
           className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-repressurizer-text hover:bg-repressurizer-surface-hover transition-colors"
         >
           <PencilSimple size={14} className="text-repressurizer-text-muted" />
-          Rename
+          {t("category.rename")}
         </button>
         <button
           onClick={() => onDelete(collection)}
           className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-repressurizer-danger hover:bg-repressurizer-danger/10 transition-colors"
         >
           <TrashSimple size={14} />
-          Delete
+          {t("category.delete")}
         </button>
       </div>
     </div>
@@ -792,25 +792,26 @@ function DeleteConfirmDialog({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
+  const t = useT();
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
       <div className="w-full max-w-xs animate-fade-in rounded-xl border border-repressurizer-border bg-repressurizer-surface p-5 shadow-[0_16px_48px_rgba(0,0,0,0.5)]">
-        <p className="mb-1 text-sm font-medium text-white">Delete category?</p>
+        <p className="mb-1 text-sm font-medium text-white">{t("category.deleteConfirm")}</p>
         <p className="mb-5 text-sm text-repressurizer-text-muted leading-relaxed">
-          "{name}" will be removed. Games won't be deleted.
+          {t("category.deleteDesc", { name })}
         </p>
         <div className="flex justify-end gap-2">
           <button
             onClick={onCancel}
             className="btn-press rounded-lg px-3.5 py-1.5 text-sm text-repressurizer-text-muted transition-colors hover:text-white hover:bg-repressurizer-surface-hover"
           >
-            Cancel
+            {t("category.cancel")}
           </button>
           <button
             onClick={onConfirm}
             className="btn-press rounded-lg bg-repressurizer-danger px-3.5 py-1.5 text-sm text-white transition-colors hover:bg-repressurizer-danger/80"
           >
-            Delete
+            {t("category.delete")}
           </button>
         </div>
       </div>

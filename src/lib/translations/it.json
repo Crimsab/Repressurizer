@@ -1,7 +1,4 @@
-import type en from "./en";
-
-const it: Record<keyof typeof en, string> = {
-  // App
+{
   "app.name": "Repressurizer",
   "app.subtitle": "Gestore Libreria Steam",
   "app.loading": "Caricamento libreria",
@@ -10,8 +7,6 @@ const it: Record<keyof typeof en, string> = {
   "app.error.tryAgain": "Riprova",
   "app.error.loadFailed": "Caricamento libreria fallito",
   "app.error.resetSetup": "Reset e Riconfigura",
-
-  // Setup
   "setup.findSteam": "Trova Steam",
   "setup.findSteam.desc": "Troveremo la tua installazione Steam automaticamente.",
   "setup.autoDetect": "Rileva Steam",
@@ -26,8 +21,6 @@ const it: Record<keyof typeof en, string> = {
   "setup.apiKey.link": "Ottieni la tua chiave API qui",
   "setup.connect": "Connetti e Carica Libreria",
   "setup.loadingLibrary": "Caricamento libreria...",
-
-  // Header
   "header.search": "Cerca giochi...",
   "header.gridView": "Vista griglia",
   "header.listView": "Vista lista",
@@ -36,8 +29,6 @@ const it: Record<keyof typeof en, string> = {
   "header.undo": "Annulla (Ctrl+Z)",
   "header.redo": "Ripristina (Ctrl+Y)",
   "header.discard": "Scarta tutte le modifiche",
-
-  // Sort
   "sort.name": "Nome",
   "sort.playtime": "Ore Giocate",
   "sort.lastPlayed": "Ultimo Giocato",
@@ -50,8 +41,6 @@ const it: Record<keyof typeof en, string> = {
   "sort.hint.metacritic": "richiede dettagli",
   "sort.hint.hltb": "ore storia principale",
   "sort.hint.achievements": "% completamento",
-
-  // Sidebar
   "sidebar.all": "Tutti",
   "sidebar.uncategorized": "Non categorizzati",
   "sidebar.smartLists": "Liste Smart",
@@ -68,32 +57,24 @@ const it: Record<keyof typeof en, string> = {
   "sidebar.category.clearSelection": "Deseleziona",
   "sidebar.category.selectedCount": "{count} selezionate",
   "sidebar.category.multiTitle": "{count} categorie selezionate",
-
-  // Filter bar
   "filter.title": "Filtri",
   "filter.hours": "Ore:",
   "filter.unplayedOnly": "Solo non giocati",
   "filter.tags": "Tag:",
   "filter.hltb": "HLTB:",
   "filter.clear": "Pulisci",
-
-  // Status
   "status.playing": "In Gioco",
   "status.beaten": "Finito",
   "status.completed": "Completato",
   "status.abandoned": "Abbandonato",
   "status.clear": "Rimuovi",
   "status.none": "",
-
-  // StatusBar
   "statusbar.games": "{count} giochi",
   "statusbar.categories": "{count} categorie",
   "statusbar.selected": "{count} selezionati",
   "statusbar.addTo": "Aggiungi a…",
   "statusbar.remove": "Rimuovi",
   "statusbar.unsaved": "Modifiche non salvate",
-
-  // Settings
   "settings.title": "Impostazioni",
   "settings.general": "Generale",
   "settings.appearance": "Aspetto",
@@ -128,8 +109,6 @@ const it: Record<keyof typeof en, string> = {
   "settings.reset.confirm": "Resettare tutte le impostazioni? Dovrai riconfigurare.",
   "settings.about": "Gestore Personale Libreria Steam",
   "settings.dynamicNote": "Le categorie dinamiche (con prefisso ~) sono gestite da Steam e sono in sola lettura.",
-
-  // Appearance
   "appearance.accentColor": "Colore Accento",
   "appearance.accentColor.desc": "Cambia il colore di evidenziazione in tutta l'app",
   "appearance.customHex": "Colore hex personalizzato",
@@ -148,8 +127,6 @@ const it: Record<keyof typeof en, string> = {
   "appearance.theme.dim": "Attenuato",
   "appearance.theme.light": "Chiaro",
   "appearance.language": "Lingua",
-
-  // Backups
   "backups.desc": "Un backup viene creato automaticamente ogni volta che salvi.",
   "backups.pinDesc": "I backup vengono creati automaticamente al salvataggio. Segna quelli importanti con la stella.",
   "backups.create": "Crea Backup",
@@ -162,22 +139,16 @@ const it: Record<keyof typeof en, string> = {
   "backups.restored": "Backup ripristinato! Riavvia Steam per vedere le modifiche.",
   "backups.deleted": "Backup eliminato.",
   "backups.created": "Backup manuale creato.",
-
-  // Ignored
   "ignored.desc": "I giochi che non sono riusciti a recuperare i dettagli da Steam {count}+ volte vengono saltati automaticamente. Di solito significa che il gioco è stato rimosso dallo store Steam.",
   "ignored.none": "Nessun gioco ignorato",
   "ignored.failed": "{count}× fallito",
   "ignored.unignore": "Non ignorare",
   "ignored.resetAll": "Reset tutti ({count})",
-
-  // Category context menu
   "category.rename": "Rinomina",
   "category.delete": "Elimina",
   "category.deleteConfirm": "Eliminare la categoria?",
-  "category.deleteDesc": '"{name}" verrà rimossa. I giochi non verranno eliminati.',
+  "category.deleteDesc": "\"{name}\" verrà rimossa. I giochi non verranno eliminati.",
   "category.cancel": "Annulla",
-
-  // Toolbar buttons
   "toolbar.autoCategorize": "Auto-Categorizza",
   "toolbar.achievements": "Achievement",
   "toolbar.wishlist": "Lista Desideri",
@@ -187,13 +158,9 @@ const it: Record<keyof typeof en, string> = {
   "toolbar.stats": "Statistiche",
   "toolbar.export": "Esporta",
   "toolbar.settings": "Impostazioni",
-
-  // Reviews
   "review.title": "Il Tuo Voto",
   "review.noRating": "Non votato",
   "review.clear": "Rimuovi voto",
-
-  // Search
   "search.advanced.hint": "Prova: /final.*vii/i year:2013 hours:>10",
   "search.filter.genre": "genere",
   "search.filter.status": "stato",
@@ -203,8 +170,6 @@ const it: Record<keyof typeof en, string> = {
   "search.filter.pub": "pub",
   "search.filter.year": "anno",
   "search.filter.rating": "voto",
-
-  // Onboarding
   "onboarding.welcome": "Benvenuto in Repressurizer!",
   "onboarding.welcome.desc": "Facciamo un rapido tour del tuo nuovo Gestore Libreria Steam.",
   "onboarding.sidebar": "Sidebar e Categorie",
@@ -221,8 +186,6 @@ const it: Record<keyof typeof en, string> = {
   "onboarding.prev": "Indietro",
   "onboarding.skip": "Salta Tour",
   "onboarding.finish": "Iniziamo",
-
-  // Export dialog
   "export.title": "Esporta",
   "export.what": "Cosa esportare",
   "export.format": "Formato",
@@ -258,8 +221,6 @@ const it: Record<keyof typeof en, string> = {
   "export.scope.stats.desc": "Statistiche libreria, più giocati, distribuzione ore",
   "export.scope.pick": "Categorie selezionate",
   "export.scope.pick.desc": "Esporta le categorie scelte con Ctrl+click nella sidebar",
-
-  // Merge categories
   "merge.title": "Unisci categorie",
   "merge.subtitle": "Unisci {count} categorie in una. I giochi vengono fusi; le categorie duplicate vengono rimosse.",
   "merge.intoExisting": "In esistente",
@@ -272,14 +233,10 @@ const it: Record<keyof typeof en, string> = {
   "merge.needTwo": "Seleziona almeno due categorie",
   "merge.nameRequired": "Inserisci il nome della nuova categoria",
   "merge.pickTarget": "Scegli quale categoria tenere",
-
-  // Duplicate category
   "duplicate.title": "Duplica categoria",
   "duplicate.placeholder": "Nome per la copia",
   "duplicate.cancel": "Annulla",
   "duplicate.confirm": "Duplica",
-
-  // Toast
   "toast.saveFailed": "Salvataggio fallito: {error}",
   "toast.saveSuccess": "Collezioni salvate con successo.",
   "toast.fetchFailed": "Recupero fallito: {error}",
@@ -289,6 +246,125 @@ const it: Record<keyof typeof en, string> = {
   "toast.cacheCleared": "Cache svuotata.",
   "toast.exportSuccess": "Esportazione salvata.",
   "toast.exportFailed": "Esportazione fallita: {error}",
-};
-
-export default it;
+  "common.cancel": "Annulla",
+  "common.delete": "Elimina",
+  "common.none": "nessuno",
+  "common.more": "altri {count}",
+  "time.minutesAgo": "{count} min fa",
+  "time.hoursAgo": "{count} h fa",
+  "time.daysAgo": "{count} g fa",
+  "header.saving": "Salvataggio...",
+  "header.sortAscending": "Crescente",
+  "header.sortDescending": "Decrescente",
+  "savePreview.title": "Rivedi modifiche alle collezioni Steam",
+  "savePreview.desc": "Repressurizer creera un backup e poi scrivera queste modifiche alle collezioni. Chiudi Steam prima di continuare.",
+  "savePreview.newCollections": "Nuove collezioni",
+  "savePreview.removed": "Rimosse",
+  "savePreview.gamesAdded": "Giochi aggiunti",
+  "savePreview.gamesRemoved": "Giochi rimossi",
+  "savePreview.noDiff": "Non sono state rilevate differenze nelle collezioni, ma la libreria risulta modificata. Il salvataggio aggiornera comunque il file delle collezioni Steam e creera un backup.",
+  "savePreview.collectionsToAdd": "Collezioni da aggiungere",
+  "savePreview.collectionsToRemove": "Collezioni da rimuovere",
+  "savePreview.add": "Aggiungi",
+  "savePreview.remove": "Rimuovi",
+  "savePreview.moreChanged": "{count} altre collezioni modificate non sono mostrate.",
+  "savePreview.createBackupAndSave": "Crea backup e salva",
+  "sidebar.dragResize": "Trascina per ridimensionare",
+  "sidebar.steamFamily": "Steam Family",
+  "sidebar.auto": "auto",
+  "sidebar.createCategory": "Crea categoria",
+  "filter.advanced": "Avanzati",
+  "filter.advanced.title": "Filtri avanzati",
+  "filter.advanced.clearAll": "Pulisci tutto",
+  "filter.advanced.done": "Fatto",
+  "filter.release": "Uscita",
+  "filter.scores": "Punteggi",
+  "filter.platform": "Piattaforma",
+  "filter.libraryState": "Stato libreria",
+  "filter.minYear": "Anno min",
+  "filter.maxYear": "Anno max",
+  "filter.minMetacritic": "Metacritic min",
+  "filter.maxMetacritic": "Metacritic max",
+  "filter.minAchievements": "Achievement min",
+  "filter.maxAchievements": "Achievement max",
+  "filter.familyShared": "Condivisi in Family",
+  "filter.possibleDuplicates": "Possibili duplicati",
+  "filter.localCollectionOnly": "Solo collezione locale",
+  "filter.missingMetadata": "Metadati mancanti",
+  "filter.likelyDelisted": "Probabilmente rimossi",
+  "settings.steamFamily": "Steam Family",
+  "settings.family.probeTitle": "Controlla libreria Family condivisa",
+  "settings.family.probeDesc": "Usa prima la chiave Steam Web API salvata. Un webapi_token dello Steam Store salvato viene riutilizzato automaticamente quando Family richiede autenticazione Store.",
+  "settings.family.webApiKey": "Chiave Steam Web API",
+  "settings.family.configured": "configurata",
+  "settings.family.missing": "mancante",
+  "settings.family.storeToken": "Token Store",
+  "settings.family.notSaved": "non salvato",
+  "settings.family.savedDate": "salvato il {date}",
+  "settings.family.validatedDate": "validato il {date}",
+  "settings.family.tokenLabel": "webapi_token Steam Store",
+  "settings.family.tokenPlaceholder": "Incolla token o JSON Steam completo",
+  "settings.family.openTokenPage": "Apri pagina token",
+  "settings.family.tokenHelp": "Apri la pagina mentre sei loggato su Steam, copia il JSON e incollalo qui. Repressurizer estrae solo webapi_token.",
+  "settings.family.saveToken": "Salva token",
+  "settings.family.clearToken": "Cancella token",
+  "settings.family.includeNonGames": "Includi strumenti e app non gioco",
+  "settings.family.includeNonGames.desc": "Nascosti per impostazione predefinita, cosi editor di mappe, SDK e utility non sporcano la lista giochi.",
+  "settings.family.checking": "Controllo...",
+  "settings.family.probe": "Controlla",
+  "settings.family.total": "Totale",
+  "settings.family.owned": "Posseduti",
+  "settings.family.shared": "Condivisi",
+  "settings.family.excluded": "Esclusi",
+  "settings.family.hiddenApps": "{count} strumenti/app non gioco nascosti.",
+  "settings.family.playtimeLoaded": "Ore Family caricate per {count} app.",
+  "settings.family.playtimeUnavailable": "Le ore Family non erano disponibili per questo controllo.",
+  "settings.family.noPlaytime": "Nessuna voce di ore Family restituita.",
+  "settings.family.cachedData": "Dati Family in cache caricati da {date}.",
+  "settings.family.loaded": "Steam Family caricata con {auth}.",
+  "settings.family.failed": "Controllo Steam Family fallito: {error}.{hint}",
+  "settings.family.expiredHint": " Il token Steam Store salvato potrebbe essere scaduto; incollane uno nuovo.",
+  "settings.family.tokenPageOpened": "Pagina token Steam aperta.",
+  "settings.family.tokenPageFailed": "Impossibile aprire la pagina token Steam: {error}",
+  "settings.family.tokenExtracted": "Token Steam Store estratto dal JSON incollato.",
+  "settings.family.tokenRequired": "Incolla prima un webapi_token Steam Store.",
+  "settings.family.tokenSaved": "Token Steam Store salvato.",
+  "settings.family.tokenCleared": "Token Steam Store salvato cancellato.",
+  "settings.steamAppIndex": "Indice app Steam",
+  "settings.steamAppsIndexed": "{count} app Steam indicizzate",
+  "settings.steamAppIndex.lastRefreshed": "Ultimo aggiornamento {date}{suffix}",
+  "settings.steamAppIndex.refreshRecommended": " - aggiornamento consigliato",
+  "settings.steamAppIndex.desc": "Usato per risolvere subito i nomi delle app presenti solo nelle collezioni.",
+  "settings.steamAppIndex.refreshed": "Indice app Steam aggiornato.",
+  "settings.steamAppIndex.failed": "Aggiornamento indice app Steam fallito: {error}",
+  "settings.refreshing": "Aggiornamento...",
+  "settings.refresh": "Aggiorna",
+  "settings.cache.details": "Dettagli",
+  "settings.cache.ignored": "Ignorati",
+  "settings.maintenance": "Manutenzione",
+  "settings.diagnostics.exporting": "Esportazione diagnostica...",
+  "settings.diagnostics.export": "Esporta diagnostica",
+  "settings.diagnostics.desc": "Scrive un report JSON sicuro per la privacy senza chiavi API.",
+  "settings.diagnostics.exported": "Diagnostica esportata.",
+  "settings.diagnostics.failed": "Diagnostica fallita: {error}",
+  "settings.updates.checking": "Controllo aggiornamenti...",
+  "settings.updates.check": "Controlla aggiornamenti",
+  "settings.updates.desc": "Usa il manifest updater dell ultima GitHub Release.",
+  "settings.updates.available": "Aggiornamento {version} disponibile.",
+  "settings.updates.current": "Repressurizer e aggiornato.",
+  "settings.updates.checkFailed": "Controllo aggiornamenti fallito: {error}",
+  "settings.updates.installFailed": "Installazione aggiornamento fallita: {error}",
+  "settings.updates.installing": "Installazione...",
+  "settings.updates.install": "Installa {version}",
+  "settings.backups.loadFailed": "Caricamento backup fallito: {error}",
+  "appearance.pickAccentColor": "Scegli colore accento",
+  "appearance.customAccent": "Accento personalizzato",
+  "appearance.customAccent.desc": "Clicca il campione per scegliere un colore. Il valore hex resta disponibile per precisione.",
+  "appearance.hexValue": "Valore hex",
+  "settings.systemTray": "Area di notifica",
+  "settings.minimizeToTray": "Minimizza nell area di notifica alla chiusura",
+  "settings.minimizeToTray.desc": "Quando chiudi la finestra, Repressurizer verra minimizzato nell area di notifica invece di uscire",
+  "backups.pin": "Fissa",
+  "backups.unpin": "Rimuovi fissato",
+  "backups.preRestore": "pre-ripristino"
+}

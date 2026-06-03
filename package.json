@@ -7,7 +7,8 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "check": "tsc --noEmit",
+    "check": "bun run i18n:check && tsc --noEmit",
+    "i18n:check": "bun scripts/i18n-check.ts",
     "test": "bun run test:unit && bun run test:e2e",
     "test:unit": "vitest run src",
     "test:e2e": "playwright test",
