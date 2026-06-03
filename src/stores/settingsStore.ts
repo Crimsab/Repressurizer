@@ -7,6 +7,11 @@ interface SettingsState extends AppSettings {
   reset: () => void;
 }
 
+function detectSystemLanguage(): string {
+  if (typeof navigator === "undefined") return "en";
+  return navigator.languages?.[0] ?? navigator.language ?? "en";
+}
+
 const defaults: AppSettings = {
   steamPath: "",
   steamId3: "",
@@ -19,7 +24,7 @@ const defaults: AppSettings = {
   accentColor: "",
   sidebarWidth: 224,
   theme: "dark",
-  language: "en",
+  language: detectSystemLanguage(),
   showSmartLists: true,
   showNowPlaying: true,
   showFilterBar: true,

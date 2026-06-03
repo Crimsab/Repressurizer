@@ -55,7 +55,7 @@ import {
   UsersThree,
 } from "@phosphor-icons/react";
 import { ACCENT_PRESETS, applyAccentColor, applyTheme } from "../../stores/settingsStore";
-import { getLocaleDisplayName, normalizeLocale, SUPPORTED_LOCALES, useT } from "../../lib/i18n";
+import { getLocaleDisplayName, getLocaleFlag, normalizeLocale, SUPPORTED_LOCALES, useT } from "../../lib/i18n";
 import type { AppTheme } from "../../lib/types";
 
 interface SettingsPageProps {
@@ -1169,8 +1169,8 @@ function AppearanceTab({
                   : "border-repressurizer-border bg-repressurizer-bg text-repressurizer-text-muted hover:border-repressurizer-border hover:text-repressurizer-text"
               }`}
             >
-              <Globe size={16} weight="duotone" />
-              <span className="truncate capitalize">{getLocaleDisplayName(locale, normalizeLocale(language))}</span>
+              <span className="text-base leading-none" aria-hidden="true">{getLocaleFlag(locale)}</span>
+              <span className="truncate">{getLocaleDisplayName(locale, normalizeLocale(language))}</span>
             </button>
           ))}
         </div>

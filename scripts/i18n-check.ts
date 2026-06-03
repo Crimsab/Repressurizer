@@ -75,6 +75,36 @@ const locales = readdirSync(translationsDir)
 
 const canonical = readCatalog(canonicalLocale);
 const canonicalKeys = Object.keys(canonical).sort();
+const coreLocalizationPrefixes = [
+  "app.",
+  "setup.",
+  "header.",
+  "sort.",
+  "sidebar.",
+  "filter.",
+  "status.",
+  "statusbar.",
+  "appearance.",
+  "toolbar.",
+  "review.",
+  "common.",
+  "games.",
+  "context.",
+  "detail.",
+  "timeline.",
+  "recommend.",
+  "achievements.",
+  "friends.",
+  "onboarding.",
+];
+const allowedCoreIdentityKeys = new Set(["app.name", "status.none"]);
+const coreLocalizationKeys = canonicalKeys.filter(
+  (key) =>
+    coreLocalizationPrefixes.some((prefix) => key.startsWith(prefix)) &&
+    !allowedCoreIdentityKeys.has(key) &&
+    !key.startsWith("search.filter."),
+);
+const maxCoreIdentityRatio = 0.45;
 let hasErrors = false;
 
 for (const locale of locales) {
@@ -99,6 +129,19 @@ for (const locale of locales) {
       console.error(`\n${locale}: placeholder mismatch for "${key}"`);
       console.error(`  en: ${sourcePlaceholders || "(none)"}`);
       console.error(`  ${locale}: ${targetPlaceholders || "(none)"}`);
+    }
+  }
+
+  if (locale !== canonicalLocale) {
+    const identicalCoreKeys = coreLocalizationKeys.filter((key) => catalog[key] === canonical[key]);
+    const identityRatio = identicalCoreKeys.length / coreLocalizationKeys.length;
+    if (identityRatio > maxCoreIdentityRatio) {
+      hasErrors = true;
+      console.error(`\n${locale}: core localization looks like an English stub`);
+      console.error(
+        `  ${identicalCoreKeys.length}/${coreLocalizationKeys.length} core UI keys are identical to English; max allowed is ${Math.round(maxCoreIdentityRatio * 100)}%`,
+      );
+      console.error(`  Examples: ${identicalCoreKeys.slice(0, 12).join(", ")}`);
     }
   }
 }
