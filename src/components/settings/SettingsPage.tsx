@@ -882,16 +882,16 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
               {/* Steam Details ignored */}
               <div className="space-y-3">
                 <h3 className="text-xs font-semibold text-repressurizer-text-muted uppercase tracking-wider">
-                  Steam Details — Ignored ({ignoredIds.length})
+                  {t("ignored.steamDetails")} ({ignoredIds.length})
                 </h3>
                 <p className="text-xs text-repressurizer-text-faint">
-                  Games with {MAX_FAIL_RUNS}+ confirmed unavailable Steam Store responses. Transient network/rate-limit errors are retried later.
+                  {t("ignored.steamDetails.desc", { count: MAX_FAIL_RUNS })}
                 </p>
 
                 {ignoredIds.length === 0 ? (
                   <div className="flex items-center gap-2 py-4 text-repressurizer-text-faint">
                     <CheckCircle size={16} weight="duotone" className="text-repressurizer-accent/50" />
-                    <p className="text-xs">No ignored games</p>
+                    <p className="text-xs">{t("ignored.none")}</p>
                   </div>
                 ) : (
                   <>
@@ -902,13 +902,13 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                             {getIgnoredGameName(id)}
                           </span>
                           <span className="font-mono text-[10px] text-repressurizer-text-faint shrink-0">
-                            {failedGamesStore.fails[id]}× failed
+                            {t("ignored.failed", { count: failedGamesStore.fails[id] })}
                           </span>
                           <button
                             onClick={() => failedGamesStore.resetFailure(id)}
                             className="shrink-0 text-xs text-repressurizer-accent hover:underline"
                           >
-                            Retry
+                            {t("ignored.retry")}
                           </button>
                         </div>
                       ))}
@@ -917,7 +917,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                       onClick={() => failedGamesStore.resetAll()}
                       className="btn-press text-xs text-repressurizer-danger/70 hover:text-repressurizer-danger transition-colors"
                     >
-                      Reset all ({ignoredIds.length})
+                      {t("ignored.resetAll", { count: ignoredIds.length })}
                     </button>
                   </>
                 )}
@@ -926,16 +926,16 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
               {/* HLTB ignored */}
               <div className="space-y-3 border-t border-repressurizer-border pt-5">
                 <h3 className="text-xs font-semibold text-repressurizer-text-muted uppercase tracking-wider">
-                  HLTB — Ignored ({hltbIgnoredIds.length})
+                  {t("ignored.hltb")} ({hltbIgnoredIds.length})
                 </h3>
                 <p className="text-xs text-repressurizer-text-faint">
-                  Games not found on HowLongToBeat after {HLTB_MAX_FAILS}+ confirmed search{HLTB_MAX_FAILS > 1 ? "es" : ""}. Skipped on future fetches.
+                  {t("ignored.hltb.desc", { count: HLTB_MAX_FAILS })}
                 </p>
 
                 {hltbIgnoredIds.length === 0 ? (
                   <div className="flex items-center gap-2 py-4 text-repressurizer-text-faint">
                     <CheckCircle size={16} weight="duotone" className="text-repressurizer-accent/50" />
-                    <p className="text-xs">No ignored games</p>
+                    <p className="text-xs">{t("ignored.none")}</p>
                   </div>
                 ) : (
                   <>
@@ -949,7 +949,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                             onClick={() => hltbIgnoredStore.resetGame(id)}
                             className="shrink-0 text-xs text-repressurizer-accent hover:underline"
                           >
-                            Retry
+                            {t("ignored.retry")}
                           </button>
                         </div>
                       ))}
@@ -958,7 +958,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                       onClick={() => hltbIgnoredStore.resetAll()}
                       className="btn-press text-xs text-repressurizer-danger/70 hover:text-repressurizer-danger transition-colors"
                     >
-                      Reset all ({hltbIgnoredIds.length})
+                      {t("ignored.resetAll", { count: hltbIgnoredIds.length })}
                     </button>
                   </>
                 )}
@@ -977,7 +977,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                   onClick={() => setPendingAction(null)}
                   className="btn-press rounded-lg px-4 py-1.5 text-sm text-repressurizer-text-muted transition-colors hover:text-white hover:bg-repressurizer-surface-hover"
                 >
-                  Cancel
+                  {t("common.cancel")}
                 </button>
                 <button
                   onClick={handleConfirmAction}
@@ -987,7 +987,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                       : "bg-repressurizer-accent hover:bg-repressurizer-accent-hover"
                   }`}
                 >
-                  {pendingAction.type === "restore" ? "Restore" : pendingAction.type === "delete" ? "Delete" : "Reset"}
+                  {pendingAction.type === "restore" ? t("backups.restore") : pendingAction.type === "delete" ? t("common.delete") : t("settings.reset")}
                 </button>
               </div>
             </div>

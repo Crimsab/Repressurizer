@@ -1,9 +1,11 @@
 import { useMemo, useState } from "react";
 import { useGameStore } from "../../stores/gameStore";
 import { usePlayHistoryStore } from "../../stores/playHistoryStore";
+import { useSettingsStore } from "../../stores/settingsStore";
 import { GameDetailPage } from "../games/GameDetailPage";
 import { SteamImage } from "../games/SteamImage";
 import type { OwnedGame } from "../../lib/types";
+import { normalizeLocale, useT } from "../../lib/i18n";
 import { X, CalendarBlank, Clock, SquaresFour, List, Rows } from "@phosphor-icons/react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -31,16 +33,20 @@ interface MonthData {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const MONTH_NAMES = [
-  "January","February","March","April","May","June",
-  "July","August","September","October","November","December",
-];
-const MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-
-function formatDate(ts: number): string {
-  return new Date(ts * 1000).toLocaleDateString("en-GB", {
+function formatDate(ts: number, locale: string): string {
+  return new Date(ts * 1000).toLocaleDateString(locale, {
     day: "numeric", month: "short", year: "numeric",
   });
+}
+
+function formatMonthLabel(year: string, monthIndex: number, locale: string): string {
+  return new Intl.DateTimeFormat(locale, { month: "long", year: "numeric" })
+    .format(new Date(Number(year), monthIndex, 1));
+}
+
+function formatMonthShort(monthIndex: number, locale: string): string {
+  return new Intl.DateTimeFormat(locale, { month: "short" })
+    .format(new Date(2024, monthIndex, 1));
 }
 
 function formatHours(minutes: number): string {
@@ -53,6 +59,8 @@ function formatHours(minutes: number): string {
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function PlayHistoryTimeline({ onClose }: PlayHistoryTimelineProps) {
+  const t = useT();
+  const locale = useSettingsStore((s) => normalizeLocale(s.language));
   const gamesMap = useGameStore((s) => s.games);
   const sessions = usePlayHistoryStore((s) => s.data.sessions);
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
@@ -91,9 +99,15 @@ export function PlayHistoryTimeline({ onClose }: PlayHistoryTimelineProps) {
         const [year, month] = key.split("-");
         const idx = parseInt(month) - 1;
         const games = [...gameMap.values()].sort((a, b) => b.playtime - a.playtime);
-        return { key, label: `${MONTH_NAMES[idx]} ${year}`, shortLabel: MONTH_SHORT[idx], year, games };
+        return {
+          key,
+          label: formatMonthLabel(year, idx, locale),
+          shortLabel: formatMonthShort(idx, locale),
+          year,
+          games,
+        };
       });
-  }, [gamesMap, sessions]);
+  }, [gamesMap, locale, sessions]);
 
   // Activity chart — last 24 months
   const activityChart = useMemo(() => {
@@ -105,14 +119,14 @@ export function PlayHistoryTimeline({ onClose }: PlayHistoryTimelineProps) {
       const m = months.find((m) => m.key === key);
       return {
         key,
-        short: MONTH_SHORT[d.getMonth()],
+        short: formatMonthShort(d.getMonth(), locale),
         year: String(d.getFullYear()),
         isJan: d.getMonth() === 0,
         isCurrent: offset === 0,
         count: m?.games.length ?? 0,
       };
     });
-  }, [months]);
+  }, [locale, months]);
 
   const maxActivity = Math.max(...activityChart.map((c) => c.count), 1);
 
@@ -147,9 +161,9 @@ export function PlayHistoryTimeline({ onClose }: PlayHistoryTimelineProps) {
             <div className="flex items-center gap-3">
               <CalendarBlank size={18} className="text-repressurizer-accent" weight="duotone" />
               <div>
-                <h2 className="text-base font-semibold text-white leading-tight">Play History</h2>
+                <h2 className="text-base font-semibold text-white leading-tight">{t("timeline.title")}</h2>
                 <p className="text-[10px] text-repressurizer-text-faint mt-0.5">
-                  {months.length} active months · {totalGamesTracked} games · grouped by last-played date
+                  {t("timeline.summary", { months: months.length, games: totalGamesTracked })}
                 </p>
               </div>
             </div>
@@ -158,7 +172,7 @@ export function PlayHistoryTimeline({ onClose }: PlayHistoryTimelineProps) {
               <div className="flex items-center rounded-lg border border-repressurizer-border overflow-hidden">
                 <button
                   onClick={() => setViewMode("grid")}
-                  title="Card view"
+                  title={t("timeline.cardView")}
                   className={`flex items-center justify-center w-8 h-8 transition-colors ${
                     viewMode === "grid"
                       ? "bg-repressurizer-accent/15 text-repressurizer-accent"
@@ -169,7 +183,7 @@ export function PlayHistoryTimeline({ onClose }: PlayHistoryTimelineProps) {
                 </button>
                 <button
                   onClick={() => setViewMode("list")}
-                  title="List view"
+                  title={t("timeline.listView")}
                   className={`flex items-center justify-center w-8 h-8 border-l border-repressurizer-border transition-colors ${
                     viewMode === "list"
                       ? "bg-repressurizer-accent/15 text-repressurizer-accent"
@@ -180,7 +194,7 @@ export function PlayHistoryTimeline({ onClose }: PlayHistoryTimelineProps) {
                 </button>
                 <button
                   onClick={() => setViewMode("strip")}
-                  title="Timeline strip"
+                  title={t("timeline.stripView")}
                   className={`flex items-center justify-center w-8 h-8 border-l border-repressurizer-border transition-colors ${
                     viewMode === "strip"
                       ? "bg-repressurizer-accent/15 text-repressurizer-accent"
@@ -203,7 +217,7 @@ export function PlayHistoryTimeline({ onClose }: PlayHistoryTimelineProps) {
           {/* ── Activity chart ──────────────────────────────────────────────── */}
           <div className="px-5 pt-4 pb-5 border-b border-repressurizer-border-subtle shrink-0">
             <p className="text-[10px] uppercase tracking-wider text-repressurizer-text-faint font-medium mb-3">
-              Activity — last 24 months
+              {t("timeline.activity")}
             </p>
             <div className="flex items-end gap-px" style={{ height: 40 }}>
               {activityChart.map((cell) => {
@@ -231,7 +245,7 @@ export function PlayHistoryTimeline({ onClose }: PlayHistoryTimelineProps) {
                       <div className="rounded-md border border-repressurizer-border bg-repressurizer-bg px-2 py-1 text-[9px] text-repressurizer-text whitespace-nowrap shadow-lg">
                         <span className="font-semibold">{cell.short} {cell.year}</span>
                         <span className="text-repressurizer-text-faint ml-1">
-                          {cell.count > 0 ? `${cell.count} game${cell.count !== 1 ? "s" : ""}` : "inactive"}
+                          {cell.count > 0 ? t("timeline.gameCount", { count: cell.count }) : t("timeline.inactive")}
                         </span>
                       </div>
                     </div>
@@ -258,13 +272,13 @@ export function PlayHistoryTimeline({ onClose }: PlayHistoryTimelineProps) {
             {months.length === 0 ? (
               <div className="flex flex-col items-center justify-center gap-3 py-20 text-repressurizer-text-faint">
                 <Clock size={40} weight="duotone" className="opacity-30" />
-                <p className="text-sm">No play history data</p>
-                <p className="text-xs">New playtime will appear after the next Steam library refresh</p>
+                <p className="text-sm">{t("timeline.empty")}</p>
+                <p className="text-xs">{t("timeline.empty.desc")}</p>
               </div>
             ) : viewMode === "grid" ? (
-              <GridView months={months} onOpenGame={openGame} />
+              <GridView months={months} onOpenGame={openGame} locale={locale} />
             ) : viewMode === "list" ? (
-              <ListView games={flatList} onOpenGame={openGame} />
+              <ListView games={flatList} onOpenGame={openGame} locale={locale} />
             ) : (
               <StripView months={months} onOpenGame={openGame} />
             )}
@@ -288,10 +302,13 @@ export function PlayHistoryTimeline({ onClose }: PlayHistoryTimelineProps) {
 function GridView({
   months,
   onOpenGame,
+  locale,
 }: {
   months: MonthData[];
   onOpenGame: (appid: number) => void;
+  locale: string;
 }) {
+  const t = useT();
   return (
     <div className="p-5 space-y-8">
       {months.map((month) => {
@@ -302,11 +319,11 @@ function GridView({
             <div className="flex items-baseline gap-2.5 mb-3">
               <h3 className="text-sm font-semibold text-white">{month.label}</h3>
               <span className="text-[11px] text-repressurizer-text-faint font-mono tabular-nums">
-                {month.games.length} game{month.games.length !== 1 ? "s" : ""}
+                {t("timeline.gameCount", { count: month.games.length })}
               </span>
               {totalHours > 0 && (
                 <span className="text-[11px] text-repressurizer-text-faint font-mono tabular-nums">
-                  · {formatHours(Math.round(totalHours * 60))} cumulative
+                  {t("timeline.cumulative", { hours: formatHours(Math.round(totalHours * 60)) })}
                 </span>
               )}
             </div>
@@ -343,7 +360,7 @@ function GridView({
                       {g.name}
                     </p>
                     <p className="text-[9px] text-repressurizer-text-faint mt-1 leading-none">
-                      Last played {formatDate(g.lastPlayed)}
+                      {t("timeline.lastPlayed", { date: formatDate(g.lastPlayed, locale) })}
                     </p>
                   </div>
                 </button>
@@ -363,10 +380,13 @@ type FlatGame = GameEntry & { monthKey: string; monthLabel: string };
 function ListView({
   games,
   onOpenGame,
+  locale,
 }: {
   games: FlatGame[];
   onOpenGame: (appid: number) => void;
+  locale: string;
 }) {
+  const t = useT();
   let lastMonthKey = "";
 
   return (
@@ -374,9 +394,9 @@ function ListView({
       {/* Column headers */}
       <div className="sticky top-0 z-10 flex items-center gap-3 px-5 py-1.5 bg-repressurizer-bg/90 backdrop-blur-sm border-b border-repressurizer-border-subtle">
         <div className="w-11 shrink-0" />
-        <span className="flex-1 text-[10px] font-medium text-repressurizer-text-faint uppercase tracking-wider">Game</span>
-        <span className="w-14 shrink-0 text-right text-[10px] font-medium text-repressurizer-text-faint uppercase tracking-wider">Hours</span>
-        <span className="w-28 shrink-0 text-right text-[10px] font-medium text-repressurizer-text-faint uppercase tracking-wider">Last played</span>
+        <span className="flex-1 text-[10px] font-medium text-repressurizer-text-faint uppercase tracking-wider">{t("timeline.column.game")}</span>
+        <span className="w-14 shrink-0 text-right text-[10px] font-medium text-repressurizer-text-faint uppercase tracking-wider">{t("timeline.column.hours")}</span>
+        <span className="w-28 shrink-0 text-right text-[10px] font-medium text-repressurizer-text-faint uppercase tracking-wider">{t("timeline.column.lastPlayed")}</span>
       </div>
 
       {games.map((g, idx) => {
@@ -394,7 +414,7 @@ function ListView({
                 <div className="w-2 h-2 rounded-full bg-repressurizer-accent/60 shrink-0" />
                 <span className="text-xs font-semibold text-repressurizer-text">{g.monthLabel}</span>
                 <span className="text-[10px] text-repressurizer-text-faint font-mono">
-                  {monthGameCount} game{monthGameCount !== 1 ? "s" : ""}
+                  {t("timeline.gameCount", { count: monthGameCount })}
                 </span>
               </div>
             )}
@@ -426,7 +446,7 @@ function ListView({
 
               {/* Last played */}
               <span className="w-28 shrink-0 text-right text-xs text-repressurizer-text-faint">
-                {formatDate(g.lastPlayed)}
+                {formatDate(g.lastPlayed, locale)}
               </span>
             </button>
           </div>
@@ -445,6 +465,7 @@ function StripView({
   months: MonthData[];
   onOpenGame: (appid: number) => void;
 }) {
+  const t = useT();
   let lastYear = "";
 
   return (
@@ -508,7 +529,7 @@ function StripView({
       {/* End of timeline */}
       <div className="flex items-center gap-3 py-4 -mx-5 px-5">
         <div className="ml-4 w-2 h-2 rounded-full border-2 border-repressurizer-border" />
-        <span className="text-[10px] text-repressurizer-text-faint">Beginning of tracked history</span>
+        <span className="text-[10px] text-repressurizer-text-faint">{t("timeline.beginning")}</span>
       </div>
     </div>
   );

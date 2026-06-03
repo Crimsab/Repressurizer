@@ -4,13 +4,14 @@ import { useCategoryStore } from "../../stores/categoryStore";
 import { useStatusStore, STATUS_META, type GameStatus } from "../../stores/statusStore";
 import { useBackgroundFetchStore } from "../../stores/backgroundFetchStore";
 import { Circle, X, FolderSimplePlus, Spinner, FolderMinus } from "@phosphor-icons/react";
+import { useT, type TranslationKey } from "../../lib/i18n";
 
-const STATUS_OPTIONS: { value: GameStatus; label: string }[] = [
-  { value: "playing",   label: "Playing" },
-  { value: "beaten",    label: "Beaten" },
-  { value: "completed", label: "Completed" },
-  { value: "abandoned", label: "Abandoned" },
-  { value: "none",      label: "Clear" },
+const STATUS_OPTIONS: { value: GameStatus; labelKey: TranslationKey }[] = [
+  { value: "playing",   labelKey: "status.playing" },
+  { value: "beaten",    labelKey: "status.beaten" },
+  { value: "completed", labelKey: "status.completed" },
+  { value: "abandoned", labelKey: "status.abandoned" },
+  { value: "none",      labelKey: "status.clear" },
 ];
 
 // ---- Fetch detail popover ----
@@ -26,6 +27,7 @@ function FetchPopover({
   coolingDown?: boolean; cooldownSecs?: number;
   onStop: () => void; onClose: () => void;
 }) {
+  const t = useT();
   const remaining = total - fetched;
   const percent = total > 0 ? Math.round((fetched / total) * 100) : 0;
   const barColor = color === "amber" ? "bg-amber-500" : color === "violet" ? "bg-violet-500" : "bg-sky-500";
@@ -49,7 +51,7 @@ function FetchPopover({
         {coolingDown && (
           <div className="flex items-center gap-2 rounded-lg bg-amber-500/10 border border-amber-500/20 px-3 py-2 text-[10px] text-amber-400">
             <Spinner size={10} className="animate-spin shrink-0" />
-            <span>Slowing down — <span className="font-mono font-bold">{cooldownSecs}s</span> between requests</span>
+            <span>{t("fetch.slowingDown", { seconds: cooldownSecs ?? 0 })}</span>
           </div>
         )}
 
@@ -59,14 +61,14 @@ function FetchPopover({
             <div className={`h-full rounded-full ${barColor} transition-all duration-300`} style={{ width: `${percent}%` }} />
           </div>
           <div className="mt-1.5 grid grid-cols-3 text-[10px] text-repressurizer-text-faint font-mono tabular-nums">
-            <span>{fetched} done</span>
+            <span>{t("fetch.done", { count: fetched })}</span>
             <span className="text-center">{percent}%</span>
-            <span className="text-right">{remaining} left</span>
+            <span className="text-right">{t("fetch.left", { count: remaining })}</span>
           </div>
           {(succeeded != null || (failed != null && failed > 0)) && (
             <div className="mt-1 flex gap-3 text-[10px] font-mono tabular-nums">
-              {succeeded != null && <span className="text-repressurizer-accent">✓ {succeeded} ok</span>}
-              {failed != null && failed > 0 && <span className="text-repressurizer-danger">✗ {failed} failed</span>}
+              {succeeded != null && <span className="text-repressurizer-accent">✓ {t("fetch.ok", { count: succeeded })}</span>}
+              {failed != null && failed > 0 && <span className="text-repressurizer-danger">✗ {t("fetch.failed", { count: failed })}</span>}
             </div>
           )}
         </div>
@@ -74,7 +76,7 @@ function FetchPopover({
         {/* Current game */}
         {currentName && !coolingDown && (
           <div className="text-[10px] text-repressurizer-text-faint">
-            <span className="text-repressurizer-text-muted">Now: </span>
+            <span className="text-repressurizer-text-muted">{t("fetch.now")}: </span>
             <span className="text-repressurizer-text truncate block">{currentName}</span>
           </div>
         )}
@@ -82,7 +84,7 @@ function FetchPopover({
         {/* Recent */}
         {recentNames.length > 0 && (
           <div>
-            <p className="text-[10px] text-repressurizer-text-faint mb-1 uppercase tracking-wider font-medium">Recent</p>
+            <p className="text-[10px] text-repressurizer-text-faint mb-1 uppercase tracking-wider font-medium">{t("fetch.recent")}</p>
             <div className="space-y-0.5 max-h-36 overflow-auto">
               {recentNames.map((name, i) => (
                 <p key={i} className={`text-[10px] truncate leading-relaxed ${
@@ -101,7 +103,7 @@ function FetchPopover({
           onClick={() => { onStop(); onClose(); }}
           className="w-full rounded-lg border border-repressurizer-danger/30 py-1.5 text-[10px] text-repressurizer-danger/70 transition-colors hover:border-repressurizer-danger hover:text-repressurizer-danger"
         >
-          Stop fetching
+          {t("fetch.stop")}
         </button>
       </div>
     </div>
@@ -109,6 +111,7 @@ function FetchPopover({
 }
 
 export function StatusBar() {
+  const t = useT();
   const gameCount = useGameStore((s) => Object.keys(s.games).length);
   const selectedGameIds = useGameStore((s) => s.selectedGameIds);
   const clearSelection = useGameStore((s) => s.clearSelection);
@@ -177,12 +180,12 @@ export function StatusBar() {
       className="flex items-center gap-4 border-t border-repressurizer-border-subtle bg-repressurizer-surface/50 px-4 py-1 text-[11px] text-repressurizer-text-faint font-mono tabular-nums"
       onMouseDown={() => { setShowDetailsPopover(false); setShowHltbPopover(false); setShowAchievementsPopover(false); }}
     >
-      <span>{gameCount} games</span>
-      <span>{categoryCount} categories</span>
+      <span>{t("statusbar.games", { count: gameCount })}</span>
+      <span>{t("statusbar.categories", { count: categoryCount })}</span>
 
       {selectedCount > 1 && (
         <span className="inline-flex items-center gap-2 text-repressurizer-accent font-sans text-[11px]">
-          <span className="font-mono tabular-nums">{selectedCount}</span> selected
+          {t("statusbar.selected", { count: selectedCount })}
 
           {/* Bulk assign category */}
           <div className="relative">
@@ -191,7 +194,7 @@ export function StatusBar() {
               className="inline-flex items-center gap-1 rounded-md border border-repressurizer-border bg-repressurizer-surface px-2 py-0.5 text-[10px] text-repressurizer-text transition-colors hover:border-repressurizer-accent hover:text-repressurizer-accent"
             >
               <FolderSimplePlus size={11} />
-              Add to…
+              {t("statusbar.addTo")}
             </button>
             {showCatMenu && (
               <div className="absolute bottom-7 left-0 z-50 min-w-[160px] animate-fade-in rounded-xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_8px_32px_rgba(0,0,0,0.5)]">
@@ -206,7 +209,7 @@ export function StatusBar() {
                     </button>
                   ))}
                   {editableCollections.length === 0 && (
-                    <p className="px-3 py-2 text-xs text-repressurizer-text-faint">No categories yet</p>
+                    <p className="px-3 py-2 text-xs text-repressurizer-text-faint">{t("statusbar.noCategories")}</p>
                   )}
                 </div>
               </div>
@@ -218,10 +221,10 @@ export function StatusBar() {
             <button
               onClick={() => { removeGamesFromCategory(activeColl.key, selectedIds); clearSelection(); }}
               className="inline-flex items-center gap-1 rounded-md border border-repressurizer-danger/30 bg-repressurizer-surface px-2 py-0.5 text-[10px] text-repressurizer-danger/70 transition-colors hover:border-repressurizer-danger hover:text-repressurizer-danger"
-              title={`Remove from "${activeColl.name}"`}
+              title={t("statusbar.removeFrom", { name: activeColl.name })}
             >
               <FolderMinus size={11} />
-              Remove
+              {t("statusbar.remove")}
             </button>
           )}
 
@@ -238,7 +241,7 @@ export function StatusBar() {
                     : `${meta.color} ${meta.bg}`
                 }`}
               >
-                {s.label}
+                {t(s.labelKey)}
               </button>
             );
           })}
@@ -246,7 +249,7 @@ export function StatusBar() {
           <button
             onClick={clearSelection}
             className="ml-1 rounded p-0.5 hover:bg-repressurizer-surface-hover transition-colors text-repressurizer-text-faint hover:text-white"
-            title="Clear selection"
+            title={t("sidebar.category.clearSelection")}
           >
             <X size={10} weight="bold" />
           </button>
@@ -255,11 +258,11 @@ export function StatusBar() {
 
       {selectedCount === 1 && (
         <span className="inline-flex items-center gap-1 text-repressurizer-accent">
-          1 selected
+          {t("statusbar.selected", { count: 1 })}
           <button
             onClick={clearSelection}
             className="rounded p-0.5 hover:bg-repressurizer-surface-hover transition-colors"
-            title="Clear selection"
+            title={t("sidebar.category.clearSelection")}
           >
             <X size={10} weight="bold" />
           </button>
@@ -279,13 +282,13 @@ export function StatusBar() {
             <Spinner size={9} className={detailsCoolingDown ? "shrink-0" : "animate-spin shrink-0"} />
             <span>
               {detailsCoolingDown
-                ? `Slowing — ${detailsCooldownSecs}s delay`
-                : `Details ${detailsFetched}/${detailsTotal}`}
+                ? t("statusbar.slowing", { seconds: detailsCooldownSecs })
+                : t("statusbar.detailsProgress", { fetched: detailsFetched, total: detailsTotal })}
             </span>
           </button>
           {showDetailsPopover && (
             <FetchPopover
-              title="Fetching game details"
+              title={t("fetch.details")}
               color="amber"
               fetched={detailsFetched}
               total={detailsTotal}
@@ -314,7 +317,7 @@ export function StatusBar() {
           </button>
           {showHltbPopover && (
             <FetchPopover
-              title="Fetching HLTB data"
+              title={t("fetch.hltb")}
               color="sky"
               fetched={hltbFetched}
               total={hltbTotal}
@@ -339,7 +342,7 @@ export function StatusBar() {
           </button>
           {showAchievementsPopover && (
             <FetchPopover
-              title="Fetching achievements"
+              title={t("fetch.achievements")}
               color="violet"
               fetched={achievementsFetched}
               total={achievementsTotal}
@@ -355,7 +358,7 @@ export function StatusBar() {
       {dirty && (
         <span className="inline-flex items-center gap-1.5 text-repressurizer-warning">
           <Circle size={6} weight="fill" className="animate-breathe" />
-          Unsaved changes
+          {t("statusbar.unsaved")}
         </span>
       )}
     </footer>

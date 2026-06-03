@@ -5,6 +5,7 @@ import { useBackgroundFetchStore } from "../../stores/backgroundFetchStore";
 import type { OwnedGame } from "../../lib/types";
 import { X, Trophy, ArrowsClockwise } from "@phosphor-icons/react";
 import { SteamImage } from "../games/SteamImage";
+import { useT } from "../../lib/i18n";
 
 interface AchievementsPageProps {
   onClose: () => void;
@@ -12,6 +13,7 @@ interface AchievementsPageProps {
 }
 
 export function AchievementsPage({ onClose, onOpenGame }: AchievementsPageProps) {
+  const t = useT();
   const games = useGameStore((s) => s.games);
   const details = useGameStore((s) => s.details);
   const summaries = useAchievementsStore((s) => s.summaries);
@@ -71,11 +73,11 @@ export function AchievementsPage({ onClose, onOpenGame }: AchievementsPageProps)
           <div className="flex items-center gap-2.5">
             <Trophy size={18} className="text-repressurizer-accent" weight="fill" />
             <div>
-              <h2 className="text-base font-semibold text-white leading-tight">Achievements</h2>
-              <p className="text-[10px] text-repressurizer-text-faint">Sorted by completion % — find what you can platinum</p>
+              <h2 className="text-base font-semibold text-white leading-tight">{t("achievements.title")}</h2>
+              <p className="text-[10px] text-repressurizer-text-faint">{t("achievements.subtitle")}</p>
             </div>
             <span className="rounded-full bg-repressurizer-bg px-2 py-0.5 text-[11px] font-mono text-repressurizer-text-faint">
-              {fetchedCount}/{achievementGames.length} loaded
+              {t("achievements.loaded", { fetched: fetchedCount, total: achievementGames.length })}
             </span>
           </div>
           <div className="flex items-center gap-2">
@@ -88,7 +90,7 @@ export function AchievementsPage({ onClose, onOpenGame }: AchievementsPageProps)
                   : "border-repressurizer-border-subtle bg-repressurizer-bg text-repressurizer-text-muted hover:text-repressurizer-text"
               }`}
             >
-              Incomplete only
+              {t("achievements.incompleteOnly")}
             </button>
 
             {/* Fetch / Stop */}
@@ -98,17 +100,17 @@ export function AchievementsPage({ onClose, onOpenGame }: AchievementsPageProps)
                 className="inline-flex items-center gap-1.5 rounded-lg border border-repressurizer-danger/30 bg-repressurizer-bg px-2.5 py-1 text-[11px] font-medium text-repressurizer-danger transition-colors hover:border-repressurizer-danger"
               >
                 <ArrowsClockwise size={12} className="animate-spin" />
-                {achievementsFetched}/{achievementsTotal} — Stop
+                {achievementsFetched}/{achievementsTotal} - {t("achievements.stop")}
               </button>
             ) : (
               <button
                 onClick={handleFetchAll}
                 disabled={toFetchCount === 0 || noDetails}
                 className="inline-flex items-center gap-1.5 rounded-lg border border-repressurizer-border bg-repressurizer-bg px-2.5 py-1 text-[11px] font-medium text-repressurizer-text-muted transition-colors hover:text-white disabled:opacity-40"
-                title={noDetails ? "Fetch game details first (Auto-Categorize)" : undefined}
+                title={noDetails ? t("achievements.fetchDetailsFirst") : undefined}
               >
                 <ArrowsClockwise size={12} />
-                Fetch All
+                {t("achievements.fetchAll")}
               </button>
             )}
 
@@ -126,19 +128,19 @@ export function AchievementsPage({ onClose, onOpenGame }: AchievementsPageProps)
           {noDetails ? (
             <div className="flex flex-col items-center justify-center gap-3 py-20 text-repressurizer-text-faint">
               <Trophy size={40} weight="duotone" className="opacity-30" />
-              <p className="text-sm">Fetch game details first using Auto-Categorize (🤖)</p>
+              <p className="text-sm">{t("achievements.fetchDetailsFirst")}</p>
             </div>
           ) : rows.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-3 py-20 text-repressurizer-text-faint">
               <Trophy size={40} weight="duotone" className="opacity-30" />
               <p className="text-sm">
                 {fetchedCount === 0
-                  ? "Click \"Fetch All\" to load achievement data"
+                  ? t("achievements.clickFetchAll")
                   : achievementsRunning
-                  ? `Fetching… ${achievementsFetched}/${achievementsTotal}`
+                  ? t("achievements.fetching", { fetched: achievementsFetched, total: achievementsTotal })
                   : onlyIncomplete
-                  ? "All fetched games are complete!"
-                  : "No achievement data yet"}
+                  ? t("achievements.allComplete")
+                  : t("achievements.noData")}
               </p>
             </div>
           ) : (

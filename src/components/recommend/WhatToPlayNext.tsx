@@ -4,6 +4,7 @@ import { useHltbStore } from "../../stores/hltbStore";
 import { useStatusStore } from "../../stores/statusStore";
 import { X, Shuffle, Timer, GameController, Funnel } from "@phosphor-icons/react";
 import { SteamImage } from "../games/SteamImage";
+import { useT } from "../../lib/i18n";
 
 interface WhatToPlayNextProps {
   onClose: () => void;
@@ -12,6 +13,7 @@ interface WhatToPlayNextProps {
 type LengthFilter = "any" | "short" | "medium" | "long";
 
 export function WhatToPlayNext({ onClose }: WhatToPlayNextProps) {
+  const t = useT();
   const games = useGameStore((s) => s.games);
   const details = useGameStore((s) => s.details);
   const hltbData = useHltbStore((s) => s.data);
@@ -122,16 +124,16 @@ export function WhatToPlayNext({ onClose }: WhatToPlayNextProps) {
         <div className="flex items-center justify-between border-b border-repressurizer-border px-5 py-3.5">
           <div className="flex items-center gap-2.5">
             <GameController size={18} className="text-repressurizer-accent" weight="duotone" />
-            <h2 className="text-base font-semibold text-white">What to Play Next</h2>
+            <h2 className="text-base font-semibold text-white">{t("recommend.title")}</h2>
           </div>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setSeed((s) => s + 1)}
-              title="Shuffle recommendations"
+              title={t("recommend.shuffleTitle")}
               className="flex items-center gap-1 rounded-lg border border-repressurizer-border px-2.5 py-1 text-[11px] text-repressurizer-text-muted transition-colors hover:text-white"
             >
               <Shuffle size={12} />
-              Shuffle
+              {t("recommend.shuffle")}
             </button>
             <button
               onClick={onClose}
@@ -147,10 +149,10 @@ export function WhatToPlayNext({ onClose }: WhatToPlayNextProps) {
           <Funnel size={12} className="text-repressurizer-text-faint" />
           <div className="flex gap-1.5">
             {([
-              ["any", "Any Length"],
-              ["short", "Short (<10h)"],
-              ["medium", "Medium (10-30h)"],
-              ["long", "Long (30h+)"],
+              ["any", t("recommend.anyLength")],
+              ["short", t("recommend.short")],
+              ["medium", t("recommend.medium")],
+              ["long", t("recommend.long")],
             ] as [LengthFilter, string][]).map(([key, label]) => (
               <button
                 key={key}
@@ -171,7 +173,7 @@ export function WhatToPlayNext({ onClose }: WhatToPlayNextProps) {
               onChange={(e) => setGenreFilter(e.target.value)}
               className="ml-auto rounded-lg border border-repressurizer-border bg-repressurizer-bg px-2 py-0.5 text-[11px] text-repressurizer-text focus:outline-none"
             >
-              <option value="">All Genres</option>
+              <option value="">{t("recommend.allGenres")}</option>
               {topGenres.map((g) => (
                 <option key={g} value={g}>{g}</option>
               ))}
@@ -184,8 +186,8 @@ export function WhatToPlayNext({ onClose }: WhatToPlayNextProps) {
           {recommendations.length === 0 ? (
             <div className="flex flex-col items-center justify-center gap-3 py-20 text-repressurizer-text-faint">
               <GameController size={40} weight="duotone" className="opacity-30" />
-              <p className="text-sm">No recommendations found</p>
-              <p className="text-xs">Try adjusting filters or fetch more game details</p>
+              <p className="text-sm">{t("recommend.empty")}</p>
+              <p className="text-xs">{t("recommend.empty.desc")}</p>
             </div>
           ) : (
             <div className="divide-y divide-repressurizer-border-subtle">
@@ -238,7 +240,7 @@ export function WhatToPlayNext({ onClose }: WhatToPlayNextProps) {
         {/* Footer hint */}
         <div className="border-t border-repressurizer-border-subtle px-4 py-2">
           <p className="text-[10px] text-repressurizer-text-faint text-center">
-            Scored by Metacritic rating, genre preference, and game length. Fetch HLTB + game details for better results.
+            {t("recommend.footer")}
           </p>
         </div>
       </div>

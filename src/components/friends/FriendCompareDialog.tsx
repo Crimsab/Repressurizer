@@ -6,6 +6,7 @@ import { fetchLibrary, resolveVanityUrl, fetchPlayerSummary } from "../../lib/ta
 import type { OwnedGame } from "../../lib/types";
 import { X, UsersThree, MagnifyingGlass, ArrowsClockwise } from "@phosphor-icons/react";
 import { SteamImage } from "../games/SteamImage";
+import { useT } from "../../lib/i18n";
 
 interface FriendCompareDialogProps {
   onClose: () => void;
@@ -14,6 +15,7 @@ interface FriendCompareDialogProps {
 type Section = "both" | "only-me" | "only-them";
 
 export function FriendCompareDialog({ onClose }: FriendCompareDialogProps) {
+  const t = useT();
   const myGames = useGameStore((s) => s.games);
   const { apiKey } = useSettingsStore();
   const { friends, saveFriend, removeFriend } = useFriendsStore();
@@ -45,7 +47,7 @@ export function FriendCompareDialog({ onClose }: FriendCompareDialogProps) {
   const handleCompare = async () => {
     if (!input.trim()) return;
     if (!apiKey) {
-      setError("Set your API key in Settings first.");
+      setError(t("friends.apiKeyRequired"));
       return;
     }
     setLoading(true);
@@ -79,7 +81,7 @@ export function FriendCompareDialog({ onClose }: FriendCompareDialogProps) {
 
   const handleSelectFriend = async (steamId64: string) => {
     if (!apiKey) {
-      setError("Set your API key in Settings first.");
+      setError(t("friends.apiKeyRequired"));
       return;
     }
     setInput(steamId64);
@@ -158,9 +160,9 @@ export function FriendCompareDialog({ onClose }: FriendCompareDialogProps) {
   };
 
   const sectionLabel: Record<Section, string> = {
-    both: `Both own (${both.length})`,
-    "only-me": `Only me (${onlyMe.length})`,
-    "only-them": `Only them (${onlyThem.length})`,
+    both: t("friends.bothOwn", { count: both.length }),
+    "only-me": t("friends.onlyMe", { count: onlyMe.length }),
+    "only-them": t("friends.onlyThem", { count: onlyThem.length }),
   };
 
   return (
@@ -173,7 +175,7 @@ export function FriendCompareDialog({ onClose }: FriendCompareDialogProps) {
         <div className="flex items-center justify-between border-b border-repressurizer-border-subtle px-5 py-3.5">
           <div className="flex items-center gap-2.5">
             <UsersThree size={18} className="text-repressurizer-accent" weight="fill" />
-            <h2 className="text-base font-semibold text-white">Friend Comparison</h2>
+            <h2 className="text-base font-semibold text-white">{t("friends.title")}</h2>
           </div>
           <button
             onClick={onClose}
@@ -191,7 +193,7 @@ export function FriendCompareDialog({ onClose }: FriendCompareDialogProps) {
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleCompare()}
-              placeholder="Steam ID64 or profile URL (https://steamcommunity.com/profiles/...)"
+              placeholder={t("friends.inputPlaceholder")}
               className="flex-1 rounded-lg border border-repressurizer-border bg-repressurizer-bg px-3 py-1.5 text-sm text-repressurizer-text placeholder:text-repressurizer-text-faint focus:border-repressurizer-accent focus:outline-none"
             />
             <button
@@ -200,7 +202,7 @@ export function FriendCompareDialog({ onClose }: FriendCompareDialogProps) {
               className="inline-flex items-center gap-1.5 rounded-lg bg-repressurizer-accent px-3.5 py-1.5 text-sm font-medium text-white transition-colors hover:bg-repressurizer-accent-hover disabled:opacity-40"
             >
               <ArrowsClockwise size={14} className={loading ? "animate-spin" : ""} />
-              Compare
+              {t("friends.compare")}
             </button>
           </div>
           {error && <p className="text-xs text-repressurizer-danger">{error}</p>}
@@ -232,7 +234,7 @@ export function FriendCompareDialog({ onClose }: FriendCompareDialogProps) {
                   <button
                     onClick={(e) => { e.stopPropagation(); removeFriend(f.steamId64); }}
                     className="opacity-0 group-hover:opacity-100 text-repressurizer-text-faint hover:text-repressurizer-danger transition-all"
-                    title="Remove"
+                    title={t("friends.remove")}
                   >
                     <X size={10} weight="bold" />
                   </button>
@@ -262,7 +264,7 @@ export function FriendCompareDialog({ onClose }: FriendCompareDialogProps) {
               onClick={handleForceRefresh}
               disabled={loading}
               className="rounded-lg border border-repressurizer-border-subtle px-2 py-1 text-[11px] text-repressurizer-text-muted hover:text-white transition-colors disabled:opacity-40"
-              title="Force refresh — re-fetch friend's library"
+              title={t("friends.forceRefresh")}
             >
               <ArrowsClockwise size={12} className={loading ? "animate-spin" : ""} />
             </button>
@@ -272,7 +274,7 @@ export function FriendCompareDialog({ onClose }: FriendCompareDialogProps) {
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Filter..."
+                placeholder={t("friends.filter")}
                 className="w-28 bg-transparent text-[11px] text-repressurizer-text placeholder:text-repressurizer-text-faint focus:outline-none"
               />
             </div>
@@ -284,9 +286,9 @@ export function FriendCompareDialog({ onClose }: FriendCompareDialogProps) {
           {!friendGames && !loading && (
             <div className="flex flex-col items-center justify-center gap-3 py-20 text-repressurizer-text-faint">
               <UsersThree size={40} weight="duotone" className="opacity-30" />
-              <p className="text-sm">Enter a friend's Steam ID or profile URL above</p>
+              <p className="text-sm">{t("friends.empty")}</p>
               {friends.length > 0 && (
-                <p className="text-xs">or click a saved friend to compare</p>
+                <p className="text-xs">{t("friends.empty.saved")}</p>
               )}
             </div>
           )}
@@ -303,7 +305,7 @@ export function FriendCompareDialog({ onClose }: FriendCompareDialogProps) {
                   </div>
                   <div className="flex items-center gap-3 text-[11px] font-mono tabular-nums">
                     <span className="text-repressurizer-accent">{(mine.playtime_forever / 60).toFixed(1)}h</span>
-                    <span className="text-repressurizer-text-faint">vs</span>
+                    <span className="text-repressurizer-text-faint">{t("friends.vs")}</span>
                     <span className="text-repressurizer-text-muted">{(theirs.playtime_forever / 60).toFixed(1)}h</span>
                   </div>
                 </div>

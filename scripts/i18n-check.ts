@@ -41,6 +41,9 @@ function hardcodedUiStrings(): string[] {
     /key="/,
     /import /,
     /from "/,
+    /placeholder="C:\\/,
+    />[A-Z]{3} \([^<]+\)</,
+    />HLTB: </,
   ];
 
   const findings: string[] = [];

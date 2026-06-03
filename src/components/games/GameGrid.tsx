@@ -12,6 +12,7 @@ import { GameCard } from "./GameCard";
 import { ContextMenu } from "./ContextMenu";
 import { GameDetailPage } from "./GameDetailPage";
 import type { OwnedGame } from "../../lib/types";
+import { useT, type TranslationKey } from "../../lib/i18n";
 import { Spinner, MagnifyingGlass, FolderOpen, Clock, UsersThree } from "@phosphor-icons/react";
 import { extractReleaseYear, parseSearchQuery, matchesFilter, hasAdvancedFilters } from "../../lib/search";
 import { possibleDuplicateAppIds } from "../../lib/gameIdentity";
@@ -23,6 +24,7 @@ interface ContextMenuState {
 }
 
 export function GameGrid() {
+  const t = useT();
   const games = useGameStore((s) => s.games);
   const searchQuery = useGameStore((s) => s.searchQuery);
   const sortBy = useGameStore((s) => s.sortBy);
@@ -290,7 +292,7 @@ export function GameGrid() {
       <div className="flex h-full items-center justify-center">
         <div className="text-center animate-fade-in">
           <Spinner size={28} className="mx-auto mb-3 text-repressurizer-accent animate-spin" />
-          <p className="text-sm text-repressurizer-text-muted">Loading games...</p>
+          <p className="text-sm text-repressurizer-text-muted">{t("games.loading")}</p>
         </div>
       </div>
     );
@@ -303,13 +305,13 @@ export function GameGrid() {
           {searchQuery ? (
             <>
               <MagnifyingGlass size={36} weight="duotone" className="mx-auto mb-3 text-repressurizer-text-faint" />
-              <p className="text-sm text-repressurizer-text-muted">No games match "{searchQuery}"</p>
+              <p className="text-sm text-repressurizer-text-muted">{t("games.noMatches", { query: searchQuery })}</p>
             </>
           ) : (
             <>
               <FolderOpen size={36} weight="duotone" className="mx-auto mb-3 text-repressurizer-text-faint" />
-              <p className="text-sm text-repressurizer-text-muted">No games in this category</p>
-              <p className="mt-1 text-xs text-repressurizer-text-faint">Drag games here to add them</p>
+              <p className="text-sm text-repressurizer-text-muted">{t("games.emptyCategory")}</p>
+              <p className="mt-1 text-xs text-repressurizer-text-faint">{t("games.emptyCategory.desc")}</p>
             </>
           )}
         </div>
@@ -387,6 +389,7 @@ function GameListRow({
   const clearSelection = useGameStore((s) => s.clearSelection);
   const isSelected = useGameStore((s) => !!s.selectedGameIds[game.appid]);
   const collections = useCategoryStore((s) => s.collections);
+  const t = useT();
   const status = useStatusStore((s) => s.statuses[game.appid] ?? "none");
   const statusMeta = STATUS_META[status];
   const isFamilyShared = useFamilyStore((s) => s.isFamilyShared(game.appid));
@@ -443,18 +446,18 @@ function GameListRow({
       )}
       {game.is_collection_only && (
         <span className="shrink-0 rounded-md bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-300">
-          Local
+          {t("games.local")}
         </span>
       )}
       {status !== "none" && (
         <span className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-medium ${statusMeta.color} ${statusMeta.bg}`}>
-          {statusMeta.label}
+          {t(`status.${status}` as TranslationKey)}
         </span>
       )}
       {isFamilyShared && (
         <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-sky-400/20 bg-sky-400/12 px-1.5 py-0.5 text-[10px] font-medium text-sky-300">
           <UsersThree size={10} weight="duotone" />
-          Family
+          {t("games.family")}
         </span>
       )}
       <span className="inline-flex items-center gap-1 font-mono text-xs text-repressurizer-text-faint tabular-nums">

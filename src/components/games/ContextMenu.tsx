@@ -4,6 +4,7 @@ import { useCategoryStore } from "../../stores/categoryStore";
 import { useGameStore } from "../../stores/gameStore";
 import { useStatusStore, STATUS_META, type GameStatus } from "../../stores/statusStore";
 import type { OwnedGame } from "../../lib/types";
+import { useT, type TranslationKey } from "../../lib/i18n";
 import { Eye, ArrowSquareOut, Check, EyeSlash, Play } from "@phosphor-icons/react";
 
 const STATUS_OPTIONS: GameStatus[] = ["none", "playing", "beaten", "completed", "abandoned"];
@@ -17,6 +18,7 @@ interface ContextMenuProps {
 }
 
 export function ContextMenu({ x, y, game, onClose, onViewDetails }: ContextMenuProps) {
+  const t = useT();
   const ref = useRef<HTMLDivElement>(null);
   const collections = useCategoryStore((s) => s.collections);
   const addGameToCategory = useCategoryStore((s) => s.addGameToCategory);
@@ -105,7 +107,7 @@ export function ContextMenu({ x, y, game, onClose, onViewDetails }: ContextMenuP
       {/* Header */}
       <div className="border-b border-repressurizer-border px-3 py-2">
         <p className="truncate text-sm font-medium text-white">
-          {isMulti ? `${selectedCount} games selected` : String(game.name ?? "")}
+          {isMulti ? t("context.selectedGames", { count: selectedCount }) : String(game.name ?? "")}
         </p>
       </div>
 
@@ -117,7 +119,7 @@ export function ContextMenu({ x, y, game, onClose, onViewDetails }: ContextMenuP
             className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-repressurizer-text transition-colors hover:bg-repressurizer-surface-hover"
           >
             <Eye size={14} className="text-repressurizer-text-muted" />
-            View Details
+            {t("context.viewDetails")}
           </button>
         )}
         {!isMulti && (
@@ -126,7 +128,7 @@ export function ContextMenu({ x, y, game, onClose, onViewDetails }: ContextMenuP
             className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-repressurizer-text transition-colors hover:bg-repressurizer-surface-hover"
           >
             <Play size={14} className="text-repressurizer-text-muted" weight="fill" />
-            Launch with Steam
+            {t("context.launchSteam")}
           </button>
         )}
         <button
@@ -134,7 +136,7 @@ export function ContextMenu({ x, y, game, onClose, onViewDetails }: ContextMenuP
           className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-repressurizer-text transition-colors hover:bg-repressurizer-surface-hover"
         >
           <ArrowSquareOut size={14} className="text-repressurizer-text-muted" />
-          Open in Steam Store
+          {t("context.openStore")}
         </button>
         {hiddenCollection && (
           <button
@@ -142,7 +144,7 @@ export function ContextMenu({ x, y, game, onClose, onViewDetails }: ContextMenuP
             className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-repressurizer-text transition-colors hover:bg-repressurizer-surface-hover"
           >
             <EyeSlash size={14} className="text-repressurizer-text-muted" />
-            {isHidden ? "Unhide" : "Hide"}
+            {isHidden ? t("context.unhide") : t("context.hide")}
           </button>
         )}
       </div>
@@ -152,7 +154,7 @@ export function ContextMenu({ x, y, game, onClose, onViewDetails }: ContextMenuP
         <>
           <div className="border-t border-repressurizer-border" />
           <div className="py-1">
-            <p className="px-3 py-1 text-[10px] uppercase tracking-wider text-repressurizer-text-faint font-medium">Status</p>
+            <p className="px-3 py-1 text-[10px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("sort.status")}</p>
             {STATUS_OPTIONS.map((s) => {
               const meta = STATUS_META[s];
               const isActive = currentStatus === s;
@@ -170,7 +172,7 @@ export function ContextMenu({ x, y, game, onClose, onViewDetails }: ContextMenuP
                     "bg-repressurizer-text-faint"
                   }`} />
                   <span className={isActive ? "text-white font-medium" : `${meta.color || "text-repressurizer-text-muted"}`}>
-                    {s === "none" ? "No status" : meta.label}
+                    {s === "none" ? t("context.noStatus") : t(`status.${s}` as TranslationKey)}
                   </span>
                   {isActive && <Check size={12} weight="bold" className="ml-auto text-repressurizer-accent" />}
                 </button>
@@ -186,7 +188,7 @@ export function ContextMenu({ x, y, game, onClose, onViewDetails }: ContextMenuP
           <div className="border-t border-repressurizer-border" />
           <div className="max-h-48 overflow-auto py-1">
             <p className="px-3 py-1 text-[10px] uppercase tracking-wider text-repressurizer-text-faint font-medium">
-              {isMulti ? "Add all to" : "Categories"}
+              {isMulti ? t("context.addAllTo") : t("context.categories")}
             </p>
             {editableCollections.map((col) => {
               const inCat = !isMulti && gameInCategory(col.key);
