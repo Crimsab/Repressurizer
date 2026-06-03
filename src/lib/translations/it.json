@@ -620,5 +620,6 @@
   "ignored.steamDetails.desc": "Giochi con {count}+ risposte Steam Store confermate come non disponibili. Errori temporanei di rete/rate-limit verranno riprovati più tardi.",
   "ignored.hltb": "HLTB — ignorati",
   "ignored.hltb.desc": "Giochi non trovati su HowLongToBeat dopo {count}+ ricerche confermate. Verranno saltati nei fetch futuri.",
-  "ignored.retry": "Riprova"
+  "ignored.retry": "Riprova",
+  "onboarding.family.readyWithSharedOne": "Steam Family pronta: trovato {count} gioco condiviso."
 }

@@ -620,5 +620,6 @@
   "ignored.steamDetails.desc": "Games with {count}+ confirmed unavailable Steam Store responses. Transient network/rate-limit errors are retried later.",
   "ignored.hltb": "HLTB — Ignored",
   "ignored.hltb.desc": "Games not found on HowLongToBeat after {count}+ confirmed searches. Skipped on future fetches.",
-  "ignored.retry": "Retry"
+  "ignored.retry": "Retry",
+  "onboarding.family.readyWithSharedOne": "Steam Family ready: {count} shared game found."
 }

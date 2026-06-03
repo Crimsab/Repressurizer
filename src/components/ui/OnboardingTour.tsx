@@ -94,7 +94,12 @@ export function OnboardingTour({ onComplete }: OnboardingTourProps) {
       setFamilyStatus("ready");
       setFamilyMessage(
         result.shared_apps > 0
-          ? t("onboarding.family.readyWithShared", { count: result.shared_apps })
+          ? t(
+              result.shared_apps === 1
+                ? "onboarding.family.readyWithSharedOne"
+                : "onboarding.family.readyWithShared",
+              { count: result.shared_apps },
+            )
           : t("onboarding.family.readyEmpty")
       );
     } catch (error) {
