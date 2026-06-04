@@ -17,10 +17,22 @@ const CURRENCY_SYMBOLS: Record<string, string> = {
   AUD: "A$", CHF: "Fr", BRL: "R$", PLN: "zł", RUB: "₽",
 };
 
-function formatPrice(cents: number, currency: string): string {
-  const symbol = CURRENCY_SYMBOLS[currency] ?? currency;
-  const value = (cents / 100).toFixed(2);
-  return `${symbol}${value}`;
+function formatPrice(cents: number, currency: string, compact = false): string {
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency,
+      notation: compact ? "compact" : "standard",
+      maximumFractionDigits: compact ? 1 : 2,
+    }).format(cents / 100);
+  } catch {
+    const symbol = CURRENCY_SYMBOLS[currency] ?? currency;
+    const value = (cents / 100).toLocaleString(undefined, {
+      maximumFractionDigits: compact ? 1 : 2,
+      minimumFractionDigits: compact ? 0 : 2,
+    });
+    return `${symbol}${value}`;
+  }
 }
 
 interface StatsPageProps {
@@ -97,7 +109,7 @@ export function StatsPage({ onClose }: StatsPageProps) {
 
         <div className="flex-1 overflow-auto p-6 space-y-6">
           {/* Summary cards */}
-          <div className="grid grid-cols-5 gap-3">
+          <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
             <StatCard
               icon={<GameController size={18} weight="duotone" />}
               label={t("stats.totalGames")}
@@ -122,7 +134,7 @@ export function StatsPage({ onClose }: StatsPageProps) {
             <StatCard
               icon={<CurrencyEur size={18} weight="duotone" />}
               label={t("stats.libraryValue")}
-              value={stats.pricedGamesCount > 0 ? formatPrice(stats.libraryValue, currency) : "—"}
+              value={stats.pricedGamesCount > 0 ? formatPrice(stats.libraryValue, currency, true) : "—"}
               subtitle={stats.pricedGamesCount > 0
                 ? t("stats.priceSubtitle", { priced: stats.pricedGamesCount, free: stats.freeGamesCount })
                 : t("stats.fetchDetailsFirst")
@@ -331,7 +343,7 @@ export function StatsPage({ onClose }: StatsPageProps) {
             </div>
           )}
           {hasDetails && (stats.bestCostPerHour.length > 0 || stats.shameWall.length > 0) && (
-            <div className="grid grid-cols-2 gap-6">
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
               {/* Best value (cost per hour) */}
               {stats.bestCostPerHour.length > 0 && (
                 <div>
@@ -339,12 +351,12 @@ export function StatsPage({ onClose }: StatsPageProps) {
                     <CurrencyCircleDollar size={12} weight="duotone" />
                     {t("stats.bestValue")}
                   </h3>
-                  <div className="space-y-1.5">
+                  <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg/60">
                     {stats.bestCostPerHour.map((g, i) => (
-                      <div key={i} className="flex items-center gap-2">
-                        <span className="w-4 shrink-0 text-[11px] text-repressurizer-text-faint font-mono tabular-nums text-right">{i + 1}</span>
-                        <span className="flex-1 truncate text-[11px] text-repressurizer-text" title={g.name}>{g.name}</span>
-                        <span className="shrink-0 text-[11px] text-repressurizer-accent font-mono tabular-nums">
+                      <div key={i} className="flex items-center gap-2 border-b border-repressurizer-border-subtle px-3 py-2 last:border-b-0">
+                        <span className="w-4 shrink-0 text-right font-mono text-[11px] tabular-nums text-repressurizer-text-faint">{i + 1}</span>
+                        <span className="min-w-0 flex-1 truncate text-[12px] text-repressurizer-text" title={g.name}>{g.name}</span>
+                        <span className="shrink-0 font-mono text-[11px] tabular-nums text-repressurizer-accent">
                           {formatPrice(Math.round(g.costPerHour * 100), currency)}/h
                         </span>
                       </div>
@@ -360,19 +372,19 @@ export function StatsPage({ onClose }: StatsPageProps) {
                     <Skull size={12} weight="duotone" />
                     {t("stats.shameWall")}
                   </h3>
-                  <p className="text-[10px] text-repressurizer-text-faint mb-2">{t("stats.shameWall.desc")}</p>
-                  <div className="space-y-1.5">
+                  <p className="mb-2 text-[10px] text-repressurizer-text-faint">{t("stats.shameWall.desc")}</p>
+                  <div className="rounded-xl border border-repressurizer-danger/15 bg-repressurizer-bg/60">
                     {stats.shameWall.map((g, i) => (
-                      <div key={i} className="flex items-center gap-2">
-                        <span className="w-4 shrink-0 text-[11px] text-repressurizer-text-faint font-mono tabular-nums text-right">{i + 1}</span>
-                        <span className="flex-1 truncate text-[11px] text-repressurizer-text" title={g.name}>{g.name}</span>
-                        <span className="shrink-0 text-[11px] text-repressurizer-danger font-mono tabular-nums">
+                      <div key={i} className="flex items-center gap-2 border-b border-repressurizer-border-subtle px-3 py-2 last:border-b-0">
+                        <span className="w-4 shrink-0 text-right font-mono text-[11px] tabular-nums text-repressurizer-text-faint">{i + 1}</span>
+                        <span className="min-w-0 flex-1 truncate text-[12px] text-repressurizer-text" title={g.name}>{g.name}</span>
+                        <span className="shrink-0 font-mono text-[11px] tabular-nums text-repressurizer-danger">
                           {formatPrice(g.price, currency)}
                         </span>
                       </div>
                     ))}
                   </div>
-                  <p className="mt-2 text-[10px] text-repressurizer-text-faint font-mono tabular-nums">
+                  <p className="mt-2 text-right font-mono text-[10px] tabular-nums text-repressurizer-text-faint">
                     {t("stats.totalWasted")}: <span className="text-repressurizer-danger">{formatPrice(stats.shameWall.reduce((s, g) => s + g.price, 0), currency)}</span>
                   </p>
                 </div>
@@ -462,11 +474,16 @@ function StatCard({
   accent?: "warning";
 }) {
   return (
-    <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3">
+    <div className="min-w-0 rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-3 py-2.5">
       <div className={`mb-1 ${accent === "warning" ? "text-repressurizer-warning" : "text-repressurizer-accent"}`}>{icon}</div>
-      <p className={`text-lg font-semibold font-mono tabular-nums ${accent === "warning" ? "text-repressurizer-warning" : "text-white"}`}>{value}</p>
-      <p className="text-[11px] text-repressurizer-text-faint mt-0.5">{label}</p>
-      {subtitle && <p className="text-[10px] text-repressurizer-text-faint mt-0.5">{subtitle}</p>}
+      <p
+        className={`truncate font-mono text-lg font-semibold leading-tight tabular-nums ${accent === "warning" ? "text-repressurizer-warning" : "text-white"}`}
+        title={value}
+      >
+        {value}
+      </p>
+      <p className="mt-0.5 truncate text-[11px] text-repressurizer-text-faint">{label}</p>
+      {subtitle && <p className="mt-0.5 line-clamp-2 text-[10px] leading-snug text-repressurizer-text-faint">{subtitle}</p>}
     </div>
   );
 }
