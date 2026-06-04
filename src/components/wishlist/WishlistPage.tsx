@@ -156,7 +156,7 @@ export function WishlistPage({ onClose }: WishlistPageProps) {
       className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-sm pt-16 pb-8 px-4"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="flex h-full w-full max-w-2xl flex-col rounded-2xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_24px_80px_rgba(0,0,0,0.6)]">
+      <div className="flex h-full w-full max-w-3xl flex-col rounded-2xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_24px_80px_rgba(0,0,0,0.6)]">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-repressurizer-border-subtle px-5 py-3.5">
           <div className="flex items-center gap-2.5">
@@ -211,22 +211,22 @@ export function WishlistPage({ onClose }: WishlistPageProps) {
 
         {/* Toolbar */}
         {items.length > 0 && (
-          <div className="flex items-center gap-2 border-b border-repressurizer-border-subtle px-4 py-2">
+          <div className="flex items-center gap-1.5 border-b border-repressurizer-border-subtle px-4 py-2">
             <input
               type="text"
               placeholder={t("wishlist.search")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="flex-1 rounded-lg border border-repressurizer-border bg-repressurizer-bg px-3 py-1 text-sm text-repressurizer-text placeholder:text-repressurizer-text-faint focus:border-repressurizer-accent focus:outline-none"
+              className="min-w-[180px] flex-1 rounded-lg border border-repressurizer-border bg-repressurizer-bg px-3 py-1.5 text-sm text-repressurizer-text placeholder:text-repressurizer-text-faint focus:border-repressurizer-accent focus:outline-none"
             />
-            <div className="flex items-center gap-1 text-repressurizer-text-faint">
+            <div className="flex shrink-0 items-center gap-1 text-repressurizer-text-faint">
               <SortAscending size={13} />
             </div>
             {(["priority", "date", "name", "price", "discount"] as SortMode[]).map((s) => (
               <button
                 key={s}
                 onClick={() => setSortBy(s)}
-                className={`rounded-lg border px-2.5 py-1 text-[11px] font-medium capitalize transition-colors ${
+                className={`shrink-0 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium capitalize leading-none transition-colors ${
                   sortBy === s
                     ? "border-repressurizer-accent bg-repressurizer-accent/10 text-repressurizer-accent"
                     : "border-repressurizer-border-subtle bg-repressurizer-bg text-repressurizer-text-muted hover:text-repressurizer-text"
@@ -239,7 +239,11 @@ export function WishlistPage({ onClose }: WishlistPageProps) {
                  t("wishlist.sort.name")}
               </button>
             ))}
-            <label className="inline-flex items-center gap-1.5 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-bg px-2.5 py-1 text-[11px] text-repressurizer-text-muted">
+            <label className={`inline-flex shrink-0 cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg border px-2.5 py-1.5 text-[11px] font-medium leading-none transition-colors ${
+              onSaleOnly
+                ? "border-repressurizer-accent bg-repressurizer-accent/10 text-repressurizer-accent"
+                : "border-repressurizer-border-subtle bg-repressurizer-bg text-repressurizer-text-muted hover:text-repressurizer-text"
+            }`}>
               <input
                 type="checkbox"
                 checked={onSaleOnly}
