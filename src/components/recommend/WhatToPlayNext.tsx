@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useGameStore } from "../../stores/gameStore";
 import { useHltbStore } from "../../stores/hltbStore";
 import { useStatusStore } from "../../stores/statusStore";
+import { useCategoryStore } from "../../stores/categoryStore";
 import { X, Shuffle, Timer, GameController, Funnel } from "@phosphor-icons/react";
 import { SteamImage } from "../games/SteamImage";
 import { useT } from "../../lib/i18n";
@@ -11,6 +12,8 @@ interface WhatToPlayNextProps {
 }
 
 type LengthFilter = "any" | "short" | "medium" | "long";
+type RecommendMode = "smart" | "surprise" | "quick" | "quality" | "backlog";
+type PlayFilter = "any" | "unplayed" | "started";
 
 export function WhatToPlayNext({ onClose }: WhatToPlayNextProps) {
   const t = useT();
@@ -18,14 +21,33 @@ export function WhatToPlayNext({ onClose }: WhatToPlayNextProps) {
   const details = useGameStore((s) => s.details);
   const hltbData = useHltbStore((s) => s.data);
   const statuses = useStatusStore((s) => s.statuses);
+  const collections = useCategoryStore((s) => s.collections);
 
   const [seed, setSeed] = useState(0);
+  const [mode, setMode] = useState<RecommendMode>("smart");
   const [lengthFilter, setLengthFilter] = useState<LengthFilter>("any");
+  const [playFilter, setPlayFilter] = useState<PlayFilter>("any");
   const [genreFilter, setGenreFilter] = useState<string>("");
+  const [avoidRecent, setAvoidRecent] = useState(true);
+  const [recentIds, setRecentIds] = useState<Set<number>>(() => {
+    try {
+      return new Set(JSON.parse(localStorage.getItem("repressurizer-recent-recommendations") ?? "[]"));
+    } catch {
+      return new Set();
+    }
+  });
+
+  const rememberRecommendations = (ids: number[]) => {
+    const next = [...ids, ...recentIds].slice(0, 60);
+    const unique = [...new Set(next)];
+    localStorage.setItem("repressurizer-recent-recommendations", JSON.stringify(unique));
+    setRecentIds(new Set(unique));
+  };
 
   // Build genre preference from most-played games
   const { recommendations, topGenres } = useMemo(() => {
-    const list = Object.values(games);
+    const hidden = new Set(collections.find((c) => c.id === "hidden")?.added ?? []);
+    const list = Object.values(games).filter((g) => !hidden.has(g.appid));
 
     // Genre weight: sum of playtime per genre
     const genrePlaytime = new Map<string, number>();
@@ -45,9 +67,12 @@ export function WhatToPlayNext({ onClose }: WhatToPlayNextProps) {
 
     // Score unplayed or barely-played games
     const candidates = list.filter((g) => {
-      if (g.playtime_forever > 60) return false; // less than 1h played
+      if (playFilter === "unplayed" && g.playtime_forever > 0) return false;
+      if (playFilter === "started" && (g.playtime_forever === 0 || g.playtime_forever > 240)) return false;
+      if (playFilter === "any" && g.playtime_forever > 60) return false; // less than 1h played
       const status = statuses[g.appid];
       if (status === "beaten" || status === "completed" || status === "abandoned") return false;
+      if (avoidRecent && recentIds.has(g.appid)) return false;
       return true;
     });
 
@@ -58,7 +83,7 @@ export function WhatToPlayNext({ onClose }: WhatToPlayNextProps) {
 
       // Metacritic bonus (0-30 points)
       if (d?.metacritic_score) {
-        score += d.metacritic_score * 0.3;
+        score += d.metacritic_score * (mode === "quality" ? 0.45 : 0.3);
       }
 
       // Genre affinity (0-25 points)
@@ -71,12 +96,13 @@ export function WhatToPlayNext({ onClose }: WhatToPlayNextProps) {
         score += Math.min(genreScore, 25);
       }
 
-      // HLTB bonus: shorter games get a slight boost (0-15 points)
+      // HLTB bonus: shorter games get a slight boost (0-20 points)
       const mainTime = hltb?.main_story ?? hltb?.main_extra;
       if (mainTime != null) {
-        if (mainTime <= 10) score += 15;
-        else if (mainTime <= 25) score += 10;
-        else if (mainTime <= 50) score += 5;
+        const quickBoost = mode === "quick" ? 1.35 : 1;
+        if (mainTime <= 10) score += 15 * quickBoost;
+        else if (mainTime <= 25) score += 10 * quickBoost;
+        else if (mainTime <= 50) score += 5 * quickBoost;
       }
 
       // Recency penalty: if last played recently, slight boost
@@ -85,8 +111,12 @@ export function WhatToPlayNext({ onClose }: WhatToPlayNextProps) {
         if (daysSincePlay < 30) score += 5;
       }
 
-      // Small random factor for variety
-      score += ((g.appid * 13 + seed * 7) % 100) * 0.05;
+      if (mode === "backlog") {
+        score += Math.min(20, Math.max(0, 20 - g.playtime_forever / 3));
+      }
+
+      // Random factor for variety. Surprise mode deliberately moves more.
+      score += ((g.appid * 13 + seed * 97) % 100) * (mode === "surprise" ? 0.22 : 0.07);
 
       return { game: g, details: d, hltb, score, mainTime };
     });
@@ -108,8 +138,16 @@ export function WhatToPlayNext({ onClose }: WhatToPlayNextProps) {
     }
 
     filtered.sort((a, b) => b.score - a.score);
-    return { recommendations: filtered.slice(0, 20), topGenres };
-  }, [games, details, hltbData, statuses, seed, lengthFilter, genreFilter]);
+    const pool = mode === "surprise" ? filtered.slice(0, 45) : filtered.slice(0, 30);
+    const picked = weightedPick(pool, seed, mode === "surprise" ? 20 : 12);
+    const recommendations = [...picked, ...filtered.filter((r) => !picked.includes(r))].slice(0, 20);
+    return { recommendations, topGenres };
+  }, [games, details, hltbData, statuses, seed, lengthFilter, genreFilter, playFilter, avoidRecent, recentIds, collections, mode]);
+
+  const handleShuffle = () => {
+    rememberRecommendations(recommendations.slice(0, 8).map((r) => r.game.appid));
+    setSeed((s) => s + 1);
+  };
 
   return (
     <div
@@ -128,7 +166,7 @@ export function WhatToPlayNext({ onClose }: WhatToPlayNextProps) {
           </div>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setSeed((s) => s + 1)}
+              onClick={handleShuffle}
               title={t("recommend.shuffleTitle")}
               className="flex items-center gap-1 rounded-lg border border-repressurizer-border px-2.5 py-1 text-[11px] text-repressurizer-text-muted transition-colors hover:text-white"
             >
@@ -147,6 +185,29 @@ export function WhatToPlayNext({ onClose }: WhatToPlayNextProps) {
         {/* Filters */}
         <div className="flex items-center gap-3 border-b border-repressurizer-border-subtle px-4 py-2">
           <Funnel size={12} className="text-repressurizer-text-faint" />
+          <div className="flex flex-wrap gap-1.5">
+            {([
+              ["smart", t("recommend.mode.smart")],
+              ["surprise", t("recommend.mode.surprise")],
+              ["quick", t("recommend.mode.quick")],
+              ["quality", t("recommend.mode.quality")],
+              ["backlog", t("recommend.mode.backlog")],
+            ] as [RecommendMode, string][]).map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => setMode(key)}
+                className={`rounded-lg border px-2 py-0.5 text-[11px] transition-colors ${
+                  mode === key
+                    ? "border-repressurizer-accent bg-repressurizer-accent/10 text-repressurizer-accent"
+                    : "border-repressurizer-border-subtle text-repressurizer-text-muted hover:text-repressurizer-text"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <div className="flex items-center gap-3 border-b border-repressurizer-border-subtle px-4 py-2">
           <div className="flex gap-1.5">
             {([
               ["any", t("recommend.anyLength")],
@@ -167,6 +228,24 @@ export function WhatToPlayNext({ onClose }: WhatToPlayNextProps) {
               </button>
             ))}
           </div>
+          <select
+            value={playFilter}
+            onChange={(e) => setPlayFilter(e.target.value as PlayFilter)}
+            className="rounded-lg border border-repressurizer-border bg-repressurizer-bg px-2 py-0.5 text-[11px] text-repressurizer-text focus:outline-none"
+          >
+            <option value="any">{t("recommend.play.any")}</option>
+            <option value="unplayed">{t("recommend.play.unplayed")}</option>
+            <option value="started">{t("recommend.play.started")}</option>
+          </select>
+          <label className="inline-flex items-center gap-1.5 text-[11px] text-repressurizer-text-muted">
+            <input
+              type="checkbox"
+              checked={avoidRecent}
+              onChange={(e) => setAvoidRecent(e.target.checked)}
+              className="h-3 w-3 accent-[var(--color-repressurizer-accent)]"
+            />
+            {t("recommend.avoidRecent")}
+          </label>
           {topGenres.length > 0 && (
             <select
               value={genreFilter}
@@ -244,6 +323,31 @@ export function WhatToPlayNext({ onClose }: WhatToPlayNextProps) {
           </p>
         </div>
       </div>
-    </div>
+      </div>
   );
+}
+
+function weightedPick<T extends { score: number }>(items: T[], seed: number, count: number): T[] {
+  const pool = [...items];
+  const picked: T[] = [];
+  let state = Math.max(1, seed + 17);
+  const random = () => {
+    state = (state * 1664525 + 1013904223) >>> 0;
+    return state / 0xffffffff;
+  };
+
+  while (pool.length > 0 && picked.length < count) {
+    const maxScore = Math.max(...pool.map((item) => item.score), 1);
+    const weights = pool.map((item) => Math.max(0.1, item.score / maxScore));
+    const total = weights.reduce((sum, weight) => sum + weight, 0);
+    let roll = random() * total;
+    let index = 0;
+    for (; index < weights.length; index++) {
+      roll -= weights[index];
+      if (roll <= 0) break;
+    }
+    picked.push(pool.splice(Math.min(index, pool.length - 1), 1)[0]);
+  }
+
+  return picked;
 }
