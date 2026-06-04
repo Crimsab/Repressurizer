@@ -157,6 +157,29 @@ test("uses the color picker as the primary custom accent control", async ({ page
     .toBe("#38bdf8");
 });
 
+test("keeps recommendation filters inside the dialog", async ({ page }, testInfo) => {
+  await page.goto("/");
+  await page.getByTitle("What to Play Next").click();
+
+  const dialog = page.locator(".fixed.inset-0").filter({
+    has: page.getByRole("heading", { name: "What to Play Next" }),
+  });
+  await expect(dialog.getByRole("heading", { name: "What to Play Next" })).toBeVisible();
+  await dialog.getByRole("button", { name: "All Genres" }).click();
+  const rpgOption = dialog.getByRole("button", { name: "RPG", exact: true });
+  await expect(rpgOption).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+
+  const viewport = page.viewportSize();
+  const menuBox = await rpgOption.locator("..").boundingBox();
+  expect(menuBox?.x ?? 0).toBeGreaterThanOrEqual(0);
+  if (viewport && menuBox) expect(menuBox.x + menuBox.width).toBeLessThanOrEqual(viewport.width);
+
+  const screenshotPath = testInfo.outputPath("recommend-filters.png");
+  await page.screenshot({ path: screenshotPath, fullPage: true });
+  await testInfo.attach("recommend-filters", { path: screenshotPath, contentType: "image/png" });
+});
+
 test("guides Steam Family setup during onboarding", async ({ page }) => {
   await page.addInitScript(() => {
     const raw = window.localStorage.getItem("repressurizer-settings");

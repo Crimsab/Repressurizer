@@ -206,8 +206,8 @@ export function WhatToPlayNext({ onClose }: WhatToPlayNextProps) {
             ))}
           </div>
         </div>
-        <div className="flex items-center gap-3 border-b border-repressurizer-border-subtle px-4 py-2">
-          <div className="flex gap-1.5">
+        <div className="flex flex-wrap items-center gap-2 border-b border-repressurizer-border-subtle px-4 py-2">
+          <div className="flex min-w-0 flex-wrap gap-1.5">
             {([
               ["any", t("recommend.anyLength")],
               ["short", t("recommend.short")],
@@ -235,9 +235,9 @@ export function WhatToPlayNext({ onClose }: WhatToPlayNextProps) {
               { value: "unplayed", label: t("recommend.play.unplayed") },
               { value: "started", label: t("recommend.play.started") },
             ]}
-            className="w-[170px]"
+            className="w-[160px]"
           />
-          <label className="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] text-repressurizer-text-muted">
+          <label className="inline-flex min-w-0 items-center gap-1.5 whitespace-nowrap text-[11px] text-repressurizer-text-muted">
             <input
               type="checkbox"
               checked={avoidRecent}
@@ -255,7 +255,7 @@ export function WhatToPlayNext({ onClose }: WhatToPlayNextProps) {
                 ...genreOptions.map((g) => ({ value: g, label: g })),
               ]}
               align="right"
-              className="ml-auto w-[220px]"
+              className="w-[200px]"
             />
           )}
         </div>
