@@ -33,6 +33,9 @@ export const useFriendsStore = create<FriendsState>((set) => ({
       const raw = await loadFriendsCache();
       if (raw) {
         const parsed: SavedFriend[] = JSON.parse(raw);
+        for (const friend of parsed) {
+          if (friend.lastCompared === 0 && friend.gameCount === 0) friend.gameCount = -1;
+        }
         set({ friends: parsed, hydrated: true });
         return;
       }
@@ -52,7 +55,14 @@ export const useFriendsStore = create<FriendsState>((set) => ({
     set((state) => {
       const merged = new Map<string, SavedFriend>();
       for (const friend of state.friends) merged.set(friend.steamId64, friend);
-      for (const friend of friends) merged.set(friend.steamId64, friend);
+      for (const friend of friends) {
+        const existing = merged.get(friend.steamId64);
+        merged.set(friend.steamId64, {
+          ...friend,
+          lastCompared: existing?.lastCompared || friend.lastCompared,
+          gameCount: existing?.gameCount != null && existing.gameCount >= 0 ? existing.gameCount : friend.gameCount,
+        });
+      }
       const next = [...merged.values()]
         .sort((a, b) => a.displayName.localeCompare(b.displayName))
         .slice(0, MAX_FRIENDS);

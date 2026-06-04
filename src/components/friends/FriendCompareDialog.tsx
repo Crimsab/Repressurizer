@@ -4,7 +4,7 @@ import { useSettingsStore } from "../../stores/settingsStore";
 import { useFriendsStore } from "../../stores/friendsStore";
 import { fetchLibrary, resolveVanityUrl, fetchPlayerSummary, fetchFriendList } from "../../lib/tauri";
 import type { OwnedGame } from "../../lib/types";
-import { X, UsersThree, MagnifyingGlass, ArrowsClockwise } from "@phosphor-icons/react";
+import { X, UsersThree, MagnifyingGlass, ArrowsClockwise, CaretDown, CaretRight } from "@phosphor-icons/react";
 import { SteamImage } from "../games/SteamImage";
 import { useT } from "../../lib/i18n";
 
@@ -26,6 +26,8 @@ export function FriendCompareDialog({ onClose }: FriendCompareDialogProps) {
   const [error, setError] = useState("");
   const [section, setSection] = useState<Section>("both");
   const [search, setSearch] = useState("");
+  const [friendSearch, setFriendSearch] = useState("");
+  const [friendsOpen, setFriendsOpen] = useState(false);
   const [currentFriendId, setCurrentFriendId] = useState("");
   const [importingFriends, setImportingFriends] = useState(false);
 
@@ -138,8 +140,9 @@ export function FriendCompareDialog({ onClose }: FriendCompareDialogProps) {
         displayName: friend.personaname || `Friend #${friend.steamid.slice(-6)}`,
         avatar: friend.avatar,
         lastCompared: 0,
-        gameCount: 0,
+        gameCount: -1,
       })));
+      setFriendsOpen(imported.length > 0);
       if (imported.length === 0) {
         setError(t("friends.importEmpty"));
       }
@@ -191,6 +194,15 @@ export function FriendCompareDialog({ onClose }: FriendCompareDialogProps) {
     "only-me": t("friends.onlyMe", { count: onlyMe.length }),
     "only-them": t("friends.onlyThem", { count: onlyThem.length }),
   };
+
+  const filteredFriends = useMemo(() => {
+    const query = friendSearch.trim().toLowerCase();
+    if (!query) return friends;
+    return friends.filter((friend) =>
+      friend.displayName.toLowerCase().includes(query) ||
+      friend.steamId64.includes(query)
+    );
+  }, [friends, friendSearch]);
 
   return (
     <div
@@ -244,37 +256,66 @@ export function FriendCompareDialog({ onClose }: FriendCompareDialogProps) {
 
           {/* Saved friends */}
           {friends.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {friends.map((f) => (
-                <div
-                  key={f.steamId64}
-                  className={`group inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs transition-colors ${
-                    currentFriendId === f.steamId64
-                      ? "border-repressurizer-accent/40 bg-repressurizer-accent/10 text-repressurizer-accent"
-                      : "border-repressurizer-border-subtle bg-repressurizer-bg text-repressurizer-text-muted hover:text-repressurizer-text hover:border-repressurizer-border"
-                  }`}
-                >
-                  {f.avatar && (
-                    <img src={f.avatar} alt="" className="h-4 w-4 rounded-full shrink-0" />
+            <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg">
+              <button
+                onClick={() => setFriendsOpen((v) => !v)}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-repressurizer-text-muted transition-colors hover:text-repressurizer-text"
+              >
+                {friendsOpen ? <CaretDown size={12} /> : <CaretRight size={12} />}
+                <span className="font-medium text-repressurizer-text">{t("friends.saved")}</span>
+                <span className="font-mono text-repressurizer-text-faint tabular-nums">{friends.length}</span>
+                <span className="ml-auto text-[10px] text-repressurizer-text-faint">{t("friends.saved.desc")}</span>
+              </button>
+              {friendsOpen && (
+                <div className="border-t border-repressurizer-border-subtle p-2">
+                  <div className="mb-2 flex items-center gap-1.5 rounded-lg border border-repressurizer-border bg-repressurizer-surface px-2 py-1">
+                    <MagnifyingGlass size={12} className="text-repressurizer-text-faint" />
+                    <input
+                      value={friendSearch}
+                      onChange={(e) => setFriendSearch(e.target.value)}
+                      placeholder={t("friends.search")}
+                      className="min-w-0 flex-1 bg-transparent text-[11px] text-repressurizer-text placeholder:text-repressurizer-text-faint focus:outline-none"
+                    />
+                  </div>
+                  <div className="grid max-h-32 grid-cols-2 gap-1.5 overflow-auto md:grid-cols-3">
+                    {filteredFriends.map((f) => (
+                      <div
+                        key={f.steamId64}
+                        className={`group inline-flex min-w-0 items-center gap-1.5 rounded-lg border px-2.5 py-1 text-xs transition-colors ${
+                          currentFriendId === f.steamId64
+                            ? "border-repressurizer-accent/40 bg-repressurizer-accent/10 text-repressurizer-accent"
+                            : "border-repressurizer-border-subtle bg-repressurizer-surface text-repressurizer-text-muted hover:text-repressurizer-text hover:border-repressurizer-border"
+                        }`}
+                      >
+                        {f.avatar && (
+                          <img src={f.avatar} alt="" className="h-4 w-4 rounded-full shrink-0" />
+                        )}
+                        <button
+                          onClick={() => handleSelectFriend(f.steamId64)}
+                          disabled={loading}
+                          className="min-w-0 flex-1 truncate text-left disabled:opacity-40"
+                          title={`${f.displayName}${f.gameCount >= 0 ? ` (${f.gameCount} games)` : ""}`}
+                        >
+                          {f.displayName}
+                        </button>
+                        {f.gameCount >= 0 && (
+                          <span className="text-[10px] text-repressurizer-text-faint font-mono tabular-nums">{f.gameCount}</span>
+                        )}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); removeFriend(f.steamId64); }}
+                          className="opacity-0 group-hover:opacity-100 text-repressurizer-text-faint hover:text-repressurizer-danger transition-all"
+                          title={t("friends.remove")}
+                        >
+                          <X size={10} weight="bold" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  {filteredFriends.length === 0 && (
+                    <p className="py-4 text-center text-xs text-repressurizer-text-faint">{t("common.noResults")}</p>
                   )}
-                  <button
-                    onClick={() => handleSelectFriend(f.steamId64)}
-                    disabled={loading}
-                    className="truncate max-w-[120px] disabled:opacity-40"
-                    title={`${f.displayName} (${f.gameCount} games)`}
-                  >
-                    {f.displayName}
-                  </button>
-                  <span className="text-[10px] text-repressurizer-text-faint font-mono tabular-nums">{f.gameCount}</span>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); removeFriend(f.steamId64); }}
-                    className="opacity-0 group-hover:opacity-100 text-repressurizer-text-faint hover:text-repressurizer-danger transition-all"
-                    title={t("friends.remove")}
-                  >
-                    <X size={10} weight="bold" />
-                  </button>
                 </div>
-              ))}
+              )}
             </div>
           )}
         </div>
