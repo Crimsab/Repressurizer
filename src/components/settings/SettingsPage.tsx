@@ -92,7 +92,6 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
   const [restoring, setRestoring] = useState(false);
   const [message, setMessage] = useState("");
   const [tab, setTab] = useState<"general" | "appearance" | "backups" | "ignored">("general");
-  const [customHex, setCustomHex] = useState(settings.accentColor);
   const [cacheInfo, setCacheInfo] = useState<CacheInfo | null>(null);
   const [diagnosticsExporting, setDiagnosticsExporting] = useState(false);
   const [checkingUpdates, setCheckingUpdates] = useState(false);
@@ -860,12 +859,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
             </div>
           )}
 
-          {tab === "appearance" && (
-            <AppearanceTab
-              customHex={customHex}
-              setCustomHex={setCustomHex}
-            />
-          )}
+          {tab === "appearance" && <AppearanceTab />}
 
           {tab === "backups" && (
             <BackupsTab
@@ -999,13 +993,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
   );
 }
 
-function AppearanceTab({
-  customHex,
-  setCustomHex,
-}: {
-  customHex: string;
-  setCustomHex: (v: string) => void;
-}) {
+function AppearanceTab() {
   const {
     accentColor,
     recentAccentColors,
@@ -1023,9 +1011,23 @@ function AppearanceTab({
     setSettings,
   } = useSettingsStore();
   const t = useT();
+  const [customHex, setCustomHex] = useState(accentColor);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [previewAccent, setPreviewAccent] = useState(accentColor);
   const pickerRef = useRef<HTMLDivElement>(null);
-  const activeAccent = /^#[0-9a-fA-F]{6}$/.test(accentColor) ? accentColor : "#10b981";
+  const previewFrameRef = useRef<number | null>(null);
+  const activeAccent = /^#[0-9a-fA-F]{6}$/.test(previewAccent) ? previewAccent : "#10b981";
+
+  useEffect(() => {
+    setPreviewAccent(accentColor);
+    setCustomHex(accentColor);
+  }, [accentColor]);
+
+  useEffect(() => {
+    return () => {
+      if (previewFrameRef.current != null) cancelAnimationFrame(previewFrameRef.current);
+    };
+  }, []);
 
   const commitAccent = (hex: string, saveRecent = false) => {
     if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return;
@@ -1036,6 +1038,7 @@ function AppearanceTab({
     }
     setSettings(nextSettings);
     setCustomHex(normalized);
+    setPreviewAccent(normalized);
     applyAccentColor(normalized);
   };
 
@@ -1047,8 +1050,12 @@ function AppearanceTab({
     setCustomHex(hex);
     if (/^#[0-9a-fA-F]{6}$/.test(hex)) {
       const normalized = hex.toLowerCase();
-      setSettings({ accentColor: normalized });
-      applyAccentColor(normalized);
+      setPreviewAccent(normalized);
+      if (previewFrameRef.current != null) cancelAnimationFrame(previewFrameRef.current);
+      previewFrameRef.current = requestAnimationFrame(() => {
+        applyAccentColor(normalized);
+        previewFrameRef.current = null;
+      });
     }
   };
 
@@ -1080,6 +1087,7 @@ function AppearanceTab({
     setSettings({ accentColor: "" });
     applyAccentColor("");
     setCustomHex("");
+    setPreviewAccent("");
   };
 
   return (
