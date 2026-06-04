@@ -140,7 +140,8 @@ test("uses the color picker as the primary custom accent control", async ({ page
   await page.getByTitle("Settings").click();
   await page.getByRole("button", { name: "Appearance" }).click();
 
-  const picker = page.getByLabel("Pick accent color");
+  await page.getByLabel("Pick accent color").first().click();
+  const picker = page.locator('input[type="color"]').first();
   await expect(picker).toBeAttached();
   await picker.evaluate((input) => {
     const el = input as HTMLInputElement;

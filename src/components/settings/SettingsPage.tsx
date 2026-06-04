@@ -44,6 +44,7 @@ import {
   Palette,
   Stack,
   Funnel,
+  Timer,
   Monitor,
   Globe,
   Moon,
@@ -1005,20 +1006,43 @@ function AppearanceTab({
   customHex: string;
   setCustomHex: (v: string) => void;
 }) {
-  const { accentColor, showSmartLists, showNowPlaying, showFilterBar, sidebarWidth, theme, language, minimizeToTray, setSettings } = useSettingsStore();
+  const {
+    accentColor,
+    recentAccentColors,
+    showSmartLists,
+    showNowPlaying,
+    showFilterBar,
+    showDetailHltb,
+    showDetailMetacritic,
+    showDetailPrice,
+    sidebarWidth,
+    theme,
+    language,
+    minimizeToTray,
+    checkUpdatesOnStartup,
+    setSettings,
+  } = useSettingsStore();
   const t = useT();
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const activeAccent = /^#[0-9a-fA-F]{6}$/.test(accentColor) ? accentColor : "#10b981";
+
+  const commitAccent = (hex: string) => {
+    if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return;
+    const normalized = hex.toLowerCase();
+    const recent = [normalized, ...(recentAccentColors ?? []).filter((c) => c !== normalized)].slice(0, 8);
+    setSettings({ accentColor: normalized, recentAccentColors: recent });
+    setCustomHex(normalized);
+    applyAccentColor(normalized);
+  };
 
   const handlePickPreset = (hex: string) => {
-    setCustomHex(hex);
-    setSettings({ accentColor: hex });
-    applyAccentColor(hex);
+    commitAccent(hex);
   };
 
   const handleCustomHex = (hex: string) => {
     setCustomHex(hex);
     if (/^#[0-9a-fA-F]{6}$/.test(hex)) {
-      setSettings({ accentColor: hex });
-      applyAccentColor(hex);
+      commitAccent(hex);
     }
   };
 
@@ -1035,25 +1059,34 @@ function AppearanceTab({
         <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("appearance.accentColor")}</h3>
         <p className="text-xs text-repressurizer-text-faint -mt-1">{t("appearance.accentColor.desc")}</p>
 
-        <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3">
-          <div className="flex items-center gap-3">
-            <label className="relative block h-12 w-12 shrink-0 cursor-pointer overflow-hidden rounded-xl border border-repressurizer-border shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
-              <span
-                className="block h-full w-full"
-                style={{ backgroundColor: /^#[0-9a-fA-F]{6}$/.test(customHex || accentColor) ? (customHex || accentColor) : "#10b981" }}
-              />
-              <input
-                type="color"
-                value={/^#[0-9a-fA-F]{6}$/.test(customHex || accentColor) ? (customHex || accentColor) : "#10b981"}
-                onChange={(e) => handleCustomHex(e.target.value)}
-                className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                aria-label={t("appearance.pickAccentColor")}
-              />
-            </label>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-repressurizer-text">{t("appearance.customAccent")}</p>
-              <p className="mt-0.5 text-xs text-repressurizer-text-faint">{t("appearance.customAccent.desc")}</p>
+        <div className="relative rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-3 py-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => setPickerOpen((v) => !v)}
+              className="btn-press relative h-9 w-9 shrink-0 overflow-hidden rounded-full border border-white/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]"
+              title={t("appearance.pickAccentColor")}
+              aria-label={t("appearance.pickAccentColor")}
+              style={{
+                background: accentColor
+                  ? activeAccent
+                  : "conic-gradient(from 90deg, #ef4444, #f97316, #eab308, #10b981, #06b6d4, #3b82f6, #8b5cf6, #ef4444)",
+              }}
+            >
+              <span className="absolute inset-0 rounded-full ring-1 ring-inset ring-white/20" />
+            </button>
+            <div className="mr-1 min-w-[120px]">
+              <p className="text-sm font-medium text-repressurizer-text">{accentColor ? accentColor : t("appearance.defaultAccent")}</p>
+              <p className="text-[10px] text-repressurizer-text-faint">{t("appearance.accentCompact.desc")}</p>
             </div>
+            {ACCENT_PRESETS.map((p) => (
+              <AccentSwatch
+                key={p.id}
+                color={p.accent}
+                label={p.label}
+                active={accentColor === p.accent}
+                onClick={() => handlePickPreset(p.accent)}
+              />
+            ))}
             {accentColor && (
               <button
                 onClick={handleResetColor}
@@ -1064,40 +1097,60 @@ function AppearanceTab({
               </button>
             )}
           </div>
-          <div className="mt-3">
-            <label className="mb-1.5 block text-xs text-repressurizer-text-muted">{t("appearance.hexValue")}</label>
-            <input
-              type="text"
-              value={customHex}
-              onChange={(e) => handleCustomHex(e.target.value)}
-              placeholder="#10b981"
-              maxLength={7}
-              className="w-full rounded-lg border border-repressurizer-border bg-repressurizer-surface px-3 py-2 font-mono text-sm text-repressurizer-text transition-colors focus:border-repressurizer-accent focus:outline-none"
-            />
-          </div>
-        </div>
-
-        {/* Presets */}
-        <div className="flex flex-wrap gap-2">
-          {ACCENT_PRESETS.map((p) => (
-            <button
-              key={p.id}
-              onClick={() => handlePickPreset(p.accent)}
-              title={p.label}
-              className={`relative h-8 w-8 rounded-full transition-all ${
-                accentColor === p.accent
-                  ? "ring-2 ring-white ring-offset-2 ring-offset-repressurizer-surface scale-110"
-                  : "hover:scale-105"
-              }`}
-              style={{ backgroundColor: p.accent }}
-            >
-              {accentColor === p.accent && (
-                <span className="absolute inset-0 flex items-center justify-center text-white">
-                  <CheckCircle size={14} weight="fill" />
-                </span>
+          {recentAccentColors?.length > 0 && (
+            <div className="mt-3 flex items-center gap-2 border-t border-repressurizer-border-subtle pt-3">
+              <span className="text-[10px] uppercase tracking-wider text-repressurizer-text-faint">
+                {t("appearance.recentColors")}
+              </span>
+              {recentAccentColors.map((color) => (
+                <AccentSwatch
+                  key={color}
+                  color={color}
+                  label={color}
+                  active={accentColor === color}
+                  onClick={() => commitAccent(color)}
+                  small
+                />
+              ))}
+            </div>
+          )}
+          {pickerOpen && (
+            <div className="absolute left-3 top-14 z-20 w-72 rounded-xl border border-repressurizer-border bg-repressurizer-surface p-3 shadow-[0_16px_40px_rgba(0,0,0,0.45)]">
+              <div className="mb-3 flex items-center gap-3">
+                <label className="relative block h-16 w-16 shrink-0 cursor-pointer overflow-hidden rounded-xl border border-repressurizer-border">
+                  <span className="block h-full w-full" style={{ backgroundColor: activeAccent }} />
+                  <input
+                    type="color"
+                    value={activeAccent}
+                    onChange={(e) => handleCustomHex(e.target.value)}
+                    className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                    aria-label={t("appearance.pickAccentColor")}
+                  />
+                </label>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-repressurizer-text">{t("appearance.customAccent")}</p>
+                  <p className="mt-0.5 text-xs text-repressurizer-text-faint">{t("appearance.customAccent.desc")}</p>
+                </div>
+              </div>
+              <label className="mb-1.5 block text-xs text-repressurizer-text-muted">{t("appearance.hexValue")}</label>
+              <input
+                type="text"
+                value={customHex}
+                onChange={(e) => handleCustomHex(e.target.value)}
+                placeholder="#10b981"
+                maxLength={7}
+                className="w-full rounded-lg border border-repressurizer-border bg-repressurizer-bg px-3 py-2 font-mono text-sm text-repressurizer-text transition-colors focus:border-repressurizer-accent focus:outline-none"
+              />
+              {accentColor && (
+                <button
+                  onClick={handleResetColor}
+                  className="mt-3 w-full rounded-lg border border-repressurizer-border px-3 py-2 text-xs text-repressurizer-text-muted transition-colors hover:text-repressurizer-text"
+                >
+                  {t("appearance.resetColor")}
+                </button>
               )}
-            </button>
-          ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -1124,6 +1177,27 @@ function AppearanceTab({
           description={t("appearance.filterBar.desc")}
           checked={showFilterBar}
           onChange={(v) => setSettings({ showFilterBar: v })}
+        />
+        <ToggleRow
+          icon={<Timer size={15} weight="duotone" />}
+          label={t("appearance.detailHltb")}
+          description={t("appearance.detailHltb.desc")}
+          checked={showDetailHltb}
+          onChange={(v) => setSettings({ showDetailHltb: v })}
+        />
+        <ToggleRow
+          icon={<Star size={15} weight="duotone" />}
+          label={t("appearance.detailMetacritic")}
+          description={t("appearance.detailMetacritic.desc")}
+          checked={showDetailMetacritic}
+          onChange={(v) => setSettings({ showDetailMetacritic: v })}
+        />
+        <ToggleRow
+          icon={<Database size={15} weight="duotone" />}
+          label={t("appearance.detailPrice")}
+          description={t("appearance.detailPrice.desc")}
+          checked={showDetailPrice}
+          onChange={(v) => setSettings({ showDetailPrice: v })}
         />
       </div>
 
@@ -1206,8 +1280,46 @@ function AppearanceTab({
           checked={minimizeToTray ?? false}
           onChange={(v) => setSettings({ minimizeToTray: v })}
         />
+        <ToggleRow
+          icon={<CloudArrowDown size={15} weight="duotone" />}
+          label={t("settings.updates.autoCheck")}
+          description={t("settings.updates.autoCheck.desc")}
+          checked={checkUpdatesOnStartup ?? true}
+          onChange={(v) => setSettings({ checkUpdatesOnStartup: v })}
+        />
       </div>
     </div>
+  );
+}
+
+function AccentSwatch({
+  color,
+  label,
+  active,
+  onClick,
+  small = false,
+}: {
+  color: string;
+  label: string;
+  active: boolean;
+  onClick: () => void;
+  small?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      title={label}
+      className={`btn-press relative shrink-0 rounded-full transition-transform hover:scale-105 ${
+        small ? "h-6 w-6" : "h-8 w-8"
+      } ${active ? "ring-2 ring-white ring-offset-2 ring-offset-repressurizer-bg" : ""}`}
+      style={{ backgroundColor: color }}
+    >
+      {active && (
+        <span className="absolute inset-0 flex items-center justify-center text-white">
+          <CheckCircle size={small ? 10 : 13} weight="fill" />
+        </span>
+      )}
+    </button>
   );
 }
 

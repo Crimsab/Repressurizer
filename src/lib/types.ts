@@ -92,6 +92,7 @@ export interface AppSettings {
   pinFavorites: boolean;
   // Appearance
   accentColor: string;
+  recentAccentColors: string[];
   sidebarWidth: number;
   theme: AppTheme;
   language: AppLocale;
@@ -99,6 +100,9 @@ export interface AppSettings {
   showSmartLists: boolean;
   showNowPlaying: boolean;
   showFilterBar: boolean;
+  showDetailHltb: boolean;
+  showDetailMetacritic: boolean;
+  showDetailPrice: boolean;
   // Fetch settings
   hltbConcurrency: number;
   achievementsConcurrency: number;
@@ -110,6 +114,7 @@ export interface AppSettings {
   categoryOrder: string[];
   // System tray
   minimizeToTray: boolean;
+  checkUpdatesOnStartup: boolean;
   // Steam Family
   includeSteamFamilyNonGames: boolean;
 }
