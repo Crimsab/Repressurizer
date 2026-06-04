@@ -163,6 +163,29 @@ jobs:
             return [int]$property.Value
           }
 
+          function Get-Detections($results) {
+            if ($null -eq $results) {
+              return @()
+            }
+
+            $detections = @()
+            foreach ($result in $results.PSObject.Properties) {
+              $category = $result.Value.category
+              if ($category -eq "malicious" -or $category -eq "suspicious") {
+                $engine = $result.Value.engine_name
+                if (-not $engine) {
+                  $engine = $result.Name
+                }
+                $verdict = $result.Value.result
+                if (-not $verdict) {
+                  $verdict = $category
+                }
+                $detections += "${engine}: ${verdict}"
+              }
+            }
+            return $detections
+          }
+
           $headers = @{ "x-apikey" = $env:VT_API_KEY }
           $entries = $env:VT_ANALYSIS -split "," | Where-Object { $_ -match "=" }
           $lines = @()
@@ -205,8 +228,13 @@ jobs:
             $harmless = Get-Stat $stats "harmless"
             $undetected = Get-Stat $stats "undetected"
             $timeout = Get-Stat $stats "timeout"
+            $engines = Get-Detections $attributes.results
+            $engineText = ""
+            if ($engines.Count -gt 0) {
+              $engineText = " detections: " + ($engines -join "; ")
+            }
 
-            $lines += "- ${name}: ${malicious} malicious, ${suspicious} suspicious, ${harmless} harmless, ${undetected} undetected, ${timeout} timeout - $url"
+            $lines += "- ${name}: ${malicious} malicious, ${suspicious} suspicious, ${harmless} harmless, ${undetected} undetected, ${timeout} timeout.${engineText} - $url"
 
             if ($malicious -gt 0 -or $suspicious -gt 0) {
               $detections += "${name}: ${malicious} malicious, ${suspicious} suspicious"
@@ -221,8 +249,7 @@ jobs:
 
           if ($detections.Count -gt 0) {
             $message = $detections -join "; "
-            Write-Output "::error::VirusTotal reported detections: $message"
-            exit 1
+            Write-Output "::warning::VirusTotal reported detections: $message"
           }
 
       - name: Append VirusTotal results

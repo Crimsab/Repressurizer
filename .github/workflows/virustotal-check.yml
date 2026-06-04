@@ -72,6 +72,7 @@ jobs:
 
               attributes = (data or {}).get("data", {}).get("attributes", {})
               stats = attributes.get("last_analysis_stats") or {}
+              results = attributes.get("last_analysis_results") or {}
               name = attributes.get("meaningful_name") or sha256
 
               malicious = int(stats.get("malicious") or 0)
@@ -79,11 +80,17 @@ jobs:
               harmless = int(stats.get("harmless") or 0)
               undetected = int(stats.get("undetected") or 0)
               timeout = int(stats.get("timeout") or 0)
+              engines = [
+                  f"{result.get('engine_name') or engine}: {result.get('result') or result.get('category')}"
+                  for engine, result in results.items()
+                  if result.get("category") in {"malicious", "suspicious"}
+              ]
+              engine_text = f". Detections: {'; '.join(engines)}" if engines else ""
 
               line = (
                   f"- `{name}` (`{sha256}`): {malicious} malicious, "
                   f"{suspicious} suspicious, {harmless} harmless, "
-                  f"{undetected} undetected, {timeout} timeout"
+                  f"{undetected} undetected, {timeout} timeout{engine_text}"
               )
               print(line)
               summary_lines.append(line)
