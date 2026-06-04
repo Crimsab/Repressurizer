@@ -4,6 +4,7 @@ import type { OwnedGame, GameDetails } from "../lib/types";
 import type { GameStatus } from "./statusStore";
 import { displayNameFromDetails, isPlaceholderGameName } from "../lib/libraryMerge";
 import { useSteamAppIndexStore } from "./steamAppIndexStore";
+import { sanitizeGameDetailsPrices } from "../lib/prices";
 
 function persistDetailsCache(details: Record<number, GameDetails>) {
   invoke("save_details_cache", { data: JSON.stringify(details) }).catch(() => {});
@@ -149,11 +150,12 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   setDetails: (appId, details) =>
     set((state) => {
-      const next = { ...state.details, [appId]: details };
+      const cleanDetails = sanitizeGameDetailsPrices(details);
+      const next = { ...state.details, [appId]: cleanDetails };
       const games = { ...state.games };
       const game = games[appId];
       if (game && (game.is_collection_only || isPlaceholderGameName(appId, game.name))) {
-        games[appId] = { ...game, name: displayNameFromDetails(game, details, useSteamAppIndexStore.getState().data) };
+        games[appId] = { ...game, name: displayNameFromDetails(game, cleanDetails, useSteamAppIndexStore.getState().data) };
       }
       persistDetailsCache(next);
       return { details: next, games };
@@ -163,7 +165,8 @@ export const useGameStore = create<GameState>((set, get) => ({
     set((state) => {
       const next = { ...state.details };
       const games = { ...state.games };
-      for (const d of details) {
+      for (const rawDetails of details) {
+        const d = sanitizeGameDetailsPrices(rawDetails);
         next[d.app_id] = d;
         const game = games[d.app_id];
         if (game && (game.is_collection_only || isPlaceholderGameName(d.app_id, game.name))) {
@@ -184,7 +187,15 @@ export const useGameStore = create<GameState>((set, get) => ({
       const raw = await invoke<string | null>("load_details_cache");
       if (raw) {
         const parsed: Record<number, GameDetails> = JSON.parse(raw);
-        set({ details: parsed });
+        const cleaned: Record<number, GameDetails> = {};
+        let changed = false;
+        for (const [id, details] of Object.entries(parsed)) {
+          const cleanDetails = sanitizeGameDetailsPrices(details);
+          cleaned[Number(id)] = cleanDetails;
+          if (cleanDetails !== details) changed = true;
+        }
+        if (changed) persistDetailsCache(cleaned);
+        set({ details: cleaned });
       }
     } catch {
       // cache miss or parse error — start fresh

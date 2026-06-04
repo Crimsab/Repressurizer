@@ -190,6 +190,12 @@ struct StorePriceOverview {
     final_price: Option<u64>,
 }
 
+const MAX_PLAUSIBLE_STEAM_PRICE_CENTS: u64 = 500_000;
+
+fn plausible_price(price: Option<u64>) -> Option<u64> {
+    price.filter(|value| *value <= MAX_PLAUSIBLE_STEAM_PRICE_CENTS)
+}
+
 #[derive(Debug, Deserialize)]
 struct StorePlatforms {
     windows: Option<bool>,
@@ -416,8 +422,14 @@ fn parse_game_details_response(app_id: u64, text: &str) -> Result<GameDetails, S
             .unwrap_or_default(),
         header_image: data.header_image.clone(),
         capsule_image: data.capsule_image.clone(),
-        price_initial: data.price_overview.as_ref().and_then(|p| p.initial),
-        price_final: data.price_overview.as_ref().and_then(|p| p.final_price),
+        price_initial: data
+            .price_overview
+            .as_ref()
+            .and_then(|p| plausible_price(p.initial)),
+        price_final: data
+            .price_overview
+            .as_ref()
+            .and_then(|p| plausible_price(p.final_price)),
         price_currency: data
             .price_overview
             .as_ref()

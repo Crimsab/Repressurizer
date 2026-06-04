@@ -1,4 +1,5 @@
 import type { OwnedGame, GameDetails, SteamCollection } from "./types";
+import { isPlausibleSteamPrice } from "./prices";
 
 export interface LibraryStats {
   totalGames: number;
@@ -88,9 +89,9 @@ export function computeStats(
   for (const d of detailsList) {
     if (d.is_free) {
       freeGamesCount++;
-    } else if (d.price_initial != null) {
+    } else if (isPlausibleSteamPrice(d.price_initial)) {
       libraryValue += d.price_initial;
-      libraryValueCurrent += d.price_final ?? d.price_initial;
+      libraryValueCurrent += isPlausibleSteamPrice(d.price_final) ? d.price_final : d.price_initial;
       pricedGamesCount++;
     }
   }
@@ -158,7 +159,7 @@ export function computeStats(
   const costPerHourList: { name: string; costPerHour: number; hours: number; price: number }[] = [];
   for (const g of list) {
     const d = details[g.appid];
-    if (!d || d.is_free || d.price_initial == null) continue;
+    if (!d || d.is_free || !isPlausibleSteamPrice(d.price_initial)) continue;
     const hours = g.playtime_forever / 60;
     if (hours < 1) continue;
     const priceEur = d.price_initial / 100;
@@ -178,7 +179,7 @@ export function computeStats(
     .filter((g) => {
       if (g.playtime_forever > 0) return false;
       const d = details[g.appid];
-      return d && !d.is_free && d.price_initial != null && d.price_initial > 0;
+      return d && !d.is_free && isPlausibleSteamPrice(d.price_initial) && d.price_initial > 0;
     })
     .map((g) => ({
       name: String(g.name ?? ""),
