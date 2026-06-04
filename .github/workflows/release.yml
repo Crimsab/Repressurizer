@@ -15,6 +15,7 @@ concurrency:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  HAS_VT_API_KEY: ${{ secrets.VT_API_KEY != '' }}
 
 jobs:
   windows:
@@ -133,6 +134,26 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: bun scripts/release-notes.ts --repo "${{ github.repository }}" --tag "${{ github.ref_name }}" --sha "${{ github.sha }}" --out release-notes.md
+
+      - name: VirusTotal Scan
+        id: vt-scan
+        if: startsWith(github.ref, 'refs/tags/') && env.HAS_VT_API_KEY == 'true'
+        uses: crazy-max/ghaction-virustotal@v5
+        with:
+          vt_api_key: ${{ secrets.VT_API_KEY }}
+          request_rate: 4
+          files: |
+            artifacts/*.exe
+            artifacts/*.zip
+
+      - name: Append VirusTotal results
+        if: startsWith(github.ref, 'refs/tags/') && steps.vt-scan.outputs.analysis != ''
+        shell: pwsh
+        env:
+          VT_ANALYSIS: ${{ steps.vt-scan.outputs.analysis }}
+        run: |
+          $lines = "- " + ($env:VT_ANALYSIS -replace "artifacts/", "" -replace "=h", ": h" -replace ",", "`n- ")
+          Add-Content -Path release-notes.md -Value "`n## VirusTotal`n`n$lines`n"
 
       - name: Publish GitHub release
         if: startsWith(github.ref, 'refs/tags/')
