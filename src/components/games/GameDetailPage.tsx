@@ -47,7 +47,14 @@ interface GameDetailPageProps {
 
 export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
   const t = useT();
-  const { apiKey, steamId64, currency } = useSettingsStore();
+  const {
+    apiKey,
+    steamId64,
+    currency,
+    showDetailHltb,
+    showDetailMetacritic,
+    showDetailPrice,
+  } = useSettingsStore();
   const collections = useCategoryStore((s) => s.collections);
   const addGameToCategory = useCategoryStore((s) => s.addGameToCategory);
   const removeGameFromCategory = useCategoryStore(
@@ -57,6 +64,7 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
   const [details, setDetails] = useState<GameDetails | null>(null);
   const [achievements, setAchievements] = useState<AchievementSummary | null>(null);
   const [loadingDetails, setLoadingDetails] = useState(true);
+  const [refreshingDetails, setRefreshingDetails] = useState(false);
   const [loadingAchievements, setLoadingAchievements] = useState(true);
   const [achError, setAchError] = useState("");
   const [tab, setTab] = useState<"info" | "achievements">("info");
@@ -108,6 +116,17 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
     achievements && achievements.total > 0
       ? Math.round((achievements.achieved / achievements.total) * 100)
       : 0;
+
+  const handleRefreshDetails = async () => {
+    setRefreshingDetails(true);
+    try {
+      const next = await fetchGameDetails(game.appid, currencyToCountryCode(currency));
+      setDetails(next);
+      useGameStore.getState().setDetails(game.appid, next);
+    } finally {
+      setRefreshingDetails(false);
+    }
+  };
 
   return (
     <div
@@ -191,6 +210,14 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
           </button>
           <div className="flex-1" />
           <button
+            onClick={handleRefreshDetails}
+            disabled={refreshingDetails}
+            className="btn-press inline-flex items-center gap-1.5 px-4 py-2.5 text-sm text-repressurizer-text-muted transition-colors hover:text-white disabled:opacity-40"
+          >
+            <ArrowsClockwise size={14} className={refreshingDetails ? "animate-spin" : ""} />
+            {t("settings.refresh")}
+          </button>
+          <button
             onClick={() => open(`https://store.steampowered.com/app/${game.appid}`)}
             className="btn-press inline-flex items-center gap-1.5 px-4 py-2.5 text-sm text-repressurizer-text-muted transition-colors hover:text-white"
           >
@@ -208,6 +235,9 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
               game={game}
               gameCategories={gameCategories}
               editableCollections={editableCollections}
+              showDetailHltb={showDetailHltb}
+              showDetailMetacritic={showDetailMetacritic}
+              showDetailPrice={showDetailPrice}
               onAddToCategory={(key) => addGameToCategory(key, game.appid)}
               onRemoveFromCategory={(key) => removeGameFromCategory(key, game.appid)}
             />
@@ -232,6 +262,9 @@ function InfoTab({
   game,
   gameCategories,
   editableCollections,
+  showDetailHltb,
+  showDetailMetacritic,
+  showDetailPrice,
   onAddToCategory,
   onRemoveFromCategory,
 }: {
@@ -240,6 +273,9 @@ function InfoTab({
   game: OwnedGame;
   gameCategories: ReturnType<typeof useCategoryStore.getState>["collections"];
   editableCollections: ReturnType<typeof useCategoryStore.getState>["collections"];
+  showDetailHltb: boolean;
+  showDetailMetacritic: boolean;
+  showDetailPrice: boolean;
   onAddToCategory: (key: string) => void;
   onRemoveFromCategory: (key: string) => void;
 }) {
@@ -323,9 +359,11 @@ function InfoTab({
       </div>
 
       {/* HLTB + Metacritic + Price — single row */}
+      {(showDetailHltb !== false || showDetailMetacritic !== false || showDetailPrice !== false) && (
       <div className="border-t border-repressurizer-border pt-5">
         <div className="flex gap-8">
           {/* HowLongToBeat */}
+          {showDetailHltb !== false && (
           <div className="flex-1">
             <div className="flex items-center justify-between mb-2">
               <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium flex items-center gap-1.5">
@@ -368,9 +406,10 @@ function InfoTab({
               <p className="text-xs text-repressurizer-text-faint">{t("detail.noDataFetch")}</p>
             )}
           </div>
+          )}
 
           {/* Metacritic */}
-          {details?.metacritic_score != null && (
+          {showDetailMetacritic !== false && details?.metacritic_score != null && (
             <div>
               <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium flex items-center gap-1.5 mb-2">
                 <Star size={12} weight="duotone" />
@@ -397,20 +436,17 @@ function InfoTab({
           )}
 
           {/* Price */}
-          {details && (details.price_initial != null || details.is_free) && (
+          {showDetailPrice !== false && details && (details.price_initial != null || details.price_final != null || details.is_free) && (
             <div>
               <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium mb-2">
                 {t("detail.price")}
               </h3>
-              <p className="text-sm font-mono tabular-nums text-repressurizer-text">
-                {details.is_free ? t("detail.freeToPlay") : details.price_initial != null
-                  ? `${(details.price_initial / 100).toFixed(2)} ${details.price_currency ?? ""}`.trim()
-                  : t("common.unknown")}
-              </p>
+              <PriceBlock details={details} />
             </div>
           )}
         </div>
       </div>
+      )}
 
       {/* Game info */}
       {loading ? (
@@ -666,6 +702,44 @@ function RatingWidget({ appId }: { appId: number }) {
           </span>
         )}
       </div>
+    </div>
+  );
+}
+
+function PriceBlock({ details }: { details: GameDetails }) {
+  const t = useT();
+  if (details.is_free) {
+    return <p className="text-sm font-mono tabular-nums text-repressurizer-text">{t("detail.freeToPlay")}</p>;
+  }
+
+  const currency = details.price_currency ?? "";
+  const initial = details.price_initial;
+  const final = details.price_final ?? details.price_initial;
+  if (final == null) {
+    return <p className="text-sm text-repressurizer-text-faint">{t("common.unknown")}</p>;
+  }
+
+  const format = (value: number) => `${(value / 100).toFixed(2)} ${currency}`.trim();
+  const discounted = initial != null && initial > final;
+  const discountPercent = discounted ? Math.round(((initial - final) / initial) * 100) : 0;
+
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center gap-2">
+        {discounted && (
+          <span className="rounded-md bg-emerald-600/20 px-1.5 py-0.5 text-[10px] font-bold text-emerald-400">
+            -{discountPercent}%
+          </span>
+        )}
+        <p className="text-sm font-mono font-semibold tabular-nums text-repressurizer-text">
+          {format(final)}
+        </p>
+      </div>
+      {discounted && (
+        <p className="font-mono text-[11px] tabular-nums text-repressurizer-text-faint line-through">
+          {format(initial)}
+        </p>
+      )}
     </div>
   );
 }

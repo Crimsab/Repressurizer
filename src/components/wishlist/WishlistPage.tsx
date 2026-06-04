@@ -6,12 +6,13 @@ import { fetchWishlist, fetchGameDetails, currencyToCountryCode } from "../../li
 import { X, BookmarkSimple, ArrowsClockwise, SortAscending, Export } from "@phosphor-icons/react";
 import { SteamImage } from "../games/SteamImage";
 import { useT } from "../../lib/i18n";
+import type { GameDetails } from "../../lib/types";
 
 interface WishlistPageProps {
   onClose: () => void;
 }
 
-type SortMode = "priority" | "date" | "name";
+type SortMode = "priority" | "date" | "name" | "price" | "discount";
 
 function timeAgo(unixSecs: number, t: ReturnType<typeof useT>): string {
   const diff = Math.floor(Date.now() / 1000) - unixSecs;
@@ -35,6 +36,7 @@ export function WishlistPage({ onClose }: WishlistPageProps) {
   const [error, setError] = useState("");
   const [sortBy, setSortBy] = useState<SortMode>("priority");
   const [search, setSearch] = useState("");
+  const [onSaleOnly, setOnSaleOnly] = useState(false);
   const fetchingRef = useRef(new Set<number>());
 
   // Fetch details for wishlist items not in cache
@@ -117,9 +119,28 @@ export function WishlistPage({ onClose }: WishlistPageProps) {
         return name.toLowerCase().includes(q);
       });
     }
+    if (onSaleOnly) {
+      list = list.filter((item) => {
+        const d = details[item.appid];
+        return d?.price_initial != null && d.price_final != null && d.price_initial > d.price_final;
+      });
+    }
     list.sort((a, b) => {
       if (sortBy === "priority") return a.priority - b.priority;
       if (sortBy === "date") return b.date_added - a.date_added;
+      if (sortBy === "price") {
+        const pa = details[a.appid]?.price_final ?? Number.POSITIVE_INFINITY;
+        const pb = details[b.appid]?.price_final ?? Number.POSITIVE_INFINITY;
+        return pa - pb;
+      }
+      if (sortBy === "discount") {
+        const discount = (appid: number) => {
+          const d = details[appid];
+          if (!d?.price_initial || d.price_final == null || d.price_initial <= d.price_final) return 0;
+          return (d.price_initial - d.price_final) / d.price_initial;
+        };
+        return discount(b.appid) - discount(a.appid);
+      }
       if (sortBy === "name") {
         const na = details[a.appid]?.name ?? String(a.appid);
         const nb = details[b.appid]?.name ?? String(b.appid);
@@ -128,7 +149,7 @@ export function WishlistPage({ onClose }: WishlistPageProps) {
       return 0;
     });
     return list;
-  }, [items, sortBy, search, details]);
+  }, [items, sortBy, search, details, onSaleOnly]);
 
   return (
     <div
@@ -201,7 +222,7 @@ export function WishlistPage({ onClose }: WishlistPageProps) {
             <div className="flex items-center gap-1 text-repressurizer-text-faint">
               <SortAscending size={13} />
             </div>
-            {(["priority", "date", "name"] as SortMode[]).map((s) => (
+            {(["priority", "date", "name", "price", "discount"] as SortMode[]).map((s) => (
               <button
                 key={s}
                 onClick={() => setSortBy(s)}
@@ -211,9 +232,22 @@ export function WishlistPage({ onClose }: WishlistPageProps) {
                     : "border-repressurizer-border-subtle bg-repressurizer-bg text-repressurizer-text-muted hover:text-repressurizer-text"
                 }`}
               >
-                {s === "priority" ? t("wishlist.sort.priority") : s === "date" ? t("wishlist.sort.added") : t("wishlist.sort.name")}
+                {s === "priority" ? t("wishlist.sort.priority") :
+                 s === "date" ? t("wishlist.sort.added") :
+                 s === "price" ? t("wishlist.sort.price") :
+                 s === "discount" ? t("wishlist.sort.discount") :
+                 t("wishlist.sort.name")}
               </button>
             ))}
+            <label className="inline-flex items-center gap-1.5 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-bg px-2.5 py-1 text-[11px] text-repressurizer-text-muted">
+              <input
+                type="checkbox"
+                checked={onSaleOnly}
+                onChange={(e) => setOnSaleOnly(e.target.checked)}
+                className="h-3 w-3 accent-[var(--color-repressurizer-accent)]"
+              />
+              {t("wishlist.onSale")}
+            </label>
           </div>
         )}
 
@@ -273,6 +307,7 @@ export function WishlistPage({ onClose }: WishlistPageProps) {
                     </div>
 
                     {/* Added date */}
+                    {d && <WishlistPrice details={d} />}
                     {item.date_added > 0 && (
                       <span className="shrink-0 text-[11px] text-repressurizer-text-faint">
                         {timeAgo(item.date_added, t)}
@@ -285,6 +320,30 @@ export function WishlistPage({ onClose }: WishlistPageProps) {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function WishlistPrice({ details }: { details: GameDetails }) {
+  const t = useT();
+  if (details.is_free) {
+    return <span className="shrink-0 text-[11px] font-mono text-repressurizer-text-muted">{t("detail.freeToPlay")}</span>;
+  }
+  const final = details.price_final ?? details.price_initial;
+  if (final == null) return null;
+  const initial = details.price_initial;
+  const discounted = initial != null && initial > final;
+  const discountPercent = discounted ? Math.round(((initial - final) / initial) * 100) : 0;
+  return (
+    <div className="flex shrink-0 items-center gap-1.5">
+      {discounted && (
+        <span className="rounded bg-emerald-600/20 px-1.5 py-0.5 text-[10px] font-bold text-emerald-400">
+          -{discountPercent}%
+        </span>
+      )}
+      <span className="font-mono text-[11px] tabular-nums text-repressurizer-text-muted">
+        {`${(final / 100).toFixed(2)} ${details.price_currency ?? ""}`.trim()}
+      </span>
     </div>
   );
 }
