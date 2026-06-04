@@ -657,5 +657,6 @@
   "common.done": "Done",
   "friends.saved": "Saved friends",
   "friends.saved.desc": "Click to search and compare",
-  "friends.search": "Search friends..."
+  "friends.search": "Search friends...",
+  "stats.bestValue.desc": "Lowest cost for every hour you actually played"
 }

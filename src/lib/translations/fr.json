@@ -657,5 +657,6 @@
   "common.done": "Terminé",
   "friends.saved": "Amis enregistrés",
   "friends.saved.desc": "Rechercher et comparer",
-  "friends.search": "Rechercher des amis..."
+  "friends.search": "Rechercher des amis...",
+  "stats.bestValue.desc": "Cout le plus bas par heure vraiment jouee"
 }

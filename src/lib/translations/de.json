@@ -657,5 +657,6 @@
   "common.done": "Fertig",
   "friends.saved": "Gespeicherte Freunde",
   "friends.saved.desc": "Suchen und vergleichen",
-  "friends.search": "Freunde suchen..."
+  "friends.search": "Freunde suchen...",
+  "stats.bestValue.desc": "Niedrigste Kosten pro wirklich gespielter Stunde"
 }

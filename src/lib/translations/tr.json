@@ -657,5 +657,6 @@
   "common.done": "Bitti",
   "friends.saved": "Kayıtlı arkadaşlar",
   "friends.saved.desc": "Ara ve karşılaştır",
-  "friends.search": "Arkadaş ara..."
+  "friends.search": "Arkadaş ara...",
+  "stats.bestValue.desc": "Gercekten oynanan saat basina en dusuk maliyet"
 }

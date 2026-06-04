@@ -351,6 +351,7 @@ export function StatsPage({ onClose }: StatsPageProps) {
                     <CurrencyCircleDollar size={12} weight="duotone" />
                     {t("stats.bestValue")}
                   </h3>
+                  <p className="mb-2 text-[10px] text-repressurizer-text-faint">{t("stats.bestValue.desc")}</p>
                   <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg/60">
                     {stats.bestCostPerHour.map((g, i) => (
                       <div key={i} className="flex items-center gap-2 border-b border-repressurizer-border-subtle px-3 py-2 last:border-b-0">

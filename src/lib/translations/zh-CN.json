@@ -657,5 +657,6 @@
   "common.done": "完成",
   "friends.saved": "已保存好友",
   "friends.saved.desc": "搜索并比较",
-  "friends.search": "搜索好友..."
+  "friends.search": "搜索好友...",
+  "stats.bestValue.desc": "按实际游玩时间计算的最低成本"
 }

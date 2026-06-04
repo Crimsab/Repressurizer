@@ -657,5 +657,6 @@
   "common.done": "Listo",
   "friends.saved": "Amigos guardados",
   "friends.saved.desc": "Busca y compara",
-  "friends.search": "Buscar amigos..."
+  "friends.search": "Buscar amigos...",
+  "stats.bestValue.desc": "Menor coste por cada hora jugada de verdad"
 }
