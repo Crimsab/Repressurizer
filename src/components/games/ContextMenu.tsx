@@ -1,11 +1,11 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-shell";
 import { useCategoryStore } from "../../stores/categoryStore";
 import { useGameStore } from "../../stores/gameStore";
 import { useStatusStore, STATUS_META, type GameStatus } from "../../stores/statusStore";
 import type { OwnedGame } from "../../lib/types";
 import { useT, type TranslationKey } from "../../lib/i18n";
-import { Eye, ArrowSquareOut, Check, EyeSlash, Play, Star } from "@phosphor-icons/react";
+import { Eye, ArrowSquareOut, Check, EyeSlash, Play, Star, CaretRight, MagnifyingGlass } from "@phosphor-icons/react";
 
 const STATUS_OPTIONS: GameStatus[] = ["none", "playing", "beaten", "completed", "abandoned"];
 
@@ -20,6 +20,10 @@ interface ContextMenuProps {
 export function ContextMenu({ x, y, game, onClose, onViewDetails }: ContextMenuProps) {
   const t = useT();
   const ref = useRef<HTMLDivElement>(null);
+  const categoryRef = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState({ left: x, top: y });
+  const [categoryPanelOpen, setCategoryPanelOpen] = useState(false);
+  const [categorySearch, setCategorySearch] = useState("");
   const collections = useCategoryStore((s) => s.collections);
   const addGameToCategory = useCategoryStore((s) => s.addGameToCategory);
   const removeGameFromCategory = useCategoryStore((s) => s.removeGameFromCategory);
@@ -33,9 +37,18 @@ export function ContextMenu({ x, y, game, onClose, onViewDetails }: ContextMenuP
   const selectedCount = Object.keys(selectedGameIds).length;
   const isMulti = selectedCount > 1 && selectedGameIds[game.appid];
 
-  const editableCollections = [...collections]
-    .filter((c) => !c.is_dynamic && c.id !== "hidden" && c.id !== "favorite")
-    .sort((a, b) => a.name.localeCompare(b.name));
+  const editableCollections = useMemo(
+    () => [...collections]
+      .filter((c) => !c.is_dynamic && c.id !== "hidden" && c.id !== "favorite")
+      .sort((a, b) => a.name.localeCompare(b.name)),
+    [collections]
+  );
+
+  const filteredCollections = useMemo(() => {
+    const query = categorySearch.trim().toLowerCase();
+    if (!query) return editableCollections;
+    return editableCollections.filter((c) => c.name.toLowerCase().includes(query));
+  }, [categorySearch, editableCollections]);
 
   const hiddenCollection = collections.find((c) => c.id === "hidden");
   const favoriteCollection = collections.find((c) => c.id === "favorite");
@@ -69,7 +82,9 @@ export function ContextMenu({ x, y, game, onClose, onViewDetails }: ContextMenuP
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) onClose();
+      const target = e.target as Node;
+      if (ref.current?.contains(target) || categoryRef.current?.contains(target)) return;
+      onClose();
     };
     const handleEsc = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -82,10 +97,31 @@ export function ContextMenu({ x, y, game, onClose, onViewDetails }: ContextMenuP
     };
   }, [onClose]);
 
+  useLayoutEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+    const margin = 8;
+    const rect = node.getBoundingClientRect();
+    const nextLeft = Math.max(margin, Math.min(x, window.innerWidth - rect.width - margin));
+    const nextTop = Math.max(margin, Math.min(y, window.innerHeight - rect.height - margin));
+    setPosition({ left: nextLeft, top: nextTop });
+  }, [x, y, editableCollections.length, categoryPanelOpen]);
+
+  const categoryPanelStyle: React.CSSProperties = {
+    position: "fixed",
+    left: position.left + 248 + 8 > window.innerWidth
+      ? Math.max(8, position.left - 300 - 8)
+      : position.left + 248 + 8,
+    top: Math.max(8, Math.min(position.top, window.innerHeight - Math.min(420, window.innerHeight - 16))),
+    maxHeight: Math.min(420, window.innerHeight - 16),
+    zIndex: 101,
+  };
+
   const style: React.CSSProperties = {
     position: "fixed",
-    left: Math.min(x, window.innerWidth - 220),
-    top: Math.min(y, window.innerHeight - 300),
+    left: position.left,
+    top: position.top,
+    maxHeight: "calc(100vh - 16px)",
     zIndex: 100,
   };
 
@@ -206,15 +242,50 @@ export function ContextMenu({ x, y, game, onClose, onViewDetails }: ContextMenuP
         </>
       )}
 
-      {/* Categories */}
       {editableCollections.length > 0 && (
         <>
           <div className="border-t border-repressurizer-border" />
-          <div className="max-h-48 overflow-auto py-1">
-            <p className="px-3 py-1 text-[10px] uppercase tracking-wider text-repressurizer-text-faint font-medium">
+          <div className="py-1">
+            <button
+              onClick={() => setCategoryPanelOpen((v) => !v)}
+              onMouseEnter={() => setCategoryPanelOpen(true)}
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-repressurizer-text transition-colors hover:bg-repressurizer-surface-hover"
+            >
+              <span className="flex h-3.5 w-3.5 items-center justify-center rounded border border-repressurizer-border" />
+              <span className="min-w-0 flex-1 truncate">
+                {isMulti ? t("context.addAllTo") : t("context.categories")}
+              </span>
+              <span className="font-mono text-[10px] text-repressurizer-text-faint tabular-nums">
+                {editableCollections.length}
+              </span>
+              <CaretRight size={12} className="text-repressurizer-text-faint" />
+            </button>
+          </div>
+        </>
+      )}
+      {categoryPanelOpen && editableCollections.length > 0 && (
+        <div
+          ref={categoryRef}
+          style={categoryPanelStyle}
+          className="flex w-[300px] flex-col animate-fade-in rounded-xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_8px_32px_rgba(0,0,0,0.5)]"
+        >
+          <div className="border-b border-repressurizer-border px-3 py-2">
+            <p className="mb-2 text-[10px] font-medium uppercase tracking-wider text-repressurizer-text-faint">
               {isMulti ? t("context.addAllTo") : t("context.categories")}
             </p>
-            {editableCollections.map((col) => {
+            <div className="flex items-center gap-2 rounded-lg border border-repressurizer-border bg-repressurizer-bg px-2 py-1.5">
+              <MagnifyingGlass size={12} className="text-repressurizer-text-faint" />
+              <input
+                autoFocus
+                value={categorySearch}
+                onChange={(e) => setCategorySearch(e.target.value)}
+                placeholder={t("common.search")}
+                className="min-w-0 flex-1 bg-transparent text-xs text-repressurizer-text placeholder:text-repressurizer-text-faint focus:outline-none"
+              />
+            </div>
+          </div>
+          <div className="min-h-0 overflow-auto py-1">
+            {filteredCollections.map((col) => {
               const inCat = !isMulti && gameInCategory(col.key);
               return (
                 <button
@@ -223,7 +294,7 @@ export function ContextMenu({ x, y, game, onClose, onViewDetails }: ContextMenuP
                   className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-repressurizer-text transition-colors hover:bg-repressurizer-surface-hover"
                 >
                   <span
-                    className={`flex h-3.5 w-3.5 items-center justify-center rounded border transition-colors ${
+                    className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border transition-colors ${
                       inCat
                         ? "border-repressurizer-accent bg-repressurizer-accent text-white"
                         : "border-repressurizer-border"
@@ -235,8 +306,13 @@ export function ContextMenu({ x, y, game, onClose, onViewDetails }: ContextMenuP
                 </button>
               );
             })}
+            {filteredCollections.length === 0 && (
+              <p className="px-3 py-6 text-center text-xs text-repressurizer-text-faint">
+                {t("common.noResults")}
+              </p>
+            )}
           </div>
-        </>
+        </div>
       )}
     </div>
   );
