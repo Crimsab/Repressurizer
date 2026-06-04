@@ -623,23 +623,6 @@ pub struct FamilyLibraryResult {
     pub apps: Vec<FamilyLibraryApp>,
 }
 
-#[derive(Debug, Deserialize)]
-struct WishlistV1Response {
-    wishlist: Option<Vec<WishlistV1Item>>,
-}
-
-#[derive(Debug, Deserialize)]
-struct WishlistV1Item {
-    appid: Option<serde_json::Value>, // sometimes "id" or "appid"
-    id: Option<serde_json::Value>,
-    #[serde(default)]
-    priority: u32,
-    #[serde(default)]
-    added_date: u64,
-    #[serde(default)]
-    date_added: u64,
-}
-
 #[derive(Debug)]
 enum SteamFamilyAuth {
     WebApiKey(String),
