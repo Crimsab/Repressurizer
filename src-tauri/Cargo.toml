@@ -4,6 +4,7 @@ version = "0.1.8"
 description = "Steam Library Manager"
 authors = ["you"]
 edition = "2021"
+default-run = "repressurizer"
 
 [lib]
 name = "repressurizer_lib"
