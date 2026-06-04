@@ -1,5 +1,7 @@
 import { Component, useEffect, useState } from "react";
 import type { ReactNode, ErrorInfo } from "react";
+import { check, type Update } from "@tauri-apps/plugin-updater";
+import { relaunch } from "@tauri-apps/plugin-process";
 import { useSettingsStore, applyAccentColor, applyTheme } from "./stores/settingsStore";
 import { useGameStore } from "./stores/gameStore";
 import { useCategoryStore } from "./stores/categoryStore";
@@ -29,7 +31,7 @@ import { StatusBar } from "./components/layout/StatusBar";
 import { FilterBar } from "./components/layout/FilterBar";
 import { ToastContainer } from "./components/ui/Toast";
 import { OnboardingTour } from "./components/ui/OnboardingTour";
-import { WarningCircle, ArrowCounterClockwise, GameController } from "@phosphor-icons/react";
+import { WarningCircle, ArrowCounterClockwise, GameController, CloudArrowDown, X } from "@phosphor-icons/react";
 
 class ErrorBoundary extends Component<
   { children: ReactNode },
@@ -116,6 +118,7 @@ function ErrorScreen({ error, onReset }: { error: string; onReset: () => void })
 
 function AppContent() {
   const settings = useSettingsStore();
+  const t = useT();
   const gameCount = useGameStore((s) => Object.keys(s.games).length);
   const setGames = useGameStore((s) => s.setGames);
   const hydrateDetailsCache = useGameStore((s) => s.hydrateDetailsCache);
@@ -135,6 +138,8 @@ function AppContent() {
   const setCollections = useCategoryStore((s) => s.setCollections);
   const [reloading, setReloading] = useState(false);
   const [reloadError, setReloadError] = useState("");
+  const [availableUpdate, setAvailableUpdate] = useState<Update | null>(null);
+  const [installingUpdate, setInstallingUpdate] = useState(false);
   const toast = useToastStore;
 
   const [showOnboarding, setShowOnboarding] = useState(false);
@@ -155,6 +160,30 @@ function AppContent() {
       })
       .catch(() => {});
   }, [settings.steamPersonaName, settings.apiKey, settings.steamId64]);
+
+  useEffect(() => {
+    if (!settings.setupComplete || settings.checkUpdatesOnStartup === false) return;
+    const timer = window.setTimeout(() => {
+      check()
+        .then((update) => {
+          if (update) setAvailableUpdate(update);
+        })
+        .catch(() => {});
+    }, 7000);
+    return () => window.clearTimeout(timer);
+  }, [settings.setupComplete, settings.checkUpdatesOnStartup]);
+
+  const installUpdate = async () => {
+    if (!availableUpdate) return;
+    setInstallingUpdate(true);
+    try {
+      await availableUpdate.downloadAndInstall();
+      await relaunch();
+    } catch (e) {
+      toast.getState().error(t("settings.updates.installFailed", { error: String(e) }));
+      setInstallingUpdate(false);
+    }
+  };
 
   // Load cached data from Rust file cache on startup
   useEffect(() => {
@@ -296,6 +325,14 @@ function AppContent() {
             </div>
           </main>
         </div>
+        {availableUpdate && (
+          <UpdateBanner
+            version={availableUpdate.version}
+            installing={installingUpdate}
+            onInstall={installUpdate}
+            onDismiss={() => setAvailableUpdate(null)}
+          />
+        )}
         <StatusBar />
       </div>
       {showOnboarding && (
@@ -307,6 +344,49 @@ function AppContent() {
         />
       )}
     </>
+  );
+}
+
+function UpdateBanner({
+  version,
+  installing,
+  onInstall,
+  onDismiss,
+}: {
+  version: string;
+  installing: boolean;
+  onInstall: () => void;
+  onDismiss: () => void;
+}) {
+  const t = useT();
+  return (
+    <div className="border-t border-repressurizer-border bg-repressurizer-surface px-4 py-2">
+      <div className="mx-auto flex max-w-5xl items-center gap-3">
+        <CloudArrowDown size={16} weight="duotone" className="text-repressurizer-accent" />
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-medium text-repressurizer-text">
+            {t("settings.updates.available", { version })}
+          </p>
+          <p className="text-[11px] text-repressurizer-text-faint">
+            {t("settings.updates.banner.desc")}
+          </p>
+        </div>
+        <button
+          onClick={onInstall}
+          disabled={installing}
+          className="btn-press rounded-lg bg-repressurizer-accent px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-repressurizer-accent-hover disabled:opacity-50"
+        >
+          {installing ? t("settings.updates.installing") : t("settings.updates.install", { version })}
+        </button>
+        <button
+          onClick={onDismiss}
+          className="btn-press flex h-7 w-7 items-center justify-center rounded-lg text-repressurizer-text-muted transition-colors hover:bg-repressurizer-surface-hover hover:text-white"
+          aria-label={t("common.close")}
+        >
+          <X size={14} weight="bold" />
+        </button>
+      </div>
+    </div>
   );
 }
 
