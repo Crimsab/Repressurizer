@@ -150,11 +150,12 @@ export function ContextMenu({ x, y, game, onClose, onViewDetails }: ContextMenuP
   };
 
   return (
-    <div
-      ref={ref}
-      style={style}
-      className="min-w-[200px] animate-fade-in rounded-xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_8px_32px_rgba(0,0,0,0.5)]"
-    >
+    <>
+      <div
+        ref={ref}
+        style={style}
+        className="min-w-[200px] animate-fade-in rounded-xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_8px_32px_rgba(0,0,0,0.5)]"
+      >
       {/* Header */}
       <div className="border-b border-repressurizer-border px-3 py-2">
         <p className="truncate text-sm font-medium text-white">
@@ -248,8 +249,11 @@ export function ContextMenu({ x, y, game, onClose, onViewDetails }: ContextMenuP
           <div className="py-1">
             <button
               onClick={() => setCategoryPanelOpen((v) => !v)}
-              onMouseEnter={() => setCategoryPanelOpen(true)}
-              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-repressurizer-text transition-colors hover:bg-repressurizer-surface-hover"
+              className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors ${
+                categoryPanelOpen
+                  ? "bg-repressurizer-surface-hover text-white"
+                  : "text-repressurizer-text hover:bg-repressurizer-surface-hover"
+              }`}
             >
               <span className="flex h-3.5 w-3.5 items-center justify-center rounded border border-repressurizer-border" />
               <span className="min-w-0 flex-1 truncate">
@@ -263,6 +267,7 @@ export function ContextMenu({ x, y, game, onClose, onViewDetails }: ContextMenuP
           </div>
         </>
       )}
+      </div>
       {categoryPanelOpen && editableCollections.length > 0 && (
         <div
           ref={categoryRef}
@@ -314,6 +319,6 @@ export function ContextMenu({ x, y, game, onClose, onViewDetails }: ContextMenuP
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
