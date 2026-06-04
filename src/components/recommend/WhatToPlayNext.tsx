@@ -1,9 +1,9 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useGameStore } from "../../stores/gameStore";
 import { useHltbStore } from "../../stores/hltbStore";
 import { useStatusStore } from "../../stores/statusStore";
 import { useCategoryStore } from "../../stores/categoryStore";
-import { X, Shuffle, Timer, GameController, Funnel } from "@phosphor-icons/react";
+import { X, Shuffle, Timer, GameController, Funnel, CaretDown, Check } from "@phosphor-icons/react";
 import { SteamImage } from "../games/SteamImage";
 import { useT } from "../../lib/i18n";
 
@@ -45,7 +45,7 @@ export function WhatToPlayNext({ onClose }: WhatToPlayNextProps) {
   };
 
   // Build genre preference from most-played games
-  const { recommendations, topGenres } = useMemo(() => {
+  const { recommendations, genreOptions } = useMemo(() => {
     const hidden = new Set(collections.find((c) => c.id === "hidden")?.added ?? []);
     const list = Object.values(games).filter((g) => !hidden.has(g.appid));
 
@@ -60,9 +60,8 @@ export function WhatToPlayNext({ onClose }: WhatToPlayNextProps) {
     }
     const maxGenreTime = Math.max(...genrePlaytime.values(), 1);
 
-    const topGenres = [...genrePlaytime.entries()]
+    const genreOptions = [...genrePlaytime.entries()]
       .sort((a, b) => b[1] - a[1])
-      .slice(0, 15)
       .map(([name]) => name);
 
     // Score unplayed or barely-played games
@@ -141,7 +140,7 @@ export function WhatToPlayNext({ onClose }: WhatToPlayNextProps) {
     const pool = mode === "surprise" ? filtered.slice(0, 45) : filtered.slice(0, 30);
     const picked = weightedPick(pool, seed, mode === "surprise" ? 20 : 12);
     const recommendations = [...picked, ...filtered.filter((r) => !picked.includes(r))].slice(0, 20);
-    return { recommendations, topGenres };
+    return { recommendations, genreOptions };
   }, [games, details, hltbData, statuses, seed, lengthFilter, genreFilter, playFilter, avoidRecent, recentIds, collections, mode]);
 
   const handleShuffle = () => {
@@ -183,7 +182,7 @@ export function WhatToPlayNext({ onClose }: WhatToPlayNextProps) {
         </div>
 
         {/* Filters */}
-        <div className="flex items-center gap-3 border-b border-repressurizer-border-subtle px-4 py-2">
+        <div className="flex flex-wrap items-center gap-2 border-b border-repressurizer-border-subtle px-4 py-2">
           <Funnel size={12} className="text-repressurizer-text-faint" />
           <div className="flex flex-wrap gap-1.5">
             {([
@@ -228,16 +227,17 @@ export function WhatToPlayNext({ onClose }: WhatToPlayNextProps) {
               </button>
             ))}
           </div>
-          <select
+          <FilterSelect
             value={playFilter}
-            onChange={(e) => setPlayFilter(e.target.value as PlayFilter)}
-            className="rounded-lg border border-repressurizer-border bg-repressurizer-bg px-2 py-0.5 text-[11px] text-repressurizer-text focus:outline-none"
-          >
-            <option value="any">{t("recommend.play.any")}</option>
-            <option value="unplayed">{t("recommend.play.unplayed")}</option>
-            <option value="started">{t("recommend.play.started")}</option>
-          </select>
-          <label className="inline-flex items-center gap-1.5 text-[11px] text-repressurizer-text-muted">
+            onChange={(value) => setPlayFilter(value as PlayFilter)}
+            options={[
+              { value: "any", label: t("recommend.play.any") },
+              { value: "unplayed", label: t("recommend.play.unplayed") },
+              { value: "started", label: t("recommend.play.started") },
+            ]}
+            className="w-[170px]"
+          />
+          <label className="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] text-repressurizer-text-muted">
             <input
               type="checkbox"
               checked={avoidRecent}
@@ -246,17 +246,17 @@ export function WhatToPlayNext({ onClose }: WhatToPlayNextProps) {
             />
             {t("recommend.avoidRecent")}
           </label>
-          {topGenres.length > 0 && (
-            <select
+          {genreOptions.length > 0 && (
+            <FilterSelect
               value={genreFilter}
-              onChange={(e) => setGenreFilter(e.target.value)}
-              className="ml-auto rounded-lg border border-repressurizer-border bg-repressurizer-bg px-2 py-0.5 text-[11px] text-repressurizer-text focus:outline-none"
-            >
-              <option value="">{t("recommend.allGenres")}</option>
-              {topGenres.map((g) => (
-                <option key={g} value={g}>{g}</option>
-              ))}
-            </select>
+              onChange={setGenreFilter}
+              options={[
+                { value: "", label: t("recommend.allGenres") },
+                ...genreOptions.map((g) => ({ value: g, label: g })),
+              ]}
+              align="right"
+              className="ml-auto w-[220px]"
+            />
           )}
         </div>
 
@@ -350,4 +350,89 @@ function weightedPick<T extends { score: number }>(items: T[], seed: number, cou
   }
 
   return picked;
+}
+
+interface FilterSelectOption {
+  value: string;
+  label: string;
+}
+
+function FilterSelect({
+  value,
+  options,
+  onChange,
+  className = "",
+  align = "left",
+}: {
+  value: string;
+  options: FilterSelectOption[];
+  onChange: (value: string) => void;
+  className?: string;
+  align?: "left" | "right";
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const selected = options.find((option) => option.value === value) ?? options[0];
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!ref.current?.contains(event.target as Node)) setOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <div ref={ref} className={`relative shrink-0 ${className}`}>
+      <button
+        type="button"
+        onClick={() => setOpen((next) => !next)}
+        className={`flex h-8 w-full items-center gap-2 rounded-lg border px-2.5 text-left text-[11px] transition-colors ${
+          open
+            ? "border-repressurizer-accent bg-repressurizer-accent/10 text-white"
+            : "border-repressurizer-border bg-repressurizer-bg text-repressurizer-text hover:text-white"
+        }`}
+      >
+        <span className="min-w-0 flex-1 truncate">{selected?.label}</span>
+        <CaretDown size={12} className={`shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div
+          className={`absolute top-[calc(100%+6px)] z-50 max-h-64 min-w-full overflow-auto rounded-lg border border-repressurizer-border bg-repressurizer-bg py-1 shadow-[0_16px_40px_rgba(0,0,0,0.45)] ${
+            align === "right" ? "right-0" : "left-0"
+          }`}
+        >
+          {options.map((option) => {
+            const active = option.value === value;
+            return (
+              <button
+                key={option.value || "__all"}
+                type="button"
+                onClick={() => {
+                  onChange(option.value);
+                  setOpen(false);
+                }}
+                className={`flex w-full items-center gap-2 px-3 py-1.5 text-left text-[11px] transition-colors ${
+                  active
+                    ? "bg-repressurizer-accent/15 text-repressurizer-accent"
+                    : "text-repressurizer-text-muted hover:bg-repressurizer-surface-hover hover:text-white"
+                }`}
+              >
+                <span className="min-w-0 flex-1 truncate">{option.label}</span>
+                {active && <Check size={12} className="shrink-0" weight="bold" />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
 }
