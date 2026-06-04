@@ -5,7 +5,7 @@ import { useGameStore } from "../../stores/gameStore";
 import { useStatusStore, STATUS_META, type GameStatus } from "../../stores/statusStore";
 import type { OwnedGame } from "../../lib/types";
 import { useT, type TranslationKey } from "../../lib/i18n";
-import { Eye, ArrowSquareOut, Check, EyeSlash, Play } from "@phosphor-icons/react";
+import { Eye, ArrowSquareOut, Check, EyeSlash, Play, Star } from "@phosphor-icons/react";
 
 const STATUS_OPTIONS: GameStatus[] = ["none", "playing", "beaten", "completed", "abandoned"];
 
@@ -25,6 +25,7 @@ export function ContextMenu({ x, y, game, onClose, onViewDetails }: ContextMenuP
   const removeGameFromCategory = useCategoryStore((s) => s.removeGameFromCategory);
   const selectedGameIds = useGameStore((s) => s.selectedGameIds);
   const addGamesToCategory = useCategoryStore((s) => s.addGamesToCategory);
+  const removeGamesFromCategory = useCategoryStore((s) => s.removeGamesFromCategory);
 
   const currentStatus = useStatusStore((s) => s.statuses[game.appid] ?? "none");
   const setStatus = useStatusStore((s) => s.setStatus);
@@ -33,18 +34,32 @@ export function ContextMenu({ x, y, game, onClose, onViewDetails }: ContextMenuP
   const isMulti = selectedCount > 1 && selectedGameIds[game.appid];
 
   const editableCollections = [...collections]
-    .filter((c) => !c.is_dynamic && c.id !== "hidden")
+    .filter((c) => !c.is_dynamic && c.id !== "hidden" && c.id !== "favorite")
     .sort((a, b) => a.name.localeCompare(b.name));
 
   const hiddenCollection = collections.find((c) => c.id === "hidden");
+  const favoriteCollection = collections.find((c) => c.id === "favorite");
   const isHidden = hiddenCollection?.added.includes(game.appid) ?? false;
+  const isFavorite = favoriteCollection?.added.includes(game.appid) ?? false;
 
   const handleToggleHidden = () => {
     if (!hiddenCollection) return;
+    const ids = isMulti ? Object.keys(selectedGameIds).map(Number) : [game.appid];
     if (isHidden) {
-      removeGameFromCategory(hiddenCollection.key, game.appid);
+      removeGamesFromCategory(hiddenCollection.key, ids);
     } else {
-      addGameToCategory(hiddenCollection.key, game.appid);
+      addGamesToCategory(hiddenCollection.key, ids);
+    }
+    onClose();
+  };
+
+  const handleToggleFavorite = () => {
+    if (!favoriteCollection) return;
+    const ids = isMulti ? Object.keys(selectedGameIds).map(Number) : [game.appid];
+    if (isFavorite) {
+      removeGamesFromCategory(favoriteCollection.key, ids);
+    } else {
+      addGamesToCategory(favoriteCollection.key, ids);
     }
     onClose();
   };
@@ -145,6 +160,15 @@ export function ContextMenu({ x, y, game, onClose, onViewDetails }: ContextMenuP
           >
             <EyeSlash size={14} className="text-repressurizer-text-muted" />
             {isHidden ? t("context.unhide") : t("context.hide")}
+          </button>
+        )}
+        {favoriteCollection && (
+          <button
+            onClick={handleToggleFavorite}
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-repressurizer-text transition-colors hover:bg-repressurizer-surface-hover"
+          >
+            <Star size={14} className="text-repressurizer-text-muted" weight={isFavorite ? "fill" : "regular"} />
+            {isFavorite ? t("context.unfavorite") : t("context.favorite")}
           </button>
         )}
       </div>

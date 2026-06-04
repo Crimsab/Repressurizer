@@ -28,7 +28,7 @@ Local app data may include:
 - Local notes, ratings, tags, statuses, and ignored-fetch state.
 - Family library cache.
 
-Steam collection backups are stored next to the Steam collection file they protect.
+Steam collection backups are stored next to the Steam collection file they protect. When Steam's local LevelDB catalog cache is present, Repressurizer stores a matching raw LevelDB catalog backup next to the JSON backup so restores keep both catalog copies in sync.
 
 ## Diagnostics
 

@@ -565,6 +565,8 @@
   "context.openStore": "Steam Mağazası'nda aç",
   "context.unhide": "Göster",
   "context.hide": "Gizle",
+  "context.favorite": "Favorilere ekle",
+  "context.unfavorite": "Favorilerden kaldır",
   "context.noStatus": "Durum yok",
   "context.addAllTo": "Tümünü şuraya ekle",
   "context.categories": "Kategoriler",

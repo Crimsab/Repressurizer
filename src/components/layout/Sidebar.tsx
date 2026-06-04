@@ -195,7 +195,10 @@ export function Sidebar() {
   }, [selectedCategoryKeys.length, clearCategorySelection]);
 
   const visibleCollections = collections.filter(
-    (c) => c.id !== "hidden" && (showDynamicCategories || !c.is_dynamic)
+    (c) =>
+      c.id !== "hidden" &&
+      (c.id !== "favorite" || c.added.length > 0) &&
+      (showDynamicCategories || !c.is_dynamic)
   );
   const sortedCollections = [...visibleCollections].sort((a, b) => {
     // Custom order takes priority if both items are in the order list

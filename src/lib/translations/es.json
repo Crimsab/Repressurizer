@@ -565,6 +565,8 @@
   "context.openStore": "Abrir en la tienda de Steam",
   "context.unhide": "Mostrar",
   "context.hide": "Ocultar",
+  "context.favorite": "Añadir a favoritos",
+  "context.unfavorite": "Quitar de favoritos",
   "context.noStatus": "Sin estado",
   "context.addAllTo": "Añadir todo a",
   "context.categories": "Categorías",

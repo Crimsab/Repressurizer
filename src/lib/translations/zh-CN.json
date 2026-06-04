@@ -565,6 +565,8 @@
   "context.openStore": "在 Steam 商店中打开",
   "context.unhide": "取消隐藏",
   "context.hide": "隐藏",
+  "context.favorite": "添加到收藏",
+  "context.unfavorite": "从收藏中移除",
   "context.noStatus": "无状态",
   "context.addAllTo": "全部添加到",
   "context.categories": "类别",

@@ -66,7 +66,7 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
   const gameCategories = useMemo(
     () =>
       collections.filter(
-        (c) => c.added.includes(game.appid) && !c.is_dynamic && c.id !== "hidden"
+        (c) => c.added.includes(game.appid) && !c.is_dynamic && c.id !== "hidden" && c.id !== "favorite"
       ),
     [collections, game.appid]
   );
@@ -74,7 +74,7 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
   const editableCollections = useMemo(
     () =>
       [...collections]
-        .filter((c) => !c.is_dynamic && c.id !== "hidden")
+        .filter((c) => !c.is_dynamic && c.id !== "hidden" && c.id !== "favorite")
         .sort((a, b) => a.name.localeCompare(b.name)),
     [collections]
   );

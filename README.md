@@ -38,8 +38,8 @@ Older releases remain available on the [releases page](https://github.com/Crimsa
 ### Steam Collection Editing
 
 - Detects local Steam installs and Steam users.
-- Reads and writes Steam collections from `cloud-storage-namespace-1.json`.
-- Creates automatic backups before saving and supports manual backups/restores.
+- Reads and writes Steam's modern collection catalog from `cloud-storage-namespace-1.json` and the Steam UI LevelDB cache when available.
+- Creates automatic backups before saving, including the matching Steam LevelDB catalog value when present, and supports manual backups/restores.
 - Shows a save preview before writing collection changes.
 - Lets you drag games into collections, bulk-select games, and edit multiple games at once.
 - Keeps hidden games separate from normal library browsing.
@@ -152,7 +152,7 @@ Linux and macOS support are possible, but Windows is the supported target for th
 
 ## Safety
 
-Repressurizer is designed around local files. It needs file access so it can detect Steam installs, read collection data, write collection changes, and create/restore backups. The first-run setup explains this before any save operation.
+Repressurizer is designed around local files. It needs file access so it can detect Steam installs, read collection data, write collection changes, and create/restore backups. On current Steam clients it may update both `cloud-storage-namespace-1.json` and Steam's local LevelDB catalog cache. The first-run setup explains this before any save operation.
 
 Before public testing:
 
