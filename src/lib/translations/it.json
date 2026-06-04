@@ -359,7 +359,7 @@
   "settings.backups.loadFailed": "Impossibile caricare i backup: {error}",
   "appearance.pickAccentColor": "Scegli colore accento",
   "appearance.customAccent": "Accento personalizzato",
-  "appearance.customAccent.desc": "Clicca il campione per scegliere un colore. Il valore esadecimale resta disponibile per la precisione.",
+  "appearance.customAccent.desc": "Scegli un colore o inserisci un HEX.",
   "appearance.hexValue": "Valore hex",
   "settings.systemTray": "Area di notifica",
   "settings.minimizeToTray": "Riduci nell’area di notifica alla chiusura",
@@ -643,7 +643,7 @@
   "recommend.play.started": "Iniziati",
   "recommend.avoidRecent": "Evita consigli recenti",
   "appearance.defaultAccent": "Accento predefinito",
-  "appearance.accentCompact.desc": "Preset, colori recenti o picker custom",
+  "appearance.accentCompact.desc": "Preset, recenti, custom",
   "appearance.recentColors": "Recenti",
   "appearance.detailHltb": "Mostra HowLongToBeat",
   "appearance.detailHltb.desc": "Mostra le stime di durata nei dettagli gioco.",
@@ -653,5 +653,9 @@
   "appearance.detailPrice.desc": "Mostra prezzo attuale, sconto e valuta nei dettagli gioco.",
   "wishlist.sort.price": "Prezzo",
   "wishlist.sort.discount": "Sconto",
-  "wishlist.onSale": "In saldo"
+  "wishlist.onSale": "In saldo",
+  "common.done": "Fatto",
+  "friends.saved": "Amici salvati",
+  "friends.saved.desc": "Cerca e confronta",
+  "friends.search": "Cerca amici..."
 }

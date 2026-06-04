@@ -359,7 +359,7 @@
   "settings.backups.loadFailed": "Yedekler yüklenemedi: {error}",
   "appearance.pickAccentColor": "Vurgu rengini seç",
   "appearance.customAccent": "Özel vurgu",
-  "appearance.customAccent.desc": "Renk seçmek için örneğe tıkla. Hassasiyet için hex değeri kullanılabilir kalır.",
+  "appearance.customAccent.desc": "Bir renk seç veya HEX gir.",
   "appearance.hexValue": "Hex değeri",
   "settings.systemTray": "Sistem tepsisi",
   "settings.minimizeToTray": "Kapatınca sistem tepsisine küçült",
@@ -643,7 +643,7 @@
   "recommend.play.started": "Başlanmış",
   "recommend.avoidRecent": "Son önerileri atla",
   "appearance.defaultAccent": "Varsayılan vurgu",
-  "appearance.accentCompact.desc": "Presetler, son renkler veya özel seçici",
+  "appearance.accentCompact.desc": "Presetler, son renkler, özel",
   "appearance.recentColors": "Son",
   "appearance.detailHltb": "HowLongToBeat göster",
   "appearance.detailHltb.desc": "Oyun detaylarında süre tahminlerini gösterir.",
@@ -653,5 +653,9 @@
   "appearance.detailPrice.desc": "Güncel fiyatı, indirimi ve para birimini gösterir.",
   "wishlist.sort.price": "Fiyat",
   "wishlist.sort.discount": "İndirim",
-  "wishlist.onSale": "İndirimde"
+  "wishlist.onSale": "İndirimde",
+  "common.done": "Bitti",
+  "friends.saved": "Kayıtlı arkadaşlar",
+  "friends.saved.desc": "Ara ve karşılaştır",
+  "friends.search": "Arkadaş ara..."
 }

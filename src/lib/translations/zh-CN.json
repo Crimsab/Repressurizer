@@ -359,7 +359,7 @@
   "settings.backups.loadFailed": "加载备份失败：{error}",
   "appearance.pickAccentColor": "选择强调色",
   "appearance.customAccent": "自定义强调色",
-  "appearance.customAccent.desc": "点击色块选择颜色。仍可使用十六进制值进行精确设置。",
+  "appearance.customAccent.desc": "选择颜色或输入 HEX。",
   "appearance.hexValue": "十六进制值",
   "settings.systemTray": "系统托盘",
   "settings.minimizeToTray": "关闭时最小化到托盘",
@@ -643,7 +643,7 @@
   "recommend.play.started": "已开始",
   "recommend.avoidRecent": "避开最近推荐",
   "appearance.defaultAccent": "默认强调色",
-  "appearance.accentCompact.desc": "预设、最近颜色或自定义选择器",
+  "appearance.accentCompact.desc": "预设、最近、自定义",
   "appearance.recentColors": "最近",
   "appearance.detailHltb": "显示 HowLongToBeat",
   "appearance.detailHltb.desc": "在游戏详情中显示时长估算。",
@@ -653,5 +653,9 @@
   "appearance.detailPrice.desc": "显示当前价格、折扣和货币。",
   "wishlist.sort.price": "价格",
   "wishlist.sort.discount": "折扣",
-  "wishlist.onSale": "促销中"
+  "wishlist.onSale": "促销中",
+  "common.done": "完成",
+  "friends.saved": "已保存好友",
+  "friends.saved.desc": "搜索并比较",
+  "friends.search": "搜索好友..."
 }

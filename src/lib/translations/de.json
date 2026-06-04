@@ -359,7 +359,7 @@
   "settings.backups.loadFailed": "Sicherungen konnten nicht geladen werden: {error}",
   "appearance.pickAccentColor": "Akzentfarbe auswählen",
   "appearance.customAccent": "Benutzerdefinierter Akzent",
-  "appearance.customAccent.desc": "Klicke auf das Farbfeld, um eine Farbe auszuwählen. Hex bleibt für präzise Eingabe verfügbar.",
+  "appearance.customAccent.desc": "Farbe wählen oder HEX-Wert eingeben.",
   "appearance.hexValue": "Hex-Wert",
   "settings.systemTray": "Infobereich",
   "settings.minimizeToTray": "Beim Schließen in den Infobereich minimieren",
@@ -643,7 +643,7 @@
   "recommend.play.started": "Begonnen",
   "recommend.avoidRecent": "Neue Empfehlungen vermeiden",
   "appearance.defaultAccent": "Standardakzent",
-  "appearance.accentCompact.desc": "Presets, letzte Farben oder eigener Picker",
+  "appearance.accentCompact.desc": "Presets, zuletzt, benutzerdefiniert",
   "appearance.recentColors": "Zuletzt",
   "appearance.detailHltb": "HowLongToBeat anzeigen",
   "appearance.detailHltb.desc": "Spielzeit-Schätzungen in Spieldetails anzeigen.",
@@ -653,5 +653,9 @@
   "appearance.detailPrice.desc": "Aktuellen Preis, Rabatt und Währung anzeigen.",
   "wishlist.sort.price": "Preis",
   "wishlist.sort.discount": "Rabatt",
-  "wishlist.onSale": "Im Angebot"
+  "wishlist.onSale": "Im Angebot",
+  "common.done": "Fertig",
+  "friends.saved": "Gespeicherte Freunde",
+  "friends.saved.desc": "Suchen und vergleichen",
+  "friends.search": "Freunde suchen..."
 }
