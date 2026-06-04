@@ -14,17 +14,16 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   HAS_VT_API_KEY: ${{ secrets.VT_API_KEY != '' }}
 
 jobs:
   windows:
     name: Windows installer and portable
-    runs-on: windows-latest
+    runs-on: windows-2025-vs2026
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -50,7 +49,7 @@ jobs:
           bun-version: latest
 
       - name: Cache Bun
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.bun/install/cache
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
@@ -122,7 +121,7 @@ jobs:
 
       - name: Upload workflow artifacts
         continue-on-error: true
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: repressurizer-windows
           path: artifacts/*
@@ -146,18 +145,102 @@ jobs:
             artifacts/*.exe
             artifacts/*.zip
 
+      - name: Check VirusTotal verdicts
+        id: vt-verdict
+        if: startsWith(github.ref, 'refs/tags/') && steps.vt-scan.outputs.analysis != ''
+        shell: pwsh
+        env:
+          VT_API_KEY: ${{ secrets.VT_API_KEY }}
+          VT_ANALYSIS: ${{ steps.vt-scan.outputs.analysis }}
+        run: |
+          $ErrorActionPreference = "Stop"
+
+          function Get-Stat($stats, $name) {
+            $property = $stats.PSObject.Properties[$name]
+            if ($null -eq $property -or $null -eq $property.Value) {
+              return 0
+            }
+            return [int]$property.Value
+          }
+
+          $headers = @{ "x-apikey" = $env:VT_API_KEY }
+          $entries = $env:VT_ANALYSIS -split "," | Where-Object { $_ -match "=" }
+          $lines = @()
+          $detections = @()
+
+          foreach ($entry in $entries) {
+            $parts = $entry -split "=", 2
+            $name = Split-Path $parts[0] -Leaf
+            $url = $parts[1]
+
+            if ($url -notmatch "/file-analysis/([^/]+)/") {
+              $lines += "- ${name}: unable to parse VirusTotal analysis link - $url"
+              continue
+            }
+
+            $analysisId = $Matches[1]
+            $attributes = $null
+
+            for ($attempt = 1; $attempt -le 18; $attempt++) {
+              $response = Invoke-RestMethod `
+                -Headers $headers `
+                -Uri "https://www.virustotal.com/api/v3/analyses/$analysisId"
+
+              $attributes = $response.data.attributes
+              if ($attributes.status -eq "completed") {
+                break
+              }
+
+              Start-Sleep -Seconds 10
+            }
+
+            if ($null -eq $attributes -or $attributes.status -ne "completed") {
+              $lines += "- ${name}: analysis still pending after timeout - $url"
+              continue
+            }
+
+            $stats = $attributes.stats
+            $malicious = Get-Stat $stats "malicious"
+            $suspicious = Get-Stat $stats "suspicious"
+            $harmless = Get-Stat $stats "harmless"
+            $undetected = Get-Stat $stats "undetected"
+            $timeout = Get-Stat $stats "timeout"
+
+            $lines += "- ${name}: ${malicious} malicious, ${suspicious} suspicious, ${harmless} harmless, ${undetected} undetected, ${timeout} timeout - $url"
+
+            if ($malicious -gt 0 -or $suspicious -gt 0) {
+              $detections += "${name}: ${malicious} malicious, ${suspicious} suspicious"
+            }
+          }
+
+          $markdown = $lines -join "`n"
+          $delimiter = [guid]::NewGuid().ToString()
+          "markdown<<$delimiter" >> $env:GITHUB_OUTPUT
+          $markdown >> $env:GITHUB_OUTPUT
+          "$delimiter" >> $env:GITHUB_OUTPUT
+
+          if ($detections.Count -gt 0) {
+            $message = $detections -join "; "
+            Write-Output "::error::VirusTotal reported detections: $message"
+            exit 1
+          }
+
       - name: Append VirusTotal results
         if: startsWith(github.ref, 'refs/tags/') && steps.vt-scan.outputs.analysis != ''
         shell: pwsh
         env:
           VT_ANALYSIS: ${{ steps.vt-scan.outputs.analysis }}
+          VT_VERDICTS: ${{ steps.vt-verdict.outputs.markdown }}
         run: |
           $lines = "- " + ($env:VT_ANALYSIS -replace "artifacts/", "" -replace "=h", ": h" -replace ",", "`n- ")
           Add-Content -Path release-notes.md -Value "`n## VirusTotal`n`n$lines`n"
+          if ($env:VT_VERDICTS) {
+            Add-Content -Path release-notes.md -Value "`n### Verdicts`n`n$env:VT_VERDICTS`n"
+          }
 
       - name: Publish GitHub release
         if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           name: Repressurizer ${{ github.ref_name }}
           body_path: release-notes.md

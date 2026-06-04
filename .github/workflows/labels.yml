@@ -7,9 +7,6 @@ permissions:
   issues: write
   contents: read
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   sync:
     name: Sync repository labels
@@ -17,12 +14,35 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Sync labels
-        uses: EndBug/label-sync@v2
-        with:
-          config-file: .github/labels.yml
-          delete-other-labels: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ruby <<'RUBY'
+          require "yaml"
+          require "open3"
+
+          labels = YAML.load_file(".github/labels.yml")
+
+          labels.each do |label|
+            name = label.fetch("name")
+            color = label.fetch("color").delete_prefix("#")
+            description = label.fetch("description", "")
+
+            create_args = [
+              "gh", "label", "create", name,
+              "--color", color,
+              "--description", description
+            ]
+
+            edit_args = [
+              "gh", "label", "edit", name,
+              "--color", color,
+              "--description", description
+            ]
+
+            system(*create_args) || system(*edit_args) || abort("Failed to sync label: #{name}")
+          end
+          RUBY

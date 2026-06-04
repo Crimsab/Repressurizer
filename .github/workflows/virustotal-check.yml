@@ -1,0 +1,102 @@
+name: VirusTotal Check
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha256s:
+        description: Newline or comma separated SHA256 hashes to check.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Check VirusTotal verdicts
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Query VirusTotal
+        env:
+          VT_API_KEY: ${{ secrets.VT_API_KEY }}
+          SHA256S: ${{ inputs.sha256s }}
+        run: |
+          python3 <<'PY'
+          import json
+          import os
+          import sys
+          import time
+          import urllib.error
+          import urllib.request
+
+          api_key = os.environ.get("VT_API_KEY", "")
+          if not api_key:
+              print("::error::VT_API_KEY secret is not configured")
+              sys.exit(1)
+
+          hashes = [
+              item.strip()
+              for item in os.environ.get("SHA256S", "").replace(",", "\n").splitlines()
+              if item.strip()
+          ]
+          if not hashes:
+              print("::error::No SHA256 hashes were provided")
+              sys.exit(1)
+
+          headers = {
+              "x-apikey": api_key,
+              "accept": "application/json",
+          }
+
+          summary_lines = ["## VirusTotal verdicts", ""]
+          detections = []
+
+          for sha256 in hashes:
+              url = f"https://www.virustotal.com/api/v3/files/{sha256}"
+              data = None
+
+              for attempt in range(1, 7):
+                  request = urllib.request.Request(url, headers=headers)
+                  try:
+                      with urllib.request.urlopen(request, timeout=30) as response:
+                          data = json.load(response)
+                      break
+                  except urllib.error.HTTPError as error:
+                      if error.code == 404:
+                          break
+                      if error.code in {429, 500, 502, 503, 504} and attempt < 6:
+                          time.sleep(10)
+                          continue
+                      raise
+
+              attributes = (data or {}).get("data", {}).get("attributes", {})
+              stats = attributes.get("last_analysis_stats") or {}
+              name = attributes.get("meaningful_name") or sha256
+
+              malicious = int(stats.get("malicious") or 0)
+              suspicious = int(stats.get("suspicious") or 0)
+              harmless = int(stats.get("harmless") or 0)
+              undetected = int(stats.get("undetected") or 0)
+              timeout = int(stats.get("timeout") or 0)
+
+              line = (
+                  f"- `{name}` (`{sha256}`): {malicious} malicious, "
+                  f"{suspicious} suspicious, {harmless} harmless, "
+                  f"{undetected} undetected, {timeout} timeout"
+              )
+              print(line)
+              summary_lines.append(line)
+
+              if malicious > 0 or suspicious > 0:
+                  detections.append(f"{name}: {malicious} malicious, {suspicious} suspicious")
+
+          summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+          if summary_path:
+              with open(summary_path, "a", encoding="utf-8") as summary:
+                  summary.write("\n".join(summary_lines) + "\n")
+
+          if detections:
+              print(f"::error::VirusTotal reported detections: {'; '.join(detections)}")
+              sys.exit(1)
+          PY
