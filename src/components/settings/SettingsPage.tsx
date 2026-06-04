@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import type { ClipboardEvent } from "react";
 import { save } from "@tauri-apps/plugin-dialog";
 import { writeTextFile } from "@tauri-apps/plugin-fs";
@@ -1024,27 +1024,57 @@ function AppearanceTab({
   } = useSettingsStore();
   const t = useT();
   const [pickerOpen, setPickerOpen] = useState(false);
+  const pickerRef = useRef<HTMLDivElement>(null);
   const activeAccent = /^#[0-9a-fA-F]{6}$/.test(accentColor) ? accentColor : "#10b981";
 
-  const commitAccent = (hex: string) => {
+  const commitAccent = (hex: string, saveRecent = false) => {
     if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return;
     const normalized = hex.toLowerCase();
-    const recent = [normalized, ...(recentAccentColors ?? []).filter((c) => c !== normalized)].slice(0, 8);
-    setSettings({ accentColor: normalized, recentAccentColors: recent });
+    const nextSettings: Partial<ReturnType<typeof useSettingsStore.getState>> = { accentColor: normalized };
+    if (saveRecent) {
+      nextSettings.recentAccentColors = [normalized, ...(recentAccentColors ?? []).filter((c) => c !== normalized)].slice(0, 8);
+    }
+    setSettings(nextSettings);
     setCustomHex(normalized);
     applyAccentColor(normalized);
   };
 
   const handlePickPreset = (hex: string) => {
-    commitAccent(hex);
+    commitAccent(hex, false);
   };
 
   const handleCustomHex = (hex: string) => {
     setCustomHex(hex);
     if (/^#[0-9a-fA-F]{6}$/.test(hex)) {
-      commitAccent(hex);
+      const normalized = hex.toLowerCase();
+      setSettings({ accentColor: normalized });
+      applyAccentColor(normalized);
     }
   };
+
+  const closePicker = () => {
+    if (/^#[0-9a-fA-F]{6}$/.test(customHex)) {
+      commitAccent(customHex, true);
+    }
+    setPickerOpen(false);
+  };
+
+  useEffect(() => {
+    if (!pickerOpen) return;
+    const handleDown = (event: MouseEvent) => {
+      if (pickerRef.current?.contains(event.target as Node)) return;
+      closePicker();
+    };
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closePicker();
+    };
+    document.addEventListener("mousedown", handleDown);
+    document.addEventListener("keydown", handleKey);
+    return () => {
+      document.removeEventListener("mousedown", handleDown);
+      document.removeEventListener("keydown", handleKey);
+    };
+  }, [pickerOpen, customHex]);
 
   const handleResetColor = () => {
     setSettings({ accentColor: "" });
@@ -1062,14 +1092,11 @@ function AppearanceTab({
         <div className="relative rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-3 py-3">
           <div className="flex flex-wrap items-center gap-2">
             <button
-              onClick={() => setPickerOpen((v) => !v)}
               className="btn-press relative h-9 w-9 shrink-0 overflow-hidden rounded-full border border-white/20 shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]"
-              title={t("appearance.pickAccentColor")}
-              aria-label={t("appearance.pickAccentColor")}
+              title={accentColor || t("appearance.defaultAccent")}
+              aria-label={accentColor || t("appearance.defaultAccent")}
               style={{
-                background: accentColor
-                  ? activeAccent
-                  : "conic-gradient(from 90deg, #ef4444, #f97316, #eab308, #10b981, #06b6d4, #3b82f6, #8b5cf6, #ef4444)",
+                background: activeAccent,
               }}
             >
               <span className="absolute inset-0 rounded-full ring-1 ring-inset ring-white/20" />
@@ -1087,6 +1114,17 @@ function AppearanceTab({
                 onClick={() => handlePickPreset(p.accent)}
               />
             ))}
+            <button
+              onClick={() => setPickerOpen((v) => !v)}
+              className={`btn-press relative h-8 w-8 shrink-0 rounded-full transition-transform hover:scale-105 ${pickerOpen ? "ring-2 ring-white ring-offset-2 ring-offset-repressurizer-bg" : ""}`}
+              title={t("appearance.pickAccentColor")}
+              aria-label={t("appearance.pickAccentColor")}
+              style={{
+                background: "conic-gradient(from 90deg, #ef4444, #f97316, #eab308, #10b981, #06b6d4, #3b82f6, #8b5cf6, #ef4444)",
+              }}
+            >
+              <span className="absolute inset-[3px] rounded-full bg-repressurizer-bg/70" />
+            </button>
             {accentColor && (
               <button
                 onClick={handleResetColor}
@@ -1108,14 +1146,14 @@ function AppearanceTab({
                   color={color}
                   label={color}
                   active={accentColor === color}
-                  onClick={() => commitAccent(color)}
+                  onClick={() => commitAccent(color, false)}
                   small
                 />
               ))}
             </div>
           )}
           {pickerOpen && (
-            <div className="absolute left-3 top-14 z-20 w-72 rounded-xl border border-repressurizer-border bg-repressurizer-surface p-3 shadow-[0_16px_40px_rgba(0,0,0,0.45)]">
+            <div ref={pickerRef} className="absolute right-3 top-14 z-20 w-72 rounded-xl border border-repressurizer-border bg-repressurizer-surface p-3 shadow-[0_16px_40px_rgba(0,0,0,0.45)]">
               <div className="mb-3 flex items-center gap-3">
                 <label className="relative block h-16 w-16 shrink-0 cursor-pointer overflow-hidden rounded-xl border border-repressurizer-border">
                   <span className="block h-full w-full" style={{ backgroundColor: activeAccent }} />
@@ -1141,6 +1179,12 @@ function AppearanceTab({
                 maxLength={7}
                 className="w-full rounded-lg border border-repressurizer-border bg-repressurizer-bg px-3 py-2 font-mono text-sm text-repressurizer-text transition-colors focus:border-repressurizer-accent focus:outline-none"
               />
+              <button
+                onClick={closePicker}
+                className="mt-3 w-full rounded-lg bg-repressurizer-accent px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-repressurizer-accent-hover"
+              >
+                {t("common.done")}
+              </button>
               {accentColor && (
                 <button
                   onClick={handleResetColor}
