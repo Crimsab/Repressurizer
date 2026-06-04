@@ -24,6 +24,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Read version
         id: version
@@ -128,30 +130,9 @@ jobs:
       - name: Create release notes
         id: notes
         if: startsWith(github.ref, 'refs/tags/')
-        shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          $tag = "${{ github.ref_name }}"
-          $notes = gh api "repos/${{ github.repository }}/releases/generate-notes" `
-            -f tag_name="$tag" `
-            -f target_commitish="${{ github.sha }}" `
-            --jq .body
-          @"
-          ## Repressurizer $tag
-
-          Modern Steam library management, inspired by Depressurizer.
-
-          ### Downloads
-
-          - `Repressurizer_*.exe`: Windows installer
-          - `Repressurizer-portable-windows-x64.zip`: portable Windows build
-          - `Repressurizer-portable.exe`: unpacked portable executable
-
-          ### Changelog
-
-          $notes
-          "@ | Set-Content -Path release-notes.md
+        run: bun scripts/release-notes.ts --repo "${{ github.repository }}" --tag "${{ github.ref_name }}" --sha "${{ github.sha }}" --out release-notes.md
 
       - name: Publish GitHub release
         if: startsWith(github.ref, 'refs/tags/')

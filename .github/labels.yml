@@ -37,6 +37,9 @@
 - name: good first issue
   color: "7057ff"
   description: Good for a first contribution.
+- name: skip-changelog
+  color: "ededed"
+  description: Exclude from generated release notes.
 - name: blocked-upstream
   color: "bfdadc"
   description: Blocked by Steam, HLTB, Tauri, or another upstream service.

@@ -1,0 +1,29 @@
+changelog:
+  exclude:
+    labels:
+      - skip-changelog
+    authors:
+      - github-actions[bot]
+      - dependabot[bot]
+  categories:
+    - title: New Features
+      labels:
+        - enhancement
+    - title: Bug Fixes
+      labels:
+        - bug
+    - title: Steam Metadata
+      labels:
+        - metadata
+        - steam-store
+        - steam-family
+    - title: Installer and Windows
+      labels:
+        - installer
+        - windows
+    - title: User Interface
+      labels:
+        - ui
+    - title: Other Changes
+      labels:
+        - "*"
