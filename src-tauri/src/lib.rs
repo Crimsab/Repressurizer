@@ -1,6 +1,6 @@
-mod categorizer;
-mod hltb;
-mod steam;
+pub mod categorizer;
+pub mod hltb;
+pub mod steam;
 
 use categorizer::commands;
 use serde::Serialize;
@@ -325,6 +325,7 @@ pub fn run() {
             api::fetch_family_library,
             api::resolve_vanity_url,
             api::fetch_player_summary,
+            api::fetch_friend_list,
             commands::run_hours_categorizer,
             commands::run_genre_categorizer,
             commands::run_tags_categorizer,

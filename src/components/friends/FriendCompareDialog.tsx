@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useGameStore } from "../../stores/gameStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useFriendsStore } from "../../stores/friendsStore";
-import { fetchLibrary, resolveVanityUrl, fetchPlayerSummary } from "../../lib/tauri";
+import { fetchLibrary, resolveVanityUrl, fetchPlayerSummary, fetchFriendList } from "../../lib/tauri";
 import type { OwnedGame } from "../../lib/types";
 import { X, UsersThree, MagnifyingGlass, ArrowsClockwise } from "@phosphor-icons/react";
 import { SteamImage } from "../games/SteamImage";
@@ -17,8 +17,8 @@ type Section = "both" | "only-me" | "only-them";
 export function FriendCompareDialog({ onClose }: FriendCompareDialogProps) {
   const t = useT();
   const myGames = useGameStore((s) => s.games);
-  const { apiKey } = useSettingsStore();
-  const { friends, saveFriend, removeFriend } = useFriendsStore();
+  const { apiKey, steamId64 } = useSettingsStore();
+  const { friends, saveFriend, saveFriends, removeFriend } = useFriendsStore();
 
   const [input, setInput] = useState("");
   const [friendGames, setFriendGames] = useState<OwnedGame[] | null>(null);
@@ -27,6 +27,7 @@ export function FriendCompareDialog({ onClose }: FriendCompareDialogProps) {
   const [section, setSection] = useState<Section>("both");
   const [search, setSearch] = useState("");
   const [currentFriendId, setCurrentFriendId] = useState("");
+  const [importingFriends, setImportingFriends] = useState(false);
 
   const resolveAndFetch = async (rawInput: string): Promise<{ id: string; games: OwnedGame[] }> => {
     let friendId = rawInput.trim();
@@ -123,6 +124,32 @@ export function FriendCompareDialog({ onClose }: FriendCompareDialogProps) {
     }
   };
 
+  const handleImportFriends = async () => {
+    if (!apiKey || !steamId64) {
+      setError(t("friends.apiKeyRequired"));
+      return;
+    }
+    setImportingFriends(true);
+    setError("");
+    try {
+      const imported = await fetchFriendList(apiKey, steamId64);
+      saveFriends(imported.map((friend) => ({
+        steamId64: friend.steamid,
+        displayName: friend.personaname || `Friend #${friend.steamid.slice(-6)}`,
+        avatar: friend.avatar,
+        lastCompared: 0,
+        gameCount: 0,
+      })));
+      if (imported.length === 0) {
+        setError(t("friends.importEmpty"));
+      }
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setImportingFriends(false);
+    }
+  };
+
   const { both, onlyMe, onlyThem } = useMemo(() => {
     if (!friendGames) return { both: [], onlyMe: [], onlyThem: [] };
     const myMap = myGames;
@@ -203,6 +230,14 @@ export function FriendCompareDialog({ onClose }: FriendCompareDialogProps) {
             >
               <ArrowsClockwise size={14} className={loading ? "animate-spin" : ""} />
               {t("friends.compare")}
+            </button>
+            <button
+              onClick={handleImportFriends}
+              disabled={importingFriends || !apiKey || !steamId64}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-repressurizer-border bg-repressurizer-bg px-3 py-1.5 text-sm font-medium text-repressurizer-text-muted transition-colors hover:text-white disabled:opacity-40"
+            >
+              <UsersThree size={14} className={importingFriends ? "animate-pulse" : ""} />
+              {importingFriends ? t("friends.importing") : t("friends.import")}
             </button>
           </div>
           {error && <p className="text-xs text-repressurizer-danger">{error}</p>}

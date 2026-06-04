@@ -9,7 +9,7 @@ export interface SavedFriend {
   gameCount: number;
 }
 
-const MAX_FRIENDS = 10;
+const MAX_FRIENDS = 250;
 
 function persist(friends: SavedFriend[]) {
   saveFriendsCache(JSON.stringify(friends)).catch(() => {});
@@ -20,6 +20,7 @@ interface FriendsState {
   hydrated: boolean;
   hydrate: () => Promise<void>;
   saveFriend: (friend: SavedFriend) => void;
+  saveFriends: (friends: SavedFriend[]) => void;
   removeFriend: (steamId64: string) => void;
 }
 
@@ -43,6 +44,18 @@ export const useFriendsStore = create<FriendsState>((set) => ({
     set((state) => {
       const filtered = state.friends.filter((f) => f.steamId64 !== friend.steamId64);
       const next = [friend, ...filtered].slice(0, MAX_FRIENDS);
+      persist(next);
+      return { friends: next };
+    }),
+
+  saveFriends: (friends) =>
+    set((state) => {
+      const merged = new Map<string, SavedFriend>();
+      for (const friend of state.friends) merged.set(friend.steamId64, friend);
+      for (const friend of friends) merged.set(friend.steamId64, friend);
+      const next = [...merged.values()]
+        .sort((a, b) => a.displayName.localeCompare(b.displayName))
+        .slice(0, MAX_FRIENDS);
       persist(next);
       return { friends: next };
     }),

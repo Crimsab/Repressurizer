@@ -172,6 +172,14 @@ export async function fetchPlayerSummary(apiKey: string, steamId64: string): Pro
   return invoke<PlayerSummary>("fetch_player_summary", { apiKey, steamId64 });
 }
 
+export interface FriendSummary extends PlayerSummary {
+  friend_since: number;
+}
+
+export async function fetchFriendList(apiKey: string, steamId64: string): Promise<FriendSummary[]> {
+  return invoke<FriendSummary[]>("fetch_friend_list", { apiKey, steamId64 });
+}
+
 export interface HltbData {
   main_story: number | null;
   main_extra: number | null;
