@@ -68,7 +68,7 @@
 .theme-light .bg-amber-600\/80 .text-white,
 .theme-light .bg-red-600\/80 .text-white { color: #fff !important; }
 .theme-light .bg-black\/40 { color: #fff !important; }
-.theme-light [class*="bg-repressurizer-accent"].text-white { color: #fff !important; }
+.theme-light .bg-repressurizer-accent.text-white { color: #fff !important; }
 
 /* Light theme overrides for specific elements */
 .theme-light ::selection {

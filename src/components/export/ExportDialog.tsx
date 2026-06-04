@@ -224,7 +224,7 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
                   onClick={() => setPickLayout("structured")}
                   className={`flex-1 rounded-xl border py-2 text-xs font-medium transition-colors ${
                     pickLayout === "structured"
-                      ? "border-repressurizer-accent bg-repressurizer-accent/10 text-white"
+                      ? "border-repressurizer-accent bg-repressurizer-accent/10 text-repressurizer-accent"
                       : "border-repressurizer-border-subtle text-repressurizer-text-muted hover:border-repressurizer-border"
                   }`}
                 >
@@ -235,7 +235,7 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
                   onClick={() => setPickLayout("flat_unique")}
                   className={`flex-1 rounded-xl border py-2 text-xs font-medium transition-colors ${
                     pickLayout === "flat_unique"
-                      ? "border-repressurizer-accent bg-repressurizer-accent/10 text-white"
+                      ? "border-repressurizer-accent bg-repressurizer-accent/10 text-repressurizer-accent"
                       : "border-repressurizer-border-subtle text-repressurizer-text-muted hover:border-repressurizer-border"
                   }`}
                 >

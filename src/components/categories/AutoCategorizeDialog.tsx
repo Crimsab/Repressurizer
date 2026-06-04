@@ -708,7 +708,7 @@ function YearConfigForm({ config, onChange }: { config: YearConfig; onChange: (c
               onClick={() => onChange({ ...config, grouping: g })}
               className={`btn-press rounded-xl border px-4 py-2 text-sm transition-colors ${
                 config.grouping === g
-                  ? "border-repressurizer-accent bg-repressurizer-accent/10 text-white"
+                  ? "border-repressurizer-accent bg-repressurizer-accent/10 text-repressurizer-accent"
                   : "border-repressurizer-border-subtle bg-repressurizer-bg text-repressurizer-text-muted hover:border-repressurizer-border"
               }`}
             >

@@ -408,7 +408,7 @@ export function Sidebar() {
                 onContextMenu={(e) => handleContextMenu(e, col)}
                 className={`group flex w-full items-center gap-2 rounded-lg px-1 py-1.5 text-left text-sm transition-colors ${
                   activeCategory === col.key
-                    ? "bg-repressurizer-accent/10 text-white"
+                    ? "bg-repressurizer-accent/10 text-repressurizer-accent"
                     : "text-repressurizer-text hover:bg-repressurizer-surface-hover"
                 } ${col.is_dynamic ? "italic text-repressurizer-text-muted" : ""} ${
                   !col.is_dynamic && selectedCategoryKeys.includes(col.key)
@@ -655,7 +655,7 @@ function SidebarItem({
       onClick={onClick}
       className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm transition-colors ${
         active
-          ? "bg-repressurizer-accent/10 text-white"
+          ? "bg-repressurizer-accent/10 text-repressurizer-accent"
           : "text-repressurizer-text hover:bg-repressurizer-surface-hover"
       }`}
     >

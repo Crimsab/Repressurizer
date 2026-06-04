@@ -1270,7 +1270,7 @@ function AppearanceTab() {
               }}
               className={`btn-press flex flex-1 items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm transition-all ${
                 (theme ?? "dark") === opt.value
-                  ? "border-repressurizer-accent bg-repressurizer-accent/10 text-white"
+                  ? "border-repressurizer-accent bg-repressurizer-accent/10 text-repressurizer-accent"
                   : "border-repressurizer-border bg-repressurizer-bg text-repressurizer-text-muted hover:border-repressurizer-border hover:text-repressurizer-text"
               }`}
             >
@@ -1291,7 +1291,7 @@ function AppearanceTab() {
               onClick={() => setSettings({ language: locale })}
               className={`btn-press flex flex-1 items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm transition-all ${
                 normalizeLocale(language) === locale
-                  ? "border-repressurizer-accent bg-repressurizer-accent/10 text-white"
+                  ? "border-repressurizer-accent bg-repressurizer-accent/10 text-repressurizer-accent"
                   : "border-repressurizer-border bg-repressurizer-bg text-repressurizer-text-muted hover:border-repressurizer-border hover:text-repressurizer-text"
               }`}
             >

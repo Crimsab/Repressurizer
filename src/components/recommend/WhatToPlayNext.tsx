@@ -397,7 +397,7 @@ function FilterSelect({
         onClick={() => setOpen((next) => !next)}
         className={`flex h-8 w-full items-center gap-2 rounded-lg border px-2.5 text-left text-[11px] transition-colors ${
           open
-            ? "border-repressurizer-accent bg-repressurizer-accent/10 text-white"
+            ? "border-repressurizer-accent bg-repressurizer-accent/10 text-repressurizer-accent"
             : "border-repressurizer-border bg-repressurizer-bg text-repressurizer-text hover:text-white"
         }`}
       >

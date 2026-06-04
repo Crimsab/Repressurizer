@@ -74,7 +74,7 @@ export function MergeCategoriesDialog({ selectedKeys, onClose }: MergeCategories
             onClick={() => setMode("existing")}
             className={`flex-1 rounded-xl border py-2 text-sm font-medium transition-colors ${
               mode === "existing"
-                ? "border-repressurizer-accent bg-repressurizer-accent/10 text-white"
+                ? "border-repressurizer-accent bg-repressurizer-accent/10 text-repressurizer-accent"
                 : "border-repressurizer-border-subtle text-repressurizer-text-muted hover:border-repressurizer-border"
             }`}
           >
@@ -85,7 +85,7 @@ export function MergeCategoriesDialog({ selectedKeys, onClose }: MergeCategories
             onClick={() => setMode("new")}
             className={`flex-1 rounded-xl border py-2 text-sm font-medium transition-colors ${
               mode === "new"
-                ? "border-repressurizer-accent bg-repressurizer-accent/10 text-white"
+                ? "border-repressurizer-accent bg-repressurizer-accent/10 text-repressurizer-accent"
                 : "border-repressurizer-border-subtle text-repressurizer-text-muted hover:border-repressurizer-border"
             }`}
           >

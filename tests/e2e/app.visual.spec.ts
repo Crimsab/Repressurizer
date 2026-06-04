@@ -157,6 +157,36 @@ test("uses the color picker as the primary custom accent control", async ({ page
     .toBe("#38bdf8");
 });
 
+test("keeps selected appearance controls legible in light theme", async ({ page }, testInfo) => {
+  await page.addInitScript(() => {
+    const raw = window.localStorage.getItem("repressurizer-settings");
+    if (!raw) return;
+    const settings = JSON.parse(raw);
+    settings.theme = "light";
+    settings.language = "en";
+    window.localStorage.setItem("repressurizer-settings", JSON.stringify(settings));
+  });
+
+  await page.goto("/");
+  await page.getByTitle("Settings").click();
+  await page.getByRole("button", { name: "Appearance" }).click();
+
+  const lightButton = page.getByRole("button", { name: "Light" });
+  await expect(lightButton).toBeVisible();
+  const lightTextColor = await lightButton.evaluate((el) => getComputedStyle(el).color);
+  expect(lightTextColor).not.toBe("rgb(255, 255, 255)");
+
+  const englishButton = page.getByRole("button", { name: /English/ });
+  await expect(englishButton).toBeVisible();
+  const englishTextColor = await englishButton.evaluate((el) => getComputedStyle(el).color);
+  expect(englishTextColor).not.toBe("rgb(255, 255, 255)");
+
+  await lightButton.scrollIntoViewIfNeeded();
+  const screenshotPath = testInfo.outputPath("settings-light-appearance.png");
+  await page.screenshot({ path: screenshotPath, fullPage: true });
+  await testInfo.attach("settings-light-appearance", { path: screenshotPath, contentType: "image/png" });
+});
+
 test("keeps recommendation filters inside the dialog", async ({ page }, testInfo) => {
   await page.goto("/");
   await page.getByTitle("What to Play Next").click();
