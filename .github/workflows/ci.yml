@@ -76,7 +76,6 @@ jobs:
           path: |
             ~/.cargo/git
             ~/.cargo/registry
-            src-tauri/target
           key: ${{ runner.os }}-rust-${{ hashFiles('src-tauri/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-rust-
