@@ -49,4 +49,23 @@ describe("categoryStore", () => {
     expect(state.collections.some((c) => c.key === "rpg")).toBe(false);
     expect(state.collections.some((c) => c.key === "coop")).toBe(false);
   });
+
+  it("removes multiple selected categories in one undoable change", () => {
+    const store = useCategoryStore.getState();
+    store.setActiveCategory("rpg");
+    store.setSelectedCategoryKeys(["rpg", "coop"]);
+
+    store.removeCategories(["rpg", "coop"]);
+
+    let state = useCategoryStore.getState();
+    expect(state.collections).toEqual([]);
+    expect(state.activeCategory).toBe("all");
+    expect(state.selectedCategoryKeys).toEqual([]);
+    expect(state.dirty).toBe(true);
+
+    state.undo();
+
+    state = useCategoryStore.getState();
+    expect(state.collections.map((c) => c.key)).toEqual(["rpg", "coop"]);
+  });
 });

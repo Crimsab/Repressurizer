@@ -21,6 +21,7 @@ interface CategoryState {
   setSelectedCategoryKeys: (keys: string[]) => void;
   addCategory: (name: string) => void;
   removeCategory: (key: string) => void;
+  removeCategories: (keys: string[]) => void;
   renameCategory: (key: string, newName: string) => void;
   addGameToCategory: (key: string, appId: number) => void;
   removeGameFromCategory: (key: string, appId: number) => void;
@@ -120,6 +121,28 @@ export const useCategoryStore = create<CategoryState>((set, get) => ({
         state.activeCategory === key ? "all" : state.activeCategory,
       selectedCategoryKeys: state.selectedCategoryKeys.filter((k) => k !== key),
     })),
+
+  removeCategories: (keys) =>
+    set((state) => {
+      const requestedKeys = new Set(keys);
+      const removableKeys = new Set(
+        state.collections
+          .filter((c) => requestedKeys.has(c.key) && !c.is_dynamic)
+          .map((c) => c.key)
+      );
+      if (removableKeys.size === 0) return state;
+      return {
+        ...pushHistory(state),
+        collections: state.collections.filter((c) => !removableKeys.has(c.key)),
+        activeCategory:
+          state.activeCategory && removableKeys.has(state.activeCategory)
+            ? "all"
+            : state.activeCategory,
+        selectedCategoryKeys: state.selectedCategoryKeys.filter(
+          (k) => !removableKeys.has(k)
+        ),
+      };
+    }),
 
   renameCategory: (key, newName) =>
     set((state) => ({

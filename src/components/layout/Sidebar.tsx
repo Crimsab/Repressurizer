@@ -42,6 +42,7 @@ export function Sidebar() {
     setActiveCategory,
     addCategory,
     removeCategory,
+    removeCategories,
     renameCategory,
     addGamesToCategory,
     selectedCategoryKeys,
@@ -94,11 +95,19 @@ export function Sidebar() {
   const [editName, setEditName] = useState("");
   const [dragOver, setDragOver] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<CategoryContextMenuState | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const [confirmDeleteKeys, setConfirmDeleteKeys] = useState<string[] | null>(null);
   const [showMerge, setShowMerge] = useState(false);
   const [duplicateFor, setDuplicateFor] = useState<SteamCollection | null>(null);
   const [duplicateName, setDuplicateName] = useState("");
   const categoryAnchorRef = useRef<string | null>(null);
+
+  const isRemovableCategory = useCallback(
+    (key: string | null) => {
+      if (!key) return false;
+      return collections.some((c) => c.key === key && !c.is_dynamic);
+    },
+    [collections]
+  );
 
   // Category reorder drag state
   const [reorderDragKey, setReorderDragKey] = useState<string | null>(null);
@@ -185,14 +194,28 @@ export function Sidebar() {
   useEffect(() => {
     if (selectedCategoryKeys.length === 0) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      if ((e.target as HTMLElement).tagName === "INPUT") return;
+      const target = e.target as HTMLElement;
+      const tagName = target.tagName;
+      if (
+        tagName === "INPUT" ||
+        tagName === "TEXTAREA" ||
+        tagName === "SELECT" ||
+        target.isContentEditable
+      ) {
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        clearCategorySelection();
+        return;
+      }
+      if (e.key !== "Delete" && e.key !== "Backspace") return;
       e.preventDefault();
-      clearCategorySelection();
+      setConfirmDeleteKeys([...selectedCategoryKeys]);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [selectedCategoryKeys.length, clearCategorySelection]);
+  }, [selectedCategoryKeys, clearCategorySelection]);
 
   const visibleCollections = collections.filter(
     (c) =>
@@ -393,7 +416,15 @@ export function Sidebar() {
                   }
                   if (e.ctrlKey || e.metaKey) {
                     e.preventDefault();
-                    toggleCategorySelection(col.key);
+                    if (
+                      selectedCategoryKeys.length === 0 &&
+                      activeCategory !== col.key &&
+                      isRemovableCategory(activeCategory)
+                    ) {
+                      setSelectedCategoryKeys([activeCategory!, col.key]);
+                    } else {
+                      toggleCategorySelection(col.key);
+                    }
                     categoryAnchorRef.current = col.key;
                     return;
                   }
@@ -408,11 +439,11 @@ export function Sidebar() {
                 onContextMenu={(e) => handleContextMenu(e, col)}
                 className={`group flex w-full items-center gap-2 rounded-lg px-1 py-1.5 text-left text-sm transition-colors ${
                   activeCategory === col.key
-                    ? "bg-repressurizer-accent/10 text-repressurizer-accent"
+                    ? "bg-repressurizer-surface-hover text-repressurizer-text"
                     : "text-repressurizer-text hover:bg-repressurizer-surface-hover"
                 } ${col.is_dynamic ? "italic text-repressurizer-text-muted" : ""} ${
                   !col.is_dynamic && selectedCategoryKeys.includes(col.key)
-                    ? "ring-1 ring-repressurizer-accent/50 bg-repressurizer-accent/5"
+                    ? "ring-1 ring-repressurizer-accent bg-repressurizer-accent/10 text-repressurizer-accent"
                     : ""
                 }`}
               >
@@ -449,39 +480,50 @@ export function Sidebar() {
 
       {/* Multi-select actions */}
       {selectedCategoryKeys.length > 0 && (
-        <div className="border-t border-repressurizer-border-subtle px-2 py-2 flex flex-wrap items-center gap-2 bg-repressurizer-bg/80">
-          <span className="text-[11px] text-repressurizer-text-muted tabular-nums">
+        <div className="border-t border-repressurizer-border-subtle bg-repressurizer-bg/90 px-2 py-2">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <span className="text-[11px] text-repressurizer-text-muted tabular-nums">
             {t("sidebar.category.selectedCount", { count: selectedCategoryKeys.length })}
-          </span>
+            </span>
+            <button
+              type="button"
+              onClick={() => clearCategorySelection()}
+              className="btn-press flex h-7 w-7 items-center justify-center rounded-lg text-repressurizer-text-muted hover:bg-repressurizer-surface-hover hover:text-repressurizer-text"
+              title={t("sidebar.category.clearSelection")}
+              aria-label={t("sidebar.category.clearSelection")}
+            >
+              <X size={13} weight="bold" />
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-1.5">
           <button
             type="button"
             onClick={() => {
               openExportDialog({ initialScope: "categories_pick" });
             }}
-            className="btn-press flex items-center gap-1 rounded-lg bg-repressurizer-accent/15 px-2.5 py-1 text-[11px] font-medium text-repressurizer-accent hover:bg-repressurizer-accent/25"
+            className="btn-press flex min-w-0 items-center justify-center gap-1 rounded-lg bg-repressurizer-accent/15 px-2 py-1.5 text-[11px] font-medium text-repressurizer-accent hover:bg-repressurizer-accent/25"
           >
             <Export size={12} weight="bold" />
-            {t("sidebar.category.exportSelected", { count: selectedCategoryKeys.length })}
+            <span className="truncate">{t("sidebar.category.exportSelectedShort")}</span>
           </button>
-          {selectedCategoryKeys.length >= 2 && (
-            <button
-              type="button"
-              onClick={() => setShowMerge(true)}
-              className="btn-press flex items-center gap-1 rounded-lg border border-repressurizer-border px-2.5 py-1 text-[11px] font-medium text-repressurizer-text hover:bg-repressurizer-surface-hover"
-            >
-              <ArrowsMerge size={12} />
-              {t("sidebar.category.merge")}
-            </button>
-          )}
           <button
             type="button"
-            onClick={() => clearCategorySelection()}
-            className="btn-press flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] text-repressurizer-text-muted hover:text-white hover:bg-repressurizer-surface-hover"
-            title={t("sidebar.category.clearSelection")}
+            onClick={() => setShowMerge(true)}
+            disabled={selectedCategoryKeys.length < 2}
+            className="btn-press flex min-w-0 items-center justify-center gap-1 rounded-lg border border-repressurizer-border px-2 py-1.5 text-[11px] font-medium text-repressurizer-text hover:bg-repressurizer-surface-hover disabled:cursor-not-allowed disabled:opacity-40"
           >
-            <X size={12} weight="bold" />
-            {t("sidebar.category.clearSelection")}
+            <ArrowsMerge size={12} />
+            <span className="truncate">{t("sidebar.category.mergeShort")}</span>
           </button>
+          <button
+            type="button"
+            onClick={() => setConfirmDeleteKeys([...selectedCategoryKeys])}
+            className="btn-press col-span-2 flex min-w-0 items-center justify-center gap-1 rounded-lg border border-repressurizer-danger/30 px-2 py-1.5 text-[11px] font-medium text-repressurizer-danger hover:bg-repressurizer-danger/10"
+          >
+            <TrashSimple size={12} />
+            <span className="truncate">{t("sidebar.category.deleteSelected")}</span>
+          </button>
+          </div>
         </div>
       )}
 
@@ -547,7 +589,11 @@ export function Sidebar() {
             setContextMenu(null);
           }}
           onDelete={(col) => {
-            setConfirmDelete(col.key);
+            setConfirmDeleteKeys([col.key]);
+            setContextMenu(null);
+          }}
+          onDeleteSelected={() => {
+            setConfirmDeleteKeys([...selectedCategoryKeys]);
             setContextMenu(null);
           }}
           onExportCategory={(col) => {
@@ -561,6 +607,10 @@ export function Sidebar() {
             openExportDialog({ initialScope: "categories_pick" });
             setContextMenu(null);
           }}
+          onMergeSelected={() => {
+            setShowMerge(true);
+            setContextMenu(null);
+          }}
           onDuplicate={(col) => {
             setDuplicateFor(col);
             setDuplicateName(`${col.name} (copy)`);
@@ -570,14 +620,20 @@ export function Sidebar() {
       )}
 
       {/* Delete confirmation dialog */}
-      {confirmDelete && (
+      {confirmDeleteKeys && (
         <DeleteConfirmDialog
-          name={collections.find((c) => c.key === confirmDelete)?.name ?? ""}
+          names={confirmDeleteKeys
+            .map((key) => collections.find((c) => c.key === key)?.name)
+            .filter((name): name is string => !!name)}
           onConfirm={() => {
-            removeCategory(confirmDelete);
-            setConfirmDelete(null);
+            if (confirmDeleteKeys.length === 1) {
+              removeCategory(confirmDeleteKeys[0]);
+            } else {
+              removeCategories(confirmDeleteKeys);
+            }
+            setConfirmDeleteKeys(null);
           }}
-          onCancel={() => setConfirmDelete(null)}
+          onCancel={() => setConfirmDeleteKeys(null)}
         />
       )}
 
@@ -675,8 +731,10 @@ function CategoryContextMenu({
   onClose,
   onRename,
   onDelete,
+  onDeleteSelected,
   onExportCategory,
   onExportSelected,
+  onMergeSelected,
   onDuplicate,
 }: {
   x: number;
@@ -687,8 +745,10 @@ function CategoryContextMenu({
   onClose: () => void;
   onRename: (col: SteamCollection) => void;
   onDelete: (col: SteamCollection) => void;
+  onDeleteSelected: () => void;
   onExportCategory: (col: SteamCollection) => void;
   onExportSelected: () => void;
+  onMergeSelected: () => void;
   onDuplicate: (col: SteamCollection) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -712,7 +772,7 @@ function CategoryContextMenu({
   const style: React.CSSProperties = {
     position: "fixed",
     left: Math.min(x, window.innerWidth - 200),
-    top: Math.min(y, window.innerHeight - (multiExportMode ? 140 : 200)),
+    top: Math.min(y, window.innerHeight - (multiExportMode ? 230 : 200)),
     zIndex: 100,
   };
 
@@ -735,6 +795,22 @@ function CategoryContextMenu({
           >
             <Export size={14} weight="bold" />
             {t("sidebar.category.exportSelected", { count: exportSelectedCount })}
+          </button>
+          {exportSelectedCount >= 2 && (
+            <button
+              onClick={() => onMergeSelected()}
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-repressurizer-text hover:bg-repressurizer-surface-hover transition-colors"
+            >
+              <ArrowsMerge size={14} className="text-repressurizer-text-muted" />
+              {t("sidebar.category.merge")}
+            </button>
+          )}
+          <button
+            onClick={() => onDeleteSelected()}
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-repressurizer-danger hover:bg-repressurizer-danger/10 transition-colors"
+          >
+            <TrashSimple size={14} />
+            {t("sidebar.category.deleteSelected")}
           </button>
         </div>
       </div>
@@ -787,21 +863,28 @@ function CategoryContextMenu({
 }
 
 function DeleteConfirmDialog({
-  name,
+  names,
   onConfirm,
   onCancel,
 }: {
-  name: string;
+  names: string[];
   onConfirm: () => void;
   onCancel: () => void;
 }) {
   const t = useT();
+  const isBatch = names.length > 1;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
       <div className="w-full max-w-xs animate-fade-in rounded-xl border border-repressurizer-border bg-repressurizer-surface p-5 shadow-[0_16px_48px_rgba(0,0,0,0.5)]">
-        <p className="mb-1 text-sm font-medium text-white">{t("category.deleteConfirm")}</p>
+        <p className="mb-1 text-sm font-medium text-white">
+          {isBatch
+            ? t("category.deleteSelectedConfirm", { count: names.length })
+            : t("category.deleteConfirm")}
+        </p>
         <p className="mb-5 text-sm text-repressurizer-text-muted leading-relaxed">
-          {t("category.deleteDesc", { name })}
+          {isBatch
+            ? t("category.deleteSelectedDesc", { count: names.length })
+            : t("category.deleteDesc", { name: names[0] ?? "" })}
         </p>
         <div className="flex justify-end gap-2">
           <button
