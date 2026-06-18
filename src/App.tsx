@@ -29,6 +29,8 @@ import {
   buildAutomationSnapshotFromContext,
   publishAutomationSnapshot,
 } from "./lib/automationPublish";
+import { appLog } from "./lib/appLog";
+import { notifyDesktop } from "./lib/desktopNotifications";
 import { useT } from "./lib/i18n";
 import { SetupWizard } from "./components/setup/SetupWizard";
 import { Header } from "./components/layout/Header";
@@ -52,6 +54,10 @@ class ErrorBoundary extends Component<
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error("React crash:", error, info.componentStack);
+    void appLog.error("React crash", {
+      error: error.message,
+      componentStack: info.componentStack,
+    });
   }
 
   render() {
@@ -152,6 +158,22 @@ function AppContent() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showCloseChoice, setShowCloseChoice] = useState(false);
 
+  const shouldNotifyDesktop = (userInitiated = false, isError = false) =>
+    useSettingsStore.getState().desktopNotifications !== false && (userInitiated || isError);
+
+  const sendWorkflowNotification = async (
+    body: string,
+    userInitiated = false,
+    isError = false
+  ) => {
+    if (!shouldNotifyDesktop(userInitiated, isError)) return;
+    await notifyDesktop({
+      body,
+      enabled: true,
+      requestPermissionOnDemand: userInitiated,
+    });
+  };
+
   // Apply saved accent color and theme on startup
   const accentColor = useSettingsStore((s) => s.accentColor);
   const theme = useSettingsStore((s) => s.theme);
@@ -166,6 +188,8 @@ function AppContent() {
       const message = t("settings.automationExport.skippedNotConfigured");
       settingsStore.setSettings(automationPublishStatusPatch(settingsStore, "skipped", message));
       if (notify) toast.getState().warning(message);
+      await appLog.info("Automation export skipped: not configured");
+      await sendWorkflowNotification(message, notify);
       return;
     }
 
@@ -178,6 +202,8 @@ function AppContent() {
       const message = t("settings.automationExport.skippedNoData");
       settingsStore.setSettings(automationPublishStatusPatch(settingsStore, "skipped", message));
       if (notify) toast.getState().warning(message);
+      await appLog.info("Automation export skipped: no library data");
+      await sendWorkflowNotification(message, notify);
       return;
     }
 
@@ -194,6 +220,10 @@ function AppContent() {
       const message = t("settings.automationExport.skippedUnchanged");
       settingsStore.setSettings(automationPublishStatusPatch(settingsStore, "skipped", message));
       if (notify) toast.getState().info(message);
+      await appLog.info("Automation export skipped: unchanged snapshot", {
+        checksum: snapshot.checksum,
+      });
+      await sendWorkflowNotification(message, notify);
       return;
     }
 
@@ -206,10 +236,17 @@ function AppContent() {
         ...automationPublishStatusPatch(settingsStore, "success", message, result.http.status),
       });
       if (notify) toast.getState().success(message);
+      await appLog.info("Automation export published", {
+        status: result.http.status,
+        checksum: result.snapshot.checksum,
+      });
+      await sendWorkflowNotification(message, notify);
     } catch (error) {
       const message = t("settings.automationExport.failed", { error: String(error) });
       settingsStore.setSettings(automationPublishStatusPatch(settingsStore, "failed", message));
       if (notify) toast.getState().error(message);
+      await appLog.error("Automation export failed", { error: String(error) });
+      await sendWorkflowNotification(message, notify, true);
       throw error;
     }
   };
@@ -231,6 +268,10 @@ function AppContent() {
       const appIndex = useSteamAppIndexStore.getState().data;
       const mergedGames = mergeCollectionOnlyGames([...games, ...familyGames], collections, cachedDetails, appIndex);
       console.log("Reloaded:", mergedGames.length, "games,", collections.length, "collections");
+      await appLog.info("Steam library refreshed", {
+        games: mergedGames.length,
+        collections: collections.length,
+      });
       setGames(mergedGames);
       usePlayHistoryStore.getState().observeLibrary(mergedGames);
       setCollections(collections);
@@ -262,11 +303,14 @@ function AppContent() {
       startHltbFetch(missingHltb);
 
       if (notify) toast.getState().success("Steam library refreshed.");
+      if (notify) await sendWorkflowNotification("Steam library refreshed.", true);
     } catch (e) {
       console.error("Reload error:", e);
+      await appLog.error("Steam library refresh failed", { error: String(e) });
       setReloadError(String(e));
       setReloading(false);
       toast.getState().error(`Failed to load library: ${e}`);
+      await sendWorkflowNotification(`Failed to load library: ${e}`, notify, true);
     }
   };
 
@@ -317,8 +361,18 @@ function AppContent() {
     listen("repressurizer-create-backup-requested", () => {
       const currentSettings = useSettingsStore.getState();
       createManualBackup(currentSettings.steamPath, currentSettings.steamId3, "Manual backup from tray")
-        .then(() => toast.getState().success(t("backups.created")))
-        .catch((error) => toast.getState().error(t("toast.backupFailed", { error: String(error) })));
+        .then(() => {
+          const message = t("backups.created");
+          toast.getState().success(message);
+          void appLog.info("Manual backup created from tray");
+          void sendWorkflowNotification(message, true);
+        })
+        .catch((error) => {
+          const message = t("toast.backupFailed", { error: String(error) });
+          toast.getState().error(message);
+          void appLog.error("Manual backup from tray failed", { error: String(error) });
+          void sendWorkflowNotification(message, true, true);
+        });
     })
       .then((fn) => {
         unlistenBackup = fn;

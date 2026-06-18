@@ -414,6 +414,8 @@
   "settings.systemTray": "Zasobnik systemowy",
   "settings.minimizeToTray": "Minimalizuj do zasobnika przy zamknięciu",
   "settings.minimizeToTray.desc": "Po zamknięciu okna Repressurizer zminimalizuje się do zasobnika systemowego zamiast zakończyć działanie",
+  "settings.desktopNotifications": "Powiadomienia pulpitu",
+  "settings.desktopNotifications.desc": "Pokazuje natywne powiadomienia systemowe dla ręcznych akcji z zasobnika i błędów automatycznego eksportu.",
   "settings.startOnLogin": "Uruchamiaj Repressurizer przy logowaniu",
   "settings.startOnLogin.desc": "Uruchamia Repressurizer automatycznie z systemem, aby eksporty w tle i akcje z zasobnika były od razu dostępne.",
   "settings.startOnLogin.checking": "Aktualizowanie autostartu...",

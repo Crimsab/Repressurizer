@@ -414,6 +414,8 @@
   "settings.systemTray": "Area di notifica",
   "settings.minimizeToTray": "Riduci nell’area di notifica alla chiusura",
   "settings.minimizeToTray.desc": "Quando chiudi la finestra, Repressurizer verrà ridotto nell’area di notifica invece di uscire",
+  "settings.desktopNotifications": "Notifiche desktop",
+  "settings.desktopNotifications.desc": "Mostra notifiche native di sistema per azioni manuali dalla tray ed errori dell’export automatico.",
   "settings.startOnLogin": "Avvia Repressurizer all’accesso",
   "settings.startOnLogin.desc": "Avvia Repressurizer insieme al sistema, così export automatici e azioni dalla tray sono subito disponibili.",
   "settings.startOnLogin.checking": "Aggiornamento avvio automatico...",

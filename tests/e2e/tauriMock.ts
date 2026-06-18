@@ -55,6 +55,7 @@ export async function installTauriMock(page: Page) {
       trayCloseChoiceMade: false,
       startOnLogin: false,
       startOnLoginMode: "tray",
+      desktopNotifications: true,
       checkUpdatesOnStartup: true,
       includeSteamFamilyNonGames: false,
       automationPublishEnabled: true,
@@ -178,10 +179,37 @@ export async function installTauriMock(page: Page) {
 
     window.localStorage.setItem("repressurizer-settings", JSON.stringify(settings));
     let autostartEnabled = settings.startOnLogin;
+    const notifications: Array<{ title: string; body?: string }> = [];
+
+    class MockNotification {
+      static permission: NotificationPermission = "granted";
+      title: string;
+      body?: string;
+
+      constructor(title: string, options?: NotificationOptions) {
+        this.title = title;
+        this.body = options?.body;
+        notifications.push({ title, body: options?.body });
+      }
+
+      static requestPermission(): Promise<NotificationPermission> {
+        MockNotification.permission = "granted";
+        return Promise.resolve("granted");
+      }
+    }
+
+    Object.defineProperty(window, "Notification", {
+      configurable: true,
+      value: MockNotification,
+    });
 
     const tauriInternals = {
       invoke: async (cmd: string, args?: Record<string, unknown>) => {
         switch (cmd) {
+          case "plugin:log|log":
+            return null;
+          case "plugin:notification|is_permission_granted":
+            return true;
           case "plugin:autostart|is_enabled":
             return autostartEnabled;
           case "plugin:autostart|enable":

@@ -414,6 +414,8 @@
   "settings.systemTray": "Infobereich",
   "settings.minimizeToTray": "Beim Schließen in den Infobereich minimieren",
   "settings.minimizeToTray.desc": "Wenn du das Fenster schließt, wird Repressurizer in den Infobereich minimiert, statt beendet zu werden",
+  "settings.desktopNotifications": "Desktop-Benachrichtigungen",
+  "settings.desktopNotifications.desc": "Zeigt native Systembenachrichtigungen für manuelle Tray-Aktionen und Fehler beim automatischen Export.",
   "settings.startOnLogin": "Repressurizer bei der Anmeldung starten",
   "settings.startOnLogin.desc": "Startet Repressurizer automatisch mit dem System, damit Hintergrund-Exporte und Tray-Aktionen bereit sind.",
   "settings.startOnLogin.checking": "Autostart wird aktualisiert...",

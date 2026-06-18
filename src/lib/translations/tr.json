@@ -414,6 +414,8 @@
   "settings.systemTray": "Sistem tepsisi",
   "settings.minimizeToTray": "Kapatınca sistem tepsisine küçült",
   "settings.minimizeToTray.desc": "Pencereyi kapattığında Repressurizer çıkmak yerine sistem tepsisine küçülür",
+  "settings.desktopNotifications": "Masaüstü bildirimleri",
+  "settings.desktopNotifications.desc": "Manuel tepsi eylemleri ve otomatik dışa aktarım hataları için yerel sistem bildirimleri gösterir.",
   "settings.startOnLogin": "Oturum açıldığında Repressurizer’ı başlat",
   "settings.startOnLogin.desc": "Arka plan dışa aktarımları ve tepsi eylemleri hazır olsun diye Repressurizer’ı sistemle birlikte otomatik başlatır.",
   "settings.startOnLogin.checking": "Otomatik başlatma güncelleniyor...",

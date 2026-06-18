@@ -41,6 +41,7 @@ const defaults: AppSettings = {
   trayCloseChoiceMade: false,
   startOnLogin: false,
   startOnLoginMode: "tray",
+  desktopNotifications: true,
   checkUpdatesOnStartup: true,
   automationPublishEnabled: false,
   automationPublishUrl: "",

@@ -31,6 +31,7 @@ const settings: AppSettings = {
   trayCloseChoiceMade: false,
   startOnLogin: false,
   startOnLoginMode: "tray",
+  desktopNotifications: true,
   checkUpdatesOnStartup: true,
   automationPublishEnabled: true,
   automationPublishUrl: "https://example.test/import",

@@ -57,6 +57,7 @@ import {
   Sun,
   CloudMoon,
   Tray,
+  BellRinging,
   Bug,
   CloudArrowDown,
   UsersThree,
@@ -575,6 +576,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
         keywords: [
           t("settings.systemTray"),
           t("settings.startOnLogin"),
+          t("settings.desktopNotifications"),
           t("settings.minimizeToTray"),
           t("settings.updates.autoCheck"),
           "tray close background startup autostart login boot window",
@@ -1508,6 +1510,7 @@ function AppearanceTab({ isSectionVisible }: { isSectionVisible: (id: string) =>
     minimizeToTray,
     startOnLogin,
     startOnLoginMode,
+    desktopNotifications,
     checkUpdatesOnStartup,
     setSettings,
   } = useSettingsStore();
@@ -1948,6 +1951,13 @@ function AppearanceTab({ isSectionVisible }: { isSectionVisible: (id: string) =>
             </div>
           </div>
         )}
+        <ToggleRow
+          icon={<BellRinging size={15} weight="duotone" />}
+          label={t("settings.desktopNotifications")}
+          description={t("settings.desktopNotifications.desc")}
+          checked={desktopNotifications ?? true}
+          onChange={(v) => setSettings({ desktopNotifications: v })}
+        />
         <ToggleRow
           icon={<Tray size={15} weight="duotone" />}
           label={t("settings.minimizeToTray")}

@@ -414,6 +414,8 @@
   "settings.systemTray": "系统托盘",
   "settings.minimizeToTray": "关闭时最小化到托盘",
   "settings.minimizeToTray.desc": "关闭窗口时，Repressurizer 会最小化到系统托盘，而不是退出",
+  "settings.desktopNotifications": "桌面通知",
+  "settings.desktopNotifications.desc": "针对手动托盘操作和自动导出失败显示原生系统通知。",
   "settings.startOnLogin": "登录时启动 Repressurizer",
   "settings.startOnLogin.desc": "随系统自动启动 Repressurizer，让后台导出和托盘操作随时可用。",
   "settings.startOnLogin.checking": "正在更新开机启动...",

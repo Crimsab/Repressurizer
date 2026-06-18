@@ -127,6 +127,7 @@ export interface AppSettings {
   trayCloseChoiceMade: boolean;
   startOnLogin: boolean;
   startOnLoginMode: AppStartupMode;
+  desktopNotifications: boolean;
   checkUpdatesOnStartup: boolean;
   // Automation export
   automationPublishEnabled: boolean;

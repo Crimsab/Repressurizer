@@ -414,6 +414,8 @@
   "settings.systemTray": "Bandeja del sistema",
   "settings.minimizeToTray": "Minimizar a la bandeja al cerrar",
   "settings.minimizeToTray.desc": "Al cerrar la ventana, Repressurizer se minimizará a la bandeja del sistema en lugar de salir",
+  "settings.desktopNotifications": "Notificaciones de escritorio",
+  "settings.desktopNotifications.desc": "Muestra notificaciones nativas del sistema para acciones manuales desde la bandeja y errores del export automático.",
   "settings.startOnLogin": "Iniciar Repressurizer al iniciar sesión",
   "settings.startOnLogin.desc": "Inicia Repressurizer automáticamente con el sistema para tener listos los exports en segundo plano y las acciones de la bandeja.",
   "settings.startOnLogin.checking": "Actualizando inicio automático...",

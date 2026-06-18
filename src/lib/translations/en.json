@@ -414,6 +414,8 @@
   "settings.systemTray": "System Tray",
   "settings.minimizeToTray": "Minimize to tray on close",
   "settings.minimizeToTray.desc": "When you close the window, Repressurizer will minimize to the system tray instead of quitting",
+  "settings.desktopNotifications": "Desktop notifications",
+  "settings.desktopNotifications.desc": "Show native system notifications for manual tray actions and automation export failures.",
   "settings.startOnLogin": "Start Repressurizer when you sign in",
   "settings.startOnLogin.desc": "Launch Repressurizer automatically with your system so background exports and tray actions are ready.",
   "settings.startOnLogin.checking": "Updating startup registration...",
