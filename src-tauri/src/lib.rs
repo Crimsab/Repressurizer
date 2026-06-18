@@ -330,10 +330,34 @@ pub fn run() {
             use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 
             let show = MenuItem::with_id(app, "show", "Open Repressurizer", true, None::<&str>)?;
+            let settings =
+                MenuItem::with_id(app, "settings", "Settings", true, None::<&str>)?;
+            let publish = MenuItem::with_id(
+                app,
+                "publish_snapshot",
+                "Publish Snapshot Now",
+                true,
+                None::<&str>,
+            )?;
+            let backup =
+                MenuItem::with_id(app, "create_backup", "Create Backup", true, None::<&str>)?;
             let hide = MenuItem::with_id(app, "hide", "Minimize to Tray", true, None::<&str>)?;
             let separator = PredefinedMenuItem::separator(app)?;
+            let separator_two = PredefinedMenuItem::separator(app)?;
             let quit = MenuItem::with_id(app, "quit", "Quit Repressurizer", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&show, &hide, &separator, &quit])?;
+            let menu = Menu::with_items(
+                app,
+                &[
+                    &show,
+                    &settings,
+                    &separator,
+                    &publish,
+                    &backup,
+                    &separator_two,
+                    &hide,
+                    &quit,
+                ],
+            )?;
 
             TrayIconBuilder::new()
                 .icon(app.default_window_icon().cloned().unwrap())
@@ -345,6 +369,20 @@ pub fn run() {
                             let _ = w.show();
                             let _ = w.set_focus();
                         }
+                    }
+                    "settings" => {
+                        if let Some(w) = app.get_webview_window("main") {
+                            let _ = w.show();
+                            let _ = w.unminimize();
+                            let _ = w.set_focus();
+                        }
+                        let _ = app.emit("repressurizer-open-settings-requested", ());
+                    }
+                    "publish_snapshot" => {
+                        let _ = app.emit("repressurizer-publish-automation-requested", ());
+                    }
+                    "create_backup" => {
+                        let _ = app.emit("repressurizer-create-backup-requested", ());
                     }
                     "hide" => {
                         if let Some(w) = app.get_webview_window("main") {

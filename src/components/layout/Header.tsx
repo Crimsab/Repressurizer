@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { listen } from "@tauri-apps/api/event";
 import { useGameStore } from "../../stores/gameStore";
 import type { SortBy } from "../../stores/gameStore";
 import { useCategoryStore } from "../../stores/categoryStore";
@@ -118,6 +119,18 @@ export function Header() {
   useEffect(() => {
     if (exportOpenVersion > 0) setShowExport(true);
   }, [exportOpenVersion]);
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    listen("repressurizer-open-settings-requested", () => setShowSettings(true))
+      .then((fn) => {
+        unlisten = fn;
+      })
+      .catch(() => {});
+    return () => {
+      unlisten?.();
+    };
+  }, []);
 
   const savePreview = buildSavePreview(savedCollections, collections, games);
 
