@@ -53,6 +53,41 @@ export async function installTauriMock(page: Page) {
       categoryOrder: [],
       minimizeToTray: false,
       includeSteamFamilyNonGames: false,
+      trayCloseChoiceMade: false,
+      checkUpdatesOnStartup: true,
+      automationPublishEnabled: true,
+      automationPublishUrl: "http://homelab.local:3045/api/steam/repressurizer/import",
+      automationPublishBearerToken: "",
+      automationPublishIntervalHours: 24,
+      automationPublishLastChecksum: "a32:1fdd332b",
+      automationPublishLastPublishedAt: "2026-06-18T21:25:19.000Z",
+      automationPublishLastAttemptedAt: "2026-06-18T21:25:19.000Z",
+      automationPublishLastStatus: "success",
+      automationPublishLastMessage: "Automation export published with HTTP 200.",
+      automationPublishLastHttpStatus: 200,
+      automationPublishLogs: [
+        {
+          id: "success-1",
+          timestamp: "2026-06-18T21:25:19.000Z",
+          status: "success",
+          message: "Automation export published with HTTP 200.",
+          httpStatus: 200,
+        },
+        {
+          id: "skipped-1",
+          timestamp: "2026-06-18T20:25:19.000Z",
+          status: "skipped",
+          message: "Automation export skipped: snapshot checksum has not changed.",
+          httpStatus: 0,
+        },
+        {
+          id: "failed-1",
+          timestamp: "2026-06-18T19:25:19.000Z",
+          status: "failed",
+          message: "Automation export returned HTTP 500: unavailable",
+          httpStatus: 500,
+        },
+      ],
     };
 
     const games = [

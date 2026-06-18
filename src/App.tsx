@@ -164,7 +164,7 @@ function AppContent() {
 
     if (!currentSettings.automationPublishUrl.trim()) {
       const message = t("settings.automationExport.skippedNotConfigured");
-      settingsStore.setSettings(automationPublishStatusPatch("skipped", message));
+      settingsStore.setSettings(automationPublishStatusPatch(settingsStore, "skipped", message));
       if (notify) toast.getState().warning(message);
       return;
     }
@@ -176,7 +176,7 @@ function AppContent() {
     const hltbState = useHltbStore.getState();
     if (Object.keys(gameState.games).length === 0 || categoryState.collections.length === 0) {
       const message = t("settings.automationExport.skippedNoData");
-      settingsStore.setSettings(automationPublishStatusPatch("skipped", message));
+      settingsStore.setSettings(automationPublishStatusPatch(settingsStore, "skipped", message));
       if (notify) toast.getState().warning(message);
       return;
     }
@@ -192,7 +192,7 @@ function AppContent() {
     const snapshot = buildAutomationSnapshotFromContext(context);
     if (!force && snapshot.checksum === currentSettings.automationPublishLastChecksum) {
       const message = t("settings.automationExport.skippedUnchanged");
-      settingsStore.setSettings(automationPublishStatusPatch("skipped", message));
+      settingsStore.setSettings(automationPublishStatusPatch(settingsStore, "skipped", message));
       if (notify) toast.getState().info(message);
       return;
     }
@@ -203,12 +203,12 @@ function AppContent() {
       settingsStore.setSettings({
         automationPublishLastChecksum: result.snapshot.checksum,
         automationPublishLastPublishedAt: new Date().toISOString(),
-        ...automationPublishStatusPatch("success", message, result.http.status),
+        ...automationPublishStatusPatch(settingsStore, "success", message, result.http.status),
       });
       if (notify) toast.getState().success(message);
     } catch (error) {
       const message = t("settings.automationExport.failed", { error: String(error) });
-      settingsStore.setSettings(automationPublishStatusPatch("failed", message));
+      settingsStore.setSettings(automationPublishStatusPatch(settingsStore, "failed", message));
       if (notify) toast.getState().error(message);
       throw error;
     }

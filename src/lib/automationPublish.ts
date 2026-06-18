@@ -18,6 +18,7 @@ export interface AutomationPublishResult {
 }
 
 export function automationPublishStatusPatch(
+  settings: Pick<AppSettings, "automationPublishLogs">,
   status: AppSettings["automationPublishLastStatus"],
   message: string,
   httpStatus = 0,
@@ -28,12 +29,24 @@ export function automationPublishStatusPatch(
   | "automationPublishLastStatus"
   | "automationPublishLastMessage"
   | "automationPublishLastHttpStatus"
+  | "automationPublishLogs"
 > {
+  const timestamp = now.toISOString();
+  const logStatus = status || "skipped";
+  const entry = {
+    id: `${timestamp}-${logStatus}-${Math.random().toString(36).slice(2, 8)}`,
+    timestamp,
+    status: logStatus,
+    message,
+    httpStatus,
+  };
+
   return {
-    automationPublishLastAttemptedAt: now.toISOString(),
+    automationPublishLastAttemptedAt: timestamp,
     automationPublishLastStatus: status,
     automationPublishLastMessage: message,
     automationPublishLastHttpStatus: httpStatus,
+    automationPublishLogs: [entry, ...(settings.automationPublishLogs ?? [])].slice(0, 100),
   };
 }
 

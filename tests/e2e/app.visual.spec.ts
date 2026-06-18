@@ -106,33 +106,70 @@ test("play history shows tracked deltas instead of lifetime playtime", async ({ 
   await expect(timeline.getByText("30.0h")).toBeHidden();
 });
 
-test("opens settings maintenance and Steam Family controls without layout overflow", async ({ page }, testInfo) => {
+test("opens organized settings tabs, automation logs, and Steam controls without layout overflow", async ({ page }, testInfo) => {
   await page.goto("/");
   await page.getByTitle("Settings").click();
 
   await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
-  await expect(page.getByText("Crimsab (123456)")).toBeVisible();
-  await expect(page.getByText("Steam App Index")).toBeVisible();
-  await expect(page.getByRole("button", { name: "Refresh" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Steam Family" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Maintenance" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Export diagnostics" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Check for updates" })).toBeVisible();
+  const settingsDialog = page.locator(".fixed.inset-0").filter({
+    has: page.getByRole("heading", { name: "Settings" }),
+  });
 
+  await expect(page.getByText("Crimsab (123456)")).toBeVisible();
   await expectNoHorizontalOverflow(page);
-  const dialog = page.locator(".fixed.inset-0").first();
-  const box = await dialog.boundingBox();
+  const box = await settingsDialog.boundingBox();
   expect(box?.width).toBeGreaterThan(900);
 
   const settingsTopPath = testInfo.outputPath("settings-top.png");
   await page.screenshot({ path: settingsTopPath, fullPage: true });
   await testInfo.attach("settings-top", { path: settingsTopPath, contentType: "image/png" });
 
-  await page.getByRole("heading", { name: "Maintenance" }).scrollIntoViewIfNeeded();
-  await expect(page.getByRole("button", { name: "Export diagnostics" })).toBeVisible();
-  const maintenancePath = testInfo.outputPath("settings-maintenance.png");
-  await page.screenshot({ path: maintenancePath, fullPage: true });
-  await testInfo.attach("settings-maintenance", { path: maintenancePath, contentType: "image/png" });
+  await settingsDialog.getByRole("button", { name: "Steam", exact: true }).click();
+  await expect(settingsDialog.getByRole("heading", { name: "Steam Family" })).toBeVisible();
+  await expect(settingsDialog.getByText("Steam Web API Key", { exact: true })).toBeVisible();
+  const apiKeyInput = settingsDialog.locator('input[type="password"]').last();
+  const apiSaveButton = settingsDialog.getByRole("button", { name: "Save", exact: true });
+  await expect(apiSaveButton).toBeVisible();
+  const apiInputBox = await apiKeyInput.boundingBox();
+  const apiButtonBox = await apiSaveButton.boundingBox();
+  expect(Math.abs((apiInputBox?.height ?? 0) - (apiButtonBox?.height ?? 0))).toBeLessThanOrEqual(1);
+
+  const steamPath = testInfo.outputPath("settings-steam.png");
+  await page.screenshot({ path: steamPath, fullPage: true });
+  await testInfo.attach("settings-steam", { path: steamPath, contentType: "image/png" });
+
+  await settingsDialog.getByRole("button", { name: "Data", exact: true }).click();
+  await expect(settingsDialog.getByText("Steam App Index")).toBeVisible();
+  await expect(settingsDialog.getByRole("button", { name: "Refresh" })).toBeVisible();
+  await expect(settingsDialog.getByRole("heading", { name: "Maintenance" })).toBeVisible();
+  await expect(settingsDialog.getByRole("button", { name: "Export diagnostics" })).toBeVisible();
+  await expect(settingsDialog.getByRole("button", { name: "Check for updates" })).toBeVisible();
+
+  const dataPath = testInfo.outputPath("settings-data.png");
+  await page.screenshot({ path: dataPath, fullPage: true });
+  await testInfo.attach("settings-data", { path: dataPath, contentType: "image/png" });
+
+  await settingsDialog.getByRole("button", { name: "Automation", exact: true }).click();
+  await expect(settingsDialog.getByRole("heading", { name: "Automation Export" })).toBeVisible();
+  await expect(settingsDialog.getByText("Result:")).toBeVisible();
+  await expect(settingsDialog.getByRole("button", { name: "View logs" })).toBeVisible();
+  await expect(settingsDialog.getByRole("button", { name: "Publish now" })).toBeVisible();
+
+  const automationPath = testInfo.outputPath("settings-automation.png");
+  await page.screenshot({ path: automationPath, fullPage: true });
+  await testInfo.attach("settings-automation", { path: automationPath, contentType: "image/png" });
+
+  await settingsDialog.getByRole("button", { name: "View logs" }).click();
+  await expect(settingsDialog.getByRole("heading", { name: "Automation export logs" })).toBeVisible();
+  await expect(settingsDialog.getByRole("combobox").first()).toBeVisible();
+  await expect(settingsDialog.getByText("HTTP 200", { exact: true })).toBeVisible();
+  await expect(settingsDialog.getByText("HTTP 500", { exact: true })).toBeVisible();
+
+  const logsPath = testInfo.outputPath("settings-automation-logs.png");
+  await page.screenshot({ path: logsPath, fullPage: true });
+  await testInfo.attach("settings-automation-logs", { path: logsPath, contentType: "image/png" });
+
+  await expectNoHorizontalOverflow(page);
 });
 
 test("uses the color picker as the primary custom accent control", async ({ page }) => {

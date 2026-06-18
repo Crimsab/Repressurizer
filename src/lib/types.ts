@@ -80,6 +80,15 @@ export interface AchievementSummary {
 
 export type AppTheme = "dark" | "dim" | "light";
 export type AppLocale = string;
+export type AutomationPublishLogStatus = "success" | "failed" | "skipped";
+
+export interface AutomationPublishLogEntry {
+  id: string;
+  timestamp: string;
+  status: AutomationPublishLogStatus;
+  message: string;
+  httpStatus: number;
+}
 
 export interface AppSettings {
   steamPath: string;
@@ -127,6 +136,7 @@ export interface AppSettings {
   automationPublishLastStatus: "" | "success" | "failed" | "skipped";
   automationPublishLastMessage: string;
   automationPublishLastHttpStatus: number;
+  automationPublishLogs: AutomationPublishLogEntry[];
   // Steam Family
   includeSteamFamilyNonGames: boolean;
 }

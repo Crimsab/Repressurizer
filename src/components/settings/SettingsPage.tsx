@@ -25,7 +25,7 @@ import {
   saveSteamFamilyToken,
   type SteamFamilyTokenCache,
 } from "../../lib/steamFamilyToken";
-import type { BackupInfo } from "../../lib/types";
+import type { AutomationPublishLogEntry, BackupInfo } from "../../lib/types";
 import {
   X,
   Key,
@@ -66,7 +66,24 @@ interface SettingsPageProps {
   onClose: () => void;
 }
 
-type SettingsTab = "general" | "appearance" | "backups" | "ignored";
+type SettingsTab =
+  | "general"
+  | "steam"
+  | "automation"
+  | "appearance"
+  | "data"
+  | "backups"
+  | "ignored"
+  | "about";
+type AutomationLogFilter = "all" | "success" | "failed" | "skipped";
+type AutomationLogSort = "desc" | "asc";
+
+interface SettingsTabItem {
+  id: SettingsTab;
+  label: string;
+  icon: React.ReactNode;
+  badge?: number;
+}
 
 function redactTail(value: string | null | undefined): string | null {
   if (!value) return null;
@@ -101,6 +118,9 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
   const [message, setMessage] = useState("");
   const [tab, setTab] = useState<SettingsTab>("general");
   const [settingsSearch, setSettingsSearch] = useState("");
+  const [showAutomationLogs, setShowAutomationLogs] = useState(false);
+  const [automationLogFilter, setAutomationLogFilter] = useState<AutomationLogFilter>("all");
+  const [automationLogSort, setAutomationLogSort] = useState<AutomationLogSort>("desc");
   const [cacheInfo, setCacheInfo] = useState<CacheInfo | null>(null);
   const [diagnosticsExporting, setDiagnosticsExporting] = useState(false);
   const [checkingUpdates, setCheckingUpdates] = useState(false);
@@ -124,7 +144,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
 
   useEffect(() => {
     if (tab === "backups") loadBackups();
-    if (tab === "general") getCacheInfo().then(setCacheInfo).catch(() => {});
+    if (tab === "data") getCacheInfo().then(setCacheInfo).catch(() => {});
   }, [tab]);
 
   useEffect(() => {
@@ -280,6 +300,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
         automationPublishLastChecksum: result.snapshot.checksum,
         automationPublishLastPublishedAt: new Date().toISOString(),
         ...automationPublishStatusPatch(
+          settings,
           "success",
           t("settings.automationExport.published", { status: result.http.status }),
           result.http.status
@@ -288,7 +309,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
       setMessage(t("settings.automationExport.published", { status: result.http.status }));
     } catch (e) {
       const errorMessage = t("settings.automationExport.failed", { error: String(e) });
-      settings.setSettings(automationPublishStatusPatch("failed", errorMessage));
+      settings.setSettings(automationPublishStatusPatch(settings, "failed", errorMessage));
       setMessage(errorMessage);
     } finally {
       setPublishingAutomation(false);
@@ -450,7 +471,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
       },
       {
         id: "family",
-        tab: "general" as const,
+        tab: "steam" as const,
         label: t("settings.steamFamily"),
         keywords: [
           t("settings.family.probeTitle"),
@@ -473,31 +494,31 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
       },
       {
         id: "performance",
-        tab: "general" as const,
+        tab: "data" as const,
         label: t("settings.fetchSpeed"),
         keywords: [t("settings.hltbConcurrency"), t("settings.achievementsConcurrency"), "hltb achievements speed concurrency"],
       },
       {
         id: "data",
-        tab: "general" as const,
+        tab: "data" as const,
         label: t("settings.cache"),
         keywords: [t("settings.steamAppIndex"), t("settings.cache"), t("settings.clearCache"), "cache index data steam apps"],
       },
       {
         id: "api",
-        tab: "general" as const,
+        tab: "steam" as const,
         label: t("settings.apiKey"),
         keywords: [t("settings.apiKey"), "api key steam web api"],
       },
       {
         id: "maintenance",
-        tab: "general" as const,
+        tab: "data" as const,
         label: t("settings.maintenance"),
         keywords: [t("settings.diagnostics.export"), t("settings.updates.check"), "diagnostics update maintenance"],
       },
       {
         id: "automation",
-        tab: "general" as const,
+        tab: "automation" as const,
         label: t("settings.automationExport"),
         keywords: [
           t("settings.automationExport.enabled"),
@@ -508,7 +529,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
       },
       {
         id: "reset",
-        tab: "general" as const,
+        tab: "about" as const,
         label: t("settings.reset"),
         keywords: [t("settings.reset"), "reset about version"],
       },
@@ -573,7 +594,12 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
     () => new Set(matchedSettingsSections.map((section) => section.id)),
     [matchedSettingsSections]
   );
-  const isSectionVisible = (id: string) => !settingsSearchText || visibleSectionIds.has(id);
+  const sectionTabById = useMemo(
+    () => new Map(settingsSections.map((section) => [section.id, section.tab])),
+    [settingsSections]
+  );
+  const isSectionVisible = (id: string) =>
+    sectionTabById.get(id) === tab && (!settingsSearchText || visibleSectionIds.has(id));
   const countTabMatches = (targetTab: SettingsTab) =>
     settingsSearchText ? matchedSettingsSections.filter((section) => section.tab === targetTab).length : 0;
   const automationStatusTone =
@@ -587,6 +613,32 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
   const automationStatusLabel = settings.automationPublishLastStatus
     ? t(`settings.automationExport.status.${settings.automationPublishLastStatus}` as Parameters<typeof t>[0])
     : t("settings.automationExport.status.idle");
+  const settingsTabs: SettingsTabItem[] = [
+    { id: "general", label: t("settings.general"), icon: <Info size={14} /> },
+    { id: "steam", label: t("settings.steam"), icon: <UsersThree size={14} /> },
+    { id: "automation", label: t("settings.automation"), icon: <CloudArrowDown size={14} /> },
+    { id: "appearance", label: t("settings.appearance"), icon: <Palette size={14} /> },
+    { id: "data", label: t("settings.data"), icon: <Database size={14} /> },
+    { id: "backups", label: t("settings.backups"), icon: <ClockCounterClockwise size={14} /> },
+    {
+      id: "ignored",
+      label: t("settings.ignored"),
+      icon: <Warning size={14} />,
+      badge: ignoredIds.length + hltbIgnoredIds.length,
+    },
+    { id: "about", label: t("settings.aboutTab"), icon: <Info size={14} /> },
+  ];
+  const filteredAutomationLogs = useMemo(() => {
+    const logs = [...(settings.automationPublishLogs ?? [])];
+    const filtered =
+      automationLogFilter === "all"
+        ? logs
+        : logs.filter((entry) => entry.status === automationLogFilter);
+    return filtered.sort((a, b) => {
+      const delta = Date.parse(a.timestamp) - Date.parse(b.timestamp);
+      return automationLogSort === "asc" ? delta : -delta;
+    });
+  }, [settings.automationPublishLogs, automationLogFilter, automationLogSort]);
 
   useEffect(() => {
     if (!settingsSearchText || matchedSettingsSections.length === 0) return;
@@ -596,10 +648,13 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-auto bg-black/60 p-4 backdrop-blur-sm sm:p-6"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="relative flex w-full max-w-4xl flex-col rounded-2xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_24px_64px_rgba(0,0,0,0.6)] animate-fade-in" style={{ maxHeight: "88vh" }}>
+      <div
+        className="relative flex flex-col rounded-2xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_24px_64px_rgba(0,0,0,0.6)] animate-fade-in"
+        style={{ width: "min(1040px, calc(100vw - 32px))", maxHeight: "calc(100vh - 48px)" }}
+      >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-repressurizer-border px-6 py-4">
           <h2 className="text-base font-semibold text-white tracking-tight">{t("settings.title")}</h2>
@@ -608,79 +663,6 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
             className="btn-press flex items-center justify-center w-7 h-7 rounded-lg text-repressurizer-text-muted transition-colors hover:text-white hover:bg-repressurizer-surface-hover"
           >
             <X size={16} weight="bold" />
-          </button>
-        </div>
-
-        {/* Tabs */}
-        <div className="flex overflow-x-auto border-b border-repressurizer-border px-2">
-          <button
-            onClick={() => setTab("general")}
-            className={`inline-flex shrink-0 items-center gap-1.5 px-4 py-2.5 text-sm transition-colors ${
-              tab === "general"
-                ? "border-b-2 border-repressurizer-accent text-white"
-                : "text-repressurizer-text-muted hover:text-white"
-            }`}
-          >
-            <Info size={14} />
-            {t("settings.general")}
-            {countTabMatches("general") > 0 && (
-              <span className="rounded-full bg-repressurizer-accent/15 px-1.5 py-0.5 text-[10px] font-medium text-repressurizer-accent tabular-nums">
-                {countTabMatches("general")}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => setTab("appearance")}
-            className={`inline-flex shrink-0 items-center gap-1.5 px-4 py-2.5 text-sm transition-colors ${
-              tab === "appearance"
-                ? "border-b-2 border-repressurizer-accent text-white"
-                : "text-repressurizer-text-muted hover:text-white"
-            }`}
-          >
-            <Palette size={14} />
-            {t("settings.appearance")}
-            {countTabMatches("appearance") > 0 && (
-              <span className="rounded-full bg-repressurizer-accent/15 px-1.5 py-0.5 text-[10px] font-medium text-repressurizer-accent tabular-nums">
-                {countTabMatches("appearance")}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => setTab("backups")}
-            className={`inline-flex shrink-0 items-center gap-1.5 px-4 py-2.5 text-sm transition-colors ${
-              tab === "backups"
-                ? "border-b-2 border-repressurizer-accent text-white"
-                : "text-repressurizer-text-muted hover:text-white"
-            }`}
-          >
-            <ClockCounterClockwise size={14} />
-            {t("settings.backups")}
-            {countTabMatches("backups") > 0 && (
-              <span className="rounded-full bg-repressurizer-accent/15 px-1.5 py-0.5 text-[10px] font-medium text-repressurizer-accent tabular-nums">
-                {countTabMatches("backups")}
-              </span>
-            )}
-          </button>
-          <button
-            onClick={() => setTab("ignored")}
-            className={`inline-flex shrink-0 items-center gap-1.5 px-4 py-2.5 text-sm transition-colors ${
-              tab === "ignored"
-                ? "border-b-2 border-repressurizer-accent text-white"
-                : "text-repressurizer-text-muted hover:text-white"
-            }`}
-          >
-            <Warning size={14} />
-            {t("settings.ignored")}
-            {countTabMatches("ignored") > 0 && (
-              <span className="rounded-full bg-repressurizer-accent/15 px-1.5 py-0.5 text-[10px] font-medium text-repressurizer-accent tabular-nums">
-                {countTabMatches("ignored")}
-              </span>
-            )}
-            {(ignoredIds.length + hltbIgnoredIds.length) > 0 && (
-              <span className="ml-1 rounded-full bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-medium text-amber-400 tabular-nums">
-                {ignoredIds.length + hltbIgnoredIds.length}
-              </span>
-            )}
           </button>
         </div>
 
@@ -731,8 +713,24 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
           )}
         </div>
 
+        <div className="flex min-h-0 flex-1 flex-col md:flex-row">
+          <SettingsNavigation
+            tabs={settingsTabs}
+            activeTab={tab}
+            onTabChange={setTab}
+            countTabMatches={countTabMatches}
+            variant="mobile"
+          />
+          <SettingsNavigation
+            tabs={settingsTabs}
+            activeTab={tab}
+            onTabChange={setTab}
+            countTabMatches={countTabMatches}
+            variant="desktop"
+          />
+
         {/* Content */}
-        <div className="flex-1 overflow-auto p-6">
+        <div className="flex-1 overflow-auto p-4 sm:p-6">
           {message && (
             <div className={`mb-4 flex items-center gap-2 rounded-xl border p-3.5 text-sm ${
               message.includes("failed") || message.includes("Failed")
@@ -752,7 +750,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
             </div>
           )}
 
-          {tab === "general" && (
+          {(["general", "steam", "automation", "data", "about"] as SettingsTab[]).includes(tab) && (
             <div className="space-y-6">
               {/* Info grid */}
               {isSectionVisible("overview") && (
@@ -1068,12 +1066,12 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                       type="password"
                       value={apiKey}
                       onChange={(e) => setApiKey(e.target.value)}
-                      className="w-full rounded-lg border border-repressurizer-border bg-repressurizer-bg pl-9 pr-3 py-2 text-sm text-repressurizer-text transition-colors focus:border-repressurizer-accent focus:outline-none"
+                      className="h-10 w-full rounded-lg border border-repressurizer-border bg-repressurizer-bg pl-9 pr-3 text-sm text-repressurizer-text transition-colors focus:border-repressurizer-accent focus:outline-none"
                     />
                   </div>
                   <button
                     onClick={handleSaveApiKey}
-                    className="btn-press rounded-lg bg-repressurizer-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-repressurizer-accent-hover"
+                    className="btn-press h-10 rounded-lg bg-repressurizer-accent px-5 text-sm font-medium text-white transition-colors hover:bg-repressurizer-accent-hover"
                   >
                     {t("settings.apiKey.save")}
                   </button>
@@ -1175,57 +1173,40 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                       />
                     </div>
                   </div>
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <p className="text-xs text-repressurizer-text-faint">
-                      {settings.automationPublishLastPublishedAt
-                        ? t("settings.automationExport.lastPublished", { date: new Date(settings.automationPublishLastPublishedAt).toLocaleString() })
-                        : t("settings.automationExport.never")}
-                    </p>
-                    <button
-                      onClick={handlePublishAutomation}
-                      disabled={publishingAutomation || !settings.automationPublishUrl.trim() || gameCount === 0}
-                      className="btn-press rounded-lg bg-repressurizer-accent px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-repressurizer-accent-hover disabled:opacity-40"
-                    >
-                      {publishingAutomation ? t("settings.automationExport.publishing") : t("settings.automationExport.publishNow")}
-                    </button>
-                  </div>
-                  <div className="grid gap-2 sm:grid-cols-3">
-                    <SettingMetric
-                      label={t("settings.automationExport.lastAttempt")}
-                      value={
-                        settings.automationPublishLastAttemptedAt
-                          ? new Date(settings.automationPublishLastAttemptedAt).toLocaleString()
-                          : t("settings.automationExport.never")
-                      }
-                    />
-                    <SettingMetric
-                      label={t("settings.automationExport.lastResult")}
-                      value={automationStatusLabel}
-                      tone={automationStatusTone}
-                    />
-                    <SettingMetric
-                      label={t("settings.automationExport.lastChecksum")}
-                      value={
-                        settings.automationPublishLastChecksum
-                          ? settings.automationPublishLastChecksum.slice(-12)
-                          : t("settings.automationExport.noChecksum")
-                      }
-                    />
-                  </div>
-                  {settings.automationPublishLastMessage && (
-                    <p className={`rounded-lg border px-3 py-2 text-[11px] leading-relaxed ${
-                      settings.automationPublishLastStatus === "failed"
-                        ? "border-repressurizer-danger/20 bg-repressurizer-danger/8 text-repressurizer-danger"
-                        : "border-repressurizer-border-subtle bg-repressurizer-surface/50 text-repressurizer-text-muted"
-                    }`}>
-                      {settings.automationPublishLastHttpStatus > 0 && (
-                        <span className="mr-2 font-mono text-repressurizer-text">
-                          HTTP {settings.automationPublishLastHttpStatus}
+                  <div className="flex flex-col gap-3 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-surface/50 px-3 py-2 sm:flex-row sm:items-center">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs text-repressurizer-text-muted">
+                        {settings.automationPublishLastPublishedAt
+                          ? t("settings.automationExport.lastPublished", { date: new Date(settings.automationPublishLastPublishedAt).toLocaleString() })
+                          : t("settings.automationExport.never")}
+                      </p>
+                      <p className="mt-0.5 break-words text-[11px] leading-relaxed text-repressurizer-text-faint">
+                        {t("settings.automationExport.lastResult")}:{" "}
+                        <span className={automationStatusTone === "success" ? "text-repressurizer-success" : automationStatusTone === "danger" ? "text-repressurizer-danger" : "text-repressurizer-text-muted"}>
+                          {automationStatusLabel}
                         </span>
-                      )}
-                      {settings.automationPublishLastMessage}
-                    </p>
-                  )}
+                        {settings.automationPublishLastAttemptedAt
+                          ? ` · ${new Date(settings.automationPublishLastAttemptedAt).toLocaleString()}`
+                          : ""}
+                      </p>
+                    </div>
+                    <div className="flex w-full gap-2 sm:w-auto">
+                      <button
+                        type="button"
+                        onClick={() => setShowAutomationLogs(true)}
+                        className="btn-press flex-1 rounded-lg border border-repressurizer-border bg-repressurizer-bg px-3 py-1.5 text-xs font-medium text-repressurizer-text-muted transition-colors hover:text-repressurizer-text sm:flex-none"
+                      >
+                        {t("settings.automationExport.viewLogs")}
+                      </button>
+                      <button
+                        onClick={handlePublishAutomation}
+                        disabled={publishingAutomation || !settings.automationPublishUrl.trim() || gameCount === 0}
+                        className="btn-press flex-1 rounded-lg bg-repressurizer-accent px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-repressurizer-accent-hover disabled:opacity-40 sm:flex-none"
+                      >
+                        {publishingAutomation ? t("settings.automationExport.publishing") : t("settings.automationExport.publishNow")}
+                      </button>
+                    </div>
+                  </div>
                   <p className="text-[11px] leading-relaxed text-repressurizer-text-faint">
                     {t("settings.automationExport.desc")}
                   </p>
@@ -1362,6 +1343,18 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
             </div>
           )}
         </div>
+        </div>
+
+        {showAutomationLogs && (
+          <AutomationLogsDialog
+            logs={filteredAutomationLogs}
+            filter={automationLogFilter}
+            sort={automationLogSort}
+            onFilterChange={setAutomationLogFilter}
+            onSortChange={setAutomationLogSort}
+            onClose={() => setShowAutomationLogs(false)}
+          />
+        )}
 
         {/* Confirmation dialog */}
         {pendingAction && (
@@ -1391,6 +1384,100 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
         )}
       </div>
     </div>
+  );
+}
+
+function SettingsNavigation({
+  tabs,
+  activeTab,
+  onTabChange,
+  countTabMatches,
+  variant,
+}: {
+  tabs: SettingsTabItem[];
+  activeTab: SettingsTab;
+  onTabChange: (tab: SettingsTab) => void;
+  countTabMatches: (tab: SettingsTab) => number;
+  variant: "desktop" | "mobile";
+}) {
+  const t = useT();
+
+  if (variant === "mobile") {
+    return (
+      <nav className="border-b border-repressurizer-border px-3 md:hidden" aria-label={t("settings.sections")}>
+        <div className="flex gap-1 overflow-x-auto py-2">
+          {tabs.map((item) => (
+            <SettingsNavButton
+              key={item.id}
+              item={item}
+              active={activeTab === item.id}
+              matchCount={countTabMatches(item.id)}
+              onClick={() => onTabChange(item.id)}
+              variant="mobile"
+            />
+          ))}
+        </div>
+      </nav>
+    );
+  }
+
+  return (
+    <nav className="hidden w-48 shrink-0 border-r border-repressurizer-border bg-repressurizer-bg/35 p-3 md:block" aria-label={t("settings.sections")}>
+      <div className="space-y-1">
+        {tabs.map((item) => (
+          <SettingsNavButton
+            key={item.id}
+            item={item}
+            active={activeTab === item.id}
+            matchCount={countTabMatches(item.id)}
+            onClick={() => onTabChange(item.id)}
+            variant="desktop"
+          />
+        ))}
+      </div>
+    </nav>
+  );
+}
+
+function SettingsNavButton({
+  item,
+  active,
+  matchCount,
+  onClick,
+  variant,
+}: {
+  item: SettingsTabItem;
+  active: boolean;
+  matchCount: number;
+  onClick: () => void;
+  variant: "desktop" | "mobile";
+}) {
+  const showMatch = matchCount > 0;
+  const showBadge = item.badge != null && item.badge > 0;
+  const base =
+    variant === "desktop"
+      ? "flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-sm"
+      : "inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm";
+  const state = active
+    ? "border-repressurizer-accent/35 bg-repressurizer-accent/16 text-white shadow-[inset_2px_0_0_var(--color-repressurizer-accent)]"
+    : "border-transparent text-repressurizer-text-muted hover:border-repressurizer-border-subtle hover:bg-repressurizer-surface-hover hover:text-repressurizer-text";
+  const iconState = active ? "text-repressurizer-accent" : "text-repressurizer-text-faint";
+
+  return (
+    <button type="button" onClick={onClick} className={`${base} ${state}`}>
+      <span className={`shrink-0 ${iconState}`}>{item.icon}</span>
+      <span className="truncate">{item.label}</span>
+      {showMatch && (
+        <span className="ml-auto rounded-full bg-repressurizer-accent/15 px-1.5 py-0.5 text-[10px] font-medium text-repressurizer-accent tabular-nums">
+          {matchCount}
+        </span>
+      )}
+      {showBadge && !showMatch && (
+        <span className="ml-auto rounded-full bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-medium text-amber-400 tabular-nums">
+          {item.badge}
+        </span>
+      )}
+    </button>
   );
 }
 
@@ -1801,37 +1888,120 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function AutomationLogsDialog({
+  logs,
+  filter,
+  sort,
+  onFilterChange,
+  onSortChange,
+  onClose,
+}: {
+  logs: AutomationPublishLogEntry[];
+  filter: AutomationLogFilter;
+  sort: AutomationLogSort;
+  onFilterChange: (value: AutomationLogFilter) => void;
+  onSortChange: (value: AutomationLogSort) => void;
+  onClose: () => void;
+}) {
+  const t = useT();
+
+  return (
+    <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-black/50 p-4 backdrop-blur-sm">
+      <div className="flex w-full max-w-3xl flex-col rounded-xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_16px_48px_rgba(0,0,0,0.5)]" style={{ maxHeight: "min(640px, calc(100vh - 96px))" }}>
+        <div className="flex items-center justify-between border-b border-repressurizer-border px-4 py-3">
+          <div>
+            <h3 className="text-sm font-semibold text-repressurizer-text">{t("settings.automationExport.logsTitle")}</h3>
+            <p className="mt-0.5 text-[11px] text-repressurizer-text-faint">
+              {t("settings.automationExport.logsDesc")}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="btn-press flex h-7 w-7 items-center justify-center rounded-lg text-repressurizer-text-muted transition-colors hover:bg-repressurizer-surface-hover hover:text-white"
+            aria-label={t("common.close")}
+          >
+            <X size={15} weight="bold" />
+          </button>
+        </div>
+
+        <div className="flex flex-wrap gap-2 border-b border-repressurizer-border px-4 py-3">
+          <div className="relative">
+            <select
+              value={filter}
+              onChange={(event) => onFilterChange(event.target.value as AutomationLogFilter)}
+              className="h-8 appearance-none rounded-lg border border-repressurizer-border bg-repressurizer-bg pl-3 pr-10 text-xs text-repressurizer-text focus:border-repressurizer-accent focus:outline-none"
+            >
+              <option value="all">{t("settings.automationExport.logs.all")}</option>
+              <option value="success">{t("settings.automationExport.status.success")}</option>
+              <option value="failed">{t("settings.automationExport.status.failed")}</option>
+              <option value="skipped">{t("settings.automationExport.status.skipped")}</option>
+            </select>
+            <CaretDown
+              size={12}
+              weight="bold"
+              className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-repressurizer-text-faint"
+            />
+          </div>
+          <div className="relative">
+            <select
+              value={sort}
+              onChange={(event) => onSortChange(event.target.value as AutomationLogSort)}
+              className="h-8 appearance-none rounded-lg border border-repressurizer-border bg-repressurizer-bg pl-3 pr-10 text-xs text-repressurizer-text focus:border-repressurizer-accent focus:outline-none"
+            >
+              <option value="desc">{t("settings.automationExport.logs.newest")}</option>
+              <option value="asc">{t("settings.automationExport.logs.oldest")}</option>
+            </select>
+            <CaretDown
+              size={12}
+              weight="bold"
+              className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-repressurizer-text-faint"
+            />
+          </div>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-auto">
+          {logs.length === 0 ? (
+            <div className="px-4 py-8 text-center text-sm text-repressurizer-text-muted">
+              {t("settings.automationExport.logs.empty")}
+            </div>
+          ) : (
+            <div className="divide-y divide-repressurizer-border-subtle">
+              {logs.map((entry) => (
+                <div key={entry.id} className="grid gap-2 px-4 py-3 sm:grid-cols-[170px_132px_minmax(0,1fr)]">
+                  <p className="font-mono text-[11px] text-repressurizer-text-faint tabular-nums sm:whitespace-nowrap">
+                    {new Date(entry.timestamp).toLocaleString()}
+                  </p>
+                  <p className={`whitespace-nowrap text-xs font-medium ${
+                    entry.status === "success"
+                      ? "text-repressurizer-success"
+                      : entry.status === "failed"
+                        ? "text-repressurizer-danger"
+                        : "text-repressurizer-text-muted"
+                  }`}>
+                    {t(`settings.automationExport.status.${entry.status}` as Parameters<typeof t>[0])}
+                    {entry.httpStatus > 0 && (
+                      <span className="ml-2 font-mono text-repressurizer-text-muted">HTTP {entry.httpStatus}</span>
+                    )}
+                  </p>
+                  <p className="min-w-0 text-xs leading-relaxed text-repressurizer-text-muted">
+                    {entry.message}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function MiniStat({ label, value }: { label: string; value: number }) {
   return (
     <div className="rounded-lg border border-repressurizer-border-subtle bg-repressurizer-surface px-2.5 py-2">
       <p className="text-[10px] uppercase tracking-wider text-repressurizer-text-faint">{label}</p>
       <p className="mt-0.5 font-mono text-sm text-repressurizer-text tabular-nums">{value}</p>
-    </div>
-  );
-}
-
-function SettingMetric({
-  label,
-  value,
-  tone = "default",
-}: {
-  label: string;
-  value: string | number;
-  tone?: "default" | "success" | "danger" | "muted";
-}) {
-  const valueClass =
-    tone === "success"
-      ? "text-repressurizer-success"
-      : tone === "danger"
-        ? "text-repressurizer-danger"
-        : tone === "muted"
-          ? "text-repressurizer-text-muted"
-          : "text-repressurizer-text";
-
-  return (
-    <div className="min-w-0 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-surface px-2.5 py-2">
-      <p className="text-[10px] uppercase tracking-wider text-repressurizer-text-faint">{label}</p>
-      <p className={`mt-0.5 truncate font-mono text-xs tabular-nums ${valueClass}`}>{value}</p>
     </div>
   );
 }

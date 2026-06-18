@@ -40,6 +40,7 @@ const settings: AppSettings = {
   automationPublishLastStatus: "",
   automationPublishLastMessage: "",
   automationPublishLastHttpStatus: 0,
+  automationPublishLogs: [],
   includeSteamFamilyNonGames: false,
 };
 
