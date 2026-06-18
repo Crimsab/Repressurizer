@@ -55,15 +55,18 @@ import {
   Bug,
   CloudArrowDown,
   UsersThree,
+  MagnifyingGlass,
 } from "@phosphor-icons/react";
 import { ACCENT_PRESETS, applyAccentColor, applyTheme } from "../../stores/settingsStore";
 import { getLocaleDisplayName, getLocaleFlag, normalizeLocale, SUPPORTED_LOCALES, useT } from "../../lib/i18n";
 import type { AppTheme } from "../../lib/types";
-import { publishAutomationSnapshot } from "../../lib/automationPublish";
+import { automationPublishStatusPatch, publishAutomationSnapshot } from "../../lib/automationPublish";
 
 interface SettingsPageProps {
   onClose: () => void;
 }
+
+type SettingsTab = "general" | "appearance" | "backups" | "ignored";
 
 function redactTail(value: string | null | undefined): string | null {
   if (!value) return null;
@@ -96,7 +99,8 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
   const [loadingBackups, setLoadingBackups] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [message, setMessage] = useState("");
-  const [tab, setTab] = useState<"general" | "appearance" | "backups" | "ignored">("general");
+  const [tab, setTab] = useState<SettingsTab>("general");
+  const [settingsSearch, setSettingsSearch] = useState("");
   const [cacheInfo, setCacheInfo] = useState<CacheInfo | null>(null);
   const [diagnosticsExporting, setDiagnosticsExporting] = useState(false);
   const [checkingUpdates, setCheckingUpdates] = useState(false);
@@ -275,10 +279,17 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
       settings.setSettings({
         automationPublishLastChecksum: result.snapshot.checksum,
         automationPublishLastPublishedAt: new Date().toISOString(),
+        ...automationPublishStatusPatch(
+          "success",
+          t("settings.automationExport.published", { status: result.http.status }),
+          result.http.status
+        ),
       });
       setMessage(t("settings.automationExport.published", { status: result.http.status }));
     } catch (e) {
-      setMessage(t("settings.automationExport.failed", { error: String(e) }));
+      const errorMessage = t("settings.automationExport.failed", { error: String(e) });
+      settings.setSettings(automationPublishStatusPatch("failed", errorMessage));
+      setMessage(errorMessage);
     } finally {
       setPublishingAutomation(false);
     }
@@ -422,13 +433,173 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
   const familyIncludeNonGames = settings.includeSteamFamilyNonGames ?? false;
   const steamAppIndexCount = Object.keys(steamAppIndex.apps).length;
   const steamAppIndexStale = isSteamAppIndexStale(steamAppIndex);
+  const settingsSearchText = settingsSearch.trim().toLowerCase();
+  const settingsSections = useMemo(
+    () => [
+      {
+        id: "overview",
+        tab: "general" as const,
+        label: t("settings.general"),
+        keywords: [
+          t("settings.steamPath"),
+          t("settings.user"),
+          t("settings.steamId64"),
+          t("settings.library"),
+          "profile account steam path library",
+        ],
+      },
+      {
+        id: "family",
+        tab: "general" as const,
+        label: t("settings.steamFamily"),
+        keywords: [
+          t("settings.family.probeTitle"),
+          t("settings.family.tokenLabel"),
+          t("settings.family.includeNonGames"),
+          "family shared library token webapi",
+        ],
+      },
+      {
+        id: "display",
+        tab: "general" as const,
+        label: t("settings.display"),
+        keywords: [t("settings.showDynamic"), t("settings.pinFavorites"), "display favorites dynamic"],
+      },
+      {
+        id: "currency",
+        tab: "general" as const,
+        label: t("settings.currency"),
+        keywords: [t("settings.defaultCurrency"), "currency price regional"],
+      },
+      {
+        id: "performance",
+        tab: "general" as const,
+        label: t("settings.fetchSpeed"),
+        keywords: [t("settings.hltbConcurrency"), t("settings.achievementsConcurrency"), "hltb achievements speed concurrency"],
+      },
+      {
+        id: "data",
+        tab: "general" as const,
+        label: t("settings.cache"),
+        keywords: [t("settings.steamAppIndex"), t("settings.cache"), t("settings.clearCache"), "cache index data steam apps"],
+      },
+      {
+        id: "api",
+        tab: "general" as const,
+        label: t("settings.apiKey"),
+        keywords: [t("settings.apiKey"), "api key steam web api"],
+      },
+      {
+        id: "maintenance",
+        tab: "general" as const,
+        label: t("settings.maintenance"),
+        keywords: [t("settings.diagnostics.export"), t("settings.updates.check"), "diagnostics update maintenance"],
+      },
+      {
+        id: "automation",
+        tab: "general" as const,
+        label: t("settings.automationExport"),
+        keywords: [
+          t("settings.automationExport.enabled"),
+          t("settings.automationExport.url"),
+          t("settings.automationExport.token"),
+          "automation export snapshot publish endpoint webhook game vault http hltb",
+        ],
+      },
+      {
+        id: "reset",
+        tab: "general" as const,
+        label: t("settings.reset"),
+        keywords: [t("settings.reset"), "reset about version"],
+      },
+      {
+        id: "accent",
+        tab: "appearance" as const,
+        label: t("appearance.accentColor"),
+        keywords: [t("appearance.accentColor"), t("appearance.customAccent"), "color accent theme"],
+      },
+      {
+        id: "visibility",
+        tab: "appearance" as const,
+        label: t("appearance.visibility"),
+        keywords: [t("appearance.smartLists"), t("appearance.filterBar"), t("appearance.nowPlaying"), "visibility panels ui"],
+      },
+      {
+        id: "theme",
+        tab: "appearance" as const,
+        label: t("appearance.theme"),
+        keywords: [t("appearance.theme.dark"), t("appearance.theme.dim"), t("appearance.theme.light"), "theme dark light"],
+      },
+      {
+        id: "language",
+        tab: "appearance" as const,
+        label: t("appearance.language"),
+        keywords: [t("appearance.language"), "language locale translation"],
+      },
+      {
+        id: "sidebar",
+        tab: "appearance" as const,
+        label: t("appearance.sidebarWidth"),
+        keywords: [t("appearance.sidebarWidth"), "sidebar width layout"],
+      },
+      {
+        id: "tray",
+        tab: "appearance" as const,
+        label: t("settings.systemTray"),
+        keywords: [t("settings.systemTray"), t("settings.minimizeToTray"), t("settings.updates.autoCheck"), "tray close background startup"],
+      },
+      {
+        id: "backups",
+        tab: "backups" as const,
+        label: t("settings.backups"),
+        keywords: [t("settings.backups"), "backup restore delete manual"],
+      },
+      {
+        id: "ignored",
+        tab: "ignored" as const,
+        label: t("settings.ignored"),
+        keywords: [t("ignored.steamDetails"), t("ignored.hltb"), "ignored failed retry"],
+      },
+    ],
+    [t]
+  );
+  const matchedSettingsSections = useMemo(() => {
+    if (!settingsSearchText) return settingsSections;
+    return settingsSections.filter((section) =>
+      `${section.label} ${section.keywords.join(" ")}`.toLowerCase().includes(settingsSearchText)
+    );
+  }, [settingsSearchText, settingsSections]);
+  const visibleSectionIds = useMemo(
+    () => new Set(matchedSettingsSections.map((section) => section.id)),
+    [matchedSettingsSections]
+  );
+  const isSectionVisible = (id: string) => !settingsSearchText || visibleSectionIds.has(id);
+  const countTabMatches = (targetTab: SettingsTab) =>
+    settingsSearchText ? matchedSettingsSections.filter((section) => section.tab === targetTab).length : 0;
+  const automationStatusTone =
+    settings.automationPublishLastStatus === "success"
+      ? "success"
+      : settings.automationPublishLastStatus === "failed"
+        ? "danger"
+        : settings.automationPublishLastStatus === "skipped"
+          ? "muted"
+          : "default";
+  const automationStatusLabel = settings.automationPublishLastStatus
+    ? t(`settings.automationExport.status.${settings.automationPublishLastStatus}` as Parameters<typeof t>[0])
+    : t("settings.automationExport.status.idle");
+
+  useEffect(() => {
+    if (!settingsSearchText || matchedSettingsSections.length === 0) return;
+    if (matchedSettingsSections.some((section) => section.tab === tab)) return;
+    setTab(matchedSettingsSections[0].tab);
+  }, [settingsSearchText, matchedSettingsSections, tab]);
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="relative flex w-full max-w-2xl flex-col rounded-2xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_24px_64px_rgba(0,0,0,0.6)] animate-fade-in" style={{ maxHeight: "85vh" }}>
+      <div className="relative flex w-full max-w-4xl flex-col rounded-2xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_24px_64px_rgba(0,0,0,0.6)] animate-fade-in" style={{ maxHeight: "88vh" }}>
         {/* Header */}
         <div className="flex items-center justify-between border-b border-repressurizer-border px-6 py-4">
           <h2 className="text-base font-semibold text-white tracking-tight">{t("settings.title")}</h2>
@@ -441,10 +612,10 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-repressurizer-border">
+        <div className="flex overflow-x-auto border-b border-repressurizer-border px-2">
           <button
             onClick={() => setTab("general")}
-            className={`inline-flex items-center gap-1.5 px-6 py-2.5 text-sm transition-colors ${
+            className={`inline-flex shrink-0 items-center gap-1.5 px-4 py-2.5 text-sm transition-colors ${
               tab === "general"
                 ? "border-b-2 border-repressurizer-accent text-white"
                 : "text-repressurizer-text-muted hover:text-white"
@@ -452,10 +623,15 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
           >
             <Info size={14} />
             {t("settings.general")}
+            {countTabMatches("general") > 0 && (
+              <span className="rounded-full bg-repressurizer-accent/15 px-1.5 py-0.5 text-[10px] font-medium text-repressurizer-accent tabular-nums">
+                {countTabMatches("general")}
+              </span>
+            )}
           </button>
           <button
             onClick={() => setTab("appearance")}
-            className={`inline-flex items-center gap-1.5 px-6 py-2.5 text-sm transition-colors ${
+            className={`inline-flex shrink-0 items-center gap-1.5 px-4 py-2.5 text-sm transition-colors ${
               tab === "appearance"
                 ? "border-b-2 border-repressurizer-accent text-white"
                 : "text-repressurizer-text-muted hover:text-white"
@@ -463,10 +639,15 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
           >
             <Palette size={14} />
             {t("settings.appearance")}
+            {countTabMatches("appearance") > 0 && (
+              <span className="rounded-full bg-repressurizer-accent/15 px-1.5 py-0.5 text-[10px] font-medium text-repressurizer-accent tabular-nums">
+                {countTabMatches("appearance")}
+              </span>
+            )}
           </button>
           <button
             onClick={() => setTab("backups")}
-            className={`inline-flex items-center gap-1.5 px-6 py-2.5 text-sm transition-colors ${
+            className={`inline-flex shrink-0 items-center gap-1.5 px-4 py-2.5 text-sm transition-colors ${
               tab === "backups"
                 ? "border-b-2 border-repressurizer-accent text-white"
                 : "text-repressurizer-text-muted hover:text-white"
@@ -474,10 +655,15 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
           >
             <ClockCounterClockwise size={14} />
             {t("settings.backups")}
+            {countTabMatches("backups") > 0 && (
+              <span className="rounded-full bg-repressurizer-accent/15 px-1.5 py-0.5 text-[10px] font-medium text-repressurizer-accent tabular-nums">
+                {countTabMatches("backups")}
+              </span>
+            )}
           </button>
           <button
             onClick={() => setTab("ignored")}
-            className={`inline-flex items-center gap-1.5 px-6 py-2.5 text-sm transition-colors ${
+            className={`inline-flex shrink-0 items-center gap-1.5 px-4 py-2.5 text-sm transition-colors ${
               tab === "ignored"
                 ? "border-b-2 border-repressurizer-accent text-white"
                 : "text-repressurizer-text-muted hover:text-white"
@@ -485,12 +671,64 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
           >
             <Warning size={14} />
             {t("settings.ignored")}
+            {countTabMatches("ignored") > 0 && (
+              <span className="rounded-full bg-repressurizer-accent/15 px-1.5 py-0.5 text-[10px] font-medium text-repressurizer-accent tabular-nums">
+                {countTabMatches("ignored")}
+              </span>
+            )}
             {(ignoredIds.length + hltbIgnoredIds.length) > 0 && (
               <span className="ml-1 rounded-full bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-medium text-amber-400 tabular-nums">
                 {ignoredIds.length + hltbIgnoredIds.length}
               </span>
             )}
           </button>
+        </div>
+
+        <div className="border-b border-repressurizer-border px-6 py-3">
+          <div className="relative">
+            <MagnifyingGlass
+              size={15}
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-repressurizer-text-faint"
+            />
+            <input
+              type="search"
+              value={settingsSearch}
+              onChange={(e) => setSettingsSearch(e.target.value)}
+              placeholder={t("settings.search.placeholder")}
+              className="w-full rounded-xl border border-repressurizer-border bg-repressurizer-bg py-2 pl-9 pr-9 text-sm text-repressurizer-text placeholder:text-repressurizer-text-faint transition-colors focus:border-repressurizer-accent focus:outline-none"
+            />
+            {settingsSearch && (
+              <button
+                type="button"
+                onClick={() => setSettingsSearch("")}
+                aria-label={t("settings.search.clear")}
+                className="btn-press absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-repressurizer-text-faint transition-colors hover:bg-repressurizer-surface-hover hover:text-repressurizer-text"
+              >
+                <X size={13} weight="bold" />
+              </button>
+            )}
+          </div>
+          {settingsSearchText && matchedSettingsSections.length > 0 && (
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <span className="text-[11px] text-repressurizer-text-faint">
+                {t("settings.search.matches", { count: matchedSettingsSections.length })}
+              </span>
+              {matchedSettingsSections.slice(0, 7).map((section) => (
+                <button
+                  key={`${section.tab}-${section.id}`}
+                  type="button"
+                  onClick={() => setTab(section.tab)}
+                  className={`btn-press rounded-lg border px-2 py-1 text-[11px] transition-colors ${
+                    tab === section.tab
+                      ? "border-repressurizer-accent/40 bg-repressurizer-accent/10 text-repressurizer-accent"
+                      : "border-repressurizer-border-subtle bg-repressurizer-bg text-repressurizer-text-muted hover:text-repressurizer-text"
+                  }`}
+                >
+                  {section.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Content */}
@@ -508,9 +746,16 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
             </div>
           )}
 
+          {settingsSearchText && matchedSettingsSections.length === 0 && (
+            <div className="mb-4 rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3 text-sm text-repressurizer-text-muted">
+              {t("settings.search.noResults")}
+            </div>
+          )}
+
           {tab === "general" && (
             <div className="space-y-6">
               {/* Info grid */}
+              {isSectionVisible("overview") && (
               <div className="rounded-xl bg-repressurizer-bg border border-repressurizer-border-subtle p-4">
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
@@ -537,8 +782,10 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                   </div>
                 </div>
               </div>
+              )}
 
               {/* Steam Family */}
+              {isSectionVisible("family") && (
               <div className="space-y-3">
                 <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("settings.steamFamily")}</h3>
                 <div className="rounded-xl bg-repressurizer-bg border border-repressurizer-border-subtle px-4 py-3 space-y-3">
@@ -600,6 +847,13 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                         <TrashSimple size={13} />
                         {t("settings.family.clearToken")}
                       </button>
+                      <button
+                        onClick={handleProbeFamily}
+                        disabled={familyChecking || (!settings.apiKey && !hasFamilyStoreToken)}
+                        className="btn-press flex min-w-[150px] flex-1 items-center justify-center rounded-lg bg-repressurizer-accent px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-repressurizer-accent-hover disabled:opacity-40"
+                      >
+                        {familyChecking ? t("settings.family.checking") : t("settings.family.probe")}
+                      </button>
                     </div>
                   </div>
                   <label className="flex items-start gap-3 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-surface/40 px-3 py-2.5">
@@ -616,15 +870,6 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                       </span>
                     </span>
                   </label>
-                  <div className="flex justify-end">
-                    <button
-                      onClick={handleProbeFamily}
-                      disabled={familyChecking || (!settings.apiKey && !hasFamilyStoreToken)}
-                      className="btn-press shrink-0 rounded-lg bg-repressurizer-accent px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-repressurizer-accent-hover disabled:opacity-40"
-                    >
-                      {familyChecking ? t("settings.family.checking") : t("settings.family.probe")}
-                    </button>
-                  </div>
                   {familyResult && (
                     <div className="grid grid-cols-4 gap-2 text-xs">
                       <MiniStat label={t("settings.family.total")} value={familyResult.total_apps} />
@@ -652,8 +897,10 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                   )}
                 </div>
               </div>
+              )}
 
               {/* Display */}
+              {isSectionVisible("display") && (
               <div className="space-y-3">
                 <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("settings.display")}</h3>
                 <ToggleRow
@@ -671,8 +918,10 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                   onChange={(v) => settings.setSettings({ pinFavorites: v })}
                 />
               </div>
+              )}
 
               {/* Currency */}
+              {isSectionVisible("currency") && (
               <div className="space-y-3">
                 <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("settings.currency")}</h3>
                 <div className="rounded-xl bg-repressurizer-bg border border-repressurizer-border-subtle px-4 py-3 space-y-2">
@@ -700,8 +949,10 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                   </div>
                 </div>
               </div>
+              )}
 
               {/* Fetch Speed */}
+              {isSectionVisible("performance") && (
               <div className="space-y-3">
                 <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("settings.fetchSpeed")}</h3>
                 <div className="rounded-xl bg-repressurizer-bg border border-repressurizer-border-subtle px-4 py-3 space-y-2">
@@ -741,8 +992,10 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                   </p>
                 </div>
               </div>
+              )}
 
               {/* Cache */}
+              {isSectionVisible("data") && (
               <div className="space-y-3">
                 <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("settings.steamAppIndex")}</h3>
                 <div className="flex items-center gap-3 rounded-xl bg-repressurizer-bg border border-repressurizer-border-subtle px-4 py-3">
@@ -800,8 +1053,10 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                   </div>
                 )}
               </div>
+              )}
 
               {/* API Key */}
+              {isSectionVisible("api") && (
               <div>
                 <label className="mb-1.5 block text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">
                   {t("settings.apiKey")}
@@ -824,8 +1079,10 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                   </button>
                 </div>
               </div>
+              )}
 
               {/* Maintenance */}
+              {isSectionVisible("maintenance") && (
               <div className="space-y-3">
                 <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("settings.maintenance")}</h3>
                 <div className="grid gap-3 md:grid-cols-2">
@@ -865,8 +1122,10 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                   </div>
                 </div>
               </div>
+              )}
 
               {/* Automation export */}
+              {isSectionVisible("automation") && (
               <div className="space-y-3">
                 <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("settings.automationExport")}</h3>
                 <ToggleRow
@@ -930,36 +1189,78 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                       {publishingAutomation ? t("settings.automationExport.publishing") : t("settings.automationExport.publishNow")}
                     </button>
                   </div>
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    <SettingMetric
+                      label={t("settings.automationExport.lastAttempt")}
+                      value={
+                        settings.automationPublishLastAttemptedAt
+                          ? new Date(settings.automationPublishLastAttemptedAt).toLocaleString()
+                          : t("settings.automationExport.never")
+                      }
+                    />
+                    <SettingMetric
+                      label={t("settings.automationExport.lastResult")}
+                      value={automationStatusLabel}
+                      tone={automationStatusTone}
+                    />
+                    <SettingMetric
+                      label={t("settings.automationExport.lastChecksum")}
+                      value={
+                        settings.automationPublishLastChecksum
+                          ? settings.automationPublishLastChecksum.slice(-12)
+                          : t("settings.automationExport.noChecksum")
+                      }
+                    />
+                  </div>
+                  {settings.automationPublishLastMessage && (
+                    <p className={`rounded-lg border px-3 py-2 text-[11px] leading-relaxed ${
+                      settings.automationPublishLastStatus === "failed"
+                        ? "border-repressurizer-danger/20 bg-repressurizer-danger/8 text-repressurizer-danger"
+                        : "border-repressurizer-border-subtle bg-repressurizer-surface/50 text-repressurizer-text-muted"
+                    }`}>
+                      {settings.automationPublishLastHttpStatus > 0 && (
+                        <span className="mr-2 font-mono text-repressurizer-text">
+                          HTTP {settings.automationPublishLastHttpStatus}
+                        </span>
+                      )}
+                      {settings.automationPublishLastMessage}
+                    </p>
+                  )}
                   <p className="text-[11px] leading-relaxed text-repressurizer-text-faint">
                     {t("settings.automationExport.desc")}
                   </p>
                 </div>
               </div>
+              )}
 
               {/* Reset */}
-              <div className="border-t border-repressurizer-border pt-5">
-                <button
-                  onClick={handleReset}
-                  className="btn-press inline-flex items-center gap-1.5 rounded-lg border border-repressurizer-danger/30 px-4 py-2 text-sm text-repressurizer-danger transition-colors hover:bg-repressurizer-danger/10"
-                >
-                  <ArrowCounterClockwise size={14} />
-                  {t("settings.reset")}
-                </button>
-                <p className="mt-1.5 text-xs text-repressurizer-text-faint">
-                  {t("settings.reset.desc")}
-                </p>
-              </div>
+              {isSectionVisible("reset") && (
+                <>
+                  <div className="border-t border-repressurizer-border pt-5">
+                    <button
+                      onClick={handleReset}
+                      className="btn-press inline-flex items-center gap-1.5 rounded-lg border border-repressurizer-danger/30 px-4 py-2 text-sm text-repressurizer-danger transition-colors hover:bg-repressurizer-danger/10"
+                    >
+                      <ArrowCounterClockwise size={14} />
+                      {t("settings.reset")}
+                    </button>
+                    <p className="mt-1.5 text-xs text-repressurizer-text-faint">
+                      {t("settings.reset.desc")}
+                    </p>
+                  </div>
 
-              {/* About */}
-              <div className="border-t border-repressurizer-border pt-5 text-xs text-repressurizer-text-muted">
-                <p className="font-medium text-repressurizer-text">Repressurizer v{__APP_VERSION__}</p>
-                <p className="mt-1 text-repressurizer-text-faint">{t("settings.about")}</p>
-                <p className="text-repressurizer-text-faint">{t("settings.dynamicNote")}</p>
-              </div>
+                  {/* About */}
+                  <div className="border-t border-repressurizer-border pt-5 text-xs text-repressurizer-text-muted">
+                    <p className="font-medium text-repressurizer-text">Repressurizer v{__APP_VERSION__}</p>
+                    <p className="mt-1 text-repressurizer-text-faint">{t("settings.about")}</p>
+                    <p className="text-repressurizer-text-faint">{t("settings.dynamicNote")}</p>
+                  </div>
+                </>
+              )}
             </div>
           )}
 
-          {tab === "appearance" && <AppearanceTab />}
+          {tab === "appearance" && <AppearanceTab isSectionVisible={isSectionVisible} />}
 
           {tab === "backups" && (
             <BackupsTab
@@ -1093,7 +1394,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
   );
 }
 
-function AppearanceTab() {
+function AppearanceTab({ isSectionVisible }: { isSectionVisible: (id: string) => boolean }) {
   const {
     accentColor,
     recentAccentColors,
@@ -1193,6 +1494,7 @@ function AppearanceTab() {
   return (
     <div className="space-y-6">
       {/* Accent color */}
+      {isSectionVisible("accent") && (
       <div className="space-y-3">
         <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("appearance.accentColor")}</h3>
         <p className="text-xs text-repressurizer-text-faint -mt-1">{t("appearance.accentColor.desc")}</p>
@@ -1305,8 +1607,10 @@ function AppearanceTab() {
           )}
         </div>
       </div>
+      )}
 
       {/* UI visibility */}
+      {isSectionVisible("visibility") && (
       <div className="space-y-3">
         <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("appearance.visibility")}</h3>
         <ToggleRow
@@ -1352,8 +1656,10 @@ function AppearanceTab() {
           onChange={(v) => setSettings({ showDetailPrice: v })}
         />
       </div>
+      )}
 
       {/* Theme */}
+      {isSectionVisible("theme") && (
       <div className="space-y-3">
         <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("appearance.theme")}</h3>
         <div className="flex gap-2">
@@ -1380,8 +1686,10 @@ function AppearanceTab() {
           ))}
         </div>
       </div>
+      )}
 
       {/* Language */}
+      {isSectionVisible("language") && (
       <div className="space-y-3">
         <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("appearance.language")}</h3>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -1401,8 +1709,10 @@ function AppearanceTab() {
           ))}
         </div>
       </div>
+      )}
 
       {/* Sidebar width */}
+      {isSectionVisible("sidebar") && (
       <div className="space-y-3">
         <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("appearance.sidebarWidth")}</h3>
         <div className="flex items-center gap-3">
@@ -1421,8 +1731,10 @@ function AppearanceTab() {
         </div>
         <p className="text-xs text-repressurizer-text-faint">{t("appearance.sidebarWidth.desc")}</p>
       </div>
+      )}
 
       {/* System tray */}
+      {isSectionVisible("tray") && (
       <div className="space-y-3">
         <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("settings.systemTray")}</h3>
         <ToggleRow
@@ -1440,6 +1752,7 @@ function AppearanceTab() {
           onChange={(v) => setSettings({ checkUpdatesOnStartup: v })}
         />
       </div>
+      )}
     </div>
   );
 }
@@ -1493,6 +1806,32 @@ function MiniStat({ label, value }: { label: string; value: number }) {
     <div className="rounded-lg border border-repressurizer-border-subtle bg-repressurizer-surface px-2.5 py-2">
       <p className="text-[10px] uppercase tracking-wider text-repressurizer-text-faint">{label}</p>
       <p className="mt-0.5 font-mono text-sm text-repressurizer-text tabular-nums">{value}</p>
+    </div>
+  );
+}
+
+function SettingMetric({
+  label,
+  value,
+  tone = "default",
+}: {
+  label: string;
+  value: string | number;
+  tone?: "default" | "success" | "danger" | "muted";
+}) {
+  const valueClass =
+    tone === "success"
+      ? "text-repressurizer-success"
+      : tone === "danger"
+        ? "text-repressurizer-danger"
+        : tone === "muted"
+          ? "text-repressurizer-text-muted"
+          : "text-repressurizer-text";
+
+  return (
+    <div className="min-w-0 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-surface px-2.5 py-2">
+      <p className="text-[10px] uppercase tracking-wider text-repressurizer-text-faint">{label}</p>
+      <p className={`mt-0.5 truncate font-mono text-xs tabular-nums ${valueClass}`}>{value}</p>
     </div>
   );
 }

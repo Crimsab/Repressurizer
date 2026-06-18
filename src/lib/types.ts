@@ -123,6 +123,10 @@ export interface AppSettings {
   automationPublishIntervalHours: number;
   automationPublishLastChecksum: string;
   automationPublishLastPublishedAt: string;
+  automationPublishLastAttemptedAt: string;
+  automationPublishLastStatus: "" | "success" | "failed" | "skipped";
+  automationPublishLastMessage: string;
+  automationPublishLastHttpStatus: number;
   // Steam Family
   includeSteamFamilyNonGames: boolean;
 }

@@ -25,6 +25,7 @@ import { fetchLibrary, loadCollections, createManualBackup, fetchPlayerSummary, 
 import { mergeCollectionOnlyGames } from "./lib/libraryMerge";
 import {
   automationPublishDue,
+  automationPublishStatusPatch,
   buildAutomationSnapshotFromContext,
   publishAutomationSnapshot,
 } from "./lib/automationPublish";
@@ -157,6 +158,62 @@ function AppContent() {
   useEffect(() => { applyAccentColor(accentColor); }, [accentColor]);
   useEffect(() => { applyTheme(theme ?? "dark"); }, [theme]);
 
+  const publishAutomationFromStores = async (notify = false, force = false) => {
+    const currentSettings = useSettingsStore.getState();
+    const settingsStore = useSettingsStore.getState();
+
+    if (!currentSettings.automationPublishUrl.trim()) {
+      const message = t("settings.automationExport.skippedNotConfigured");
+      settingsStore.setSettings(automationPublishStatusPatch("skipped", message));
+      if (notify) toast.getState().warning(message);
+      return;
+    }
+
+    if (!force && !automationPublishDue(currentSettings)) return;
+
+    const gameState = useGameStore.getState();
+    const categoryState = useCategoryStore.getState();
+    const hltbState = useHltbStore.getState();
+    if (Object.keys(gameState.games).length === 0 || categoryState.collections.length === 0) {
+      const message = t("settings.automationExport.skippedNoData");
+      settingsStore.setSettings(automationPublishStatusPatch("skipped", message));
+      if (notify) toast.getState().warning(message);
+      return;
+    }
+
+    const context = {
+      settings: currentSettings,
+      games: gameState.games,
+      collections: categoryState.collections,
+      details: gameState.details,
+      hltbData: hltbState.data,
+      appVersion: __APP_VERSION__,
+    };
+    const snapshot = buildAutomationSnapshotFromContext(context);
+    if (!force && snapshot.checksum === currentSettings.automationPublishLastChecksum) {
+      const message = t("settings.automationExport.skippedUnchanged");
+      settingsStore.setSettings(automationPublishStatusPatch("skipped", message));
+      if (notify) toast.getState().info(message);
+      return;
+    }
+
+    try {
+      const result = await publishAutomationSnapshot(context);
+      const message = t("settings.automationExport.published", { status: result.http.status });
+      settingsStore.setSettings({
+        automationPublishLastChecksum: result.snapshot.checksum,
+        automationPublishLastPublishedAt: new Date().toISOString(),
+        ...automationPublishStatusPatch("success", message, result.http.status),
+      });
+      if (notify) toast.getState().success(message);
+    } catch (error) {
+      const message = t("settings.automationExport.failed", { error: String(error) });
+      settingsStore.setSettings(automationPublishStatusPatch("failed", message));
+      if (notify) toast.getState().error(message);
+      throw error;
+    }
+  };
+
   useEffect(() => {
     if (settings.steamPersonaName || !settings.apiKey || !settings.steamId64) return;
     fetchPlayerSummary(settings.apiKey, settings.steamId64)
@@ -181,6 +238,35 @@ function AppContent() {
   }, []);
 
   useEffect(() => {
+    let unlistenPublish: (() => void) | undefined;
+    let unlistenBackup: (() => void) | undefined;
+
+    listen("repressurizer-publish-automation-requested", () => {
+      void publishAutomationFromStores(true, true).catch(() => {});
+    })
+      .then((fn) => {
+        unlistenPublish = fn;
+      })
+      .catch(() => {});
+
+    listen("repressurizer-create-backup-requested", () => {
+      const currentSettings = useSettingsStore.getState();
+      createManualBackup(currentSettings.steamPath, currentSettings.steamId3, "Manual backup from tray")
+        .then(() => toast.getState().success(t("backups.created")))
+        .catch((error) => toast.getState().error(t("toast.backupFailed", { error: String(error) })));
+    })
+      .then((fn) => {
+        unlistenBackup = fn;
+      })
+      .catch(() => {});
+
+    return () => {
+      unlistenPublish?.();
+      unlistenBackup?.();
+    };
+  }, [t]);
+
+  useEffect(() => {
     if (!settings.setupComplete || settings.checkUpdatesOnStartup === false) return;
     const timer = window.setTimeout(() => {
       check()
@@ -197,33 +283,9 @@ function AppContent() {
     let cancelled = false;
 
     const run = async () => {
-      const currentSettings = useSettingsStore.getState();
-      if (!currentSettings.automationPublishEnabled || !currentSettings.automationPublishUrl.trim()) return;
-      if (!automationPublishDue(currentSettings)) return;
-
-      const gameState = useGameStore.getState();
-      const categoryState = useCategoryStore.getState();
-      const hltbState = useHltbStore.getState();
-      if (Object.keys(gameState.games).length === 0 || categoryState.collections.length === 0) return;
-
-      const context = {
-        settings: currentSettings,
-        games: gameState.games,
-        collections: categoryState.collections,
-        details: gameState.details,
-        hltbData: hltbState.data,
-        appVersion: __APP_VERSION__,
-      };
-      const snapshot = buildAutomationSnapshotFromContext(context);
-      if (snapshot.checksum === currentSettings.automationPublishLastChecksum) return;
-
       try {
-        const result = await publishAutomationSnapshot(context);
         if (cancelled) return;
-        useSettingsStore.getState().setSettings({
-          automationPublishLastChecksum: result.snapshot.checksum,
-          automationPublishLastPublishedAt: new Date().toISOString(),
-        });
+        await publishAutomationFromStores(false, false);
       } catch (error) {
         console.warn("Automation export publish failed:", error);
       }

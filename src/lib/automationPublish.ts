@@ -17,6 +17,26 @@ export interface AutomationPublishResult {
   http: HttpPublishResult;
 }
 
+export function automationPublishStatusPatch(
+  status: AppSettings["automationPublishLastStatus"],
+  message: string,
+  httpStatus = 0,
+  now = new Date()
+): Pick<
+  AppSettings,
+  | "automationPublishLastAttemptedAt"
+  | "automationPublishLastStatus"
+  | "automationPublishLastMessage"
+  | "automationPublishLastHttpStatus"
+> {
+  return {
+    automationPublishLastAttemptedAt: now.toISOString(),
+    automationPublishLastStatus: status,
+    automationPublishLastMessage: message,
+    automationPublishLastHttpStatus: httpStatus,
+  };
+}
+
 export function automationPublishDue(settings: AppSettings, now = Date.now()): boolean {
   const last = Date.parse(settings.automationPublishLastPublishedAt || "");
   if (!Number.isFinite(last)) return true;

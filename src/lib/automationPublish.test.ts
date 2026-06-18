@@ -36,6 +36,10 @@ const settings: AppSettings = {
   automationPublishIntervalHours: 24,
   automationPublishLastChecksum: "",
   automationPublishLastPublishedAt: "",
+  automationPublishLastAttemptedAt: "",
+  automationPublishLastStatus: "",
+  automationPublishLastMessage: "",
+  automationPublishLastHttpStatus: 0,
   includeSteamFamilyNonGames: false,
 };
 
