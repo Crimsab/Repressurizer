@@ -4,13 +4,17 @@
   "version": "0.1.10",
   "license": "GPL-3.0-only",
   "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "check": "bun run i18n:check && tsc --noEmit",
+    "check": "bun run i18n:check && tsc --noEmit && bun run --cwd packages/integration check",
+    "integration:build": "bun run --cwd packages/integration build",
     "i18n:check": "bun scripts/i18n-check.ts",
     "test": "bun run test:unit && bun run test:e2e",
-    "test:unit": "vitest run src",
+    "test:unit": "vitest run src packages/integration/test",
     "test:e2e": "playwright test",
     "preview": "vite preview",
     "tauri": "tauri"

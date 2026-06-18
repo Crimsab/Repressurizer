@@ -1,0 +1,70 @@
+{
+  "schemaVersion": "repressurizer.library-snapshot.v1",
+  "generatedAt": "2026-06-18T18:00:00.000Z",
+  "source": {
+    "app": "Repressurizer",
+    "version": "0.1.10"
+  },
+  "steam": {
+    "steamId64Tail": "2345",
+    "personaName": "Tester"
+  },
+  "summary": {
+    "gameCount": 1,
+    "collectionCount": 1,
+    "hltbCount": 1
+  },
+  "collections": [
+    {
+      "key": "user-collections.rpg",
+      "name": "RPG",
+      "isDynamic": false,
+      "gameCount": 1,
+      "appIds": [632470]
+    }
+  ],
+  "games": [
+    {
+      "appId": 632470,
+      "name": "Disco Elysium",
+      "playtimeForeverMinutes": 180,
+      "playtimeForeverHours": 3,
+      "rtimeLastPlayed": 1700000000,
+      "lastPlayedAt": "2023-11-14T22:13:20.000Z",
+      "isCollectionOnly": false,
+      "collections": [
+        {
+          "key": "user-collections.rpg",
+          "name": "RPG",
+          "isDynamic": false
+        }
+      ],
+      "details": {
+        "releaseDate": "15 Oct, 2019",
+        "genres": ["RPG"],
+        "categories": ["Single-player"],
+        "metacriticScore": 97,
+        "developers": ["ZA/UM"],
+        "publishers": ["ZA/UM"],
+        "platforms": {
+          "windows": true,
+          "mac": true,
+          "linux": false
+        },
+        "isFree": false,
+        "priceFinal": 999,
+        "priceCurrency": "EUR"
+      },
+      "hltb": {
+        "source": "howlongtobeat",
+        "mainStory": 23,
+        "mainExtra": 31.5,
+        "completionist": 48,
+        "hltbGameId": 57335,
+        "matchedName": "Disco Elysium",
+        "confidence": 118.2
+      }
+    }
+  ],
+  "checksum": "fnv1a32:9ea81afd"
+}

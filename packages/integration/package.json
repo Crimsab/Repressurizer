@@ -1,0 +1,27 @@
+{
+  "name": "@repressurizer/integration",
+  "version": "0.1.0",
+  "description": "Schema-first Repressurizer snapshot contract and TypeScript helpers for library receivers.",
+  "license": "GPL-3.0-only",
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "schema"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./schema": "./schema/repressurizer.library-snapshot.v1.schema.json"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json",
+    "test": "vitest run test"
+  }
+}
