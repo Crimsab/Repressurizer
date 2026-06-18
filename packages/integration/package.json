@@ -1,8 +1,13 @@
 {
-  "name": "@repressurizer/integration",
+  "name": "@crimsab/repressurizer-integration",
   "version": "0.1.0",
   "description": "Schema-first Repressurizer snapshot contract and TypeScript helpers for library receivers.",
   "license": "GPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Crimsab/Repressurizer.git",
+    "directory": "packages/integration"
+  },
   "type": "module",
   "sideEffects": false,
   "files": [
@@ -17,7 +22,8 @@
     "./schema": "./schema/repressurizer.library-snapshot.v1.schema.json"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "registry": "https://registry.npmjs.org"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",

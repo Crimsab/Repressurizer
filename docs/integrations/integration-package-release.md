@@ -6,7 +6,7 @@ The desktop app root remains private in npm terms. Only `packages/integration` i
 
 ## Package
 
-- Package: `@repressurizer/integration`
+- Package: `@crimsab/repressurizer-integration`
 - Directory: `packages/integration`
 - Registry target: npm, once the scope and `NPM_TOKEN` are configured
 - Tag format: `integration-v<packages/integration/package.json version>`
@@ -38,7 +38,13 @@ The workflow has two paths:
 
 Manual publish is also possible by running `workflow_dispatch` with `dry_run: false`, but it still requires the `NPM_TOKEN` repository secret.
 
-The publish job uses `npm publish --provenance --access public`, matching GitHub's recommended npm publishing flow with `NODE_AUTH_TOKEN` and provenance.
+The publish job uses `npm publish --provenance --access public`, matching GitHub's recommended npm publishing flow with `NODE_AUTH_TOKEN` and provenance. Keep the npm automation token in the GitHub Actions secret named `NPM_TOKEN`.
+
+## Update Behavior
+
+This workflow does not publish on every push. Normal CI validates the package when code changes, but npm publishing only happens from a matching tag or an explicit manual dispatch with `dry_run: false`.
+
+That keeps desktop-app changes separate from library releases. To publish a TypeScript library update, bump `packages/integration/package.json`, merge the validated change, then create `integration-v<version>`.
 
 ## Why This Is Not In The Snapshot Schema Doc
 

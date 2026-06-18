@@ -11,7 +11,7 @@ import {
   type LibrarySnapshot,
 } from "../src";
 
-describe("@repressurizer/integration", () => {
+describe("@crimsab/repressurizer-integration", () => {
   it("accepts the canonical snapshot fixture", () => {
     const result = validateLibrarySnapshot(fixture, { verifyChecksum: true });
 

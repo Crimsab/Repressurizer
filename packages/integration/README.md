@@ -1,4 +1,4 @@
-# @repressurizer/integration
+# @crimsab/repressurizer-integration
 
 Schema-first helpers for Repressurizer library snapshot receivers.
 
@@ -15,7 +15,7 @@ This package contains:
 import {
   validateLibrarySnapshot,
   indexSnapshotByAppId,
-} from "@repressurizer/integration";
+} from "@crimsab/repressurizer-integration";
 
 const result = validateLibrarySnapshot(JSON.parse(body), { verifyChecksum: true });
 
