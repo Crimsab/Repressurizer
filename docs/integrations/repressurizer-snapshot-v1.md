@@ -81,52 +81,6 @@ const gamesByAppId = indexSnapshotByAppId(result.snapshot);
 
 Use `schemaVersion` for breaking wire-format changes. Additive fields should ship in a new minor package version first; receivers should ignore unknown package versions but should not accept unknown schema versions as v1.
 
-## Registry Publishing
+## Package Release
 
-Yes: registry publishing should be automated with GitHub Actions, but only for the integration package, not for the desktop app root.
-
-Recommended release flow:
-
-1. Keep `packages/integration/package.json` versioned independently.
-2. Run CI on every PR: app checks plus `bun run --cwd packages/integration check`.
-3. Publish only on tag or manual release workflow.
-4. Prefer npm trusted publishing with OIDC/provenance.
-5. If trusted publishing is not configured yet, use `NODE_AUTH_TOKEN` as a repository secret.
-
-Minimal publish job once the package name and registry are ready:
-
-```yaml
-name: Publish Integration Package
-
-on:
-  push:
-    tags:
-      - "integration-v*"
-  workflow_dispatch:
-
-permissions:
-  contents: read
-  id-token: write
-
-jobs:
-  publish:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-      - uses: actions/setup-node@v6
-        with:
-          node-version: "24"
-          registry-url: "https://registry.npmjs.org"
-      - run: bun install --frozen-lockfile
-      - run: bun run --cwd packages/integration check
-      - run: bun run --cwd packages/integration build
-      - run: npm publish --provenance --access public
-        working-directory: packages/integration
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-```
-
-Do not enable this until the package name, npm organization, and token/trusted-publishing setup are confirmed.
+The registry workflow is repository release infrastructure, not part of the snapshot schema contract. See `docs/integrations/integration-package-release.md` for the GitHub Actions publishing flow.
