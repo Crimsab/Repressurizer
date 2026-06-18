@@ -1,7 +1,10 @@
 import type { OwnedGame, SteamCollection } from "./types";
 import { computeStats } from "./stats";
+import { generateLibrarySnapshotJson } from "./automationExport";
+import type { GameDetails } from "./types";
+import type { HltbData } from "./tauri";
 
-export type ExportScope = "all" | "category" | "categories" | "categories_pick" | "stats";
+export type ExportScope = "all" | "category" | "categories" | "categories_pick" | "stats" | "snapshot";
 export type ExportFormat = "json" | "csv" | "txt" | "md";
 
 export interface ExportOptions {
@@ -13,6 +16,11 @@ export interface ExportOptions {
   activeCategory?: string;
   /** For scope `categories_pick`: collection keys to include (structured + flat union). */
   categoryKeys?: string[];
+  details?: Record<number, GameDetails>;
+  hltbData?: Record<number, HltbData>;
+  appVersion?: string;
+  steamId64?: string;
+  steamPersonaName?: string;
   /**
    * For `categories_pick` only: `structured` = one section per category (default).
    * `flat_unique` = single deduplicated list; CSV adds a Categories column.
@@ -88,6 +96,17 @@ function toTitlesOnly(opts: ExportOptions): string {
 
 // --- JSON ---
 function toJSON(opts: ExportOptions): string {
+  if (opts.scope === "snapshot") {
+    return generateLibrarySnapshotJson({
+      games: opts.games,
+      collections: opts.collections,
+      details: opts.details,
+      hltbData: opts.hltbData,
+      appVersion: opts.appVersion,
+      steamId64: opts.steamId64,
+      steamPersonaName: opts.steamPersonaName,
+    });
+  }
   if (opts.scope === "stats") {
     return JSON.stringify(computeStats(opts.games, opts.collections), null, 2);
   }
@@ -328,6 +347,7 @@ const FORMATTERS: Record<ExportFormat, (opts: ExportOptions) => string> = {
 };
 
 export function generateExport(opts: ExportOptions): string {
+  if (opts.scope === "snapshot") return toJSON({ ...opts, format: "json" });
   if (opts.titlesOnly && opts.scope !== "stats") return toTitlesOnly(opts);
   return FORMATTERS[opts.format](opts);
 }
@@ -364,6 +384,7 @@ export function getDefaultFilename(
 ): string {
   const ext = FORMAT_EXTENSIONS[format];
   if (scope === "stats") return `repressurizer-stats.${ext}`;
+  if (scope === "snapshot") return "repressurizer-library-snapshot.json";
   if (scope === "categories") return `repressurizer-categories.${ext}`;
   if (scope === "categories_pick") {
     const n = opts?.pickCount ?? 0;

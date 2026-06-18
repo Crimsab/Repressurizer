@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { useGameStore } from "../../stores/gameStore";
 import { useCategoryStore } from "../../stores/categoryStore";
 import { useExportUiStore } from "../../stores/exportUiStore";
+import { useHltbStore } from "../../stores/hltbStore";
+import { useSettingsStore } from "../../stores/settingsStore";
 import type { ExportScope, ExportFormat } from "../../lib/export";
 import { exportToDisk } from "../../lib/exportAction";
 import { useT, type TranslationKey } from "../../lib/i18n";
@@ -34,6 +36,7 @@ const SCOPE_LABELS: Record<
   categories: { label: "export.scope.categories", desc: "export.scope.categories.desc" },
   categories_pick: { label: "export.scope.pick", desc: "export.scope.pick.desc" },
   stats: { label: "export.scope.stats", desc: "export.scope.stats.desc" },
+  snapshot: { label: "export.scope.snapshot", desc: "export.scope.snapshot.desc" },
 };
 
 const BASE_SCOPES: {
@@ -51,6 +54,11 @@ const PICK_SCOPE = {
   icon: SelectionAll,
 };
 
+const SNAPSHOT_SCOPE = {
+  value: "snapshot" as const,
+  icon: FileJs,
+};
+
 const FORMATS: { value: ExportFormat; label: string; icon: typeof FileText }[] = [
   { value: "txt", label: "TXT", icon: FileText },
   { value: "md", label: "Markdown", icon: FileMd },
@@ -60,11 +68,14 @@ const FORMATS: { value: ExportFormat; label: string; icon: typeof FileText }[] =
 
 export function ExportDialog({ onClose }: ExportDialogProps) {
   const games = useGameStore((s) => s.games);
+  const details = useGameStore((s) => s.details);
+  const hltbData = useHltbStore((s) => s.data);
   const activeCategory = useCategoryStore((s) => s.activeCategory);
   const collections = useCategoryStore((s) => s.collections);
   const selectedCategoryKeys = useCategoryStore((s) => s.selectedCategoryKeys);
   const overrideCategoryKey = useExportUiStore((s) => s.overrideCategoryKey);
   const resetIntent = useExportUiStore((s) => s.resetIntent);
+  const settings = useSettingsStore();
 
   const t = useT();
 
@@ -76,6 +87,10 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
   const [statusMsg, setStatusMsg] = useState("");
 
   useEffect(() => () => resetIntent(), [resetIntent]);
+
+  useEffect(() => {
+    if (scope === "snapshot" && format !== "json") setFormat("json");
+  }, [scope, format]);
 
   const effectiveCategoryKey =
     scope === "category"
@@ -95,6 +110,11 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
         titlesOnly,
         games,
         collections,
+        details,
+        hltbData,
+        appVersion: __APP_VERSION__,
+        steamId64: settings.steamId64,
+        steamPersonaName: settings.steamPersonaName,
         activeCategory: effectiveCategoryKey,
         categoryKeys: scope === "categories_pick" ? selectedCategoryKeys : undefined,
         pickLayout: scope === "categories_pick" ? pickLayout : undefined,
@@ -126,6 +146,7 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
 
   const scopeRows = [
     ...BASE_SCOPES,
+    SNAPSHOT_SCOPE,
     ...(selectedCategoryKeys.length >= 1 ? [PICK_SCOPE] : []),
   ];
 
@@ -256,11 +277,14 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
                   <button
                     key={f.value}
                     type="button"
-                    onClick={() => setFormat(f.value)}
+                    onClick={() => {
+                      if (scope !== "snapshot" || f.value === "json") setFormat(f.value);
+                    }}
+                    disabled={scope === "snapshot" && f.value !== "json"}
                     className={`btn-press flex flex-1 items-center justify-center gap-1.5 rounded-xl border py-2.5 text-sm font-medium transition-colors ${
                       isActive
                         ? "border-repressurizer-accent bg-repressurizer-accent/8 text-white"
-                        : "border-repressurizer-border-subtle bg-repressurizer-bg text-repressurizer-text-muted hover:border-repressurizer-border hover:text-repressurizer-text"
+                        : "border-repressurizer-border-subtle bg-repressurizer-bg text-repressurizer-text-muted hover:border-repressurizer-border hover:text-repressurizer-text disabled:opacity-35 disabled:hover:border-repressurizer-border-subtle disabled:hover:text-repressurizer-text-muted"
                     }`}
                   >
                     <Icon size={14} weight={isActive ? "fill" : "regular"} />
@@ -271,7 +295,7 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
             </div>
           </div>
 
-          {scope !== "stats" && (
+          {scope !== "stats" && scope !== "snapshot" && (
             <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-2.5 transition-colors hover:border-repressurizer-border">
               <input
                 type="checkbox"
@@ -319,6 +343,11 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
                 </>
               )}
               {scope === "categories_pick" && selectedCategoryKeys.length === 0 && t("export.summaryPickEmpty")}
+              {scope === "snapshot" && t("export.summarySnapshot", {
+                games: gameCount,
+                collections: collections.filter((c) => !c.is_deleted).length,
+                hltb: Object.keys(hltbData).length,
+              })}
             </p>
           </div>
 
