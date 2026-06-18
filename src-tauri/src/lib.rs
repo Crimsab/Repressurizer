@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use steam::api;
 use steam::collections;
 use steam::detector;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 
 #[derive(Serialize)]
 struct CacheInfo {
@@ -29,6 +29,13 @@ fn steam_collections_path(steam_path: &str, steam_id3: &str) -> PathBuf {
         .join("config")
         .join("cloudstorage")
         .join("cloud-storage-namespace-1.json")
+}
+
+fn read_app_setting_bool(key: &str) -> Option<bool> {
+    let settings_path = app_data_dir()?.join("settings.json");
+    let data = std::fs::read_to_string(settings_path).ok()?;
+    let value = serde_json::from_str::<serde_json::Value>(&data).ok()?;
+    value.get(key).and_then(|v| v.as_bool())
 }
 
 fn redact_tail(value: &str) -> String {
@@ -62,10 +69,24 @@ fn save_app_data(_app: tauri::AppHandle, key: String, data: String) {
 }
 
 #[tauri::command]
+fn hide_main_window(app: tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.hide();
+    }
+}
+
+#[tauri::command]
+fn quit_app(app: tauri::AppHandle) {
+    app.exit(0);
+}
+
+#[tauri::command]
 fn get_cache_info(_app: tauri::AppHandle) -> Option<CacheInfo> {
     let dir = app_data_dir()?;
     let file_size = |name: &str| -> u64 {
-        std::fs::metadata(dir.join(name)).map(|m| m.len()).unwrap_or(0)
+        std::fs::metadata(dir.join(name))
+            .map(|m| m.len())
+            .unwrap_or(0)
     };
     Some(CacheInfo {
         path: dir.to_str()?.to_string(),
@@ -242,47 +263,46 @@ pub fn run() {
         .setup(|app| {
             // System tray setup
             use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
-            use tauri::tray::{TrayIconBuilder, TrayIconEvent, MouseButton, MouseButtonState};
+            use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 
-            let show = MenuItem::with_id(app, "show", "Show Repressurizer", true, None::<&str>)?;
-            let hide = MenuItem::with_id(app, "hide", "Hide to Tray", true, None::<&str>)?;
+            let show = MenuItem::with_id(app, "show", "Open Repressurizer", true, None::<&str>)?;
+            let hide = MenuItem::with_id(app, "hide", "Minimize to Tray", true, None::<&str>)?;
             let separator = PredefinedMenuItem::separator(app)?;
-            let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+            let quit = MenuItem::with_id(app, "quit", "Quit Repressurizer", true, None::<&str>)?;
             let menu = Menu::with_items(app, &[&show, &hide, &separator, &quit])?;
 
             TrayIconBuilder::new()
                 .icon(app.default_window_icon().cloned().unwrap())
                 .menu(&menu)
                 .tooltip("Repressurizer - Steam Library Manager")
-                .on_menu_event(|app, event| {
-                    match event.id.as_ref() {
-                        "show" => {
-                            if let Some(w) = app.get_webview_window("main") {
-                                let _ = w.show();
-                                let _ = w.set_focus();
-                            }
+                .on_menu_event(|app, event| match event.id.as_ref() {
+                    "show" => {
+                        if let Some(w) = app.get_webview_window("main") {
+                            let _ = w.show();
+                            let _ = w.set_focus();
                         }
-                        "hide" => {
-                            if let Some(w) = app.get_webview_window("main") {
-                                let _ = w.hide();
-                            }
-                        }
-                        "quit" => {
-                            app.exit(0);
-                        }
-                        _ => {}
                     }
+                    "hide" => {
+                        if let Some(w) = app.get_webview_window("main") {
+                            let _ = w.hide();
+                        }
+                    }
+                    "quit" => {
+                        app.exit(0);
+                    }
+                    _ => {}
                 })
                 .on_tray_icon_event(|tray, event| {
-                    // Double-click (or single left-click) to toggle window visibility
-                    if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = event {
+                    if let TrayIconEvent::Click {
+                        button: MouseButton::Left,
+                        button_state: MouseButtonState::Up,
+                        ..
+                    } = event
+                    {
                         if let Some(w) = tray.app_handle().get_webview_window("main") {
-                            if w.is_visible().unwrap_or(false) {
-                                let _ = w.hide();
-                            } else {
-                                let _ = w.show();
-                                let _ = w.set_focus();
-                            }
+                            let _ = w.show();
+                            let _ = w.unminimize();
+                            let _ = w.set_focus();
                         }
                     }
                 })
@@ -291,19 +311,16 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            // Minimize to tray on close if setting enabled
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                // Read minimize_to_tray setting from app data
-                if let Some(dir) = app_data_dir() {
-                    let settings_path = dir.join("settings.json");
-                    if let Ok(data) = std::fs::read_to_string(&settings_path) {
-                        if let Ok(v) = serde_json::from_str::<serde_json::Value>(&data) {
-                            if v.get("minimizeToTray").and_then(|v| v.as_bool()).unwrap_or(false) {
-                                api.prevent_close();
-                                let _ = window.hide();
-                            }
-                        }
-                    }
+                if read_app_setting_bool("minimizeToTray").unwrap_or(false) {
+                    api.prevent_close();
+                    let _ = window.hide();
+                    return;
+                }
+
+                if !read_app_setting_bool("trayCloseChoiceMade").unwrap_or(false) {
+                    api.prevent_close();
+                    let _ = window.emit("repressurizer-close-requested", ());
                 }
             }
         })
@@ -345,6 +362,8 @@ pub fn run() {
             save_wishlist_cache,
             get_cache_info,
             export_diagnostics,
+            hide_main_window,
+            quit_app,
             load_app_data,
             save_app_data,
             hltb::fetch_hltb,

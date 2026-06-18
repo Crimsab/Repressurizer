@@ -397,3 +397,11 @@ export async function loadAppData(key: string): Promise<string | null> {
 export async function saveAppData(key: string, data: string): Promise<void> {
   return invoke<void>("save_app_data", { key, data });
 }
+
+export async function hideMainWindow(): Promise<void> {
+  return invoke<void>("hide_main_window");
+}
+
+export async function quitApp(): Promise<void> {
+  return invoke<void>("quit_app");
+}

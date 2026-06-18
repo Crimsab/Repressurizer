@@ -2,6 +2,7 @@ import { Component, useEffect, useState } from "react";
 import type { ReactNode, ErrorInfo } from "react";
 import { check, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
+import { listen } from "@tauri-apps/api/event";
 import { useSettingsStore, applyAccentColor, applyTheme } from "./stores/settingsStore";
 import { useGameStore } from "./stores/gameStore";
 import { useCategoryStore } from "./stores/categoryStore";
@@ -20,7 +21,7 @@ import { useToastStore } from "./stores/toastStore";
 import { useFamilyStore } from "./stores/familyStore";
 import { usePlayHistoryStore } from "./stores/playHistoryStore";
 import { useSteamAppIndexStore } from "./stores/steamAppIndexStore";
-import { fetchLibrary, loadCollections, createManualBackup, fetchPlayerSummary } from "./lib/tauri";
+import { fetchLibrary, loadCollections, createManualBackup, fetchPlayerSummary, hideMainWindow, quitApp } from "./lib/tauri";
 import { mergeCollectionOnlyGames } from "./lib/libraryMerge";
 import { useT } from "./lib/i18n";
 import { SetupWizard } from "./components/setup/SetupWizard";
@@ -143,6 +144,7 @@ function AppContent() {
   const toast = useToastStore;
 
   const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showCloseChoice, setShowCloseChoice] = useState(false);
 
   // Apply saved accent color and theme on startup
   const accentColor = useSettingsStore((s) => s.accentColor);
@@ -160,6 +162,18 @@ function AppContent() {
       })
       .catch(() => {});
   }, [settings.steamPersonaName, settings.apiKey, settings.steamId64]);
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    listen("repressurizer-close-requested", () => setShowCloseChoice(true))
+      .then((fn) => {
+        unlisten = fn;
+      })
+      .catch(() => {});
+    return () => {
+      unlisten?.();
+    };
+  }, []);
 
   useEffect(() => {
     if (!settings.setupComplete || settings.checkUpdatesOnStartup === false) return;
@@ -343,7 +357,67 @@ function AppContent() {
           }}
         />
       )}
+      {showCloseChoice && (
+        <CloseChoiceDialog
+          onMinimize={() => {
+            settings.setSettings({ minimizeToTray: true, trayCloseChoiceMade: true });
+            setShowCloseChoice(false);
+            window.setTimeout(() => void hideMainWindow(), 50);
+          }}
+          onQuit={() => {
+            settings.setSettings({ minimizeToTray: false, trayCloseChoiceMade: true });
+            setShowCloseChoice(false);
+            window.setTimeout(() => void quitApp(), 50);
+          }}
+          onCancel={() => setShowCloseChoice(false)}
+        />
+      )}
     </>
+  );
+}
+
+function CloseChoiceDialog({
+  onMinimize,
+  onQuit,
+  onCancel,
+}: {
+  onMinimize: () => void;
+  onQuit: () => void;
+  onCancel: () => void;
+}) {
+  const t = useT();
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+      <div className="w-full max-w-sm animate-fade-in rounded-2xl border border-repressurizer-border bg-repressurizer-surface p-5 shadow-[0_24px_64px_rgba(0,0,0,0.55)]">
+        <h2 className="text-base font-semibold text-white tracking-tight">{t("tray.closeChoice.title")}</h2>
+        <p className="mt-2 text-sm leading-relaxed text-repressurizer-text-muted">
+          {t("tray.closeChoice.desc")}
+        </p>
+        <div className="mt-5 space-y-2">
+          <button
+            type="button"
+            onClick={onMinimize}
+            className="btn-press flex w-full items-center justify-center rounded-xl bg-repressurizer-accent px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-repressurizer-accent-hover"
+          >
+            {t("tray.closeChoice.minimize")}
+          </button>
+          <button
+            type="button"
+            onClick={onQuit}
+            className="btn-press flex w-full items-center justify-center rounded-xl border border-repressurizer-border bg-repressurizer-bg px-4 py-2.5 text-sm font-medium text-repressurizer-text transition-colors hover:border-repressurizer-border hover:bg-repressurizer-surface-hover"
+          >
+            {t("tray.closeChoice.quit")}
+          </button>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="btn-press flex w-full items-center justify-center rounded-xl px-4 py-2 text-xs font-medium text-repressurizer-text-faint transition-colors hover:text-repressurizer-text"
+          >
+            {t("common.cancel")}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

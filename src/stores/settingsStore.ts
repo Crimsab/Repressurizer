@@ -38,6 +38,7 @@ const defaults: AppSettings = {
   onboardingComplete: false,
   categoryOrder: [],
   minimizeToTray: false,
+  trayCloseChoiceMade: false,
   checkUpdatesOnStartup: true,
   includeSteamFamilyNonGames: false,
 };
@@ -125,7 +126,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       return next;
     }),
   reset: () => {
-    localStorage.removeItem("repressurizer-settings");
+    saveToStorage(defaults);
     set(defaults);
   },
 }));
