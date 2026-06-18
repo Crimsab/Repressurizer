@@ -5,6 +5,11 @@ import { writeTextFile } from "@tauri-apps/plugin-fs";
 import { check, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { open } from "@tauri-apps/plugin-shell";
+import {
+  disable as disableAutostart,
+  enable as enableAutostart,
+  isEnabled as isAutostartEnabled,
+} from "@tauri-apps/plugin-autostart";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useGameStore } from "../../stores/gameStore";
 import { useCategoryStore } from "../../stores/categoryStore";
@@ -59,7 +64,7 @@ import {
 } from "@phosphor-icons/react";
 import { ACCENT_PRESETS, applyAccentColor, applyTheme } from "../../stores/settingsStore";
 import { getLocaleDisplayName, getLocaleFlag, normalizeLocale, SUPPORTED_LOCALES, useT } from "../../lib/i18n";
-import type { AppTheme } from "../../lib/types";
+import type { AppStartupMode, AppTheme } from "../../lib/types";
 import { automationPublishStatusPatch, publishAutomationSnapshot } from "../../lib/automationPublish";
 
 interface SettingsPageProps {
@@ -567,7 +572,13 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
         id: "tray",
         tab: "appearance" as const,
         label: t("settings.systemTray"),
-        keywords: [t("settings.systemTray"), t("settings.minimizeToTray"), t("settings.updates.autoCheck"), "tray close background startup"],
+        keywords: [
+          t("settings.systemTray"),
+          t("settings.startOnLogin"),
+          t("settings.minimizeToTray"),
+          t("settings.updates.autoCheck"),
+          "tray close background startup autostart login boot window",
+        ],
       },
       {
         id: "backups",
@@ -1495,6 +1506,8 @@ function AppearanceTab({ isSectionVisible }: { isSectionVisible: (id: string) =>
     theme,
     language,
     minimizeToTray,
+    startOnLogin,
+    startOnLoginMode,
     checkUpdatesOnStartup,
     setSettings,
   } = useSettingsStore();
@@ -1505,11 +1518,32 @@ function AppearanceTab({ isSectionVisible }: { isSectionVisible: (id: string) =>
   const pickerRef = useRef<HTMLDivElement>(null);
   const previewFrameRef = useRef<number | null>(null);
   const activeAccent = /^#[0-9a-fA-F]{6}$/.test(previewAccent) ? previewAccent : "#10b981";
+  const [autostartRegistered, setAutostartRegistered] = useState<boolean | null>(null);
+  const [autostartBusy, setAutostartBusy] = useState(false);
+  const [autostartError, setAutostartError] = useState("");
 
   useEffect(() => {
     setPreviewAccent(accentColor);
     setCustomHex(accentColor);
   }, [accentColor]);
+
+  useEffect(() => {
+    let cancelled = false;
+    isAutostartEnabled()
+      .then((enabled) => {
+        if (cancelled) return;
+        setAutostartRegistered(enabled);
+        if (enabled !== startOnLogin) {
+          setSettings({ startOnLogin: enabled });
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) setAutostartError(t("settings.startOnLogin.failed", { error: String(error) }));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -1576,6 +1610,32 @@ function AppearanceTab({ isSectionVisible }: { isSectionVisible: (id: string) =>
     applyAccentColor("");
     setCustomHex("");
     setPreviewAccent("");
+  };
+
+  const handleStartOnLoginChange = async (enabled: boolean) => {
+    setAutostartBusy(true);
+    setAutostartError("");
+    try {
+      if (enabled) {
+        await enableAutostart();
+      } else {
+        await disableAutostart();
+      }
+      const registered = await isAutostartEnabled();
+      setAutostartRegistered(registered);
+      setSettings({ startOnLogin: registered });
+      if (enabled && !registered) {
+        setAutostartError(t("settings.startOnLogin.notRegistered"));
+      }
+    } catch (error) {
+      setAutostartError(t("settings.startOnLogin.failed", { error: String(error) }));
+    } finally {
+      setAutostartBusy(false);
+    }
+  };
+
+  const handleStartupModeChange = (mode: AppStartupMode) => {
+    setSettings({ startOnLoginMode: mode });
   };
 
   return (
@@ -1824,6 +1884,70 @@ function AppearanceTab({ isSectionVisible }: { isSectionVisible: (id: string) =>
       {isSectionVisible("tray") && (
       <div className="space-y-3">
         <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("settings.systemTray")}</h3>
+        <ToggleRow
+          icon={<Tray size={15} weight="duotone" />}
+          label={autostartBusy ? t("settings.startOnLogin.checking") : t("settings.startOnLogin")}
+          description={t("settings.startOnLogin.desc")}
+          checked={startOnLogin ?? false}
+          onChange={handleStartOnLoginChange}
+        />
+        {(startOnLogin || autostartRegistered) && (
+          <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3">
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-sm text-repressurizer-text">{t("settings.startOnLoginMode")}</p>
+                <p className="mt-0.5 text-xs leading-relaxed text-repressurizer-text-faint">
+                  {autostartRegistered === true
+                    ? t("settings.startOnLogin.registered")
+                    : t("settings.startOnLogin.notRegistered")}
+                </p>
+              </div>
+              {autostartError && (
+                <p className="max-w-[280px] text-right text-xs leading-relaxed text-repressurizer-danger">
+                  {autostartError}
+                </p>
+              )}
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {([
+                {
+                  value: "tray" as const,
+                  label: t("settings.startOnLoginMode.tray"),
+                  description: t("settings.startOnLoginMode.tray.desc"),
+                  icon: <Tray size={15} weight="duotone" />,
+                },
+                {
+                  value: "window" as const,
+                  label: t("settings.startOnLoginMode.window"),
+                  description: t("settings.startOnLoginMode.window.desc"),
+                  icon: <Monitor size={15} weight="duotone" />,
+                },
+              ] satisfies Array<{ value: AppStartupMode; label: string; description: string; icon: React.ReactNode }>).map((option) => {
+                const selected = (startOnLoginMode ?? "tray") === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => handleStartupModeChange(option.value)}
+                    className={`btn-press flex items-start gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors ${
+                      selected
+                        ? "border-repressurizer-text-muted bg-transparent text-repressurizer-text"
+                        : "border-repressurizer-border-subtle bg-repressurizer-surface/40 text-repressurizer-text-muted hover:border-repressurizer-border hover:text-repressurizer-text"
+                    }`}
+                  >
+                    <span className="mt-0.5 shrink-0 text-repressurizer-text-faint">{option.icon}</span>
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium">{option.label}</span>
+                      <span className="mt-0.5 block text-xs leading-relaxed text-repressurizer-text-faint">
+                        {option.description}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
         <ToggleRow
           icon={<Tray size={15} weight="duotone" />}
           label={t("settings.minimizeToTray")}

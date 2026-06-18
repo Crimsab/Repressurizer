@@ -149,6 +149,19 @@ test("opens organized settings tabs, automation logs, and Steam controls without
   await page.screenshot({ path: dataPath, fullPage: true });
   await testInfo.attach("settings-data", { path: dataPath, contentType: "image/png" });
 
+  await settingsDialog.getByRole("button", { name: "Appearance", exact: true }).click();
+  await expect(settingsDialog.getByRole("heading", { name: "System Tray" })).toBeVisible();
+  const startupSwitch = settingsDialog.getByRole("switch", { name: "Start Repressurizer when you sign in" });
+  await expect(startupSwitch).toBeVisible();
+  await startupSwitch.click();
+  await expect(settingsDialog.getByText("Startup behavior")).toBeVisible();
+  await expect(settingsDialog.getByRole("button", { name: /Open in tray/ })).toBeVisible();
+  await expect(settingsDialog.getByRole("button", { name: /Open window/ })).toBeVisible();
+
+  const appearancePath = testInfo.outputPath("settings-appearance-tray.png");
+  await page.screenshot({ path: appearancePath, fullPage: true });
+  await testInfo.attach("settings-appearance-tray", { path: appearancePath, contentType: "image/png" });
+
   await settingsDialog.getByRole("button", { name: "Automation", exact: true }).click();
   await expect(settingsDialog.getByRole("heading", { name: "Automation Export" })).toBeVisible();
   await expect(settingsDialog.getByText("Result:")).toBeVisible();

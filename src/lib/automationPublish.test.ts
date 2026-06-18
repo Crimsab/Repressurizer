@@ -29,6 +29,8 @@ const settings: AppSettings = {
   categoryOrder: [],
   minimizeToTray: false,
   trayCloseChoiceMade: false,
+  startOnLogin: false,
+  startOnLoginMode: "tray",
   checkUpdatesOnStartup: true,
   automationPublishEnabled: true,
   automationPublishUrl: "https://example.test/import",

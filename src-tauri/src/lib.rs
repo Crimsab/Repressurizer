@@ -52,6 +52,20 @@ fn read_app_setting_bool(key: &str) -> Option<bool> {
     value.get(key).and_then(|v| v.as_bool())
 }
 
+fn read_app_setting_string(key: &str) -> Option<String> {
+    let settings_path = app_data_dir()?.join("settings.json");
+    let data = std::fs::read_to_string(settings_path).ok()?;
+    let value = serde_json::from_str::<serde_json::Value>(&data).ok()?;
+    value
+        .get(key)
+        .and_then(|v| v.as_str())
+        .map(ToString::to_string)
+}
+
+fn launched_from_autostart() -> bool {
+    std::env::args().any(|arg| arg == "--repressurizer-autostart")
+}
+
 fn redact_tail(value: &str) -> String {
     if value.is_empty() {
         return String::new();
@@ -325,6 +339,16 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
+            #[cfg(desktop)]
+            {
+                use tauri_plugin_autostart::MacosLauncher;
+
+                app.handle().plugin(tauri_plugin_autostart::init(
+                    MacosLauncher::LaunchAgent,
+                    Some(vec!["--repressurizer-autostart"]),
+                ))?;
+            }
+
             // System tray setup
             use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
             use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
@@ -425,6 +449,15 @@ pub fn run() {
                     }
                 })
                 .build(app)?;
+
+            if launched_from_autostart()
+                && read_app_setting_bool("startOnLogin").unwrap_or(false)
+                && read_app_setting_string("startOnLoginMode").as_deref() != Some("window")
+            {
+                if let Some(w) = app.get_webview_window("main") {
+                    let _ = w.hide();
+                }
+            }
 
             Ok(())
         })

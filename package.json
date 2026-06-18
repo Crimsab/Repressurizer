@@ -39,6 +39,7 @@
     "@fontsource-variable/geist-mono": "^5.2.7",
     "@phosphor-icons/react": "^2.1.10",
     "@tauri-apps/api": "^2.11.0",
+    "@tauri-apps/plugin-autostart": "^2.5.1",
     "@tauri-apps/plugin-dialog": "^2.7.1",
     "@tauri-apps/plugin-fs": "^2.5.1",
     "@tauri-apps/plugin-process": "^2.3.1",

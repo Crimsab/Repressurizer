@@ -52,9 +52,11 @@ export async function installTauriMock(page: Page) {
       onboardingComplete: true,
       categoryOrder: [],
       minimizeToTray: false,
-      includeSteamFamilyNonGames: false,
       trayCloseChoiceMade: false,
+      startOnLogin: false,
+      startOnLoginMode: "tray",
       checkUpdatesOnStartup: true,
+      includeSteamFamilyNonGames: false,
       automationPublishEnabled: true,
       automationPublishUrl: "http://homelab.local:3045/api/steam/repressurizer/import",
       automationPublishBearerToken: "",
@@ -175,10 +177,19 @@ export async function installTauriMock(page: Page) {
     };
 
     window.localStorage.setItem("repressurizer-settings", JSON.stringify(settings));
+    let autostartEnabled = settings.startOnLogin;
 
     const tauriInternals = {
       invoke: async (cmd: string, args?: Record<string, unknown>) => {
         switch (cmd) {
+          case "plugin:autostart|is_enabled":
+            return autostartEnabled;
+          case "plugin:autostart|enable":
+            autostartEnabled = true;
+            return null;
+          case "plugin:autostart|disable":
+            autostartEnabled = false;
+            return null;
           case "fetch_library":
             return games;
           case "fetch_steam_app_list":

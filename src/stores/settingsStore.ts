@@ -39,6 +39,8 @@ const defaults: AppSettings = {
   categoryOrder: [],
   minimizeToTray: false,
   trayCloseChoiceMade: false,
+  startOnLogin: false,
+  startOnLoginMode: "tray",
   checkUpdatesOnStartup: true,
   automationPublishEnabled: false,
   automationPublishUrl: "",

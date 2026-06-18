@@ -80,6 +80,7 @@ export interface AchievementSummary {
 
 export type AppTheme = "dark" | "dim" | "light";
 export type AppLocale = string;
+export type AppStartupMode = "tray" | "window";
 export type AutomationPublishLogStatus = "success" | "failed" | "skipped";
 
 export interface AutomationPublishLogEntry {
@@ -124,6 +125,8 @@ export interface AppSettings {
   // System tray
   minimizeToTray: boolean;
   trayCloseChoiceMade: boolean;
+  startOnLogin: boolean;
+  startOnLoginMode: AppStartupMode;
   checkUpdatesOnStartup: boolean;
   // Automation export
   automationPublishEnabled: boolean;
