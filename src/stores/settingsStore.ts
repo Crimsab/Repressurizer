@@ -40,6 +40,12 @@ const defaults: AppSettings = {
   minimizeToTray: false,
   trayCloseChoiceMade: false,
   checkUpdatesOnStartup: true,
+  automationPublishEnabled: false,
+  automationPublishUrl: "",
+  automationPublishBearerToken: "",
+  automationPublishIntervalHours: 24,
+  automationPublishLastChecksum: "",
+  automationPublishLastPublishedAt: "",
   includeSteamFamilyNonGames: false,
 };
 

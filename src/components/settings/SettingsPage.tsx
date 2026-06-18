@@ -13,6 +13,7 @@ import { useSteamAppIndexStore } from "../../stores/steamAppIndexStore";
 import { familyAppsToOwnedGames } from "../../lib/familyLibrary";
 import { isSteamAppIndexStale } from "../../lib/steamAppIndex";
 import { useFailedGamesStore, getIgnoredGameName, MAX_FAIL_RUNS } from "../../stores/failedGamesStore";
+import { useHltbStore } from "../../stores/hltbStore";
 import { useHltbIgnoredStore, getHltbIgnoredGameName, HLTB_MAX_FAILS } from "../../stores/hltbIgnoredStore";
 
 import { listBackups, restoreBackup, deleteBackup, createManualBackup, loadCollections, getCacheInfo, exportDiagnostics, fetchFamilyLibrary } from "../../lib/tauri";
@@ -58,6 +59,7 @@ import {
 import { ACCENT_PRESETS, applyAccentColor, applyTheme } from "../../stores/settingsStore";
 import { getLocaleDisplayName, getLocaleFlag, normalizeLocale, SUPPORTED_LOCALES, useT } from "../../lib/i18n";
 import type { AppTheme } from "../../lib/types";
+import { publishAutomationSnapshot } from "../../lib/automationPublish";
 
 interface SettingsPageProps {
   onClose: () => void;
@@ -71,7 +73,10 @@ function redactTail(value: string | null | undefined): string | null {
 export function SettingsPage({ onClose }: SettingsPageProps) {
   const settings = useSettingsStore();
   const t = useT();
-  const gameCount = useGameStore((s) => Object.keys(s.games).length);
+  const games = useGameStore((s) => s.games);
+  const details = useGameStore((s) => s.details);
+  const hltbData = useHltbStore((s) => s.data);
+  const gameCount = Object.keys(games).length;
   const mergeGames = useGameStore((s) => s.mergeGames);
   const setGames = useGameStore((s) => s.setGames);
   const cachedDetailsCount = useGameStore((s) => Object.keys(s.details).length);
@@ -96,6 +101,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
   const [diagnosticsExporting, setDiagnosticsExporting] = useState(false);
   const [checkingUpdates, setCheckingUpdates] = useState(false);
   const [installingUpdate, setInstallingUpdate] = useState(false);
+  const [publishingAutomation, setPublishingAutomation] = useState(false);
   const [availableUpdate, setAvailableUpdate] = useState<Update | null>(null);
   const [familyAccessToken, setFamilyAccessToken] = useState("");
   const [familyTokenSavedAt, setFamilyTokenSavedAt] = useState<number | null>(null);
@@ -251,6 +257,30 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
       setMessage(t("settings.updates.checkFailed", { error: String(e) }));
     } finally {
       setCheckingUpdates(false);
+    }
+  };
+
+  const handlePublishAutomation = async () => {
+    setPublishingAutomation(true);
+    setMessage("");
+    try {
+      const result = await publishAutomationSnapshot({
+        settings,
+        games,
+        collections: useCategoryStore.getState().collections,
+        details,
+        hltbData,
+        appVersion: __APP_VERSION__,
+      });
+      settings.setSettings({
+        automationPublishLastChecksum: result.snapshot.checksum,
+        automationPublishLastPublishedAt: new Date().toISOString(),
+      });
+      setMessage(t("settings.automationExport.published", { status: result.http.status }));
+    } catch (e) {
+      setMessage(t("settings.automationExport.failed", { error: String(e) }));
+    } finally {
+      setPublishingAutomation(false);
     }
   };
 
@@ -833,6 +863,76 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                       </button>
                     )}
                   </div>
+                </div>
+              </div>
+
+              {/* Automation export */}
+              <div className="space-y-3">
+                <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("settings.automationExport")}</h3>
+                <ToggleRow
+                  icon={<CloudArrowDown size={15} weight="duotone" />}
+                  label={t("settings.automationExport.enabled")}
+                  description={t("settings.automationExport.enabled.desc")}
+                  checked={settings.automationPublishEnabled}
+                  onChange={(v) => settings.setSettings({ automationPublishEnabled: v })}
+                />
+                <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3 space-y-3">
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium text-repressurizer-text-muted">
+                      {t("settings.automationExport.url")}
+                    </label>
+                    <input
+                      type="url"
+                      value={settings.automationPublishUrl}
+                      onChange={(e) => settings.setSettings({ automationPublishUrl: e.target.value })}
+                      placeholder={t("settings.automationExport.url.placeholder")}
+                      className="w-full rounded-lg border border-repressurizer-border bg-repressurizer-surface px-3 py-2 text-xs text-repressurizer-text placeholder:text-repressurizer-text-faint transition-colors focus:border-repressurizer-accent focus:outline-none"
+                    />
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-[1fr_120px]">
+                    <div>
+                      <label className="mb-1.5 block text-xs font-medium text-repressurizer-text-muted">
+                        {t("settings.automationExport.token")}
+                      </label>
+                      <input
+                        type="password"
+                        value={settings.automationPublishBearerToken}
+                        onChange={(e) => settings.setSettings({ automationPublishBearerToken: e.target.value })}
+                        placeholder={t("settings.automationExport.token.placeholder")}
+                        className="w-full rounded-lg border border-repressurizer-border bg-repressurizer-surface px-3 py-2 text-xs text-repressurizer-text placeholder:text-repressurizer-text-faint transition-colors focus:border-repressurizer-accent focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-xs font-medium text-repressurizer-text-muted">
+                        {t("settings.automationExport.interval")}
+                      </label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={720}
+                        value={settings.automationPublishIntervalHours}
+                        onChange={(e) => settings.setSettings({ automationPublishIntervalHours: Number(e.target.value) || 24 })}
+                        className="w-full rounded-lg border border-repressurizer-border bg-repressurizer-surface px-3 py-2 text-xs text-repressurizer-text transition-colors focus:border-repressurizer-accent focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-xs text-repressurizer-text-faint">
+                      {settings.automationPublishLastPublishedAt
+                        ? t("settings.automationExport.lastPublished", { date: new Date(settings.automationPublishLastPublishedAt).toLocaleString() })
+                        : t("settings.automationExport.never")}
+                    </p>
+                    <button
+                      onClick={handlePublishAutomation}
+                      disabled={publishingAutomation || !settings.automationPublishUrl.trim() || gameCount === 0}
+                      className="btn-press rounded-lg bg-repressurizer-accent px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-repressurizer-accent-hover disabled:opacity-40"
+                    >
+                      {publishingAutomation ? t("settings.automationExport.publishing") : t("settings.automationExport.publishNow")}
+                    </button>
+                  </div>
+                  <p className="text-[11px] leading-relaxed text-repressurizer-text-faint">
+                    {t("settings.automationExport.desc")}
+                  </p>
                 </div>
               </div>
 

@@ -3,7 +3,7 @@ pub mod hltb;
 pub mod steam;
 
 use categorizer::commands;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use steam::api;
 use steam::collections;
@@ -16,6 +16,20 @@ struct CacheInfo {
     details_bytes: u64,
     hltb_bytes: u64,
     failed_bytes: u64,
+}
+
+#[derive(Serialize)]
+struct HttpPublishResult {
+    status: u16,
+    response_preview: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PostJsonExportInput {
+    url: String,
+    body: String,
+    bearer_token: Option<String>,
 }
 
 fn app_data_dir() -> Option<PathBuf> {
@@ -78,6 +92,56 @@ fn hide_main_window(app: tauri::AppHandle) {
 #[tauri::command]
 fn quit_app(app: tauri::AppHandle) {
     app.exit(0);
+}
+
+#[tauri::command]
+async fn post_json_export(input: PostJsonExportInput) -> Result<HttpPublishResult, String> {
+    let url = reqwest::Url::parse(input.url.trim())
+        .map_err(|e| format!("Invalid export target URL: {}", e))?;
+    if !matches!(url.scheme(), "http" | "https") {
+        return Err("Export target URL must use http or https".to_string());
+    }
+
+    let client = reqwest::Client::builder()
+        .user_agent(format!("Repressurizer/{}", env!("CARGO_PKG_VERSION")))
+        .build()
+        .map_err(|e| e.to_string())?;
+
+    let mut request = client
+        .post(url)
+        .header("Content-Type", "application/json")
+        .header("Accept", "application/json, text/plain, */*")
+        .body(input.body);
+
+    if let Some(token) = input
+        .bearer_token
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        request = request.bearer_auth(token);
+    }
+
+    let response = request
+        .send()
+        .await
+        .map_err(|e| format!("Failed to publish automation export: {}", e))?;
+    let status = response.status();
+    let text = response.text().await.unwrap_or_default();
+    let response_preview = text.chars().take(500).collect::<String>();
+
+    if !status.is_success() {
+        return Err(format!(
+            "Automation export returned HTTP {}: {}",
+            status.as_u16(),
+            response_preview
+        ));
+    }
+
+    Ok(HttpPublishResult {
+        status: status.as_u16(),
+        response_preview,
+    })
 }
 
 #[tauri::command]
@@ -364,6 +428,7 @@ pub fn run() {
             export_diagnostics,
             hide_main_window,
             quit_app,
+            post_json_export,
             load_app_data,
             save_app_data,
             hltb::fetch_hltb,

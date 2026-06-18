@@ -405,3 +405,22 @@ export async function hideMainWindow(): Promise<void> {
 export async function quitApp(): Promise<void> {
   return invoke<void>("quit_app");
 }
+
+export interface HttpPublishResult {
+  status: number;
+  response_preview: string;
+}
+
+export async function postJsonExport(
+  url: string,
+  body: string,
+  bearerToken?: string
+): Promise<HttpPublishResult> {
+  return invoke<HttpPublishResult>("post_json_export", {
+    input: {
+      url,
+      body,
+      bearerToken: bearerToken?.trim() || null,
+    },
+  });
+}

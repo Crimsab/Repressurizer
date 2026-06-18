@@ -23,6 +23,11 @@ import { usePlayHistoryStore } from "./stores/playHistoryStore";
 import { useSteamAppIndexStore } from "./stores/steamAppIndexStore";
 import { fetchLibrary, loadCollections, createManualBackup, fetchPlayerSummary, hideMainWindow, quitApp } from "./lib/tauri";
 import { mergeCollectionOnlyGames } from "./lib/libraryMerge";
+import {
+  automationPublishDue,
+  buildAutomationSnapshotFromContext,
+  publishAutomationSnapshot,
+} from "./lib/automationPublish";
 import { useT } from "./lib/i18n";
 import { SetupWizard } from "./components/setup/SetupWizard";
 import { Header } from "./components/layout/Header";
@@ -186,6 +191,58 @@ function AppContent() {
     }, 7000);
     return () => window.clearTimeout(timer);
   }, [settings.setupComplete, settings.checkUpdatesOnStartup]);
+
+  useEffect(() => {
+    if (!settings.setupComplete || !settings.automationPublishEnabled || !settings.automationPublishUrl.trim()) return;
+    let cancelled = false;
+
+    const run = async () => {
+      const currentSettings = useSettingsStore.getState();
+      if (!currentSettings.automationPublishEnabled || !currentSettings.automationPublishUrl.trim()) return;
+      if (!automationPublishDue(currentSettings)) return;
+
+      const gameState = useGameStore.getState();
+      const categoryState = useCategoryStore.getState();
+      const hltbState = useHltbStore.getState();
+      if (Object.keys(gameState.games).length === 0 || categoryState.collections.length === 0) return;
+
+      const context = {
+        settings: currentSettings,
+        games: gameState.games,
+        collections: categoryState.collections,
+        details: gameState.details,
+        hltbData: hltbState.data,
+        appVersion: __APP_VERSION__,
+      };
+      const snapshot = buildAutomationSnapshotFromContext(context);
+      if (snapshot.checksum === currentSettings.automationPublishLastChecksum) return;
+
+      try {
+        const result = await publishAutomationSnapshot(context);
+        if (cancelled) return;
+        useSettingsStore.getState().setSettings({
+          automationPublishLastChecksum: result.snapshot.checksum,
+          automationPublishLastPublishedAt: new Date().toISOString(),
+        });
+      } catch (error) {
+        console.warn("Automation export publish failed:", error);
+      }
+    };
+
+    const startupTimer = window.setTimeout(() => void run(), 10000);
+    const intervalHours = Math.max(1, Number(settings.automationPublishIntervalHours || 24));
+    const intervalTimer = window.setInterval(() => void run(), intervalHours * 60 * 60 * 1000);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(startupTimer);
+      window.clearInterval(intervalTimer);
+    };
+  }, [
+    settings.setupComplete,
+    settings.automationPublishEnabled,
+    settings.automationPublishUrl,
+    settings.automationPublishIntervalHours,
+  ]);
 
   const installUpdate = async () => {
     if (!availableUpdate) return;

@@ -116,6 +116,13 @@ export interface AppSettings {
   minimizeToTray: boolean;
   trayCloseChoiceMade: boolean;
   checkUpdatesOnStartup: boolean;
+  // Automation export
+  automationPublishEnabled: boolean;
+  automationPublishUrl: string;
+  automationPublishBearerToken: string;
+  automationPublishIntervalHours: number;
+  automationPublishLastChecksum: string;
+  automationPublishLastPublishedAt: string;
   // Steam Family
   includeSteamFamilyNonGames: boolean;
 }
