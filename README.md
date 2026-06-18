@@ -119,6 +119,7 @@ Auto-categorizing uses cached metadata when possible, fetches missing Steam deta
 - Steam Store API: game details, genres, categories, release dates, platforms, Metacritic, price data, and artwork.
 - Steam Family: detects Family-shared apps with the Web API key when possible, with an optional Store `webapi_token` fallback for accounts where Steam requires Store-session auth.
 - HowLongToBeat: fetches main story, main plus extras, completionist time, and confidence data.
+- Automation export: writes or publishes a stable `repressurizer.library-snapshot.v1` JSON snapshot with games, collections, Steam metadata, and HLTB data. HTTP targets are configurable and uploads are skipped when the snapshot checksum has not changed.
 - Local Steam files: reads and writes collection data directly, with backups.
 
 ### Planning And Discovery Tools
