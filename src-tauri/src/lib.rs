@@ -330,8 +330,13 @@ pub fn run() {
             use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 
             let show = MenuItem::with_id(app, "show", "Open Repressurizer", true, None::<&str>)?;
-            let settings =
-                MenuItem::with_id(app, "settings", "Settings", true, None::<&str>)?;
+            let refresh = MenuItem::with_id(
+                app,
+                "refresh_library",
+                "Refresh Steam Library",
+                true,
+                None::<&str>,
+            )?;
             let publish = MenuItem::with_id(
                 app,
                 "publish_snapshot",
@@ -341,6 +346,8 @@ pub fn run() {
             )?;
             let backup =
                 MenuItem::with_id(app, "create_backup", "Create Backup", true, None::<&str>)?;
+            let settings =
+                MenuItem::with_id(app, "settings", "Settings", true, None::<&str>)?;
             let hide = MenuItem::with_id(app, "hide", "Minimize to Tray", true, None::<&str>)?;
             let separator = PredefinedMenuItem::separator(app)?;
             let separator_two = PredefinedMenuItem::separator(app)?;
@@ -349,12 +356,13 @@ pub fn run() {
                 app,
                 &[
                     &show,
-                    &settings,
-                    &separator,
+                    &refresh,
                     &publish,
                     &backup,
-                    &separator_two,
+                    &separator,
+                    &settings,
                     &hide,
+                    &separator_two,
                     &quit,
                 ],
             )?;
@@ -369,6 +377,14 @@ pub fn run() {
                             let _ = w.show();
                             let _ = w.set_focus();
                         }
+                    }
+                    "refresh_library" => {
+                        if let Some(w) = app.get_webview_window("main") {
+                            let _ = w.show();
+                            let _ = w.unminimize();
+                            let _ = w.set_focus();
+                        }
+                        let _ = app.emit("repressurizer-refresh-library-requested", ());
                     }
                     "settings" => {
                         if let Some(w) = app.get_webview_window("main") {

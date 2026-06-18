@@ -214,6 +214,62 @@ function AppContent() {
     }
   };
 
+  const reloadLibraryFromStores = async (notify = false, startupBackup = false) => {
+    const currentSettings = useSettingsStore.getState();
+    if (!currentSettings.setupComplete) return;
+
+    setReloading(true);
+    setReloadError("");
+    try {
+      const [games, collections] = await Promise.all([
+        fetchLibrary(currentSettings.apiKey, currentSettings.steamId64),
+        loadCollections(currentSettings.steamPath, currentSettings.steamId3),
+        useFamilyStore.getState().hydrate(),
+      ]);
+      const familyGames = useFamilyStore.getState().sharedGamesAsOwned();
+      const cachedDetails = useGameStore.getState().details;
+      const appIndex = useSteamAppIndexStore.getState().data;
+      const mergedGames = mergeCollectionOnlyGames([...games, ...familyGames], collections, cachedDetails, appIndex);
+      console.log("Reloaded:", mergedGames.length, "games,", collections.length, "collections");
+      setGames(mergedGames);
+      usePlayHistoryStore.getState().observeLibrary(mergedGames);
+      setCollections(collections);
+      useSteamAppIndexStore.getState().ensureFresh(currentSettings.apiKey).then(() => {
+        const current = Object.values(useGameStore.getState().games);
+        if (current.length > 0) useGameStore.getState().setGames(current);
+      }).catch(() => {});
+      setReloading(false);
+
+      if (!currentSettings.onboardingComplete) {
+        setShowOnboarding(true);
+      }
+
+      if (startupBackup && currentSettings.steamPath && currentSettings.steamId3) {
+        createManualBackup(currentSettings.steamPath, currentSettings.steamId3, "Auto-backup on startup").catch(() => {});
+      }
+
+      const { startDetailsFetch, startHltbFetch } = useBackgroundFetchStore.getState();
+      const cachedHltb = useHltbStore.getState().data;
+
+      if (currentSettings.apiKey) {
+        const missingDetails = mergedGames.map((g) => g.appid).filter((id) => !cachedDetails[id]);
+        startDetailsFetch(missingDetails);
+      }
+
+      const missingHltb = mergedGames
+        .filter((g) => !cachedHltb[g.appid])
+        .map((g) => ({ appId: g.appid, name: g.name }));
+      startHltbFetch(missingHltb);
+
+      if (notify) toast.getState().success("Steam library refreshed.");
+    } catch (e) {
+      console.error("Reload error:", e);
+      setReloadError(String(e));
+      setReloading(false);
+      toast.getState().error(`Failed to load library: ${e}`);
+    }
+  };
+
   useEffect(() => {
     if (settings.steamPersonaName || !settings.apiKey || !settings.steamId64) return;
     fetchPlayerSummary(settings.apiKey, settings.steamId64)
@@ -238,8 +294,17 @@ function AppContent() {
   }, []);
 
   useEffect(() => {
+    let unlistenRefresh: (() => void) | undefined;
     let unlistenPublish: (() => void) | undefined;
     let unlistenBackup: (() => void) | undefined;
+
+    listen("repressurizer-refresh-library-requested", () => {
+      void reloadLibraryFromStores(true).catch(() => {});
+    })
+      .then((fn) => {
+        unlistenRefresh = fn;
+      })
+      .catch(() => {});
 
     listen("repressurizer-publish-automation-requested", () => {
       void publishAutomationFromStores(true, true).catch(() => {});
@@ -261,6 +326,7 @@ function AppContent() {
       .catch(() => {});
 
     return () => {
+      unlistenRefresh?.();
       unlistenPublish?.();
       unlistenBackup?.();
     };
@@ -386,58 +452,7 @@ function AppContent() {
 
   useEffect(() => {
     if (settings.setupComplete && gameCount === 0) {
-      setReloading(true);
-      setReloadError("");
-      Promise.all([
-        fetchLibrary(settings.apiKey, settings.steamId64),
-        loadCollections(settings.steamPath, settings.steamId3),
-        useFamilyStore.getState().hydrate(),
-      ])
-        .then(([games, collections]) => {
-          const familyGames = useFamilyStore.getState().sharedGamesAsOwned();
-          const cachedDetails = useGameStore.getState().details;
-          const appIndex = useSteamAppIndexStore.getState().data;
-          const mergedGames = mergeCollectionOnlyGames([...games, ...familyGames], collections, cachedDetails, appIndex);
-          console.log("Reloaded:", mergedGames.length, "games,", collections.length, "collections");
-          setGames(mergedGames);
-          usePlayHistoryStore.getState().observeLibrary(mergedGames);
-          setCollections(collections);
-          useSteamAppIndexStore.getState().ensureFresh(settings.apiKey).then(() => {
-            const current = Object.values(useGameStore.getState().games);
-            if (current.length > 0) useGameStore.getState().setGames(current);
-          }).catch(() => {});
-          setReloading(false);
-
-          // Show onboarding for first-time users
-          if (!settings.onboardingComplete) {
-            setShowOnboarding(true);
-          }
-
-          // Auto-backup on startup (non-fatal)
-          if (settings.steamPath && settings.steamId3) {
-            createManualBackup(settings.steamPath, settings.steamId3, "Auto-backup on startup").catch(() => {});
-          }
-
-          // Auto-start background fetches after library loads
-          const { startDetailsFetch, startHltbFetch } = useBackgroundFetchStore.getState();
-          const cachedHltb = useHltbStore.getState().data;
-
-          if (settings.apiKey) {
-            const missingDetails = mergedGames.map((g) => g.appid).filter((id) => !cachedDetails[id]);
-            startDetailsFetch(missingDetails);
-          }
-
-          const missingHltb = mergedGames
-            .filter((g) => !cachedHltb[g.appid])
-            .map((g) => ({ appId: g.appid, name: g.name }));
-          startHltbFetch(missingHltb);
-        })
-        .catch((e) => {
-          console.error("Reload error:", e);
-          setReloadError(String(e));
-          setReloading(false);
-          toast.getState().error(`Failed to load library: ${e}`);
-        });
+      void reloadLibraryFromStores(false, true);
     }
   }, [settings.setupComplete]);
 

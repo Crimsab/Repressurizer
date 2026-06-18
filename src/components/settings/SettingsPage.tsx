@@ -1459,9 +1459,9 @@ function SettingsNavButton({
       ? "flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-sm"
       : "inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm";
   const state = active
-    ? "border-repressurizer-accent/35 bg-repressurizer-accent/16 text-white shadow-[inset_2px_0_0_var(--color-repressurizer-accent)]"
-    : "border-transparent text-repressurizer-text-muted hover:border-repressurizer-border-subtle hover:bg-repressurizer-surface-hover hover:text-repressurizer-text";
-  const iconState = active ? "text-repressurizer-accent" : "text-repressurizer-text-faint";
+    ? "border-repressurizer-text-muted bg-transparent text-white"
+    : "border-transparent text-repressurizer-text-muted hover:border-repressurizer-border hover:bg-transparent hover:text-repressurizer-text";
+  const iconState = active ? "text-repressurizer-text" : "text-repressurizer-text-faint";
 
   return (
     <button type="button" onClick={onClick} className={`${base} ${state}`}>
