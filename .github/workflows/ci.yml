@@ -76,7 +76,7 @@ jobs:
           path: |
             ~/.cargo/git
             ~/.cargo/registry
-          key: ${{ runner.os }}-rust-${{ hashFiles('src-tauri/Cargo.lock') }}
+          key: ${{ runner.os }}-rust-${{ hashFiles('src-tauri/Cargo.lock', 'packages/rust/Cargo.toml') }}
           restore-keys: |
             ${{ runner.os }}-rust-
 
@@ -91,6 +91,15 @@ jobs:
 
       - name: Rust check
         run: cargo check --manifest-path src-tauri/Cargo.toml
+
+      - name: Rust integration crate check
+        run: cargo check --manifest-path packages/rust/Cargo.toml
+
+      - name: Rust integration crate tests
+        run: cargo test --manifest-path packages/rust/Cargo.toml
+
+      - name: Rust integration crate publish dry-run
+        run: cargo publish --dry-run --manifest-path packages/rust/Cargo.toml
 
       - name: Install Playwright Chromium
         run: bunx playwright install --with-deps chromium

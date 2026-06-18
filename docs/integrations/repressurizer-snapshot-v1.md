@@ -8,9 +8,10 @@ The app remains the source of the export. Receivers should treat the JSON as an 
 
 - JSON Schema: `packages/integration/schema/repressurizer.library-snapshot.v1.schema.json`
 - TypeScript helpers: `packages/integration/src/index.ts`
-- Package name reserved in-repo: `@repressurizer/integration`
+- TypeScript package: `@crimsab/repressurizer-integration`
+- Rust crate: `repressurizer-integration`
 
-The root desktop app stays private. Only the integration package should be published when registry setup is enabled.
+The root desktop app stays private. Only the integration libraries should be published when registry setup is enabled.
 
 ## Snapshot Shape
 
@@ -61,7 +62,7 @@ import {
   validateLibrarySnapshot,
   verifyLibrarySnapshotChecksum,
   indexSnapshotByAppId,
-} from "@repressurizer/integration";
+} from "@crimsab/repressurizer-integration";
 
 const parsed = JSON.parse(body);
 const result = validateLibrarySnapshot(parsed, { verifyChecksum: true });

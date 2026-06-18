@@ -6,6 +6,8 @@ playwright-report/
 test-results/
 src-tauri/gen/
 src-tauri/target/
+packages/rust/Cargo.lock
+packages/rust/target/
 *.log
 .env
 .DS_Store

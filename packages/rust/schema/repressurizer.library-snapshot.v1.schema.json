@@ -1,0 +1,321 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://repressurizer.dev/schemas/repressurizer.library-snapshot.v1.schema.json",
+  "title": "Repressurizer Library Snapshot v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "generatedAt",
+    "source",
+    "steam",
+    "summary",
+    "collections",
+    "games",
+    "checksum"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "repressurizer.library-snapshot.v1"
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["app", "version"],
+      "properties": {
+        "app": {
+          "const": "Repressurizer"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "steam": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["steamId64Tail", "personaName"],
+      "properties": {
+        "steamId64Tail": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "maxLength": 4
+        },
+        "personaName": {
+          "type": ["string", "null"]
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["gameCount", "collectionCount", "hltbCount"],
+      "properties": {
+        "gameCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "collectionCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "hltbCount": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "collections": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/collection"
+      }
+    },
+    "games": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/game"
+      }
+    },
+    "checksum": {
+      "type": "string",
+      "pattern": "^fnv1a32:[0-9a-f]{8}$"
+    }
+  },
+  "$defs": {
+    "collection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "name", "isDynamic", "gameCount", "appIds"],
+      "properties": {
+        "key": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string"
+        },
+        "isDynamic": {
+          "type": "boolean"
+        },
+        "gameCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "appIds": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "collectionRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "name", "isDynamic"],
+      "properties": {
+        "key": {
+          "type": "string",
+          "minLength": 1
+        },
+        "name": {
+          "type": "string"
+        },
+        "isDynamic": {
+          "type": "boolean"
+        }
+      }
+    },
+    "details": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "releaseDate",
+        "genres",
+        "categories",
+        "metacriticScore",
+        "developers",
+        "publishers",
+        "platforms",
+        "isFree",
+        "priceFinal",
+        "priceCurrency"
+      ],
+      "properties": {
+        "releaseDate": {
+          "type": ["string", "null"]
+        },
+        "genres": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "categories": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "metacriticScore": {
+          "type": ["number", "null"]
+        },
+        "developers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "publishers": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "platforms": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["windows", "mac", "linux"],
+          "properties": {
+            "windows": {
+              "type": "boolean"
+            },
+            "mac": {
+              "type": "boolean"
+            },
+            "linux": {
+              "type": "boolean"
+            }
+          }
+        },
+        "isFree": {
+          "type": "boolean"
+        },
+        "priceFinal": {
+          "type": ["number", "null"]
+        },
+        "priceCurrency": {
+          "type": ["string", "null"]
+        }
+      }
+    },
+    "hltb": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "mainStory",
+        "mainExtra",
+        "completionist",
+        "hltbGameId",
+        "matchedName",
+        "confidence"
+      ],
+      "properties": {
+        "source": {
+          "const": "howlongtobeat"
+        },
+        "mainStory": {
+          "type": ["number", "null"],
+          "minimum": 0
+        },
+        "mainExtra": {
+          "type": ["number", "null"],
+          "minimum": 0
+        },
+        "completionist": {
+          "type": ["number", "null"],
+          "minimum": 0
+        },
+        "hltbGameId": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "matchedName": {
+          "type": ["string", "null"]
+        },
+        "confidence": {
+          "type": ["number", "null"],
+          "minimum": 0
+        }
+      }
+    },
+    "game": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "appId",
+        "name",
+        "playtimeForeverMinutes",
+        "playtimeForeverHours",
+        "rtimeLastPlayed",
+        "lastPlayedAt",
+        "isCollectionOnly",
+        "collections",
+        "details",
+        "hltb"
+      ],
+      "properties": {
+        "appId": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "name": {
+          "type": "string"
+        },
+        "playtimeForeverMinutes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "playtimeForeverHours": {
+          "type": "number",
+          "minimum": 0
+        },
+        "rtimeLastPlayed": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "lastPlayedAt": {
+          "type": ["string", "null"],
+          "format": "date-time"
+        },
+        "isCollectionOnly": {
+          "type": "boolean"
+        },
+        "collections": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/collectionRef"
+          }
+        },
+        "details": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/details"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "hltb": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/hltb"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    }
+  }
+}
