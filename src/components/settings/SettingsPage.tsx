@@ -1467,12 +1467,12 @@ function SettingsNavButton({
   const showBadge = item.badge != null && item.badge > 0;
   const base =
     variant === "desktop"
-      ? "flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-sm"
-      : "inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm";
+      ? "flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-sm transition-colors"
+      : "inline-flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm transition-colors";
   const state = active
-    ? "border-repressurizer-text-muted bg-transparent text-white"
-    : "border-transparent text-repressurizer-text-muted hover:border-repressurizer-border hover:bg-transparent hover:text-repressurizer-text";
-  const iconState = active ? "text-repressurizer-text" : "text-repressurizer-text-faint";
+    ? "border-repressurizer-accent bg-repressurizer-accent/10 text-repressurizer-accent"
+    : "border-transparent text-repressurizer-text-muted hover:border-repressurizer-border hover:bg-repressurizer-surface/50 hover:text-repressurizer-text";
+  const iconState = active ? "text-repressurizer-accent" : "text-repressurizer-text-faint";
 
   return (
     <button type="button" onClick={onClick} className={`${base} ${state}`}>
@@ -2407,28 +2407,36 @@ function ToggleRow({
   onChange: (value: boolean) => void;
 }) {
   return (
-    <label className="flex items-start gap-3 cursor-pointer rounded-xl bg-repressurizer-bg border border-repressurizer-border-subtle px-4 py-3 transition-colors hover:border-repressurizer-border">
-      <span className="mt-0.5 text-repressurizer-text-faint">{icon}</span>
-      <div className="flex-1 min-w-0">
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={() => onChange(!checked)}
+      className={`btn-press flex w-full cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 text-left transition-colors ${
+        checked
+          ? "border-repressurizer-accent bg-repressurizer-accent/10"
+          : "border-repressurizer-border-subtle bg-repressurizer-bg hover:border-repressurizer-border"
+      }`}
+    >
+      <span className={`mt-0.5 ${checked ? "text-repressurizer-accent" : "text-repressurizer-text-faint"}`}>{icon}</span>
+      <div className="min-w-0 flex-1">
         <p className="text-sm text-repressurizer-text">{label}</p>
-        <p className="mt-0.5 text-xs text-repressurizer-text-faint leading-relaxed">{description}</p>
+        <p className="mt-0.5 text-xs leading-relaxed text-repressurizer-text-faint">{description}</p>
       </div>
-      <button
-        type="button"
-        role="switch"
-        aria-checked={checked}
-        onClick={() => onChange(!checked)}
-        className={`relative mt-0.5 inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${
-          checked ? "bg-repressurizer-accent" : "bg-repressurizer-border"
+      <span
+        className={`relative mt-0.5 inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-colors ${
+          checked
+            ? "border-repressurizer-accent bg-repressurizer-accent/20"
+            : "border-repressurizer-border bg-repressurizer-surface"
         }`}
       >
         <span
-          className={`inline-block h-3.5 w-3.5 rounded-full bg-white transition-transform ${
-            checked ? "translate-x-[18px]" : "translate-x-[3px]"
+          className={`inline-block h-4 w-4 rounded-full transition-transform ${
+            checked ? "translate-x-[22px] bg-repressurizer-accent" : "translate-x-[3px] bg-repressurizer-text-muted"
           }`}
         />
-      </button>
-    </label>
+      </span>
+    </button>
   );
 }
 
