@@ -125,6 +125,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
   const [tab, setTab] = useState<SettingsTab>("general");
   const [settingsSearch, setSettingsSearch] = useState("");
   const [showAutomationLogs, setShowAutomationLogs] = useState(false);
+  const [showAutomationGuide, setShowAutomationGuide] = useState(false);
   const [automationLogFilter, setAutomationLogFilter] = useState<AutomationLogFilter>("all");
   const [automationLogSort, setAutomationLogSort] = useState<AutomationLogSort>("desc");
   const [cacheInfo, setCacheInfo] = useState<CacheInfo | null>(null);
@@ -1138,7 +1139,19 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
               {/* Automation export */}
               {isSectionVisible("automation") && (
               <div className="space-y-3">
-                <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("settings.automationExport")}</h3>
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("settings.automationExport")}</h3>
+                  <button
+                    type="button"
+                    onClick={() => setShowAutomationGuide(true)}
+                    className="btn-press inline-flex h-8 items-center gap-1.5 rounded-lg border border-repressurizer-border bg-repressurizer-bg px-2.5 text-xs font-medium text-repressurizer-text-muted transition-colors hover:border-repressurizer-accent/50 hover:text-repressurizer-text"
+                    aria-label={t("settings.automationExport.guideButton")}
+                    title={t("settings.automationExport.guideButton")}
+                  >
+                    <Info size={14} weight="bold" />
+                    {t("settings.automationExport.guideButton")}
+                  </button>
+                </div>
                 <ToggleRow
                   icon={<CloudArrowDown size={15} weight="duotone" />}
                   label={t("settings.automationExport.enabled")}
@@ -1367,6 +1380,10 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
             onSortChange={setAutomationLogSort}
             onClose={() => setShowAutomationLogs(false)}
           />
+        )}
+
+        {showAutomationGuide && (
+          <AutomationGuideDialog onClose={() => setShowAutomationGuide(false)} />
         )}
 
         {/* Confirmation dialog */}
@@ -2125,6 +2142,78 @@ function AutomationLogsDialog({
               ))}
             </div>
           )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AutomationGuideDialog({ onClose }: { onClose: () => void }) {
+  const t = useT();
+  const items = [
+    {
+      title: t("settings.automationExport.guide.endpointTitle"),
+      body: t("settings.automationExport.guide.endpointBody"),
+    },
+    {
+      title: t("settings.automationExport.guide.payloadTitle"),
+      body: t("settings.automationExport.guide.payloadBody"),
+    },
+    {
+      title: t("settings.automationExport.guide.changeTitle"),
+      body: t("settings.automationExport.guide.changeBody"),
+    },
+    {
+      title: t("settings.automationExport.guide.receiverTitle"),
+      body: t("settings.automationExport.guide.receiverBody"),
+    },
+    {
+      title: t("settings.automationExport.guide.limitsTitle"),
+      body: t("settings.automationExport.guide.limitsBody"),
+    },
+    {
+      title: t("settings.automationExport.guide.packagesTitle"),
+      body: t("settings.automationExport.guide.packagesBody"),
+    },
+  ];
+
+  return (
+    <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-black/50 p-4 backdrop-blur-sm">
+      <div className="flex w-full max-w-2xl flex-col rounded-xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_16px_48px_rgba(0,0,0,0.5)]" style={{ maxHeight: "min(640px, calc(100vh - 96px))" }}>
+        <div className="flex items-start justify-between gap-4 border-b border-repressurizer-border px-4 py-3">
+          <div className="min-w-0">
+            <h3 className="text-sm font-semibold text-repressurizer-text">{t("settings.automationExport.guideTitle")}</h3>
+            <p className="mt-0.5 text-[11px] leading-relaxed text-repressurizer-text-faint">
+              {t("settings.automationExport.guideDesc")}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="btn-press flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-repressurizer-text-muted transition-colors hover:bg-repressurizer-surface-hover hover:text-white"
+            aria-label={t("common.close")}
+          >
+            <X size={15} weight="bold" />
+          </button>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-auto p-4">
+          <div className="grid gap-3 sm:grid-cols-2">
+            {items.map((item) => (
+              <div
+                key={item.title}
+                className="rounded-lg border border-repressurizer-border-subtle bg-repressurizer-bg px-3 py-3"
+              >
+                <p className="text-xs font-semibold text-repressurizer-text">{item.title}</p>
+                <p className="mt-1.5 text-[11px] leading-relaxed text-repressurizer-text-faint">
+                  {item.body}
+                </p>
+              </div>
+            ))}
+          </div>
+          <p className="mt-4 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-surface/60 px-3 py-2 text-[11px] leading-relaxed text-repressurizer-text-muted">
+            {t("settings.automationExport.guideFooter")}
+          </p>
         </div>
       </div>
     </div>

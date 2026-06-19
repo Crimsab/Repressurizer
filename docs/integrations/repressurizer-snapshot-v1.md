@@ -4,6 +4,8 @@ Repressurizer can publish a read-only JSON snapshot for external library tools, 
 
 The app remains the source of the export. Receivers should treat the JSON as an integration artifact, not as a command channel back into Steam or Repressurizer.
 
+For user-facing setup and HTTP automation behavior, see [Automation Export](../automation-export.md).
+
 ## Package Layout
 
 - JSON Schema: `packages/integration/schema/repressurizer.library-snapshot.v1.schema.json`

@@ -165,12 +165,21 @@ test("opens organized settings tabs, automation logs, and Steam controls without
   await settingsDialog.getByRole("button", { name: "Automation", exact: true }).click();
   await expect(settingsDialog.getByRole("heading", { name: "Automation Export" })).toBeVisible();
   await expect(settingsDialog.getByText("Result:")).toBeVisible();
+  await expect(settingsDialog.getByRole("button", { name: "Guide" })).toBeVisible();
   await expect(settingsDialog.getByRole("button", { name: "View logs" })).toBeVisible();
   await expect(settingsDialog.getByRole("button", { name: "Publish now" })).toBeVisible();
 
   const automationPath = testInfo.outputPath("settings-automation.png");
   await page.screenshot({ path: automationPath, fullPage: true });
   await testInfo.attach("settings-automation", { path: automationPath, contentType: "image/png" });
+
+  await settingsDialog.getByRole("button", { name: "Guide" }).click();
+  await expect(settingsDialog.getByRole("heading", { name: "Automation export guide" })).toBeVisible();
+  await expect(settingsDialog.getByText("Integration libraries")).toBeVisible();
+  const guidePath = testInfo.outputPath("settings-automation-guide.png");
+  await page.screenshot({ path: guidePath, fullPage: true });
+  await testInfo.attach("settings-automation-guide", { path: guidePath, contentType: "image/png" });
+  await settingsDialog.getByRole("button", { name: "Close" }).click();
 
   await settingsDialog.getByRole("button", { name: "View logs" }).click();
   await expect(settingsDialog.getByRole("heading", { name: "Automation export logs" })).toBeVisible();

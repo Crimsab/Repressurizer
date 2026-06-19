@@ -120,7 +120,10 @@ Auto-categorizing uses cached metadata when possible, fetches missing Steam deta
 - Steam Family: detects Family-shared apps with the Web API key when possible, with an optional Store `webapi_token` fallback for accounts where Steam requires Store-session auth.
 - HowLongToBeat: fetches main story, main plus extras, completionist time, and confidence data.
 - Automation export: writes or publishes a stable `repressurizer.library-snapshot.v1` JSON snapshot with games, collections, Steam metadata, and HLTB data. HTTP targets are configurable and uploads are skipped when the snapshot checksum has not changed.
+- Integration libraries: TypeScript receivers can use `@crimsab/repressurizer-integration`; Rust receivers can use `repressurizer-integration`.
 - Local Steam files: reads and writes collection data directly, with backups.
+
+For setup, receiver expectations, and schema/package details, see [docs/automation-export.md](docs/automation-export.md) and [docs/integrations/repressurizer-snapshot-v1.md](docs/integrations/repressurizer-snapshot-v1.md).
 
 ### Planning And Discovery Tools
 
@@ -201,6 +204,8 @@ Release builds are produced by GitHub Actions as:
 Version tags are created from `package.json` (`v0.1.0`, `v0.2.0`, ...). Each tag triggers a GitHub Release with generated changelog notes and Windows artifacts.
 
 For Steam Family setup and the optional Store `webapi_token` fallback, see [docs/steam-family.md](docs/steam-family.md).
+
+For automation export and integration libraries, see [docs/automation-export.md](docs/automation-export.md).
 
 For contribution guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md). For private vulnerability reporting guidance, see [SECURITY.md](SECURITY.md).
 
