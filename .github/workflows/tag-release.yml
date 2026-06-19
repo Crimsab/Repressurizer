@@ -101,6 +101,12 @@ jobs:
           git tag -a "${{ steps.integration_version.outputs.tag }}" -m "Release ${{ steps.integration_version.outputs.tag }}"
           git push origin "${{ steps.integration_version.outputs.tag }}"
 
+      - name: Start TypeScript integration publish workflow
+        if: steps.integration_existing.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run publish-integration.yml --ref "${{ steps.integration_version.outputs.tag }}" -f dry_run=false
+
       - name: Skip existing TypeScript integration tag
         if: steps.integration_existing.outputs.exists == 'true'
         run: echo "Tag ${{ steps.integration_version.outputs.tag }} already exists; no TypeScript integration release tag created."
@@ -129,6 +135,12 @@ jobs:
         run: |
           git tag -a "${{ steps.rust_integration_version.outputs.tag }}" -m "Release ${{ steps.rust_integration_version.outputs.tag }}"
           git push origin "${{ steps.rust_integration_version.outputs.tag }}"
+
+      - name: Start Rust integration publish workflow
+        if: steps.rust_integration_existing.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run publish-rust-integration.yml --ref "${{ steps.rust_integration_version.outputs.tag }}" -f dry_run=false
 
       - name: Skip existing Rust integration tag
         if: steps.rust_integration_existing.outputs.exists == 'true'
