@@ -55,11 +55,14 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Create and push tag
-        if: steps.existing.outputs.exists == 'false'
+      - name: Configure git author
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Create and push tag
+        if: steps.existing.outputs.exists == 'false'
+        run: |
           git tag -a "${{ steps.version.outputs.tag }}" -m "Release ${{ steps.version.outputs.tag }}"
           git push origin "${{ steps.version.outputs.tag }}"
 
@@ -72,3 +75,61 @@ jobs:
       - name: Skip existing tag
         if: steps.existing.outputs.exists == 'true'
         run: echo "Tag ${{ steps.version.outputs.tag }} already exists; no release tag created."
+
+      - name: Read TypeScript integration package version
+        id: integration_version
+        run: |
+          version="$(jq -r '.version' packages/integration/package.json)"
+          if [ -z "$version" ] || [ "$version" = "null" ]; then
+            echo "Could not read packages/integration/package.json version" >&2
+            exit 1
+          fi
+          echo "tag=integration-v$version" >> "$GITHUB_OUTPUT"
+
+      - name: Check existing TypeScript integration tag
+        id: integration_existing
+        run: |
+          if git rev-parse -q --verify "refs/tags/${{ steps.integration_version.outputs.tag }}" >/dev/null; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create and push TypeScript integration tag
+        if: steps.integration_existing.outputs.exists == 'false'
+        run: |
+          git tag -a "${{ steps.integration_version.outputs.tag }}" -m "Release ${{ steps.integration_version.outputs.tag }}"
+          git push origin "${{ steps.integration_version.outputs.tag }}"
+
+      - name: Skip existing TypeScript integration tag
+        if: steps.integration_existing.outputs.exists == 'true'
+        run: echo "Tag ${{ steps.integration_version.outputs.tag }} already exists; no TypeScript integration release tag created."
+
+      - name: Read Rust integration crate version
+        id: rust_integration_version
+        run: |
+          version="$(awk -F '"' '/^version = / { print $2; exit }' packages/rust/Cargo.toml)"
+          if [ -z "$version" ]; then
+            echo "Could not read packages/rust/Cargo.toml version" >&2
+            exit 1
+          fi
+          echo "tag=rust-integration-v$version" >> "$GITHUB_OUTPUT"
+
+      - name: Check existing Rust integration tag
+        id: rust_integration_existing
+        run: |
+          if git rev-parse -q --verify "refs/tags/${{ steps.rust_integration_version.outputs.tag }}" >/dev/null; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create and push Rust integration tag
+        if: steps.rust_integration_existing.outputs.exists == 'false'
+        run: |
+          git tag -a "${{ steps.rust_integration_version.outputs.tag }}" -m "Release ${{ steps.rust_integration_version.outputs.tag }}"
+          git push origin "${{ steps.rust_integration_version.outputs.tag }}"
+
+      - name: Skip existing Rust integration tag
+        if: steps.rust_integration_existing.outputs.exists == 'true'
+        run: echo "Tag ${{ steps.rust_integration_version.outputs.tag }} already exists; no Rust integration release tag created."

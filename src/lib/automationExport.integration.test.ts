@@ -36,7 +36,7 @@ describe("Repressurizer integration package compatibility", () => {
         1145360: game(1145360, "Hades", 120),
       },
       collections: [collection("favorites", "Favorites", [1145360])],
-      appVersion: "0.1.10",
+      appVersion: "0.2.0",
       generatedAt: "2026-06-18T18:00:00.000Z",
     });
 

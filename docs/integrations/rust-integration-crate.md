@@ -35,4 +35,4 @@ Crates.io also supports Trusted Publishing/OIDC. As with npm, keep the first tok
 
 This crate is validated by normal CI, but publishing is release-gated. It only publishes from a matching tag or an explicit manual dispatch with `dry_run: false`.
 
-To publish a Rust library update, bump `packages/rust/Cargo.toml`, merge the validated change, then create `rust-integration-v<version>`.
+After CI passes on `main`, `.github/workflows/tag-release.yml` reads `packages/rust/Cargo.toml` and creates `rust-integration-v<version>` when that tag does not already exist. To publish a Rust library update, bump `packages/rust/Cargo.toml`; the matching publish tag is created automatically after CI succeeds.

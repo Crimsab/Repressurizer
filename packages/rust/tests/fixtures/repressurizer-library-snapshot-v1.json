@@ -3,7 +3,7 @@
   "generatedAt": "2026-06-18T18:00:00.000Z",
   "source": {
     "app": "Repressurizer",
-    "version": "0.1.10"
+    "version": "0.2.0"
   },
   "steam": {
     "steamId64Tail": "2345",
@@ -66,5 +66,5 @@
       }
     }
   ],
-  "checksum": "fnv1a32:9ea81afd"
+  "checksum": "fnv1a32:71296933"
 }

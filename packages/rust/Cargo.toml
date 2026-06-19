@@ -1,6 +1,6 @@
 [package]
 name = "repressurizer-integration"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "Schema-first Repressurizer snapshot contract and Rust helpers for library receivers."
 license = "GPL-3.0-only"

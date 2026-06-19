@@ -202,6 +202,7 @@ Release builds are produced by GitHub Actions as:
 - portable Windows zip
 
 Version tags are created from `package.json` (`v0.1.0`, `v0.2.0`, ...). Each tag triggers a GitHub Release with generated changelog notes and Windows artifacts.
+After CI passes, matching integration package tags are also created from `packages/integration/package.json` and `packages/rust/Cargo.toml` when those versions have not been released yet.
 
 For Steam Family setup and the optional Store `webapi_token` fallback, see [docs/steam-family.md](docs/steam-family.md).
 

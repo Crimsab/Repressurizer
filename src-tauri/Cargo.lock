@@ -3480,7 +3480,7 @@ dependencies = [
 
 [[package]]
 name = "repressurizer"
-version = "0.1.10"
+version = "0.2.0"
 dependencies = [
  "base64 0.22.1",
  "chrono",

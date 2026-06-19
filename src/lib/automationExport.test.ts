@@ -64,7 +64,7 @@ describe("buildLibrarySnapshot", () => {
       collections: [collection("user-collections.rpg", "RPG", [632470])],
       details: { 632470: details(632470) },
       hltbData: { 632470: hltb },
-      appVersion: "0.1.10",
+      appVersion: "0.2.0",
       steamId64: "76561198000012345",
       steamPersonaName: "Tester",
       generatedAt: "2026-06-18T18:00:00.000Z",
@@ -94,7 +94,7 @@ describe("buildLibrarySnapshot", () => {
     const base = {
       games: { 10: game(10, "Hades", 90) },
       collections: [collection("favorites", "Favorites", [10])],
-      appVersion: "0.1.10",
+      appVersion: "0.2.0",
     };
 
     const first = buildLibrarySnapshot({ ...base, generatedAt: "2026-01-01T00:00:00.000Z" });

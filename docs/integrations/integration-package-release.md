@@ -11,7 +11,7 @@ The desktop app root remains private in npm terms. Only `packages/integration` i
 - Registry target: npm, once the scope and `NPM_TOKEN` are configured
 - Tag format: `integration-v<packages/integration/package.json version>`
 
-Example: package version `0.1.0` publishes from tag `integration-v0.1.0`.
+Example: package version `0.2.0` publishes from tag `integration-v0.2.0`.
 
 ## Local Release Simulation
 
@@ -44,7 +44,7 @@ The publish job uses `npm publish --provenance --access public`, matching GitHub
 
 This workflow does not publish on every push. Normal CI validates the package when code changes, but npm publishing only happens from a matching tag or an explicit manual dispatch with `dry_run: false`.
 
-That keeps desktop-app changes separate from library releases. To publish a TypeScript library update, bump `packages/integration/package.json`, merge the validated change, then create `integration-v<version>`.
+After CI passes on `main`, `.github/workflows/tag-release.yml` reads `packages/integration/package.json` and creates `integration-v<version>` when that tag does not already exist. That keeps desktop-app changes separate from library releases while still making library publishing automatic once the package version is bumped.
 
 ## Why This Is Not In The Snapshot Schema Doc
 
