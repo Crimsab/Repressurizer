@@ -1951,11 +1951,11 @@ function AppearanceTab({ isSectionVisible }: { isSectionVisible: (id: string) =>
                     onClick={() => handleStartupModeChange(option.value)}
                     className={`btn-press flex items-start gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors ${
                       selected
-                        ? "border-repressurizer-text-muted bg-transparent text-repressurizer-text"
+                        ? "border-repressurizer-accent bg-repressurizer-accent/10 text-repressurizer-accent"
                         : "border-repressurizer-border-subtle bg-repressurizer-surface/40 text-repressurizer-text-muted hover:border-repressurizer-border hover:text-repressurizer-text"
                     }`}
                   >
-                    <span className="mt-0.5 shrink-0 text-repressurizer-text-faint">{option.icon}</span>
+                    <span className={`mt-0.5 shrink-0 ${selected ? "text-repressurizer-accent" : "text-repressurizer-text-faint"}`}>{option.icon}</span>
                     <span className="min-w-0">
                       <span className="block text-sm font-medium">{option.label}</span>
                       <span className="mt-0.5 block text-xs leading-relaxed text-repressurizer-text-faint">
@@ -2150,6 +2150,8 @@ function AutomationLogsDialog({
 
 function AutomationGuideDialog({ onClose }: { onClose: () => void }) {
   const t = useT();
+  const docsUrl = "https://github.com/Crimsab/Repressurizer/blob/main/docs/automation-export.md";
+  const schemaUrl = "https://github.com/Crimsab/Repressurizer/blob/main/docs/integrations/repressurizer-snapshot-v1.md";
   const items = [
     {
       title: t("settings.automationExport.guide.endpointTitle"),
@@ -2214,6 +2216,24 @@ function AutomationGuideDialog({ onClose }: { onClose: () => void }) {
           <p className="mt-4 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-surface/60 px-3 py-2 text-[11px] leading-relaxed text-repressurizer-text-muted">
             {t("settings.automationExport.guideFooter")}
           </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => void open(docsUrl)}
+              className="btn-press inline-flex items-center gap-1.5 rounded-lg border border-repressurizer-border bg-repressurizer-bg px-3 py-2 text-xs font-medium text-repressurizer-text-muted transition-colors hover:border-repressurizer-accent/50 hover:text-repressurizer-text"
+            >
+              <Globe size={13} weight="duotone" />
+              {t("settings.automationExport.guideOpenAutomationDocs")}
+            </button>
+            <button
+              type="button"
+              onClick={() => void open(schemaUrl)}
+              className="btn-press inline-flex items-center gap-1.5 rounded-lg border border-repressurizer-border bg-repressurizer-bg px-3 py-2 text-xs font-medium text-repressurizer-text-muted transition-colors hover:border-repressurizer-accent/50 hover:text-repressurizer-text"
+            >
+              <Globe size={13} weight="duotone" />
+              {t("settings.automationExport.guideOpenSchemaDocs")}
+            </button>
+          </div>
         </div>
       </div>
     </div>

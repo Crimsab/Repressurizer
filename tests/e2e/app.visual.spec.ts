@@ -176,6 +176,8 @@ test("opens organized settings tabs, automation logs, and Steam controls without
   await settingsDialog.getByRole("button", { name: "Guide" }).click();
   await expect(settingsDialog.getByRole("heading", { name: "Automation export guide" })).toBeVisible();
   await expect(settingsDialog.getByText("Integration libraries")).toBeVisible();
+  await expect(settingsDialog.getByRole("button", { name: "Automation docs" })).toBeVisible();
+  await expect(settingsDialog.getByRole("button", { name: "Snapshot schema" })).toBeVisible();
   const guidePath = testInfo.outputPath("settings-automation-guide.png");
   await page.screenshot({ path: guidePath, fullPage: true });
   await testInfo.attach("settings-automation-guide", { path: guidePath, contentType: "image/png" });
