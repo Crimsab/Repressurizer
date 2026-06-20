@@ -308,7 +308,7 @@ test("opens organized settings tabs, automation logs, and Steam controls without
   await expect(settingsDialog.getByText("SAM integration: Steam Achievement Manager")).toBeVisible();
   await expect(settingsDialog.getByText("Enable SAM achievement changes")).toBeHidden();
   await expect(settingsDialog.getByText("Allow card farming lab")).toBeHidden();
-  await settingsDialog.getByRole("switch", { name: /Steam Tools/ }).click();
+  await settingsDialog.getByRole("switch", { name: /SAM integration/ }).click();
   await expect(settingsDialog.getByText("Enable SAM achievement changes")).toBeVisible();
 
   const toolsPath = testInfo.outputPath("settings-steam-tools.png");

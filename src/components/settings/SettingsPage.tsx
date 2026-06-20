@@ -937,23 +937,12 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                 <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("settings.steamTools")}</h3>
                 <div className="space-y-3">
                   <ToggleRow
-                    icon={<SteamLogo size={15} weight="duotone" />}
-                    label={t("settings.steamTools")}
-                    description={t("settings.steamTools.desc")}
+                    icon={<Trophy size={15} weight="duotone" />}
+                    label={t("steamTools.sam.title")}
+                    description={t("steamTools.sam.desc")}
                     checked={settings.steamToolsEnabled}
                     onChange={(v) => settings.setSettings({ steamToolsEnabled: v })}
                   />
-                  <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3">
-                    <div className="flex items-start gap-3">
-                      <Trophy size={16} weight="duotone" className="mt-0.5 text-repressurizer-text-faint" />
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-repressurizer-text">{t("steamTools.sam.title")}</p>
-                        <p className="mt-1 text-xs leading-relaxed text-repressurizer-text-faint">
-                          {t("steamTools.sam.desc")}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
                   {settings.steamToolsEnabled && (
                     <ToggleRow
                       icon={<Trophy size={15} weight="duotone" />}
