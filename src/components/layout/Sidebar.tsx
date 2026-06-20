@@ -147,6 +147,12 @@ export function Sidebar() {
   const categorizedIds = new Set(collections.flatMap((c) => c.added));
   const uncategorizedCount = allGameIds.filter((id) => !categorizedIds.has(id)).length;
 
+  useEffect(() => {
+    if (activeCategory === "uncategorized" && uncategorizedCount === 0) {
+      setActiveCategory("all");
+    }
+  }, [activeCategory, setActiveCategory, uncategorizedCount]);
+
   const gameValues = Object.values(games);
   const backlogCount = gameValues.filter((g) => g.playtime_forever === 0).length;
   const thirtyDaysAgo = Math.floor(Date.now() / 1000) - 30 * 24 * 60 * 60;
@@ -295,13 +301,15 @@ export function Sidebar() {
         />
 
         {/* Uncategorized */}
-        <SidebarItem
-          active={activeCategory === "uncategorized"}
-          onClick={() => setActiveCategory("uncategorized")}
-          icon={<Question size={15} weight={activeCategory === "uncategorized" ? "fill" : "duotone"} />}
-          label={t("sidebar.uncategorized")}
-          count={uncategorizedCount}
-        />
+        {uncategorizedCount > 0 && (
+          <SidebarItem
+            active={activeCategory === "uncategorized"}
+            onClick={() => setActiveCategory("uncategorized")}
+            icon={<Question size={15} weight={activeCategory === "uncategorized" ? "fill" : "duotone"} />}
+            label={t("sidebar.uncategorized")}
+            count={uncategorizedCount}
+          />
+        )}
 
         {showSmartLists && (
           <>
