@@ -239,7 +239,9 @@ fn validate_achievement_action_input(input: &SamAchievementActionInput) -> Resul
                 return Err("At least one achievement API name is required.".to_string());
             }
             if ids.len() != 1 {
-                return Err("Single achievement actions must target exactly one achievement.".to_string());
+                return Err(
+                    "Single achievement actions must target exactly one achievement.".to_string(),
+                );
             }
         }
         "unlock_selected" | "lock_selected" => {
@@ -440,7 +442,8 @@ fn perform_bridge_achievement_action(
     }
 
     let mut bridge = SamSteamBridge::connect(&input.steam_path, input.app_id)?;
-    bridge.prepare_user_stats();
+    let active_app_id = bridge.active_app_id();
+    let initial_stats_requested = bridge.prepare_user_stats();
 
     let available_names = bridge.achievement_names().unwrap_or_default();
     if ids.is_empty() {
@@ -454,14 +457,18 @@ fn perform_bridge_achievement_action(
         available_names.clone()
     };
     let before_states = bridge.capture_states(&backup_names);
-    let before_backup = build_achievement_backup(input.app_id, &input.action, "before", before_states);
+    let before_backup =
+        build_achievement_backup(input.app_id, &input.action, "before", before_states);
     let before_backup_path = save_achievement_backup(&before_backup).ok();
 
     let mut failed = Vec::new();
     let mut diagnostics = vec![
         format!("action={}", input.action),
         format!("target_count={}", ids.len()),
-        "SteamAppId is scoped to the hidden SAM runner; SteamGameId is not set by Repressurizer.".to_string(),
+        format!("steam_initialized_app_id={active_app_id}"),
+        format!("request_user_stats_before={initial_stats_requested}"),
+        "SteamAppId is scoped to the hidden SAM runner; SteamGameId is not set by Repressurizer."
+            .to_string(),
     ];
     let mut attempted = 0usize;
     let target_set: HashSet<String> = ids.iter().cloned().collect();
@@ -543,6 +550,14 @@ fn perform_bridge_achievement_action(
     diagnostics.push(format!("attempted_writes={attempted}"));
     diagnostics.push(format!("store_stats={store_stats}"));
     bridge.run_callbacks_for(std::time::Duration::from_millis(1600));
+    let post_store_stats_requested = if attempted > 0 && store_stats {
+        bridge.prepare_user_stats()
+    } else {
+        false
+    };
+    diagnostics.push(format!(
+        "request_user_stats_after_store={post_store_stats_requested}"
+    ));
 
     let mut after_states = bridge.capture_states(&backup_names);
     let unexpected_changes =
@@ -558,7 +573,9 @@ fn perform_bridge_achievement_action(
             "restored_unexpected_non_target_changes={}",
             unexpected_changes.len()
         ));
-        diagnostics.push(format!("store_stats_after_non_target_restore={store_stats}"));
+        diagnostics.push(format!(
+            "store_stats_after_non_target_restore={store_stats}"
+        ));
         bridge.run_callbacks_for(std::time::Duration::from_millis(1600));
         after_states = bridge.capture_states(&backup_names);
     }
@@ -575,9 +592,16 @@ fn perform_bridge_achievement_action(
         diagnostics.push("post_store_target_state=desired".to_string());
     } else {
         diagnostics.push(format!("post_store_unapplied={}", unapplied.join(",")));
+        diagnostics.push(format!(
+            "post_store_unapplied_details={}",
+            unapplied_target_state_details(&after_backup.achievements, &desired_states).join(",")
+        ));
     }
-    let changed =
-        count_target_achievement_changes(&before_backup.achievements, &after_backup.achievements, &target_set);
+    let changed = count_target_achievement_changes(
+        &before_backup.achievements,
+        &after_backup.achievements,
+        &target_set,
+    );
 
     if attempted > 0 && !store_stats {
         return Err(format!(
@@ -588,8 +612,13 @@ fn perform_bridge_achievement_action(
         ));
     }
     let message = if !unapplied.is_empty() {
+        let reason = if post_set_unapplied.is_empty() {
+            "Steam accepted the local change, but reported the achievement as unchanged after StoreStats. Close the game and retry; stat-bound, protected, or server-side achievements can re-apply themselves unless their underlying stats are also changed."
+        } else {
+            "Steam did not accept the local achievement state before StoreStats. The achievement may be protected, server-side, invalid for this app, or controlled by a running game."
+        };
         format!(
-            "Steam did not apply {} achievement change(s). Some achievements may be protected, server-side, or currently controlled by a running game.",
+            "Steam did not apply {} achievement change(s). {reason}",
             unapplied.len()
         )
     } else if unexpected_changes.is_empty() {
@@ -678,6 +707,24 @@ fn unapplied_target_states(
         .collect()
 }
 
+fn unapplied_target_state_details(
+    after: &[SamAchievementState],
+    desired_states: &HashMap<String, bool>,
+) -> Vec<String> {
+    let after_map = achievement_state_map(after);
+    desired_states
+        .iter()
+        .filter_map(|(id, desired)| match after_map.get(id) {
+            Some(state) if state.achieved != *desired => Some(format!(
+                "{}:actual={},desired={}",
+                id, state.achieved, desired
+            )),
+            None => Some(format!("{id}:actual=missing,desired={desired}")),
+            _ => None,
+        })
+        .collect()
+}
+
 fn normalized_achievement_ids(ids: &[String]) -> Vec<String> {
     dedupe_strings(
         ids.iter()
@@ -746,7 +793,8 @@ fn sam_backup_base_dir(app_id: u64) -> Result<PathBuf, String> {
 }
 
 fn load_achievement_backup(path: &str) -> Result<SamAchievementBackup, String> {
-    let raw = fs::read_to_string(path).map_err(|error| format!("Failed to read backup: {error}"))?;
+    let raw =
+        fs::read_to_string(path).map_err(|error| format!("Failed to read backup: {error}"))?;
     serde_json::from_str(&raw).map_err(|error| format!("Failed to parse backup: {error}"))
 }
 
@@ -778,7 +826,12 @@ impl SamSteamBridge {
         Err("SAM achievement writes are currently Windows-only because they use Steam's local steamclient interface.".to_string())
     }
 
-    fn prepare_user_stats(&mut self) {}
+    fn prepare_user_stats(&mut self) -> bool {
+        false
+    }
+    fn active_app_id(&self) -> u32 {
+        0
+    }
     fn achievement_names(&self) -> Result<Vec<String>, String> {
         Ok(Vec::new())
     }
@@ -800,8 +853,8 @@ use windows_steam::SamSteamBridge;
 #[cfg(windows)]
 mod windows_steam {
     use super::{find_steam_client_library, SamAchievementState};
-    use std::ffi::OsString;
     use libloading::Library;
+    use std::ffi::OsString;
     use std::ffi::{c_char, c_int, c_void, CStr, CString};
     use std::mem;
     use std::path::{Path, PathBuf};
@@ -825,9 +878,11 @@ mod windows_steam {
     type ReleaseUser = unsafe extern "system" fn(this: *mut c_void, pipe: c_int, user: c_int);
     type GetSteamUser =
         unsafe extern "system" fn(*mut c_void, c_int, c_int, *const c_char) -> *mut c_void;
-    type GetSteamUtils = unsafe extern "system" fn(*mut c_void, c_int, *const c_char) -> *mut c_void;
+    type GetSteamUtils =
+        unsafe extern "system" fn(*mut c_void, c_int, *const c_char) -> *mut c_void;
     type GetSteamUserStats =
         unsafe extern "system" fn(*mut c_void, c_int, c_int, *const c_char) -> *mut c_void;
+    type ShutdownIfAllPipesClosed = unsafe extern "system" fn(*mut c_void) -> bool;
 
     type GetAppId = unsafe extern "system" fn(*mut c_void) -> u32;
     type GetSteamId = unsafe extern "system" fn(*mut c_void, *mut u64);
@@ -859,6 +914,8 @@ mod windows_steam {
         steam_free_last_callback: SteamFreeLastCallback,
         release_user: ReleaseUser,
         release_steam_pipe: ReleaseSteamPipe,
+        shutdown_if_all_pipes_closed: ShutdownIfAllPipesClosed,
+        active_app_id: u32,
         _steam_app_id_env: ScopedEnvVar,
     }
 
@@ -892,25 +949,39 @@ mod windows_steam {
                     .map_err(|error| format!("Steam_FreeLastCallback not found: {error}"))?
             };
 
-            let steam_client =
-                unsafe { create_interface(STEAM_CLIENT_VERSION.as_ptr().cast(), std::ptr::null_mut()) };
+            let steam_client = unsafe {
+                create_interface(STEAM_CLIENT_VERSION.as_ptr().cast(), std::ptr::null_mut())
+            };
             if steam_client.is_null() {
                 return Err("Failed to create ISteamClient018.".to_string());
             }
 
-            let create_steam_pipe =
-                unsafe { vfunc::<CreateSteamPipe>(steam_client, SteamClientFn::CreateSteamPipe as usize) };
-            let release_steam_pipe =
-                unsafe { vfunc::<ReleaseSteamPipe>(steam_client, SteamClientFn::ReleaseSteamPipe as usize) };
+            let create_steam_pipe = unsafe {
+                vfunc::<CreateSteamPipe>(steam_client, SteamClientFn::CreateSteamPipe as usize)
+            };
+            let release_steam_pipe = unsafe {
+                vfunc::<ReleaseSteamPipe>(steam_client, SteamClientFn::ReleaseSteamPipe as usize)
+            };
+            let shutdown_if_all_pipes_closed = unsafe {
+                vfunc::<ShutdownIfAllPipesClosed>(
+                    steam_client,
+                    SteamClientFn::ShutdownIfAllPipesClosed as usize,
+                )
+            };
             let connect_to_global_user = unsafe {
-                vfunc::<ConnectToGlobalUser>(steam_client, SteamClientFn::ConnectToGlobalUser as usize)
+                vfunc::<ConnectToGlobalUser>(
+                    steam_client,
+                    SteamClientFn::ConnectToGlobalUser as usize,
+                )
             };
             let release_user =
                 unsafe { vfunc::<ReleaseUser>(steam_client, SteamClientFn::ReleaseUser as usize) };
-            let get_steam_user =
-                unsafe { vfunc::<GetSteamUser>(steam_client, SteamClientFn::GetISteamUser as usize) };
-            let get_steam_utils =
-                unsafe { vfunc::<GetSteamUtils>(steam_client, SteamClientFn::GetISteamUtils as usize) };
+            let get_steam_user = unsafe {
+                vfunc::<GetSteamUser>(steam_client, SteamClientFn::GetISteamUser as usize)
+            };
+            let get_steam_utils = unsafe {
+                vfunc::<GetSteamUtils>(steam_client, SteamClientFn::GetISteamUtils as usize)
+            };
             let get_steam_user_stats = unsafe {
                 vfunc::<GetSteamUserStats>(steam_client, SteamClientFn::GetISteamUserStats as usize)
             };
@@ -936,7 +1007,8 @@ mod windows_steam {
                 }
                 return Err("Failed to get ISteamUtils.".to_string());
             }
-            let get_app_id = unsafe { vfunc::<GetAppId>(steam_utils, SteamUtilsFn::GetAppId as usize) };
+            let get_app_id =
+                unsafe { vfunc::<GetAppId>(steam_utils, SteamUtilsFn::GetAppId as usize) };
             let active_app_id = unsafe { get_app_id(steam_utils) };
             if active_app_id != app_id as u32 {
                 unsafe {
@@ -986,11 +1058,17 @@ mod windows_steam {
                 steam_free_last_callback,
                 release_user,
                 release_steam_pipe,
+                shutdown_if_all_pipes_closed,
+                active_app_id,
                 _steam_app_id_env: steam_app_id_env,
             })
         }
 
-        pub fn prepare_user_stats(&mut self) {
+        pub fn active_app_id(&self) -> u32 {
+            self.active_app_id
+        }
+
+        pub fn prepare_user_stats(&mut self) -> bool {
             let get_steam_id =
                 unsafe { vfunc::<GetSteamId>(self.steam_user, SteamUserFn::GetSteamId as usize) };
             let request_user_stats = unsafe {
@@ -1003,12 +1081,13 @@ mod windows_steam {
             unsafe {
                 get_steam_id(self.steam_user, &mut steam_id);
             }
-            if steam_id != 0 {
-                unsafe {
-                    request_user_stats(self.steam_user_stats, steam_id);
-                }
-                self.run_callbacks_for(Duration::from_millis(1500));
+            if steam_id == 0 {
+                return false;
             }
+
+            let request = unsafe { request_user_stats(self.steam_user_stats, steam_id) };
+            self.run_callbacks_for(Duration::from_millis(1500));
+            request != 0
         }
 
         pub fn achievement_names(&self) -> Result<Vec<String>, String> {
@@ -1032,7 +1111,9 @@ mod windows_steam {
                 if ptr.is_null() {
                     continue;
                 }
-                let name = unsafe { CStr::from_ptr(ptr) }.to_string_lossy().into_owned();
+                let name = unsafe { CStr::from_ptr(ptr) }
+                    .to_string_lossy()
+                    .into_owned();
                 if !name.trim().is_empty() {
                     names.push(name);
                 }
@@ -1170,6 +1251,7 @@ mod windows_steam {
                     (self.release_steam_pipe)(self.steam_client, self.pipe);
                     self.pipe = 0;
                 }
+                let _ = (self.shutdown_if_all_pipes_closed)(self.steam_client);
             }
         }
     }
@@ -1183,6 +1265,7 @@ mod windows_steam {
         GetISteamUser = 5,
         GetISteamUtils = 9,
         GetISteamUserStats = 13,
+        ShutdownIfAllPipesClosed = 23,
     }
 
     #[repr(usize)]
@@ -1484,7 +1567,10 @@ mod tests {
         ];
         let targets = HashSet::from(["ACH_ONE".to_string()]);
 
-        assert_eq!(count_target_achievement_changes(&before, &after, &targets), 1);
+        assert_eq!(
+            count_target_achievement_changes(&before, &after, &targets),
+            1
+        );
         let unexpected = changed_non_target_states(&before, &after, &targets);
         assert_eq!(unexpected.len(), 1);
         assert_eq!(unexpected[0].api_name, "ACH_TWO");
@@ -1519,6 +1605,31 @@ mod tests {
         assert_eq!(
             unapplied_target_states(&after, &desired),
             vec!["ACH_MISSING".to_string()]
+        );
+    }
+
+    #[test]
+    fn unapplied_target_state_details_include_actual_and_desired_values() {
+        let after = vec![SamAchievementState {
+            api_name: "ACH_LOCK_ME".to_string(),
+            achieved: true,
+            unlock_time: 1,
+            valid: true,
+        }];
+        let desired = HashMap::from([
+            ("ACH_LOCK_ME".to_string(), false),
+            ("ACH_MISSING".to_string(), true),
+        ]);
+
+        let mut details = unapplied_target_state_details(&after, &desired);
+        details.sort();
+
+        assert_eq!(
+            details,
+            vec![
+                "ACH_LOCK_ME:actual=true,desired=false".to_string(),
+                "ACH_MISSING:actual=missing,desired=true".to_string(),
+            ]
         );
     }
 

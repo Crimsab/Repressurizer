@@ -719,7 +719,7 @@
   "detail.sam.confirmLock": "Lock {count} achievement(s) on Steam? Repressurizer will create before/after backups first. Original unlock timestamps cannot be restored by Steamworks.",
   "detail.sam.confirmRestore": "Restore achievement state from the selected backup? Repressurizer will still create before/after backups. Original unlock timestamps remain reference-only.",
   "detail.sam.actionDone": "{count} achievement change(s) stored. Before backup: {backup}",
-  "detail.sam.actionFailed": "Steam did not apply {count} achievement change(s): {ids}. This can happen with protected/server-side achievements or a running game. Before backup: {backup}",
+  "detail.sam.actionFailed": "Steam did not apply {count} achievement change(s): {ids}. This can happen with protected, stat-bound, server-side achievements or a running game. Before backup: {backup}",
   "detail.sam.actionDiagnostics": "Diagnostics: {details}",
   "detail.sam.lock": "Lock",
   "detail.sam.unlock": "Unlock",

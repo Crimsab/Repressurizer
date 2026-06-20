@@ -367,7 +367,7 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="flex w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_24px_64px_rgba(0,0,0,0.6)] animate-fade-in" style={{ maxHeight: "90vh" }}>
+      <div className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_24px_64px_rgba(0,0,0,0.6)] animate-fade-in">
         {/* Header image + overlay */}
         <div className="relative h-48 shrink-0 overflow-hidden bg-repressurizer-bg">
           <SteamImage
@@ -461,7 +461,7 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
         </div>
 
         {/* Content */}
-        <div className="min-h-0 overflow-auto p-6">
+        <div className="overflow-y-auto p-6" style={{ maxHeight: "calc(90vh - 244px)" }}>
           {tab === "info" && (
             <InfoTab
               details={details}
@@ -1206,7 +1206,7 @@ function AchievementsTab({
       )}
 
       {/* Achievement list */}
-      <div className="space-y-1">
+      <div className="space-y-1 overflow-y-auto pr-1" style={{ maxHeight: "min(42vh, 520px)" }}>
         {filtered.length === 0 ? (
           <p className="py-4 text-center text-sm text-repressurizer-text-muted">
             {t("detail.noAchievementMatches", { query: search })}
