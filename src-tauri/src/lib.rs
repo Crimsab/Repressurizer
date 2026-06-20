@@ -523,6 +523,7 @@ pub fn run() {
             api::fetch_achievements_summary,
             sam::probe_sam_bridge,
             sam::sam_achievement_action,
+            sam::sam_backup_dir,
             api::fetch_wishlist,
             api::fetch_family_library,
             api::resolve_vanity_url,

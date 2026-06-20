@@ -180,7 +180,6 @@ export function SteamToolsPage({ onClose, onOpenAchievements }: SteamToolsPagePr
                   <ProbeFact label={t("steamTools.bridge.sam")} value={samReadinessLabel(t, samProbe)} />
                   <ProbeFact label={t("steamTools.sam.platform")} value={samProbe?.platform ?? t("steamTools.sam.checking")} />
                   <ProbeFact label={t("steamTools.sam.steamClient")} value={booleanLabel(t, samProbe?.steamClientLibraryFound)} />
-                  <ProbeFact label={t("steamTools.sam.localBridge")} value={booleanLabel(t, samProbe?.localBridgeFound)} />
                   <ProbeFact label={t("steamTools.sam.writes")} value={samProbe?.writesSteam ? t("steamTools.sam.available") : t("steamTools.status.readOnly")} />
                 </div>
               </div>

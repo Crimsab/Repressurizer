@@ -160,6 +160,10 @@ export async function runSamAchievementAction(
   return invoke<SamAchievementActionResult>("sam_achievement_action", { input });
 }
 
+export async function getSamBackupDir(appId: number): Promise<string> {
+  return invoke<string>("sam_backup_dir", { appId });
+}
+
 export interface WishlistItem {
   appid: number;
   priority: number;

@@ -1,5 +1,6 @@
 import { useCallback, useState, useEffect, useMemo, useRef } from "react";
-import { open } from "@tauri-apps/plugin-shell";
+import { open as openPath } from "@tauri-apps/plugin-shell";
+import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useGameStore } from "../../stores/gameStore";
 import { useCategoryStore } from "../../stores/categoryStore";
@@ -12,6 +13,7 @@ import {
   fetchAchievements,
   fetchHltb,
   currencyToCountryCode,
+  getSamBackupDir,
   probeSamBridge,
   runSamAchievementAction,
 } from "../../lib/tauri";
@@ -37,8 +39,8 @@ import {
   Check,
   Lock,
   MagnifyingGlass,
-  ShieldCheck,
   Wrench,
+  Trash,
   WindowsLogo,
   LinuxLogo,
   AppleLogo,
@@ -265,12 +267,19 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
   );
 
   const handleSamAchievementAction = useCallback(
-    async (action: SamAchievementAction, achievementIds: string[]) => {
+    async (
+      action: SamAchievementAction,
+      achievementIds: string[],
+      backupPath: string | null = null
+    ) => {
       const count = achievementIds.length;
+      const isRestoreAction = action === "restore_backup";
       const isUnlockAction =
         action === "unlock" || action === "unlock_selected" || action === "unlock_all";
       const confirmMessage =
-        isUnlockAction
+        isRestoreAction
+          ? t("detail.sam.confirmRestore")
+          : isUnlockAction
           ? t("detail.sam.confirmUnlock", { count })
           : t("detail.sam.confirmLock", { count });
       if (!window.confirm(confirmMessage)) return false;
@@ -284,18 +293,28 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
           appId: game.appid,
           action,
           achievementIds,
-          backupPath: null,
+          backupPath,
         });
         applySamResultToAchievements(result);
         const backup = result.beforeBackupPath ?? t("common.unknown");
-        setSamActionMessage(
-          t("detail.sam.actionDone", {
-            count: result.changed,
-            backup,
-          })
-        );
+        if (result.failed.length > 0) {
+          setSamActionError(
+            t("detail.sam.actionFailed", {
+              count: result.failed.length,
+              ids: result.failed.join(", "),
+              backup,
+            })
+          );
+        } else {
+          setSamActionMessage(
+            t("detail.sam.actionDone", {
+              count: result.changed,
+              backup,
+            })
+          );
+        }
         void refreshSamProbe();
-        return true;
+        return result.failed.length === 0;
       } catch (error) {
         setSamActionError(String(error));
         return false;
@@ -311,6 +330,28 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
       t,
     ]
   );
+
+  const handleOpenSamBackups = useCallback(async () => {
+    try {
+      const backupDir = await getSamBackupDir(game.appid);
+      await openPath(backupDir);
+    } catch (error) {
+      setSamActionError(String(error));
+    }
+  }, [game.appid]);
+
+  const handleRestoreSamBackup = useCallback(async () => {
+    try {
+      const selected = await openFileDialog({
+        multiple: false,
+        filters: [{ name: "SAM backup", extensions: ["json"] }],
+      });
+      if (typeof selected !== "string") return;
+      await handleSamAchievementAction("restore_backup", [], selected);
+    } catch (error) {
+      setSamActionError(String(error));
+    }
+  }, [handleSamAchievementAction]);
 
   return (
     <div
@@ -402,7 +443,7 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
             {t("settings.refresh")}
           </button>
           <button
-            onClick={() => open(`https://store.steampowered.com/app/${game.appid}`)}
+            onClick={() => openPath(`https://store.steampowered.com/app/${game.appid}`)}
             className="btn-press inline-flex items-center gap-1.5 px-4 py-2.5 text-sm text-repressurizer-text-muted transition-colors hover:text-white"
           >
             <ArrowSquareOut size={14} />
@@ -439,6 +480,8 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
               samActionMessage={samActionMessage}
               samActionError={samActionError}
               onSamAction={handleSamAchievementAction}
+              onOpenSamBackups={handleOpenSamBackups}
+              onRestoreSamBackup={handleRestoreSamBackup}
             />
           )}
         </div>
@@ -947,6 +990,8 @@ function AchievementsTab({
   samActionMessage,
   samActionError,
   onSamAction,
+  onOpenSamBackups,
+  onRestoreSamBackup,
 }: {
   achievements: AchievementSummary | null;
   loading: boolean;
@@ -958,7 +1003,13 @@ function AchievementsTab({
   samActionRunning: string;
   samActionMessage: string;
   samActionError: string;
-  onSamAction: (action: SamAchievementAction, achievementIds: string[]) => Promise<boolean>;
+  onSamAction: (
+    action: SamAchievementAction,
+    achievementIds: string[],
+    backupPath?: string | null
+  ) => Promise<boolean>;
+  onOpenSamBackups: () => void;
+  onRestoreSamBackup: () => void;
 }) {
   const t = useT();
   const [search, setSearch] = useState("");
@@ -1089,6 +1140,8 @@ function AchievementsTab({
           unlockedCount={unlockedIds.length}
           onUnlockAll={() => onSamAction("unlock_all", lockedIds)}
           onLockAll={() => onSamAction("lock_all", unlockedIds)}
+          onOpenBackups={onOpenSamBackups}
+          onRestoreBackup={onRestoreSamBackup}
         />
       )}
 
@@ -1127,7 +1180,7 @@ function AchievementsTab({
       </div>
 
       {canWrite && (
-        <AchievementSelectionToolbar
+        <AchievementSelectionStrip
           selectedCount={selectedIds.length}
           selectedLockedCount={selectedLockedIds.length}
           selectedUnlockedCount={selectedUnlockedIds.length}
@@ -1169,7 +1222,7 @@ function AchievementsTab({
   );
 }
 
-function AchievementSelectionToolbar({
+function AchievementSelectionStrip({
   selectedCount,
   selectedLockedCount,
   selectedUnlockedCount,
@@ -1197,69 +1250,71 @@ function AchievementSelectionToolbar({
   const locking = runningAction === "lock_selected";
 
   return (
-    <div className="rounded-lg border border-repressurizer-border-subtle bg-repressurizer-bg px-3 py-2">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <span className="text-xs font-medium text-repressurizer-text">
-            {t("detail.sam.selected", { count: selectedCount })}
-          </span>
-          <button
-            type="button"
-            onClick={onSelectAll}
-            className="btn-press rounded-md border border-repressurizer-border bg-repressurizer-surface px-2 py-1 text-[11px] text-repressurizer-text-muted transition-colors hover:border-repressurizer-accent hover:text-repressurizer-text"
-          >
-            {t("detail.sam.selectAll")}
-          </button>
-          <button
-            type="button"
-            onClick={onSelectLocked}
-            className="btn-press rounded-md border border-repressurizer-border bg-repressurizer-surface px-2 py-1 text-[11px] text-repressurizer-text-muted transition-colors hover:border-repressurizer-accent hover:text-repressurizer-text"
-          >
-            {t("detail.sam.selectLocked")}
-          </button>
-          <button
-            type="button"
-            onClick={onSelectUnlocked}
-            className="btn-press rounded-md border border-repressurizer-border bg-repressurizer-surface px-2 py-1 text-[11px] text-repressurizer-text-muted transition-colors hover:border-repressurizer-accent hover:text-repressurizer-text"
-          >
-            {t("detail.sam.selectUnlocked")}
-          </button>
+    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-repressurizer-border-subtle pb-2">
+      <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+        <button
+          type="button"
+          onClick={onSelectAll}
+          className="btn-press rounded-md px-2 py-1 text-[11px] text-repressurizer-text-faint transition-colors hover:bg-repressurizer-bg hover:text-repressurizer-text"
+        >
+          {t("detail.sam.selectAll")}
+        </button>
+        <button
+          type="button"
+          onClick={onSelectLocked}
+          className="btn-press rounded-md px-2 py-1 text-[11px] text-repressurizer-text-faint transition-colors hover:bg-repressurizer-bg hover:text-repressurizer-text"
+        >
+          {t("detail.sam.selectLocked")}
+        </button>
+        <button
+          type="button"
+          onClick={onSelectUnlocked}
+          className="btn-press rounded-md px-2 py-1 text-[11px] text-repressurizer-text-faint transition-colors hover:bg-repressurizer-bg hover:text-repressurizer-text"
+        >
+          {t("detail.sam.selectUnlocked")}
+        </button>
+        {selectedCount > 0 && (
           <button
             type="button"
             onClick={onClear}
-            disabled={selectedCount === 0}
-            className="btn-press rounded-md border border-transparent px-2 py-1 text-[11px] text-repressurizer-text-faint transition-colors hover:text-repressurizer-text disabled:opacity-40"
+            aria-label={t("detail.sam.clearSelection")}
+            title={t("detail.sam.clearSelection")}
+            className="btn-press inline-flex h-7 w-7 items-center justify-center rounded-md text-repressurizer-text-faint transition-colors hover:bg-repressurizer-bg hover:text-repressurizer-text"
           >
-            {t("detail.sam.clearSelection")}
+            <Trash size={14} weight="bold" />
           </button>
-        </div>
-        <div className="flex shrink-0 flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={onUnlockSelected}
-            disabled={selectedLockedCount === 0 || !!runningAction}
-            className="btn-press rounded-lg border border-repressurizer-accent/40 bg-repressurizer-accent/10 px-3 py-1.5 text-xs font-medium text-repressurizer-accent transition-colors hover:bg-repressurizer-accent/15 disabled:opacity-40"
-          >
-            {unlocking
-              ? t("detail.sam.working")
-              : t("detail.sam.unlockSelected", { count: selectedLockedCount })}
-          </button>
-          <button
-            type="button"
-            onClick={onLockSelected}
-            disabled={selectedUnlockedCount === 0 || !!runningAction}
-            className="btn-press rounded-lg border border-repressurizer-border bg-repressurizer-surface px-3 py-1.5 text-xs font-medium text-repressurizer-text transition-colors hover:border-repressurizer-danger hover:text-repressurizer-danger disabled:opacity-40"
-          >
-            {locking
-              ? t("detail.sam.working")
-              : t("detail.sam.lockSelected", { count: selectedUnlockedCount })}
-          </button>
-        </div>
+        )}
       </div>
-      {selectedCount === 0 && (
-        <p className="mt-1 text-[11px] text-repressurizer-text-faint">
-          {t("detail.sam.noSelection")}
-        </p>
+      {selectedCount > 0 && (
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <span className="mr-1 text-xs font-medium text-repressurizer-text">
+            {t("detail.sam.selected", { count: selectedCount })}
+          </span>
+          {selectedLockedCount > 0 && (
+            <button
+              type="button"
+              onClick={onUnlockSelected}
+              disabled={!!runningAction}
+              className="btn-press rounded-lg border border-repressurizer-accent/40 bg-repressurizer-accent/10 px-3 py-1.5 text-xs font-medium text-repressurizer-accent transition-colors hover:bg-repressurizer-accent/15 disabled:opacity-40"
+            >
+              {unlocking
+                ? t("detail.sam.working")
+                : t("detail.sam.unlockSelected", { count: selectedLockedCount })}
+            </button>
+          )}
+          {selectedUnlockedCount > 0 && (
+            <button
+              type="button"
+              onClick={onLockSelected}
+              disabled={!!runningAction}
+              className="btn-press rounded-lg border border-repressurizer-border bg-repressurizer-bg px-3 py-1.5 text-xs font-medium text-repressurizer-text transition-colors hover:border-repressurizer-danger hover:text-repressurizer-danger disabled:opacity-40"
+            >
+              {locking
+                ? t("detail.sam.working")
+                : t("detail.sam.lockSelected", { count: selectedUnlockedCount })}
+            </button>
+          )}
+        </div>
       )}
     </div>
   );
@@ -1275,6 +1330,8 @@ function SamBridgePanel({
   unlockedCount,
   onUnlockAll,
   onLockAll,
+  onOpenBackups,
+  onRestoreBackup,
 }: {
   probe: SamBridgeProbe | null;
   writesEnabled: boolean;
@@ -1285,6 +1342,8 @@ function SamBridgePanel({
   unlockedCount: number;
   onUnlockAll: () => void;
   onLockAll: () => void;
+  onOpenBackups: () => void;
+  onRestoreBackup: () => void;
 }) {
   const t = useT();
   const readiness = samReadinessLabel(t, probe);
@@ -1293,7 +1352,7 @@ function SamBridgePanel({
   const unlockBlocked = !canWrite || lockedCount === 0;
 
   return (
-    <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg p-4">
+    <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3">
       <div className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-2.5">
           <Wrench size={17} weight="duotone" className="mt-0.5 shrink-0 text-repressurizer-accent" />
@@ -1309,71 +1368,58 @@ function SamBridgePanel({
         </span>
       </div>
 
-      <div className="mt-3 grid gap-2 sm:grid-cols-2">
-        <SamBridgeFact
-          icon={<ShieldCheck size={14} />}
-          label={t("detail.sam.webApi")}
-          value={t("steamTools.status.ready")}
-        />
-        <SamBridgeFact
-          icon={<Wrench size={14} />}
-          label={t("detail.sam.localBridge")}
-          value={readiness}
-        />
-      </div>
-
-      <div className="mt-3 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-surface/40 p-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-xs font-medium text-repressurizer-text">{t("detail.sam.writeActions")}</p>
-            <p className="mt-0.5 text-[11px] leading-relaxed text-repressurizer-text-faint">
-              {!writesEnabled
-                ? t("detail.sam.enableWrites")
-                : probe?.available
-                  ? t("detail.sam.backupNote")
-                  : t("detail.sam.bridgeRequired")}
-            </p>
-          </div>
-          <div className="flex shrink-0 flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={onUnlockAll}
-              disabled={unlockBlocked}
-              className="btn-press rounded-lg border border-repressurizer-border bg-repressurizer-bg px-3 py-1.5 text-xs font-medium text-repressurizer-text transition-colors hover:border-repressurizer-accent hover:text-repressurizer-accent disabled:opacity-40"
-            >
-              {runningAction === "unlock_all" ? t("detail.sam.working") : t("detail.sam.unlockAll", { count: lockedCount })}
-            </button>
-            <button
-              type="button"
-              onClick={onLockAll}
-              disabled={lockBlocked}
-              className="btn-press rounded-lg border border-repressurizer-border bg-repressurizer-bg px-3 py-1.5 text-xs font-medium text-repressurizer-text transition-colors hover:border-repressurizer-danger hover:text-repressurizer-danger disabled:opacity-40"
-            >
-              {runningAction === "lock_all" ? t("detail.sam.working") : t("detail.sam.lockAll", { count: unlockedCount })}
-            </button>
-          </div>
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-repressurizer-border-subtle pt-3">
+        <p className="min-w-0 flex-1 text-[11px] leading-relaxed text-repressurizer-text-faint">
+          {!writesEnabled
+            ? t("detail.sam.enableWrites")
+            : probe?.available
+              ? t("detail.sam.backupNote")
+              : t("detail.sam.bridgeRequired")}
+        </p>
+        <div className="flex shrink-0 flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={onOpenBackups}
+            className="btn-press rounded-lg border border-repressurizer-border bg-repressurizer-surface px-3 py-1.5 text-xs font-medium text-repressurizer-text-muted transition-colors hover:border-repressurizer-text-faint hover:text-repressurizer-text"
+          >
+            {t("detail.sam.openBackups")}
+          </button>
+          <button
+            type="button"
+            onClick={onRestoreBackup}
+            disabled={!canWrite}
+            className="btn-press rounded-lg border border-repressurizer-border bg-repressurizer-surface px-3 py-1.5 text-xs font-medium text-repressurizer-text-muted transition-colors hover:border-repressurizer-accent hover:text-repressurizer-accent disabled:opacity-40"
+          >
+            {runningAction === "restore_backup" ? t("detail.sam.working") : t("detail.sam.restoreBackup")}
+          </button>
+          <button
+            type="button"
+            onClick={onUnlockAll}
+            disabled={unlockBlocked}
+            className="btn-press rounded-lg border border-repressurizer-border bg-repressurizer-surface px-3 py-1.5 text-xs font-medium text-repressurizer-text transition-colors hover:border-repressurizer-accent hover:text-repressurizer-accent disabled:opacity-40"
+          >
+            {runningAction === "unlock_all" ? t("detail.sam.working") : t("detail.sam.unlockAll", { count: lockedCount })}
+          </button>
+          <button
+            type="button"
+            onClick={onLockAll}
+            disabled={lockBlocked}
+            className="btn-press rounded-lg border border-repressurizer-border bg-repressurizer-surface px-3 py-1.5 text-xs font-medium text-repressurizer-text transition-colors hover:border-repressurizer-danger hover:text-repressurizer-danger disabled:opacity-40"
+          >
+            {runningAction === "lock_all" ? t("detail.sam.working") : t("detail.sam.lockAll", { count: unlockedCount })}
+          </button>
         </div>
-        {message && (
-          <p className="mt-2 rounded-lg border border-repressurizer-success/20 bg-repressurizer-success/10 px-3 py-2 text-xs text-repressurizer-success">
-            {message}
-          </p>
-        )}
-        {error && (
-          <p className="mt-2 rounded-lg border border-repressurizer-danger/20 bg-repressurizer-danger/10 px-3 py-2 text-xs text-repressurizer-danger">
-            {error}
-          </p>
-        )}
       </div>
-    </div>
-  );
-}
-
-function SamBridgeFact({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
-  return (
-    <div className="flex min-w-0 items-center gap-2 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-surface/40 px-3 py-2">
-      <span className="shrink-0 text-repressurizer-text-faint">{icon}</span>
-      <span className="min-w-0 flex-1 truncate text-[11px] text-repressurizer-text-muted">{label}</span>
-      <span className="shrink-0 truncate font-mono text-[11px] text-repressurizer-text tabular-nums">{value}</span>
+      {message && (
+        <p className="mt-2 rounded-lg border border-repressurizer-success/20 bg-repressurizer-success/10 px-3 py-2 text-xs text-repressurizer-success">
+          {message}
+        </p>
+      )}
+      {error && (
+        <p className="mt-2 rounded-lg border border-repressurizer-danger/20 bg-repressurizer-danger/10 px-3 py-2 text-xs text-repressurizer-danger">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

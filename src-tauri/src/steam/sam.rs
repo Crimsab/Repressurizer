@@ -120,6 +120,17 @@ pub fn sam_achievement_action(
     run_bridge_achievement_action(&bridge_path, input)
 }
 
+#[tauri::command]
+pub fn sam_backup_dir(app_id: u64) -> Result<String, String> {
+    if app_id == 0 || app_id > u32::MAX as u64 {
+        return Err("A valid Steam appId is required.".to_string());
+    }
+    let path = sam_backup_base_dir(app_id)?;
+    fs::create_dir_all(&path)
+        .map_err(|error| format!("Failed to create SAM backup directory: {error}"))?;
+    Ok(path_to_string(path))
+}
+
 pub fn run_embedded_bridge_from_env() -> Option<i32> {
     run_embedded_bridge(std::env::args())
 }
@@ -436,10 +447,12 @@ fn perform_bridge_achievement_action(
     let mut failed = Vec::new();
     let mut attempted = 0usize;
     let target_set: HashSet<String> = ids.iter().cloned().collect();
+    let mut desired_states: HashMap<String, bool> = HashMap::new();
 
     match input.action.as_str() {
         "unlock" => {
             for id in &ids {
+                desired_states.insert(id.clone(), true);
                 if bridge.set_achievement(id, true) {
                     attempted += 1;
                 } else {
@@ -449,6 +462,7 @@ fn perform_bridge_achievement_action(
         }
         "lock" => {
             for id in &ids {
+                desired_states.insert(id.clone(), false);
                 if bridge.set_achievement(id, false) {
                     attempted += 1;
                 } else {
@@ -458,6 +472,7 @@ fn perform_bridge_achievement_action(
         }
         "unlock_selected" | "unlock_all" => {
             for id in &ids {
+                desired_states.insert(id.clone(), true);
                 if bridge.set_achievement(id, true) {
                     attempted += 1;
                 } else {
@@ -467,6 +482,7 @@ fn perform_bridge_achievement_action(
         }
         "lock_selected" | "lock_all" => {
             for id in &ids {
+                desired_states.insert(id.clone(), false);
                 if bridge.set_achievement(id, false) {
                     attempted += 1;
                 } else {
@@ -479,6 +495,7 @@ fn perform_bridge_achievement_action(
                 .as_ref()
                 .ok_or("A backup path is required to restore achievement state.")?;
             for state in backup.achievements.iter().filter(|state| state.valid) {
+                desired_states.insert(state.api_name.clone(), state.achieved);
                 if bridge.set_achievement(&state.api_name, state.achieved) {
                     attempted += 1;
                 } else {
@@ -495,6 +512,7 @@ fn perform_bridge_achievement_action(
         true
     };
     bridge.run_callbacks_for(std::time::Duration::from_millis(800));
+    bridge.prepare_user_stats();
 
     let mut after_states = bridge.capture_states(&backup_names);
     let unexpected_changes =
@@ -507,11 +525,18 @@ fn perform_bridge_achievement_action(
         }
         store_stats = bridge.store_stats() && store_stats;
         bridge.run_callbacks_for(std::time::Duration::from_millis(800));
+        bridge.prepare_user_stats();
         after_states = bridge.capture_states(&backup_names);
     }
 
     let after_backup = build_achievement_backup(input.app_id, &input.action, "after", after_states);
     let after_backup_path = save_achievement_backup(&after_backup).ok();
+    let unapplied = unapplied_target_states(&after_backup.achievements, &desired_states);
+    for id in &unapplied {
+        if !failed.iter().any(|failed_id| failed_id == id) {
+            failed.push(id.clone());
+        }
+    }
     let changed =
         count_target_achievement_changes(&before_backup.achievements, &after_backup.achievements, &target_set);
 
@@ -523,7 +548,12 @@ fn perform_bridge_achievement_action(
                 .unwrap_or("backup path unavailable")
         ));
     }
-    let message = if unexpected_changes.is_empty() {
+    let message = if !unapplied.is_empty() {
+        format!(
+            "Steam did not apply {} achievement change(s). Some achievements may be protected, server-side, or currently controlled by a running game.",
+            unapplied.len()
+        )
+    } else if unexpected_changes.is_empty() {
         "Achievement state updated. Backup contains unlock times for reference, but Steamworks does not expose an API to restore original unlock timestamps.".to_string()
     } else {
         format!(
@@ -592,6 +622,22 @@ fn changed_non_target_states(
         .collect()
 }
 
+fn unapplied_target_states(
+    after: &[SamAchievementState],
+    desired_states: &HashMap<String, bool>,
+) -> Vec<String> {
+    let after_map = achievement_state_map(after);
+    desired_states
+        .iter()
+        .filter_map(|(id, desired)| {
+            let Some(state) = after_map.get(id) else {
+                return Some(id.clone());
+            };
+            (state.achieved != *desired).then(|| id.clone())
+        })
+        .collect()
+}
+
 fn normalized_achievement_ids(ids: &[String]) -> Vec<String> {
     dedupe_strings(
         ids.iter()
@@ -632,10 +678,7 @@ fn build_achievement_backup(
 }
 
 fn save_achievement_backup(backup: &SamAchievementBackup) -> Result<String, String> {
-    let base = crate::app_data_dir()
-        .ok_or("Could not resolve Repressurizer app data directory.")?
-        .join("sam_backups")
-        .join(backup.app_id.to_string());
+    let base = sam_backup_base_dir(backup.app_id)?;
     fs::create_dir_all(&base)
         .map_err(|error| format!("Failed to create SAM backup directory: {error}"))?;
 
@@ -653,6 +696,13 @@ fn save_achievement_backup(backup: &SamAchievementBackup) -> Result<String, Stri
     let json = serde_json::to_string_pretty(backup).map_err(|error| error.to_string())?;
     fs::write(&path, json).map_err(|error| format!("Failed to write SAM backup: {error}"))?;
     Ok(path_to_string(path))
+}
+
+fn sam_backup_base_dir(app_id: u64) -> Result<PathBuf, String> {
+    Ok(crate::app_data_dir()
+        .ok_or("Could not resolve Repressurizer app data directory.")?
+        .join("sam_backups")
+        .join(app_id.to_string()))
 }
 
 fn load_achievement_backup(path: &str) -> Result<SamAchievementBackup, String> {
@@ -1373,6 +1423,38 @@ mod tests {
         let unexpected = changed_non_target_states(&before, &after, &targets);
         assert_eq!(unexpected.len(), 1);
         assert_eq!(unexpected[0].api_name, "ACH_TWO");
+    }
+
+    #[test]
+    fn unapplied_target_states_report_ids_that_did_not_change() {
+        let after = vec![SamAchievementState {
+            api_name: "ACH_LOCK_ME".to_string(),
+            achieved: true,
+            unlock_time: 1,
+            valid: true,
+        }];
+        let desired = HashMap::from([("ACH_LOCK_ME".to_string(), false)]);
+
+        assert_eq!(
+            unapplied_target_states(&after, &desired),
+            vec!["ACH_LOCK_ME".to_string()]
+        );
+    }
+
+    #[test]
+    fn unapplied_target_states_report_missing_ids() {
+        let after = vec![SamAchievementState {
+            api_name: "ACH_OTHER".to_string(),
+            achieved: false,
+            unlock_time: 0,
+            valid: true,
+        }];
+        let desired = HashMap::from([("ACH_MISSING".to_string(), false)]);
+
+        assert_eq!(
+            unapplied_target_states(&after, &desired),
+            vec!["ACH_MISSING".to_string()]
+        );
     }
 
     fn temp_dir(name: &str) -> PathBuf {

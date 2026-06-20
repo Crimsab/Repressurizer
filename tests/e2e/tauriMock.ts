@@ -437,6 +437,8 @@ export async function installTauriMock(page: Page) {
                 : ["Steam does not appear to be running; SAM-style local reads require the Steam client and logged-in user."],
             };
           }
+          case "sam_backup_dir":
+            return "C:\\\\Users\\\\Crimsab\\\\AppData\\\\Roaming\\\\Repressurizer\\\\sam_backups\\\\1145360";
           case "sam_achievement_action": {
             const input = args?.input as {
               appId?: number;

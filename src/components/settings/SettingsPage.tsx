@@ -953,17 +953,6 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                         </p>
                       </div>
                     </div>
-                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                      <MiniStat label={t("steamTools.sam.localBridge")} value={t("steamTools.sam.available")} />
-                      <MiniStat
-                        label={t("steamTools.sam.writes")}
-                        value={
-                          settings.steamToolsAchievementWritesEnabled
-                            ? t("detail.sam.writesEnabled")
-                            : t("detail.sam.writesLocked")
-                        }
-                      />
-                    </div>
                   </div>
                   {settings.steamToolsEnabled && (
                     <ToggleRow
@@ -1661,6 +1650,7 @@ function AppearanceTab({ isSectionVisible }: { isSectionVisible: (id: string) =>
     if (/^#[0-9a-fA-F]{6}$/.test(hex)) {
       const normalized = hex.toLowerCase();
       setPreviewAccent(normalized);
+      applyAccentColor(normalized);
       if (previewFrameRef.current != null) cancelAnimationFrame(previewFrameRef.current);
       previewFrameRef.current = requestAnimationFrame(() => {
         applyAccentColor(normalized);
