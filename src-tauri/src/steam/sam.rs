@@ -1,4 +1,6 @@
 use serde::{Deserialize, Serialize};
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -6,6 +8,8 @@ const SAM_SOURCE: &str = "Repressurizer SAM bridge";
 const SAM_REFERENCE_SOURCE: &str = "Steam Achievement Manager architecture";
 const SAM_LICENSE: &str = "zlib-compatible architecture reference";
 const EMBEDDED_BRIDGE_ARG: &str = "--repressurizer-sam-bridge";
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -244,7 +248,11 @@ fn run_bridge_probe(
     steam_path: &str,
     app_id: u64,
 ) -> Result<SamBridgeProbe, String> {
-    let output = Command::new(bridge_path)
+    let mut command = Command::new(bridge_path);
+    #[cfg(windows)]
+    command.creation_flags(CREATE_NO_WINDOW);
+
+    let output = command
         .arg(EMBEDDED_BRIDGE_ARG)
         .arg("probe")
         .arg("--steam-path")

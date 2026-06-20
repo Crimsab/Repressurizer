@@ -128,6 +128,14 @@ test("opens the Steam Tools lab surface", async ({ page }, testInfo) => {
 });
 
 test("game achievement details show SAM bridge preflight separately from Steam Web API data", async ({ page }, testInfo) => {
+  await page.addInitScript(() => {
+    const raw = window.localStorage.getItem("repressurizer-settings");
+    if (!raw) return;
+    const settings = JSON.parse(raw);
+    settings.steamToolsEnabled = true;
+    window.localStorage.setItem("repressurizer-settings", JSON.stringify(settings));
+  });
+
   await page.goto("/");
 
   await page.locator(".game-card").filter({ hasText: "Hades" }).dblclick();
@@ -146,6 +154,19 @@ test("game achievement details show SAM bridge preflight separately from Steam W
   const screenshotPath = testInfo.outputPath("game-achievements-sam-bridge.png");
   await page.screenshot({ path: screenshotPath, fullPage: true });
   await testInfo.attach("game-achievements-sam-bridge", { path: screenshotPath, contentType: "image/png" });
+});
+
+test("achievement details do not probe SAM while Steam Tools is disabled", async ({ page }) => {
+  await page.goto("/");
+
+  await page.locator(".game-card").filter({ hasText: "Hades" }).dblclick();
+  const detail = page.locator(".fixed.inset-0").filter({
+    has: page.getByRole("heading", { name: "Hades" }),
+  });
+  await detail.getByRole("button", { name: /Achievements/ }).click();
+
+  await expect(detail.getByText("1 / 3 achievements")).toBeVisible();
+  await expect(detail.getByRole("heading", { name: "SAM bridge" })).toBeHidden();
 });
 
 test("games without Steam achievements skip the SAM bridge panel", async ({ page }) => {

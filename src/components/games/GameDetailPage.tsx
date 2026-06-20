@@ -60,6 +60,7 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
     showDetailMetacritic,
     showDetailPrice,
     steamPath,
+    steamToolsEnabled,
   } = useSettingsStore();
   const collections = useCategoryStore((s) => s.collections);
   const addGameToCategory = useCategoryStore((s) => s.addGameToCategory);
@@ -104,6 +105,10 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
     setLoadingAchievements(false);
     setAchError("");
     setSamProbe(null);
+    const cachedAchievements = useAchievementsStore.getState().summaries[game.appid];
+    if (cachedAchievements?.achievements?.length) {
+      setAchievements(cachedAchievements);
+    }
 
     if (cachedDetails) {
       setDetails(cachedDetails);
@@ -164,6 +169,10 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
   );
 
   const refreshSamProbe = useCallback(async () => {
+    if (!steamToolsEnabled) {
+      setSamProbe(null);
+      return;
+    }
     setSamProbe(null);
     try {
       const probe = await probeSamBridge(steamPath, game.appid);
@@ -171,7 +180,7 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
     } catch {
       setSamProbe(null);
     }
-  }, [game.appid, steamPath]);
+  }, [game.appid, steamPath, steamToolsEnabled]);
 
   useEffect(() => {
     if (tab !== "achievements") return;
@@ -183,7 +192,7 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
       return;
     }
     void loadAchievementData(false);
-    if (details) void refreshSamProbe();
+    if (details && steamToolsEnabled) void refreshSamProbe();
   }, [details, loadAchievementData, refreshSamProbe, tab]);
 
   const hours = (game.playtime_forever / 60).toFixed(1);
@@ -205,7 +214,7 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
       useGameStore.getState().setDetails(game.appid, next);
       if (tab === "achievements") {
         await loadAchievementData(true, next);
-        if (gameHasSteamAchievements(next)) {
+        if (gameHasSteamAchievements(next) && steamToolsEnabled) {
           await refreshSamProbe();
         } else {
           setSamProbe(null);
@@ -337,6 +346,7 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
               error={achError}
               percent={achPercent}
               samProbe={samProbe}
+              steamToolsEnabled={steamToolsEnabled}
             />
           )}
         </div>
@@ -839,12 +849,14 @@ function AchievementsTab({
   error,
   percent,
   samProbe,
+  steamToolsEnabled,
 }: {
   achievements: AchievementSummary | null;
   loading: boolean;
   error: string;
   percent: number;
   samProbe: SamBridgeProbe | null;
+  steamToolsEnabled: boolean;
 }) {
   const t = useT();
   const [search, setSearch] = useState("");
@@ -893,9 +905,7 @@ function AchievementsTab({
 
   return (
     <div className="space-y-4">
-      <SamBridgePanel
-        probe={samProbe}
-      />
+      {steamToolsEnabled && <SamBridgePanel probe={samProbe} />}
 
       {/* Progress bar */}
       <div className="rounded-xl bg-repressurizer-bg p-4 border border-repressurizer-border-subtle">
