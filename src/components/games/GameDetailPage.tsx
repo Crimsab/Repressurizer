@@ -14,6 +14,7 @@ import {
   fetchHltb,
   currencyToCountryCode,
   getSamBackupDir,
+  loadSamAchievementSchema,
   probeSamBridge,
   runSamAchievementAction,
 } from "../../lib/tauri";
@@ -26,6 +27,7 @@ import type {
   AchievementSummary,
   AchievementInfo,
   SamBridgeProbe,
+  SamAchievementSchemaItem,
   SamAchievementAction,
   SamAchievementActionResult,
 } from "../../lib/types";
@@ -84,6 +86,7 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
   const [samActionRunning, setSamActionRunning] = useState("");
   const [samActionMessage, setSamActionMessage] = useState("");
   const [samActionError, setSamActionError] = useState("");
+  const [samSchemaKey, setSamSchemaKey] = useState("");
   const [tab, setTab] = useState<"info" | "achievements">("info");
 
   const cachedAchievementSummary = useAchievementsStore((s) => s.summaries[game.appid]);
@@ -115,6 +118,7 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
     setLoadingAchievements(false);
     setAchError("");
     setSamProbe(null);
+    setSamSchemaKey("");
     const cachedAchievements = useAchievementsStore.getState().summaries[game.appid];
     if (cachedAchievements?.achievements?.length) {
       setAchievements(cachedAchievements);
@@ -191,6 +195,45 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
       setSamProbe(null);
     }
   }, [game.appid, steamPath, steamToolsSamEnabled]);
+
+  useEffect(() => {
+    if (
+      tab !== "achievements" ||
+      !steamToolsSamEnabled ||
+      !achievements?.achievements.length
+    ) {
+      return;
+    }
+    const key = `${game.appid}:${steamPath}`;
+    if (samSchemaKey === key) return;
+
+    let cancelled = false;
+    loadSamAchievementSchema(steamPath, game.appid)
+      .then((schema) => {
+        if (cancelled || schema.length === 0) return;
+        setAchievements((current) => {
+          if (!current) return current;
+          const next = mergeAchievementsWithSamSchema(current, schema);
+          useAchievementsStore.getState().setSummary(game.appid, next);
+          return next;
+        });
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (!cancelled) setSamSchemaKey(key);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    achievements?.achievements.length,
+    game.appid,
+    samSchemaKey,
+    steamPath,
+    steamToolsSamEnabled,
+    tab,
+  ]);
 
   useEffect(() => {
     if (tab !== "achievements") return;
@@ -1060,7 +1103,9 @@ function AchievementsTab({
       return;
     }
     const availableIds = new Set(
-      achievements.achievements.map((achievement) => achievement.api_name)
+      achievements.achievements
+        .filter((achievement) => !isProtectedAchievement(achievement))
+        .map((achievement) => achievement.api_name)
     );
     setSelectedAchievementIds((current) => {
       const next = new Set([...current].filter((id) => availableIds.has(id)));
@@ -1110,10 +1155,13 @@ function AchievementsTab({
       )
     : achievements.achievements;
   const unlockedIds = achievements.achievements
-    .filter((achievement) => achievement.achieved)
+    .filter((achievement) => achievement.achieved && !isProtectedAchievement(achievement))
     .map((achievement) => achievement.api_name);
   const lockedIds = achievements.achievements
-    .filter((achievement) => !achievement.achieved)
+    .filter((achievement) => !achievement.achieved && !isProtectedAchievement(achievement))
+    .map((achievement) => achievement.api_name);
+  const manageableIds = achievements.achievements
+    .filter((achievement) => !isProtectedAchievement(achievement))
     .map((achievement) => achievement.api_name);
   const canWrite =
     steamToolsEnabled &&
@@ -1127,13 +1175,17 @@ function AchievementsTab({
   const selectedLockedIds = achievements.achievements
     .filter(
       (achievement) =>
-        selectedAchievementIds.has(achievement.api_name) && !achievement.achieved
+        selectedAchievementIds.has(achievement.api_name) &&
+        !achievement.achieved &&
+        !isProtectedAchievement(achievement)
     )
     .map((achievement) => achievement.api_name);
   const selectedUnlockedIds = achievements.achievements
     .filter(
       (achievement) =>
-        selectedAchievementIds.has(achievement.api_name) && achievement.achieved
+        selectedAchievementIds.has(achievement.api_name) &&
+        achievement.achieved &&
+        !isProtectedAchievement(achievement)
     )
     .map((achievement) => achievement.api_name);
 
@@ -1196,7 +1248,7 @@ function AchievementsTab({
           selectedUnlockedCount={selectedUnlockedIds.length}
           runningAction={samActionRunning}
           onSelectAll={() =>
-            replaceSelection(achievements.achievements.map((achievement) => achievement.api_name))
+            replaceSelection(manageableIds)
           }
           onSelectLocked={() => replaceSelection(lockedIds)}
           onSelectUnlocked={() => replaceSelection(unlockedIds)}
@@ -1218,7 +1270,7 @@ function AchievementsTab({
               key={ach.api_name}
               achievement={ach}
               canWrite={canWrite}
-              selectable={canWrite}
+              selectable={canWrite && !isProtectedAchievement(ach)}
               selected={selectedAchievementIds.has(ach.api_name)}
               onSelectToggle={() => toggleAchievementSelection(ach.api_name)}
               onToggle={() =>
@@ -1455,6 +1507,7 @@ function AchievementRow({
   onToggle: () => void;
 }) {
   const t = useT();
+  const protectedAchievement = isProtectedAchievement(achievement);
   const unlockDate = achievement.unlock_time
     ? new Date(achievement.unlock_time * 1000).toLocaleDateString()
     : null;
@@ -1510,6 +1563,17 @@ function AchievementRow({
             {achievement.description}
           </p>
         )}
+        {protectedAchievement && (
+          <p className="mt-1 inline-flex items-center gap-1 rounded-md border border-amber-500/25 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-300">
+            <Lock size={10} weight="bold" />
+            {t("detail.sam.protectedAchievement")}
+            {achievement.protection_source && (
+              <span className="text-amber-300/60">
+                {t("detail.sam.localSchemaSource")}
+              </span>
+            )}
+          </p>
+        )}
       </div>
 
       {/* Status */}
@@ -1523,7 +1587,7 @@ function AchievementRow({
           {t("detail.locked")}
         </span>
       )}
-      {canWrite && (
+      {canWrite && !protectedAchievement && (
         <button
           type="button"
           onClick={(event) => {
@@ -1545,6 +1609,31 @@ function AchievementRow({
 
 function sortAchievements(achievements: AchievementInfo[]): AchievementInfo[] {
   return [...achievements].sort((a, b) => matchAchievementOrder(a, b));
+}
+
+function mergeAchievementsWithSamSchema(
+  summary: AchievementSummary,
+  schema: SamAchievementSchemaItem[]
+): AchievementSummary {
+  const byId = new Map(schema.map((item) => [item.apiName, item]));
+  return {
+    ...summary,
+    achievements: summary.achievements.map((achievement) => {
+      const item = byId.get(achievement.api_name);
+      if (!item) return achievement;
+      return {
+        ...achievement,
+        permission: item.permission,
+        protected_achievement: item.protectedAchievement,
+        protection_source: "samLocalSchema",
+        protection_flags: item.flags,
+      };
+    }),
+  };
+}
+
+function isProtectedAchievement(achievement: AchievementInfo): boolean {
+  return achievement.protected_achievement === true;
 }
 
 function matchAchievementOrder(a: AchievementInfo, b: AchievementInfo): number {

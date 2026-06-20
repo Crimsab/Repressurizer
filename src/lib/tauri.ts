@@ -7,6 +7,7 @@ import type {
   BackupInfo,
   AchievementSummary,
   SamBridgeProbe,
+  SamAchievementSchemaItem,
   SamAchievementActionInput,
   SamAchievementActionResult,
 } from "./types";
@@ -152,6 +153,16 @@ export async function fetchAchievementsSummary(
 
 export async function probeSamBridge(steamPath: string, appId: number): Promise<SamBridgeProbe> {
   return invoke<SamBridgeProbe>("probe_sam_bridge", { steamPath, appId });
+}
+
+export async function loadSamAchievementSchema(
+  steamPath: string,
+  appId: number
+): Promise<SamAchievementSchemaItem[]> {
+  return invoke<SamAchievementSchemaItem[]>("load_sam_achievement_schema", {
+    steamPath,
+    appId,
+  });
 }
 
 export async function runSamAchievementAction(

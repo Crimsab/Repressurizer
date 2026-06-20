@@ -75,6 +75,15 @@ pub struct SamAchievementActionInput {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct SamAchievementSchemaItem {
+    pub api_name: String,
+    pub permission: i32,
+    pub protected_achievement: bool,
+    pub flags: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SamAchievementState {
     pub api_name: String,
     pub achieved: bool,
@@ -144,6 +153,14 @@ pub fn sam_backup_dir(app_id: u64) -> Result<String, String> {
     fs::create_dir_all(&path)
         .map_err(|error| format!("Failed to create SAM backup directory: {error}"))?;
     Ok(path_to_string(path))
+}
+
+#[tauri::command]
+pub fn load_sam_achievement_schema(
+    steam_path: String,
+    app_id: u64,
+) -> Result<Vec<SamAchievementSchemaItem>, String> {
+    load_sam_achievement_schema_items(&steam_path, app_id)
 }
 
 pub fn run_embedded_bridge_from_env() -> Option<i32> {
@@ -480,6 +497,12 @@ fn perform_bridge_achievement_action(
     let mut bridge = SamSteamBridge::connect(&input.steam_path, input.app_id)?;
     let active_app_id = bridge.active_app_id();
     let initial_stats_requested = bridge.prepare_user_stats();
+    let schema_items = load_sam_achievement_schema_items(&input.steam_path, input.app_id)
+        .unwrap_or_else(|_| Vec::new());
+    let schema_permissions: HashMap<String, SamAchievementSchemaItem> = schema_items
+        .into_iter()
+        .map(|item| (item.api_name.clone(), item))
+        .collect();
 
     let available_names = bridge.achievement_names().unwrap_or_default();
     if ids.is_empty() {
@@ -508,45 +531,54 @@ fn perform_bridge_achievement_action(
     let mut attempted = 0usize;
     let target_set: HashSet<String> = ids.iter().cloned().collect();
     let mut desired_states: HashMap<String, bool> = HashMap::new();
+    let mut protected_blocked = Vec::new();
+
+    let mut apply_achievement =
+        |bridge: &SamSteamBridge, failed: &mut Vec<String>, id: &str, achieved: bool| -> bool {
+            desired_states.insert(id.to_string(), achieved);
+            if schema_permissions
+                .get(id)
+                .map(|item| item.protected_achievement)
+                .unwrap_or(false)
+            {
+                protected_blocked.push(id.to_string());
+                failed.push(id.to_string());
+                return false;
+            }
+            if bridge.set_achievement(id, achieved) {
+                true
+            } else {
+                failed.push(id.to_string());
+                false
+            }
+        };
 
     match input.action.as_str() {
         "unlock" => {
             for id in &ids {
-                desired_states.insert(id.clone(), true);
-                if bridge.set_achievement(id, true) {
+                if apply_achievement(&bridge, &mut failed, id, true) {
                     attempted += 1;
-                } else {
-                    failed.push(id.clone());
                 }
             }
         }
         "lock" => {
             for id in &ids {
-                desired_states.insert(id.clone(), false);
-                if bridge.set_achievement(id, false) {
+                if apply_achievement(&bridge, &mut failed, id, false) {
                     attempted += 1;
-                } else {
-                    failed.push(id.clone());
                 }
             }
         }
         "unlock_selected" | "unlock_all" => {
             for id in &ids {
-                desired_states.insert(id.clone(), true);
-                if bridge.set_achievement(id, true) {
+                if apply_achievement(&bridge, &mut failed, id, true) {
                     attempted += 1;
-                } else {
-                    failed.push(id.clone());
                 }
             }
         }
         "lock_selected" | "lock_all" => {
             for id in &ids {
-                desired_states.insert(id.clone(), false);
-                if bridge.set_achievement(id, false) {
+                if apply_achievement(&bridge, &mut failed, id, false) {
                     attempted += 1;
-                } else {
-                    failed.push(id.clone());
                 }
             }
         }
@@ -555,15 +587,24 @@ fn perform_bridge_achievement_action(
                 .as_ref()
                 .ok_or("A backup path is required to restore achievement state.")?;
             for state in backup.achievements.iter().filter(|state| state.valid) {
-                desired_states.insert(state.api_name.clone(), state.achieved);
-                if bridge.set_achievement(&state.api_name, state.achieved) {
+                if apply_achievement(&bridge, &mut failed, &state.api_name, state.achieved) {
                     attempted += 1;
-                } else {
-                    failed.push(state.api_name.clone());
                 }
             }
         }
         other => return Err(format!("Unsupported SAM achievement action: {other}")),
+    }
+
+    protected_blocked = dedupe_strings(protected_blocked);
+    if !protected_blocked.is_empty() {
+        diagnostics.push(format!(
+            "sam_protected_achievements_skipped={}",
+            protected_blocked.join(",")
+        ));
+        diagnostics.push(
+            "SAM and SteamUtility mark achievements with permission & 3 != 0 as protected; Repressurizer does not send write requests for them."
+                .to_string(),
+        );
     }
 
     let post_set_states = bridge.capture_states(&backup_names);
@@ -646,7 +687,17 @@ fn perform_bridge_achievement_action(
                 .unwrap_or("backup path unavailable")
         ));
     }
-    let message = if !unapplied.is_empty() {
+    let message = if !protected_blocked.is_empty()
+        && attempted == 0
+        && unapplied
+            .iter()
+            .all(|id| protected_blocked.iter().any(|protected| protected == id))
+    {
+        format!(
+            "Repressurizer blocked {} protected achievement change(s). SAM/SteamUtility treat these achievements as not locally manageable.",
+            protected_blocked.len()
+        )
+    } else if !unapplied.is_empty() {
         let reason = if post_set_unapplied.is_empty() {
             "Steam accepted the local change, but reported the achievement as unchanged after StoreStats. Close the game and retry; stat-bound, protected, or server-side achievements can re-apply themselves unless their underlying stats are also changed."
         } else {
@@ -679,6 +730,273 @@ fn perform_bridge_achievement_action(
         unlock_times_restorable: false,
         message,
     })
+}
+
+fn load_sam_achievement_schema_items(
+    steam_path: &str,
+    app_id: u64,
+) -> Result<Vec<SamAchievementSchemaItem>, String> {
+    if app_id == 0 || app_id > u32::MAX as u64 {
+        return Err("A valid Steam appId is required.".to_string());
+    }
+    let path = sam_schema_path(steam_path, app_id);
+    let bytes = fs::read(&path).map_err(|error| {
+        format!(
+            "Steam local achievement schema was not found at {}: {error}",
+            path.display()
+        )
+    })?;
+    parse_sam_achievement_schema(&bytes, app_id)
+}
+
+fn sam_schema_path(steam_path: &str, app_id: u64) -> PathBuf {
+    PathBuf::from(steam_path.trim())
+        .join("appcache")
+        .join("stats")
+        .join(format!("UserGameStatsSchema_{app_id}.bin"))
+}
+
+fn parse_sam_achievement_schema(
+    bytes: &[u8],
+    app_id: u64,
+) -> Result<Vec<SamAchievementSchemaItem>, String> {
+    let root = BinaryKeyValue::parse(bytes)?;
+    let app = root
+        .child(&app_id.to_string())
+        .ok_or_else(|| format!("Steam schema does not contain appId {app_id}."))?;
+    let stats = app
+        .child("stats")
+        .ok_or_else(|| "Steam schema does not contain a stats node.".to_string())?;
+    let mut items = Vec::new();
+
+    for stat in &stats.children {
+        for bits in stat.children_named("bits") {
+            for bit in &bits.children {
+                let api_name = bit
+                    .child("name")
+                    .and_then(BinaryKeyValue::as_string)
+                    .unwrap_or_default()
+                    .trim()
+                    .to_string();
+                if api_name.is_empty() {
+                    continue;
+                }
+                let permission = bit
+                    .child("permission")
+                    .and_then(BinaryKeyValue::as_i32)
+                    .unwrap_or(0);
+                items.push(SamAchievementSchemaItem {
+                    api_name,
+                    permission,
+                    protected_achievement: sam_achievement_is_protected(permission),
+                    flags: sam_achievement_permission_flags(permission),
+                });
+            }
+        }
+    }
+
+    Ok(items)
+}
+
+fn sam_achievement_is_protected(permission: i32) -> bool {
+    permission & 3 != 0
+}
+
+fn sam_achievement_permission_flags(permission: i32) -> Vec<String> {
+    let mut flags = Vec::new();
+    if sam_achievement_is_protected(permission) {
+        flags.push("Protected".to_string());
+    }
+    if permission & !3 != 0 {
+        flags.push("UnknownPermission".to_string());
+    }
+    if flags.is_empty() {
+        flags.push("None".to_string());
+    }
+    flags
+}
+
+#[derive(Debug, Clone)]
+struct BinaryKeyValue {
+    name: String,
+    value: BinaryKeyValueValue,
+    children: Vec<BinaryKeyValue>,
+}
+
+#[derive(Debug, Clone)]
+enum BinaryKeyValueValue {
+    None,
+    String(String),
+    Int32(i32),
+    Float32(f32),
+    UInt32(u32),
+    UInt64(u64),
+}
+
+impl BinaryKeyValue {
+    fn parse(bytes: &[u8]) -> Result<Self, String> {
+        let mut cursor = BinaryCursor::new(bytes);
+        let children = cursor.read_children()?;
+        if !cursor.is_complete() {
+            return Err("Steam binary KeyValues schema contains trailing bytes.".to_string());
+        }
+        Ok(Self {
+            name: "<root>".to_string(),
+            value: BinaryKeyValueValue::None,
+            children,
+        })
+    }
+
+    fn child(&self, name: &str) -> Option<&Self> {
+        self.children
+            .iter()
+            .find(|child| child.name.eq_ignore_ascii_case(name))
+    }
+
+    fn children_named<'a>(&'a self, name: &'a str) -> impl Iterator<Item = &'a Self> + 'a {
+        self.children
+            .iter()
+            .filter(move |child| child.name.eq_ignore_ascii_case(name))
+    }
+
+    fn as_string(&self) -> Option<String> {
+        match &self.value {
+            BinaryKeyValueValue::String(value) => Some(value.clone()),
+            BinaryKeyValueValue::Int32(value) => Some(value.to_string()),
+            BinaryKeyValueValue::Float32(value) => Some(value.to_string()),
+            BinaryKeyValueValue::UInt32(value) => Some(value.to_string()),
+            BinaryKeyValueValue::UInt64(value) => Some(value.to_string()),
+            BinaryKeyValueValue::None => None,
+        }
+    }
+
+    fn as_i32(&self) -> Option<i32> {
+        match &self.value {
+            BinaryKeyValueValue::String(value) => value.parse::<i32>().ok(),
+            BinaryKeyValueValue::Int32(value) => Some(*value),
+            BinaryKeyValueValue::Float32(value) => Some(*value as i32),
+            BinaryKeyValueValue::UInt32(value) => i32::try_from(*value).ok(),
+            BinaryKeyValueValue::UInt64(value) => i32::try_from(*value).ok(),
+            BinaryKeyValueValue::None => None,
+        }
+    }
+}
+
+struct BinaryCursor<'a> {
+    bytes: &'a [u8],
+    offset: usize,
+}
+
+impl<'a> BinaryCursor<'a> {
+    fn new(bytes: &'a [u8]) -> Self {
+        Self { bytes, offset: 0 }
+    }
+
+    fn is_complete(&self) -> bool {
+        self.offset == self.bytes.len()
+    }
+
+    fn read_children(&mut self) -> Result<Vec<BinaryKeyValue>, String> {
+        let mut children = Vec::new();
+        loop {
+            let value_type = self.read_u8()?;
+            if value_type == 8 {
+                break;
+            }
+            let name = self.read_cstring()?;
+            let child = match value_type {
+                0 => BinaryKeyValue {
+                    name,
+                    value: BinaryKeyValueValue::None,
+                    children: self.read_children()?,
+                },
+                1 => BinaryKeyValue {
+                    name,
+                    value: BinaryKeyValueValue::String(self.read_cstring()?),
+                    children: Vec::new(),
+                },
+                2 => BinaryKeyValue {
+                    name,
+                    value: BinaryKeyValueValue::Int32(self.read_i32()?),
+                    children: Vec::new(),
+                },
+                3 => BinaryKeyValue {
+                    name,
+                    value: BinaryKeyValueValue::Float32(self.read_f32()?),
+                    children: Vec::new(),
+                },
+                4 | 6 => BinaryKeyValue {
+                    name,
+                    value: BinaryKeyValueValue::UInt32(self.read_u32()?),
+                    children: Vec::new(),
+                },
+                5 => {
+                    return Err("Steam binary KeyValues wstring values are unsupported.".to_string())
+                }
+                7 => BinaryKeyValue {
+                    name,
+                    value: BinaryKeyValueValue::UInt64(self.read_u64()?),
+                    children: Vec::new(),
+                },
+                other => {
+                    return Err(format!(
+                        "Steam binary KeyValues schema has unsupported value type {other}."
+                    ))
+                }
+            };
+            children.push(child);
+        }
+        Ok(children)
+    }
+
+    fn read_u8(&mut self) -> Result<u8, String> {
+        let Some(value) = self.bytes.get(self.offset).copied() else {
+            return Err("Unexpected end of Steam binary KeyValues schema.".to_string());
+        };
+        self.offset += 1;
+        Ok(value)
+    }
+
+    fn read_cstring(&mut self) -> Result<String, String> {
+        let start = self.offset;
+        while self.offset < self.bytes.len() && self.bytes[self.offset] != 0 {
+            self.offset += 1;
+        }
+        if self.offset >= self.bytes.len() {
+            return Err("Unterminated string in Steam binary KeyValues schema.".to_string());
+        }
+        let value = std::str::from_utf8(&self.bytes[start..self.offset])
+            .map_err(|error| format!("Invalid UTF-8 in Steam binary KeyValues schema: {error}"))?
+            .to_string();
+        self.offset += 1;
+        Ok(value)
+    }
+
+    fn read_i32(&mut self) -> Result<i32, String> {
+        Ok(i32::from_le_bytes(self.read_array()?))
+    }
+
+    fn read_u32(&mut self) -> Result<u32, String> {
+        Ok(u32::from_le_bytes(self.read_array()?))
+    }
+
+    fn read_u64(&mut self) -> Result<u64, String> {
+        Ok(u64::from_le_bytes(self.read_array()?))
+    }
+
+    fn read_f32(&mut self) -> Result<f32, String> {
+        Ok(f32::from_le_bytes(self.read_array()?))
+    }
+
+    fn read_array<const N: usize>(&mut self) -> Result<[u8; N], String> {
+        if self.offset + N > self.bytes.len() {
+            return Err("Unexpected end of Steam binary KeyValues schema.".to_string());
+        }
+        let mut array = [0u8; N];
+        array.copy_from_slice(&self.bytes[self.offset..self.offset + N]);
+        self.offset += N;
+        Ok(array)
+    }
 }
 
 fn achievement_state_map(states: &[SamAchievementState]) -> HashMap<String, SamAchievementState> {
@@ -1680,6 +1998,52 @@ mod tests {
         );
     }
 
+    #[test]
+    fn parses_binary_sam_schema_permission_flags() {
+        let schema = binary_schema_fixture(
+            614910,
+            &[
+                ("ACH_OPEN", 0),
+                ("NEW_ACHIEVEMENT_4_26", 3),
+                ("ACH_UNKNOWN", 8),
+            ],
+        );
+
+        let items = parse_sam_achievement_schema(&schema, 614910).unwrap();
+        let by_id: HashMap<_, _> = items
+            .iter()
+            .map(|item| (item.api_name.as_str(), item))
+            .collect();
+
+        assert_eq!(by_id["ACH_OPEN"].permission, 0);
+        assert!(!by_id["ACH_OPEN"].protected_achievement);
+        assert_eq!(by_id["NEW_ACHIEVEMENT_4_26"].permission, 3);
+        assert!(by_id["NEW_ACHIEVEMENT_4_26"].protected_achievement);
+        assert_eq!(
+            by_id["ACH_UNKNOWN"].flags,
+            vec!["UnknownPermission".to_string()]
+        );
+    }
+
+    #[test]
+    fn loads_binary_sam_schema_from_steam_appcache_path() {
+        let root = temp_dir("sam_schema");
+        let stats_dir = root.join("appcache").join("stats");
+        fs::create_dir_all(&stats_dir).unwrap();
+        fs::write(
+            stats_dir.join("UserGameStatsSchema_614910.bin"),
+            binary_schema_fixture(614910, &[("ACH_PROTECTED", 1)]),
+        )
+        .unwrap();
+
+        let items = load_sam_achievement_schema_items(&root.to_string_lossy(), 614910).unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].api_name, "ACH_PROTECTED");
+        assert!(items[0].protected_achievement);
+
+        let _ = fs::remove_dir_all(root);
+    }
+
     #[cfg(unix)]
     #[test]
     fn bridge_child_timeout_reports_hung_runner() {
@@ -1701,5 +2065,50 @@ mod tests {
             .unwrap()
             .as_nanos();
         std::env::temp_dir().join(format!("repressurizer_{name}_{nanos}"))
+    }
+
+    fn binary_schema_fixture(app_id: u64, achievements: &[(&str, i32)]) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        kv_scope(&mut bytes, &app_id.to_string(), |bytes| {
+            kv_scope(bytes, "stats", |bytes| {
+                kv_scope(bytes, "0", |bytes| {
+                    kv_string(bytes, "name", "AchievementStats");
+                    kv_scope(bytes, "bits", |bytes| {
+                        for (index, (api_name, permission)) in achievements.iter().enumerate() {
+                            kv_scope(bytes, &index.to_string(), |bytes| {
+                                kv_string(bytes, "name", api_name);
+                                kv_i32(bytes, "permission", *permission);
+                            });
+                        }
+                    });
+                });
+            });
+        });
+        bytes.push(8);
+        bytes
+    }
+
+    fn kv_scope(bytes: &mut Vec<u8>, name: &str, write_children: impl FnOnce(&mut Vec<u8>)) {
+        bytes.push(0);
+        push_cstring(bytes, name);
+        write_children(bytes);
+        bytes.push(8);
+    }
+
+    fn kv_string(bytes: &mut Vec<u8>, name: &str, value: &str) {
+        bytes.push(1);
+        push_cstring(bytes, name);
+        push_cstring(bytes, value);
+    }
+
+    fn kv_i32(bytes: &mut Vec<u8>, name: &str, value: i32) {
+        bytes.push(2);
+        push_cstring(bytes, name);
+        bytes.extend_from_slice(&value.to_le_bytes());
+    }
+
+    fn push_cstring(bytes: &mut Vec<u8>, value: &str) {
+        bytes.extend_from_slice(value.as_bytes());
+        bytes.push(0);
     }
 }

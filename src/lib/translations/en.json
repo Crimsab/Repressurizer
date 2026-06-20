@@ -696,6 +696,8 @@
   "detail.sam.writeDesc": "Unlock or lock achievements manually. Repressurizer creates before/after backups for each action.",
   "detail.sam.webApi": "Steam Web API",
   "detail.sam.localBridge": "SAM local bridge",
+  "detail.sam.localSchemaSource": "SAM local schema",
+  "detail.sam.protectedAchievement": "Protected",
   "detail.sam.writeActions": "Write actions",
   "detail.sam.writesEnabled": "Enabled",
   "detail.sam.writesLocked": "Locked",

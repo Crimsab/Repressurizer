@@ -70,6 +70,10 @@ export interface AchievementInfo {
   unlock_time: number;
   icon: string | null;
   icon_gray: string | null;
+  permission?: number | null;
+  protected_achievement?: boolean;
+  protection_source?: string | null;
+  protection_flags?: string[];
 }
 
 export interface AchievementSummary {
@@ -105,6 +109,13 @@ export interface SamBridgeProbe {
   writesSteam: boolean;
   capabilities: SamBridgeCapability[];
   notes: string[];
+}
+
+export interface SamAchievementSchemaItem {
+  apiName: string;
+  permission: number;
+  protectedAchievement: boolean;
+  flags: string[];
 }
 
 export type SamAchievementAction =

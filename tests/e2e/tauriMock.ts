@@ -376,6 +376,27 @@ export async function installTauriMock(page: Page) {
             };
           case "fetch_achievements_summary":
             return [3, 1];
+          case "load_sam_achievement_schema":
+            return [
+              {
+                apiName: "ACH_START",
+                permission: 0,
+                protectedAchievement: false,
+                flags: ["None"],
+              },
+              {
+                apiName: "ACH_SECRET",
+                permission: 0,
+                protectedAchievement: false,
+                flags: ["None"],
+              },
+              {
+                apiName: "ACH_COMPLETE",
+                permission: 0,
+                protectedAchievement: false,
+                flags: ["None"],
+              },
+            ];
           case "probe_sam_bridge": {
             const currentSettings = readSettings();
             const ready =

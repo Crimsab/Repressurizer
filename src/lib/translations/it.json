@@ -696,6 +696,8 @@
   "detail.sam.writeDesc": "Sblocca o blocca obiettivi manualmente. Repressurizer crea backup prima/dopo per ogni azione.",
   "detail.sam.webApi": "Steam Web API",
   "detail.sam.localBridge": "Bridge locale SAM",
+  "detail.sam.localSchemaSource": "Schema locale SAM",
+  "detail.sam.protectedAchievement": "Protetto",
   "detail.sam.writeActions": "Azioni di scrittura",
   "detail.sam.writesEnabled": "Abilitate",
   "detail.sam.writesLocked": "Bloccate",

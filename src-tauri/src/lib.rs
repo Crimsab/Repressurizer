@@ -521,6 +521,7 @@ pub fn run() {
             api::fetch_game_details,
             api::fetch_achievements,
             api::fetch_achievements_summary,
+            sam::load_sam_achievement_schema,
             sam::probe_sam_bridge,
             sam::sam_achievement_action,
             sam::sam_backup_dir,
