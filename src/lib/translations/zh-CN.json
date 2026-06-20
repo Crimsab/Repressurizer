@@ -128,6 +128,8 @@
   "appearance.visibility": "可见项",
   "appearance.smartLists": "显示智能列表",
   "appearance.smartLists.desc": "侧边栏中的待玩和最近游玩快捷入口",
+  "appearance.emptyLists": "显示空列表",
+  "appearance.emptyLists.desc": "即使智能列表包含 0 个游戏，也保持其在侧边栏中可见",
   "appearance.nowPlaying": "显示正在游玩",
   "appearance.nowPlaying.desc": "在侧边栏顶部显示上次游玩游戏卡片",
   "appearance.filterBar": "显示筛选栏",

@@ -128,6 +128,8 @@
   "appearance.visibility": "Widoczność",
   "appearance.smartLists": "Pokaż listy inteligentne",
   "appearance.smartLists.desc": "Skróty Zaległości i Ostatnio grane na pasku bocznym",
+  "appearance.emptyLists": "Pokaż puste listy",
+  "appearance.emptyLists.desc": "Pozostawia listy inteligentne widoczne na pasku bocznym nawet, gdy mają 0 gier",
   "appearance.nowPlaying": "Pokaż teraz grane",
   "appearance.nowPlaying.desc": "Wyświetla kartę ostatnio granej gry na górze paska bocznego",
   "appearance.filterBar": "Pokaż pasek filtrów",

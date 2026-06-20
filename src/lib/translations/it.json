@@ -128,6 +128,8 @@
   "appearance.visibility": "Visibilità",
   "appearance.smartLists": "Mostra liste intelligenti",
   "appearance.smartLists.desc": "Scorciatoie Da giocare e Giocati di recente nella barra laterale",
+  "appearance.emptyLists": "Mostra liste vuote",
+  "appearance.emptyLists.desc": "Mantiene visibili le liste intelligenti nella barra laterale anche quando contengono 0 giochi",
   "appearance.nowPlaying": "Mostra Ora in gioco",
   "appearance.nowPlaying.desc": "Mostra la scheda dell’ultimo gioco giocato in cima alla barra laterale",
   "appearance.filterBar": "Mostra barra dei filtri",

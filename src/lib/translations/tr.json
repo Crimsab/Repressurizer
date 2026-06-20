@@ -128,6 +128,8 @@
   "appearance.visibility": "Görünürlük",
   "appearance.smartLists": "Akıllı listeleri göster",
   "appearance.smartLists.desc": "Kenar çubuğunda Oynanacaklar ve Son oynanan kısayolları",
+  "appearance.emptyLists": "Boş listeleri göster",
+  "appearance.emptyLists.desc": "0 oyun içerseler bile akıllı listeleri kenar çubuğunda görünür tutar",
   "appearance.nowPlaying": "Şu an oynananı göster",
   "appearance.nowPlaying.desc": "Son oynanan oyun kartını kenar çubuğunun üstünde gösterir",
   "appearance.filterBar": "Filtre çubuğunu göster",

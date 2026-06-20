@@ -128,6 +128,8 @@
   "appearance.visibility": "Visibilidad",
   "appearance.smartLists": "Mostrar listas inteligentes",
   "appearance.smartLists.desc": "Accesos directos a Pendientes y Jugados recientemente en la barra lateral",
+  "appearance.emptyLists": "Mostrar listas vacías",
+  "appearance.emptyLists.desc": "Mantiene visibles las listas inteligentes de la barra lateral aunque contengan 0 juegos",
   "appearance.nowPlaying": "Mostrar jugando ahora",
   "appearance.nowPlaying.desc": "Muestra la tarjeta del último juego jugado arriba en la barra lateral",
   "appearance.filterBar": "Mostrar barra de filtros",

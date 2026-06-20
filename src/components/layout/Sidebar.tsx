@@ -56,6 +56,7 @@ export function Sidebar() {
   const openExportDialog = useExportUiStore((s) => s.openExportDialog);
   const selectedGameIds = useGameStore((s) => s.selectedGameIds);
   const showDynamicCategories = useSettingsStore((s) => s.showDynamicCategories);
+  const showEmptyLists = useSettingsStore((s) => s.showEmptyLists);
   const pinFavorites = useSettingsStore((s) => s.pinFavorites);
   const showSmartLists = useSettingsStore((s) => s.showSmartLists);
   const showNowPlaying = useSettingsStore((s) => s.showNowPlaying);
@@ -148,10 +149,10 @@ export function Sidebar() {
   const uncategorizedCount = allGameIds.filter((id) => !categorizedIds.has(id)).length;
 
   useEffect(() => {
-    if (activeCategory === "uncategorized" && uncategorizedCount === 0) {
+    if (!showEmptyLists && activeCategory === "uncategorized" && uncategorizedCount === 0) {
       setActiveCategory("all");
     }
-  }, [activeCategory, setActiveCategory, uncategorizedCount]);
+  }, [activeCategory, setActiveCategory, showEmptyLists, uncategorizedCount]);
 
   const gameValues = Object.values(games);
   const backlogCount = gameValues.filter((g) => g.playtime_forever === 0).length;
@@ -301,7 +302,7 @@ export function Sidebar() {
         />
 
         {/* Uncategorized */}
-        {uncategorizedCount > 0 && (
+        {(showEmptyLists || uncategorizedCount > 0) && (
           <SidebarItem
             active={activeCategory === "uncategorized"}
             onClick={() => setActiveCategory("uncategorized")}

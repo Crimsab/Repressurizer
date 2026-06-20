@@ -128,6 +128,8 @@
   "appearance.visibility": "Visibilité",
   "appearance.smartLists": "Afficher les listes intelligentes",
   "appearance.smartLists.desc": "Raccourcis À jouer et Joués récemment dans la barre latérale",
+  "appearance.emptyLists": "Afficher les listes vides",
+  "appearance.emptyLists.desc": "Garde les listes intelligentes visibles dans la barre latérale même avec 0 jeu",
   "appearance.nowPlaying": "Afficher En cours de jeu",
   "appearance.nowPlaying.desc": "Afficher la carte du dernier jeu joué en haut de la barre latérale",
   "appearance.filterBar": "Afficher la barre de filtres",

@@ -550,7 +550,13 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
         id: "visibility",
         tab: "appearance" as const,
         label: t("appearance.visibility"),
-        keywords: [t("appearance.smartLists"), t("appearance.filterBar"), t("appearance.nowPlaying"), "visibility panels ui"],
+        keywords: [
+          t("appearance.smartLists"),
+          t("appearance.emptyLists"),
+          t("appearance.filterBar"),
+          t("appearance.nowPlaying"),
+          "visibility panels ui empty zero sidebar uncategorized",
+        ],
       },
       {
         id: "theme",
@@ -1516,6 +1522,7 @@ function AppearanceTab({ isSectionVisible }: { isSectionVisible: (id: string) =>
     accentColor,
     recentAccentColors,
     showSmartLists,
+    showEmptyLists,
     showNowPlaying,
     showFilterBar,
     showDetailHltb,
@@ -1786,6 +1793,13 @@ function AppearanceTab({ isSectionVisible }: { isSectionVisible: (id: string) =>
           description={t("appearance.smartLists.desc")}
           checked={showSmartLists}
           onChange={(v) => setSettings({ showSmartLists: v })}
+        />
+        <ToggleRow
+          icon={<Eye size={15} weight="duotone" />}
+          label={t("appearance.emptyLists")}
+          description={t("appearance.emptyLists.desc")}
+          checked={showEmptyLists}
+          onChange={(v) => setSettings({ showEmptyLists: v })}
         />
         <ToggleRow
           icon={<Monitor size={15} weight="duotone" />}

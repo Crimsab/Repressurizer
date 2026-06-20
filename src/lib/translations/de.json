@@ -128,6 +128,8 @@
   "appearance.visibility": "Sichtbarkeit",
   "appearance.smartLists": "Smarte Listen anzeigen",
   "appearance.smartLists.desc": "Verknüpfungen für Ausstehend und Kürzlich gespielt in der Seitenleiste",
+  "appearance.emptyLists": "Leere Listen anzeigen",
+  "appearance.emptyLists.desc": "Smarte Listen in der Seitenleiste sichtbar lassen, auch wenn sie 0 Spiele enthalten",
   "appearance.nowPlaying": "Jetzt gespielt anzeigen",
   "appearance.nowPlaying.desc": "Zeigt die Karte des zuletzt gespielten Spiels oben in der Seitenleiste an",
   "appearance.filterBar": "Filterleiste anzeigen",

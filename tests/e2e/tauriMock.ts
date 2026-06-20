@@ -44,6 +44,7 @@ export async function installTauriMock(page: Page) {
       theme: "dark",
       language: "en",
       showSmartLists: true,
+      showEmptyLists: false,
       showNowPlaying: true,
       showFilterBar: true,
       hltbConcurrency: 5,

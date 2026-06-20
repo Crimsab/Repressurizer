@@ -155,6 +155,7 @@ test("opens organized settings tabs, automation logs, and Steam controls without
   await expect(startupSwitch).toBeVisible();
   await startupSwitch.click();
   await expect(settingsDialog.getByText("Startup behavior")).toBeVisible();
+  await expect(settingsDialog.getByRole("switch", { name: "Show empty lists" })).toBeVisible();
   await expect(settingsDialog.getByRole("button", { name: /Open in tray/ })).toBeVisible();
   await expect(settingsDialog.getByRole("button", { name: /Open window/ })).toBeVisible();
 

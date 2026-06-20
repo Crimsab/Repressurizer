@@ -27,6 +27,7 @@ const defaults: AppSettings = {
   theme: "dark",
   language: detectSystemLanguage(),
   showSmartLists: true,
+  showEmptyLists: false,
   showNowPlaying: true,
   showFilterBar: true,
   showDetailHltb: true,

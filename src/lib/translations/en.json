@@ -128,6 +128,8 @@
   "appearance.visibility": "Visibility",
   "appearance.smartLists": "Show Smart Lists",
   "appearance.smartLists.desc": "Backlog and Recently Played shortcuts in the sidebar",
+  "appearance.emptyLists": "Show empty lists",
+  "appearance.emptyLists.desc": "Keep sidebar smart lists visible even when they contain 0 games",
   "appearance.nowPlaying": "Show Now Playing",
   "appearance.nowPlaying.desc": "Display the last-played game card at the top of the sidebar",
   "appearance.filterBar": "Show Filter Bar",

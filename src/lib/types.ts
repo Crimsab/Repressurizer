@@ -108,6 +108,7 @@ export interface AppSettings {
   language: AppLocale;
   // Visibility
   showSmartLists: boolean;
+  showEmptyLists: boolean;
   showNowPlaying: boolean;
   showFilterBar: boolean;
   showDetailHltb: boolean;
