@@ -803,7 +803,7 @@
   "steamTools.cards.maxConcurrent": "Max concurrent",
   "steamTools.cards.minPlaytime": "Min playtime",
   "steamTools.bridge.title": "Bridge architecture",
-  "steamTools.bridge.desc": "Repressurizer keeps the UI in-process, while Steamworks/SAM-like commands should live in a local sidecar bridge with explicit capabilities.",
+  "steamTools.bridge.desc": "Repressurizer keeps the UI in-process; Steamworks/SAM-like commands run through an embedded bridge mode with explicit capabilities.",
   "steamTools.bridge.webApi": "Steam Web API achievement summaries",
   "steamTools.bridge.sam": "SAM-style local achievement bridge",
   "steamTools.bridge.xpaw": "xPaw-style card farming planner",

@@ -82,9 +82,6 @@ jobs:
       - name: Typecheck
         run: bun run check
 
-      - name: Build SAM bridge sidecar
-        run: bun run sam:bridge:build -- --target x86_64-pc-windows-msvc
-
       - name: Build Windows bundles
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
@@ -96,8 +93,7 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path artifacts
           Copy-Item src-tauri\target\release\repressurizer.exe artifacts\Repressurizer-portable.exe
-          Copy-Item src-tauri\binaries\repressurizer-sam-bridge-x86_64-pc-windows-msvc.exe artifacts\repressurizer-sam-bridge-x86_64-pc-windows-msvc.exe
-          Compress-Archive -Path artifacts\Repressurizer-portable.exe, artifacts\repressurizer-sam-bridge-x86_64-pc-windows-msvc.exe -DestinationPath artifacts\Repressurizer-portable-windows-x64.zip -Force
+          Compress-Archive -Path artifacts\Repressurizer-portable.exe -DestinationPath artifacts\Repressurizer-portable-windows-x64.zip -Force
           Copy-Item src-tauri\target\release\bundle\nsis\*.exe artifacts\
           Copy-Item src-tauri\target\release\bundle\nsis\*.sig artifacts\
           Get-ChildItem artifacts | ForEach-Object { "$($_.Name) $($_.Length) bytes" }

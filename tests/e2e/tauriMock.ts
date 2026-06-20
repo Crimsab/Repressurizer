@@ -370,14 +370,14 @@ export async function installTauriMock(page: Page) {
               sourceLicense: "zlib-compatible architecture reference",
               dataSource: "samLocalBridge",
               available: false,
-              readiness: "missingLocalBridge",
-              bridgeInvoked: false,
+              readiness: "steamNotRunning",
+              bridgeInvoked: true,
               steamPathExists: true,
-              steamRunning: true,
+              steamRunning: false,
               steamClientLibraryFound: true,
               steamClientLibraryPath: "C:\\\\Program Files (x86)\\\\Steam\\\\steamclient64.dll",
-              localBridgeFound: false,
-              localBridgePath: null,
+              localBridgeFound: true,
+              localBridgePath: "C:\\\\Program Files\\\\Repressurizer\\\\Repressurizer.exe",
               writesSteam: false,
               capabilities: [
                 {
@@ -392,14 +392,14 @@ export async function installTauriMock(page: Page) {
                   label: "SAM local preflight",
                   status: "ready",
                   writesSteam: false,
-                  reason: "Checks Steam install, Steam client library, bundled bridge package, and Steam process status.",
+                  reason: "Checks Steam install, Steam client library, embedded bridge mode, and Steam process status.",
                 },
                 {
                   id: "samReadAchievements",
                   label: "SAM local achievement read",
                   status: "blocked",
                   writesSteam: false,
-                  reason: "Requires the bundled local bridge and running Steam before Repressurizer can read via Steamworks.",
+                  reason: "Requires the embedded bridge mode and running Steam before Repressurizer can read via Steamworks.",
                 },
                 {
                   id: "samWriteAchievements",
@@ -409,7 +409,7 @@ export async function installTauriMock(page: Page) {
                   reason: "Requires the local bridge plus advanced write settings and per-action confirmation.",
                 },
               ],
-              notes: ["No bundled Repressurizer SAM bridge executable was found."],
+              notes: ["Steam does not appear to be running; SAM-style local reads require the Steam client and logged-in user."],
             };
           default:
             return null;

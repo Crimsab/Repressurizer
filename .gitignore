@@ -5,8 +5,6 @@ out/
 playwright-report/
 test-results/
 src-tauri/gen/
-src-tauri/binaries/*
-!src-tauri/binaries/.gitkeep
 src-tauri/target/
 packages/rust/Cargo.lock
 packages/rust/target/

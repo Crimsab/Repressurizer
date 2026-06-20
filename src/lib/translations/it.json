@@ -803,7 +803,7 @@
   "steamTools.cards.maxConcurrent": "Max concorrenti",
   "steamTools.cards.minPlaytime": "Playtime minimo",
   "steamTools.bridge.title": "Architettura bridge",
-  "steamTools.bridge.desc": "Repressurizer tiene la UI dentro l'app, mentre i comandi Steamworks/stile SAM dovrebbero vivere in un bridge locale con capability esplicite.",
+  "steamTools.bridge.desc": "Repressurizer tiene la UI dentro l'app; i comandi Steamworks/stile SAM girano tramite una modalita bridge integrata con capability esplicite.",
   "steamTools.bridge.webApi": "Riepiloghi obiettivi Steam Web API",
   "steamTools.bridge.sam": "Bridge locale obiettivi stile SAM",
   "steamTools.bridge.xpaw": "Planner card farming stile xPaw",

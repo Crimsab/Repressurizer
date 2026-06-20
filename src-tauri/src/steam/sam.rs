@@ -1,11 +1,11 @@
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use tauri::Manager;
 
 const SAM_SOURCE: &str = "Repressurizer SAM bridge";
 const SAM_REFERENCE_SOURCE: &str = "Steam Achievement Manager architecture";
 const SAM_LICENSE: &str = "zlib-compatible architecture reference";
+const EMBEDDED_BRIDGE_ARG: &str = "--repressurizer-sam-bridge";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -41,10 +41,10 @@ pub struct SamBridgeProbe {
 }
 
 #[tauri::command]
-pub fn probe_sam_bridge(app: tauri::AppHandle, steam_path: String, app_id: u64) -> SamBridgeProbe {
-    let resource_dir = app.path().resource_dir().ok();
+pub fn probe_sam_bridge(steam_path: String, app_id: u64) -> SamBridgeProbe {
+    let bridge_path = std::env::current_exe().ok();
 
-    if let Some(bridge_path) = find_local_bridge(resource_dir) {
+    if let Some(bridge_path) = bridge_path.clone() {
         match run_bridge_probe(&bridge_path, &steam_path, app_id) {
             Ok(mut probe) => {
                 probe.bridge_invoked = true;
@@ -64,11 +64,76 @@ pub fn probe_sam_bridge(app: tauri::AppHandle, steam_path: String, app_id: u64) 
         }
     }
 
-    build_probe(steam_path, app_id, None, false, None)
+    build_probe(steam_path, app_id, bridge_path, false, None)
+}
+
+pub fn run_embedded_bridge_from_env() -> Option<i32> {
+    run_embedded_bridge(std::env::args())
+}
+
+pub fn run_embedded_bridge<I, S>(args: I) -> Option<i32>
+where
+    I: IntoIterator<Item = S>,
+    S: Into<String>,
+{
+    let mut args = args.into_iter().map(Into::into);
+    let _exe = args.next();
+    if args.next().as_deref() != Some(EMBEDDED_BRIDGE_ARG) {
+        return None;
+    }
+
+    match run_embedded_bridge_command(args.collect()) {
+        Ok(output) => {
+            println!("{output}");
+            Some(0)
+        }
+        Err(error) => {
+            eprintln!("{error}");
+            Some(2)
+        }
+    }
 }
 
 pub fn probe_sam_bridge_for_cli(steam_path: String, app_id: u64) -> SamBridgeProbe {
     build_probe(steam_path, app_id, std::env::current_exe().ok(), true, None)
+}
+
+fn run_embedded_bridge_command(args: Vec<String>) -> Result<String, String> {
+    let mut args = args.into_iter();
+    let command = args.next().unwrap_or_else(|| "help".to_string());
+
+    match command.as_str() {
+        "probe" => run_embedded_bridge_probe(args.collect()),
+        "help" | "--help" | "-h" => Ok(format!(
+            "Repressurizer embedded SAM bridge\nusage: {EMBEDDED_BRIDGE_ARG} probe --steam-path <path> [--app-id <appid>]"
+        )),
+        other => Err(format!("unknown embedded SAM bridge command: {other}")),
+    }
+}
+
+fn run_embedded_bridge_probe(args: Vec<String>) -> Result<String, String> {
+    let mut steam_path = String::new();
+    let mut app_id = 0_u64;
+    let mut iter = args.into_iter();
+
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--steam-path" => {
+                steam_path = iter.next().ok_or("--steam-path needs a value")?;
+            }
+            "--app-id" => {
+                let value = iter.next().ok_or("--app-id needs a value")?;
+                app_id = value
+                    .parse::<u64>()
+                    .map_err(|_| format!("invalid --app-id value: {value}"))?;
+            }
+            "--json" => {}
+            other => return Err(format!("unknown probe argument: {other}")),
+        }
+    }
+
+    serde_json::to_string(&probe_sam_bridge_for_cli(steam_path, app_id))
+        .map_err(|error| error.to_string())
 }
 
 fn build_probe(
@@ -138,14 +203,14 @@ fn build_probe(
                 "SAM local preflight",
                 if preflight_ready { "ready" } else { "blocked" },
                 false,
-                "Checks Steam install, Steam client library, bundled bridge package, and Steam process status.",
+                "Checks Steam install, Steam client library, embedded bridge mode, and Steam process status.",
             ),
             capability(
                 "samReadAchievements",
                 "SAM local achievement read",
                 if bridge_ready { "ready" } else { "blocked" },
                 false,
-                "Requires the bundled local bridge and running Steam before Repressurizer can read via Steamworks.",
+                "Requires the embedded bridge mode and running Steam before Repressurizer can read via Steamworks.",
             ),
             capability(
                 "samWriteAchievements",
@@ -180,6 +245,7 @@ fn run_bridge_probe(
     app_id: u64,
 ) -> Result<SamBridgeProbe, String> {
     let output = Command::new(bridge_path)
+        .arg(EMBEDDED_BRIDGE_ARG)
         .arg("probe")
         .arg("--steam-path")
         .arg(steam_path)
@@ -242,13 +308,15 @@ fn notes_for_probe(
         );
     }
     if !local_bridge_found {
-        notes.push("No bundled Repressurizer SAM bridge executable was found.".to_string());
+        notes.push(
+            "Repressurizer could not resolve its embedded SAM bridge entrypoint.".to_string(),
+        );
     }
     if !steam_running {
         notes.push("Steam does not appear to be running; SAM-style local reads require the Steam client and logged-in user.".to_string());
     }
     if bridge_invoked {
-        notes.push("Bundled Repressurizer SAM bridge was invoked.".to_string());
+        notes.push("Embedded Repressurizer SAM bridge was invoked.".to_string());
     }
     if let Some(error) = bridge_error {
         notes.push(error);
@@ -291,59 +359,6 @@ fn steam_client_candidates(steam_root: &Path) -> Vec<PathBuf> {
             steam_root.join("ubuntu12_32").join("steamclient.so"),
             steam_root.join("ubuntu12_64").join("steamclient.so"),
             steam_root.join("linux64").join("steamclient.so"),
-        ]
-    }
-}
-
-fn find_local_bridge(resource_dir: Option<PathBuf>) -> Option<PathBuf> {
-    if let Ok(path) = std::env::var("REPRESSURIZER_SAM_BRIDGE") {
-        let bridge = PathBuf::from(path);
-        if bridge.exists() {
-            return Some(bridge);
-        }
-    }
-
-    let mut roots = Vec::new();
-    if let Some(exe_dir) = std::env::current_exe()
-        .ok()
-        .and_then(|path| path.parent().map(Path::to_path_buf))
-    {
-        roots.push(exe_dir);
-    }
-    if let Some(resource_dir) = resource_dir {
-        roots.push(resource_dir.join("binaries"));
-        roots.push(resource_dir);
-    }
-
-    roots
-        .into_iter()
-        .flat_map(|root| {
-            local_bridge_names()
-                .into_iter()
-                .map(move |name| root.join(name))
-        })
-        .find(|candidate| candidate.exists())
-}
-
-fn local_bridge_names() -> Vec<&'static str> {
-    if cfg!(target_os = "windows") {
-        vec![
-            "repressurizer-sam-bridge.exe",
-            "repressurizer-sam-bridge-x86_64-pc-windows-msvc.exe",
-            "sam-bridge.exe",
-        ]
-    } else if cfg!(target_os = "macos") {
-        vec![
-            "repressurizer-sam-bridge",
-            "repressurizer-sam-bridge-aarch64-apple-darwin",
-            "repressurizer-sam-bridge-x86_64-apple-darwin",
-            "sam-bridge",
-        ]
-    } else {
-        vec![
-            "repressurizer-sam-bridge",
-            "repressurizer-sam-bridge-x86_64-unknown-linux-gnu",
-            "sam-bridge",
         ]
     }
 }
@@ -396,16 +411,25 @@ mod tests {
     }
 
     #[test]
-    fn finds_bridge_from_resource_binaries_dir() {
-        let root = temp_dir("sam_probe_resource_bridge");
-        let bridge = root.join("binaries").join(local_bridge_names()[0]);
-        fs::create_dir_all(bridge.parent().unwrap()).unwrap();
-        fs::write(&bridge, b"mock").unwrap();
+    fn ignores_normal_app_launch_args() {
+        assert_eq!(run_embedded_bridge(["repressurizer"]), None);
+    }
 
-        let found = find_local_bridge(Some(root.clone()));
-        assert_eq!(found, Some(bridge));
+    #[test]
+    fn embedded_probe_outputs_json() {
+        let output = run_embedded_bridge_command(vec![
+            "probe".to_string(),
+            "--steam-path".to_string(),
+            String::new(),
+            "--app-id".to_string(),
+            "39140".to_string(),
+        ])
+        .unwrap();
+        let probe = serde_json::from_str::<SamBridgeProbe>(&output).unwrap();
 
-        let _ = fs::remove_dir_all(root);
+        assert_eq!(probe.app_id, 39140);
+        assert!(probe.bridge_invoked);
+        assert!(probe.local_bridge_found);
     }
 
     fn temp_dir(name: &str) -> PathBuf {
