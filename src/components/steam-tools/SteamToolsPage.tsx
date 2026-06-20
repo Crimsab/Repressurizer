@@ -28,6 +28,8 @@ export function SteamToolsPage({ onClose, onOpenAchievements }: SteamToolsPagePr
   const settings = useSettingsStore();
   const [samProbe, setSamProbe] = useState<SamBridgeProbe | null>(null);
   const [samChecking, setSamChecking] = useState(false);
+  const samEnabled =
+    settings.steamToolsEnabled && settings.steamToolsAchievementWritesEnabled;
 
   const refreshSamProbe = useCallback(async () => {
     setSamChecking(true);
@@ -103,8 +105,8 @@ export function SteamToolsPage({ onClose, onOpenAchievements }: SteamToolsPagePr
                 <h2 className="text-base font-semibold leading-tight tracking-tight text-white">
                   {t("steamTools.title")}
                 </h2>
-                <StatusPill tone={settings.steamToolsEnabled ? "ready" : "planned"}>
-                  {settings.steamToolsEnabled ? t("steamTools.labOn") : t("steamTools.labOff")}
+                <StatusPill tone={samEnabled ? "ready" : "planned"}>
+                  {samEnabled ? t("steamTools.labOn") : t("steamTools.labOff")}
                 </StatusPill>
               </div>
               <p className="mt-1 max-w-2xl text-xs leading-relaxed text-repressurizer-text-faint">

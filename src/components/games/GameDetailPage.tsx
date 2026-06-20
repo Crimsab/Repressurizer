@@ -87,6 +87,7 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
   const [tab, setTab] = useState<"info" | "achievements">("info");
 
   const cachedAchievementSummary = useAchievementsStore((s) => s.summaries[game.appid]);
+  const steamToolsSamEnabled = steamToolsEnabled && steamToolsAchievementWritesEnabled;
 
   const gameCategories = useMemo(
     () =>
@@ -178,7 +179,7 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
   );
 
   const refreshSamProbe = useCallback(async () => {
-    if (!steamToolsEnabled) {
+    if (!steamToolsSamEnabled) {
       setSamProbe(null);
       return;
     }
@@ -189,7 +190,7 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
     } catch {
       setSamProbe(null);
     }
-  }, [game.appid, steamPath, steamToolsEnabled]);
+  }, [game.appid, steamPath, steamToolsSamEnabled]);
 
   useEffect(() => {
     if (tab !== "achievements") return;
@@ -201,7 +202,7 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
       return;
     }
     void loadAchievementData(false);
-    if (details && steamToolsEnabled) void refreshSamProbe();
+    if (details && steamToolsSamEnabled) void refreshSamProbe();
   }, [details, loadAchievementData, refreshSamProbe, tab]);
 
   const hours = (game.playtime_forever / 60).toFixed(1);
@@ -223,7 +224,7 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
       useGameStore.getState().setDetails(game.appid, next);
       if (tab === "achievements") {
         await loadAchievementData(true, next);
-        if (gameHasSteamAchievements(next) && steamToolsEnabled) {
+        if (gameHasSteamAchievements(next) && steamToolsSamEnabled) {
           await refreshSamProbe();
         } else {
           setSamProbe(null);
@@ -483,8 +484,8 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
               error={achError}
               percent={achPercent}
               samProbe={samProbe}
-              steamToolsEnabled={steamToolsEnabled}
-              steamToolsAchievementWritesEnabled={steamToolsAchievementWritesEnabled}
+              steamToolsEnabled={steamToolsSamEnabled}
+              steamToolsAchievementWritesEnabled={steamToolsSamEnabled}
               samActionRunning={samActionRunning}
               samActionMessage={samActionMessage}
               samActionError={samActionError}

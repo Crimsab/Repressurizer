@@ -939,19 +939,15 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                   <ToggleRow
                     icon={<Trophy size={15} weight="duotone" />}
                     label={t("steamTools.sam.title")}
-                    description={t("steamTools.sam.desc")}
-                    checked={settings.steamToolsEnabled}
-                    onChange={(v) => settings.setSettings({ steamToolsEnabled: v })}
+                    description={t("settings.steamTools.achievementWrites.desc")}
+                    checked={settings.steamToolsEnabled && settings.steamToolsAchievementWritesEnabled}
+                    onChange={(v) =>
+                      settings.setSettings({
+                        steamToolsEnabled: v,
+                        steamToolsAchievementWritesEnabled: v,
+                      })
+                    }
                   />
-                  {settings.steamToolsEnabled && (
-                    <ToggleRow
-                      icon={<Trophy size={15} weight="duotone" />}
-                      label={t("settings.steamTools.achievementWrites")}
-                      description={t("settings.steamTools.achievementWrites.desc")}
-                      checked={settings.steamToolsAchievementWritesEnabled}
-                      onChange={(v) => settings.setSettings({ steamToolsAchievementWritesEnabled: v })}
-                    />
-                  )}
                 </div>
               </div>
               )}

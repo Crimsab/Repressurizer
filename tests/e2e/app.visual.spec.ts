@@ -133,6 +133,7 @@ test("game achievement details show Steam Achievement Manager preflight separate
     if (!raw) return;
     const settings = JSON.parse(raw);
     settings.steamToolsEnabled = true;
+    settings.steamToolsAchievementWritesEnabled = true;
     window.localStorage.setItem("repressurizer-settings", JSON.stringify(settings));
   });
 
@@ -146,7 +147,7 @@ test("game achievement details show Steam Achievement Manager preflight separate
   await detail.getByRole("button", { name: /Achievements/ }).click();
 
   await expect(detail.getByRole("heading", { name: "Steam Achievement Manager" })).toBeVisible();
-  await expect(detail.getByText("Steam not running").first()).toBeVisible();
+  await expect(detail.getByText("Ready").first()).toBeVisible();
   await expect(detail.getByText("1 / 3 achievements")).toBeVisible();
   await expectNoHorizontalOverflow(page);
 
@@ -313,8 +314,10 @@ test("opens organized settings tabs, automation logs, and Steam controls without
   await expect(settingsDialog.getByText("SAM integration: Steam Achievement Manager")).toBeVisible();
   await expect(settingsDialog.getByText("Enable SAM achievement changes")).toBeHidden();
   await expect(settingsDialog.getByText("Allow card farming lab")).toBeHidden();
+  await expect(settingsDialog.getByRole("switch")).toHaveCount(1);
   await settingsDialog.getByRole("switch", { name: /SAM integration/ }).click();
-  await expect(settingsDialog.getByText("Enable SAM achievement changes")).toBeVisible();
+  await expect(settingsDialog.getByRole("switch", { name: /SAM integration/ })).toBeChecked();
+  await expect(settingsDialog.getByText("Enable SAM achievement changes")).toBeHidden();
 
   const toolsPath = testInfo.outputPath("settings-steam-tools.png");
   await page.screenshot({ path: toolsPath, fullPage: true });
