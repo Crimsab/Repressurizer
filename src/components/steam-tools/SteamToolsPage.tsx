@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useGameStore } from "../../stores/gameStore";
 import { useAchievementsStore } from "../../stores/achievementsStore";
 import { useSettingsStore } from "../../stores/settingsStore";
@@ -6,15 +6,9 @@ import { useT, type TranslationKey } from "../../lib/i18n";
 import { probeSamBridge } from "../../lib/tauri";
 import type { SamBridgeProbe } from "../../lib/types";
 import {
-  Cards,
-  CheckCircle,
-  GameController,
-  Info,
-  LockKey,
-  ShieldCheck,
+  ArrowsClockwise,
   SteamLogo,
   Trophy,
-  Warning,
   Wrench,
   X,
 } from "@phosphor-icons/react";
@@ -33,15 +27,32 @@ export function SteamToolsPage({ onClose, onOpenAchievements }: SteamToolsPagePr
   const summaries = useAchievementsStore((s) => s.summaries);
   const settings = useSettingsStore();
   const [samProbe, setSamProbe] = useState<SamBridgeProbe | null>(null);
+  const [samChecking, setSamChecking] = useState(false);
+
+  const refreshSamProbe = useCallback(async () => {
+    setSamChecking(true);
+    try {
+      const probe = await probeSamBridge(settings.steamPath, 0);
+      setSamProbe(probe);
+    } catch {
+      setSamProbe(null);
+    } finally {
+      setSamChecking(false);
+    }
+  }, [settings.steamPath]);
 
   useEffect(() => {
     let cancelled = false;
+    setSamChecking(true);
     probeSamBridge(settings.steamPath, 0)
       .then((probe) => {
         if (!cancelled) setSamProbe(probe);
       })
       .catch(() => {
         if (!cancelled) setSamProbe(null);
+      })
+      .finally(() => {
+        if (!cancelled) setSamChecking(false);
       });
     return () => {
       cancelled = true;
@@ -73,10 +84,6 @@ export function SteamToolsPage({ onClose, onOpenAchievements }: SteamToolsPagePr
       neverPlayed,
     };
   }, [details, games, summaries]);
-
-  const samReady = samProbe?.available === true;
-  const writeActionsLocked = !settings.steamToolsEnabled || !settings.steamToolsAchievementWritesEnabled || !samReady;
-  const cardFarmingLocked = !settings.steamToolsEnabled || !settings.steamToolsCardFarmingEnabled;
 
   return (
     <div
@@ -122,7 +129,7 @@ export function SteamToolsPage({ onClose, onOpenAchievements }: SteamToolsPagePr
             <Metric label={t("steamTools.metric.neverPlayed")} value={stats.neverPlayed} />
           </div>
 
-          <div className="mt-5 grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+          <div className="mt-5 grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
             <section className="space-y-4">
               <CapabilityCard
                 icon={<Trophy size={18} weight="duotone" />}
@@ -144,90 +151,37 @@ export function SteamToolsPage({ onClose, onOpenAchievements }: SteamToolsPagePr
                     <Trophy size={14} weight="bold" />
                     {t("steamTools.achievements.open")}
                   </button>
-                  <DisabledAction
-                    icon={<LockKey size={14} />}
-                    label={t("steamTools.achievements.writeActions")}
-                    locked={writeActionsLocked}
-                  />
-                </div>
-              </CapabilityCard>
-
-              <CapabilityCard
-                icon={<Cards size={18} weight="duotone" />}
-                title={t("steamTools.cards.title")}
-                status={cardFarmingLocked ? t("steamTools.status.planned") : t("steamTools.status.lab")}
-                tone={cardFarmingLocked ? "planned" : "locked"}
-                description={t("steamTools.cards.desc")}
-              >
-                <div className="rounded-xl border border-amber-500/20 bg-amber-500/8 px-3 py-2.5 text-xs leading-relaxed text-amber-200">
-                  <div className="flex items-start gap-2">
-                    <Warning size={15} weight="fill" className="mt-0.5 shrink-0" />
-                    <p>{t("steamTools.cards.refundWarning")}</p>
-                  </div>
-                </div>
-                <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  <MiniMetric label={t("steamTools.cards.maxConcurrent")} value={settings.steamToolsMaxConcurrentIdleApps} />
-                  <MiniMetric label={t("steamTools.cards.minPlaytime")} value={`${settings.steamToolsMinPlaytimeMinutes}m`} />
                 </div>
               </CapabilityCard>
             </section>
 
             <aside className="space-y-4">
               <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg p-4">
-                <div className="flex items-center gap-2">
-                  <Wrench size={17} weight="duotone" className="text-repressurizer-accent" />
-                  <h3 className="text-sm font-semibold text-repressurizer-text">{t("steamTools.bridge.title")}</h3>
-                </div>
-                <p className="mt-2 text-xs leading-relaxed text-repressurizer-text-faint">
-                  {t("steamTools.bridge.desc")}
-                </p>
-                <div className="mt-3 space-y-2">
-                  <SourceRow icon={<ShieldCheck size={14} />} label={t("steamTools.bridge.webApi")} value={t("steamTools.status.ready")} tone="ready" />
-                  <SourceRow icon={<LockKey size={14} />} label={t("steamTools.bridge.sam")} value={samReadinessLabel(t, samProbe)} tone={samProbe?.available ? "ready" : "locked"} />
-                  <SourceRow icon={<Cards size={14} />} label={t("steamTools.bridge.xpaw")} value={t("steamTools.status.planned")} tone="planned" />
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg p-4">
-                <div className="flex items-center gap-2">
-                  <Info size={17} weight="duotone" className="text-repressurizer-text-muted" />
-                  <h3 className="text-sm font-semibold text-repressurizer-text">{t("steamTools.sam.title")}</h3>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <Wrench size={17} weight="duotone" className="text-repressurizer-accent" />
+                    <h3 className="text-sm font-semibold text-repressurizer-text">{t("steamTools.sam.title")}</h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void refreshSamProbe()}
+                    disabled={samChecking}
+                    className="btn-press inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-repressurizer-border bg-repressurizer-surface px-2.5 py-1.5 text-[11px] font-medium text-repressurizer-text-muted transition-colors hover:text-repressurizer-text disabled:opacity-50"
+                  >
+                    <ArrowsClockwise size={13} className={samChecking ? "animate-spin" : ""} />
+                    {t("settings.refresh")}
+                  </button>
                 </div>
                 <p className="mt-2 text-xs leading-relaxed text-repressurizer-text-faint">
                   {t("steamTools.sam.desc")}
                 </p>
-                <div className="mt-3 grid gap-2">
+                <div className="mt-3 space-y-2">
+                  <ProbeFact label={t("steamTools.bridge.webApi")} value={t("steamTools.status.ready")} />
+                  <ProbeFact label={t("steamTools.bridge.sam")} value={samReadinessLabel(t, samProbe)} />
                   <ProbeFact label={t("steamTools.sam.platform")} value={samProbe?.platform ?? t("steamTools.sam.checking")} />
                   <ProbeFact label={t("steamTools.sam.steamClient")} value={booleanLabel(t, samProbe?.steamClientLibraryFound)} />
                   <ProbeFact label={t("steamTools.sam.localBridge")} value={booleanLabel(t, samProbe?.localBridgeFound)} />
                   <ProbeFact label={t("steamTools.sam.writes")} value={samProbe?.writesSteam ? t("steamTools.sam.available") : t("steamTools.status.readOnly")} />
-                </div>
-                {samProbe?.notes?.[0] && (
-                  <p className="mt-3 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-surface/45 px-3 py-2 text-xs leading-relaxed text-repressurizer-text-muted">
-                    {samProbe.notes[0]}
-                  </p>
-                )}
-              </div>
-
-              <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg p-4">
-                <div className="flex items-center gap-2">
-                  <GameController size={17} weight="duotone" className="text-repressurizer-text-muted" />
-                  <h3 className="text-sm font-semibold text-repressurizer-text">{t("steamTools.sam.capabilities")}</h3>
-                </div>
-                <div className="mt-3 space-y-2">
-                  {samProbe?.capabilities?.length ? (
-                    samProbe.capabilities.map((capability) => (
-                      <SourceRow
-                        key={capability.id}
-                        icon={capability.writesSteam ? <LockKey size={14} /> : <ShieldCheck size={14} />}
-                        label={samCapabilityLabel(t, capability.id)}
-                        value={samCapabilityStatusLabel(t, capability.status)}
-                        tone={samCapabilityTone(capability.status)}
-                      />
-                    ))
-                  ) : (
-                    <p className="text-xs leading-relaxed text-repressurizer-text-faint">{t("steamTools.sam.checking")}</p>
-                  )}
                 </div>
               </div>
             </aside>
@@ -302,26 +256,6 @@ function StatusPill({ tone, children }: { tone: Tone; children: React.ReactNode 
   );
 }
 
-function SourceRow({
-  icon,
-  label,
-  value,
-  tone,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  tone: Tone;
-}) {
-  return (
-    <div className="flex items-center gap-2 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-surface/40 px-3 py-2">
-      <span className="text-repressurizer-text-faint">{icon}</span>
-      <span className="min-w-0 flex-1 truncate text-xs text-repressurizer-text-muted">{label}</span>
-      <StatusPill tone={tone}>{value}</StatusPill>
-    </div>
-  );
-}
-
 function ProbeFact({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex items-center justify-between gap-3 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-surface/40 px-3 py-2">
@@ -340,40 +274,4 @@ function samReadinessLabel(t: ReturnType<typeof useT>, probe: SamBridgeProbe | n
   if (!probe) return t("steamTools.sam.checking");
   const key = `steamTools.sam.readiness.${probe.readiness}` as TranslationKey;
   return t(key);
-}
-
-function samCapabilityLabel(t: ReturnType<typeof useT>, id: string): string {
-  return t(`steamTools.sam.capability.${id}` as TranslationKey);
-}
-
-function samCapabilityStatusLabel(t: ReturnType<typeof useT>, status: string): string {
-  return t(`steamTools.status.${status}` as TranslationKey);
-}
-
-function samCapabilityTone(status: string): Tone {
-  if (status === "ready") return "ready";
-  if (status === "locked") return "locked";
-  return "planned";
-}
-
-function DisabledAction({
-  icon,
-  label,
-  locked,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  locked: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      disabled={locked}
-      className="btn-press inline-flex items-center gap-2 rounded-lg border border-repressurizer-border bg-repressurizer-surface px-3 py-2 text-xs font-medium text-repressurizer-text-muted transition-colors disabled:cursor-not-allowed disabled:opacity-45"
-    >
-      {locked ? <LockKey size={14} /> : icon}
-      {label}
-      {!locked && <CheckCircle size={14} weight="fill" className="text-repressurizer-success" />}
-    </button>
-  );
 }

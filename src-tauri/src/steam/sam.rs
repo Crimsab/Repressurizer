@@ -217,14 +217,14 @@ fn build_probe(
                 "SAM unlock / lock",
                 "locked",
                 true,
-                "Requires the local bridge plus advanced write settings and per-action confirmation.",
+                "Not implemented in this build; no Steam achievement write command is exposed.",
             ),
             capability(
                 "samStatsEdit",
                 "SAM stats edit / reset",
                 "locked",
                 true,
-                "Reserved for a later danger-zone workflow; never enabled by probe alone.",
+                "Not implemented in this build; no Steam stats reset command is exposed.",
             ),
         ],
         notes: notes_for_probe(

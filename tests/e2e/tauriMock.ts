@@ -269,7 +269,7 @@ export async function installTauriMock(page: Page) {
               app_id: appId,
               name: names[appId] ?? `App ${appId}`,
               genres: [39140, 1462040, 2499860].includes(appId) ? ["RPG"] : ["Adventure"],
-              categories: ["Single-player"],
+              categories: appId === 1145360 ? ["Single-player", "Steam Achievements"] : ["Single-player"],
               release_date: years[appId] ?? "Jan 4, 2008",
               metacritic_score: appId === 12100 ? 93 : null,
               developers: ["Demo Studio"],

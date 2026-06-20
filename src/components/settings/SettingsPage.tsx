@@ -62,8 +62,6 @@ import {
   CloudArrowDown,
   UsersThree,
   MagnifyingGlass,
-  Cards,
-  LockKey,
   SteamLogo,
   Trophy,
 } from "@phosphor-icons/react";
@@ -84,6 +82,7 @@ type SettingsTab =
   | "data"
   | "backups"
   | "ignored"
+  | "tools"
   | "about";
 type AutomationLogFilter = "all" | "success" | "failed" | "skipped";
 type AutomationLogSort = "desc" | "asc";
@@ -493,13 +492,12 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
       },
       {
         id: "steamtools",
-        tab: "steam" as const,
+        tab: "tools" as const,
         label: t("settings.steamTools"),
         keywords: [
           t("settings.steamTools"),
-          t("settings.steamTools.achievementWrites"),
-          t("settings.steamTools.cardFarming"),
-          "sam achievement unlock lock stats card farming idle xpaw steam tools lab",
+          t("steamTools.sam.title"),
+          "sam achievement bridge steam tools lab",
         ],
       },
       {
@@ -661,6 +659,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
       icon: <Warning size={14} />,
       badge: ignoredIds.length + hltbIgnoredIds.length,
     },
+    { id: "tools", label: t("settings.steamTools"), icon: <SteamLogo size={14} /> },
     { id: "about", label: t("settings.aboutTab"), icon: <Info size={14} /> },
   ];
   const filteredAutomationLogs = useMemo(() => {
@@ -785,7 +784,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
             </div>
           )}
 
-          {(["general", "steam", "automation", "data", "about"] as SettingsTab[]).includes(tab) && (
+          {(["general", "steam", "automation", "data", "tools", "about"] as SettingsTab[]).includes(tab) && (
             <div className="space-y-6">
               {/* Info grid */}
               {isSectionVisible("overview") && (
@@ -944,76 +943,19 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                     checked={settings.steamToolsEnabled}
                     onChange={(v) => settings.setSettings({ steamToolsEnabled: v })}
                   />
-                  <ToggleRow
-                    icon={<Trophy size={15} weight="duotone" />}
-                    label={t("settings.steamTools.achievementWrites")}
-                    description={t("settings.steamTools.achievementWrites.desc")}
-                    checked={settings.steamToolsEnabled && settings.steamToolsAchievementWritesEnabled}
-                    onChange={(v) =>
-                      settings.setSettings({
-                        steamToolsEnabled: v ? true : settings.steamToolsEnabled,
-                        steamToolsAchievementWritesEnabled: v,
-                      })
-                    }
-                  />
-                  <ToggleRow
-                    icon={<Cards size={15} weight="duotone" />}
-                    label={t("settings.steamTools.cardFarming")}
-                    description={t("settings.steamTools.cardFarming.desc")}
-                    checked={settings.steamToolsEnabled && settings.steamToolsCardFarmingEnabled}
-                    onChange={(v) =>
-                      settings.setSettings({
-                        steamToolsEnabled: v ? true : settings.steamToolsEnabled,
-                        steamToolsCardFarmingEnabled: v,
-                      })
-                    }
-                  />
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="flex min-w-0 items-center gap-2">
-                          <LockKey size={15} weight="duotone" className="text-repressurizer-text-faint" />
-                          <p className="truncate text-sm text-repressurizer-text">{t("settings.steamTools.maxConcurrent")}</p>
-                        </div>
-                        <span className="font-mono text-sm text-repressurizer-accent tabular-nums">
-                          {settings.steamToolsMaxConcurrentIdleApps ?? 8}
-                        </span>
+                  <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3">
+                    <div className="flex items-start gap-3">
+                      <Trophy size={16} weight="duotone" className="mt-0.5 text-repressurizer-text-faint" />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-repressurizer-text">{t("steamTools.sam.title")}</p>
+                        <p className="mt-1 text-xs leading-relaxed text-repressurizer-text-faint">
+                          {t("steamTools.sam.desc")}
+                        </p>
                       </div>
-                      <input
-                        type="range"
-                        min={1}
-                        max={32}
-                        step={1}
-                        value={settings.steamToolsMaxConcurrentIdleApps ?? 8}
-                        onChange={(e) => settings.setSettings({ steamToolsMaxConcurrentIdleApps: Number(e.target.value) })}
-                        className="mt-3 w-full accent-repressurizer-accent"
-                      />
-                      <p className="mt-2 text-xs leading-relaxed text-repressurizer-text-faint">
-                        {t("settings.steamTools.maxConcurrent.desc")}
-                      </p>
                     </div>
-                    <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="flex min-w-0 items-center gap-2">
-                          <Timer size={15} weight="duotone" className="text-repressurizer-text-faint" />
-                          <p className="truncate text-sm text-repressurizer-text">{t("settings.steamTools.minPlaytime")}</p>
-                        </div>
-                        <span className="font-mono text-sm text-repressurizer-accent tabular-nums">
-                          {settings.steamToolsMinPlaytimeMinutes ?? 180}m
-                        </span>
-                      </div>
-                      <input
-                        type="range"
-                        min={0}
-                        max={300}
-                        step={15}
-                        value={settings.steamToolsMinPlaytimeMinutes ?? 180}
-                        onChange={(e) => settings.setSettings({ steamToolsMinPlaytimeMinutes: Number(e.target.value) })}
-                        className="mt-3 w-full accent-repressurizer-accent"
-                      />
-                      <p className="mt-2 text-xs leading-relaxed text-repressurizer-text-faint">
-                        {t("settings.steamTools.minPlaytime.desc")}
-                      </p>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      <MiniStat label={t("steamTools.sam.localBridge")} value={t("steamTools.sam.available")} />
+                      <MiniStat label={t("steamTools.sam.writes")} value={t("steamTools.status.readOnly")} />
                     </div>
                   </div>
                 </div>
@@ -2357,7 +2299,7 @@ function AutomationGuideDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
-function MiniStat({ label, value }: { label: string; value: number }) {
+function MiniStat({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="rounded-lg border border-repressurizer-border-subtle bg-repressurizer-surface px-2.5 py-2">
       <p className="text-[10px] uppercase tracking-wider text-repressurizer-text-faint">{label}</p>

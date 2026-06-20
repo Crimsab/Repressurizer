@@ -116,11 +116,10 @@ test("opens the Steam Tools lab surface", async ({ page }, testInfo) => {
   });
   await expect(steamTools.getByRole("heading", { name: "Steam Tools" })).toBeVisible();
   await expect(steamTools.getByRole("heading", { name: "Achievement Manager" })).toBeVisible();
-  await expect(steamTools.getByRole("heading", { name: "Card Farming" })).toBeVisible();
-  await expect(steamTools.getByRole("heading", { name: "Bridge architecture" })).toBeVisible();
-  await expect(steamTools.getByRole("heading", { name: "SAM local bridge" })).toBeVisible();
+  await expect(steamTools.getByRole("heading", { name: "Embedded SAM bridge" })).toBeVisible();
   await expect(steamTools.getByText("Steam not running")).toBeVisible();
   await expect(steamTools.getByRole("button", { name: "Open achievements" })).toBeVisible();
+  await expect(steamTools.getByRole("button", { name: "Refresh" })).toBeVisible();
   await expectNoHorizontalOverflow(page);
 
   const screenshotPath = testInfo.outputPath("steam-tools.png");
@@ -136,7 +135,7 @@ test("game achievement details show SAM bridge preflight separately from Steam W
     has: page.getByRole("heading", { name: "Hades" }),
   });
   await expect(detail.getByRole("heading", { name: "Hades" })).toBeVisible();
-  await detail.getByRole("button", { name: "Achievements 1/3" }).click();
+  await detail.getByRole("button", { name: /Achievements/ }).click();
 
   await expect(detail.getByRole("heading", { name: "SAM bridge" })).toBeVisible();
   await expect(detail.getByText("Steam Web API", { exact: true })).toBeVisible();
@@ -147,6 +146,19 @@ test("game achievement details show SAM bridge preflight separately from Steam W
   const screenshotPath = testInfo.outputPath("game-achievements-sam-bridge.png");
   await page.screenshot({ path: screenshotPath, fullPage: true });
   await testInfo.attach("game-achievements-sam-bridge", { path: screenshotPath, contentType: "image/png" });
+});
+
+test("games without Steam achievements skip the SAM bridge panel", async ({ page }) => {
+  await page.goto("/");
+
+  await page.locator(".game-card").filter({ hasText: "Outer Wilds" }).dblclick();
+  const detail = page.locator(".fixed.inset-0").filter({
+    has: page.getByRole("heading", { name: "Outer Wilds" }),
+  });
+  await detail.getByRole("button", { name: /Achievements/ }).click();
+
+  await expect(detail.getByText("This game has no achievements.")).toBeVisible();
+  await expect(detail.getByRole("heading", { name: "SAM bridge" })).toBeHidden();
 });
 
 test("opens organized settings tabs, automation logs, and Steam controls without layout overflow", async ({ page }, testInfo) => {
@@ -169,7 +181,6 @@ test("opens organized settings tabs, automation logs, and Steam controls without
 
   await settingsDialog.getByRole("button", { name: "Steam", exact: true }).click();
   await expect(settingsDialog.getByRole("heading", { name: "Steam Family" })).toBeVisible();
-  await expect(settingsDialog.getByRole("heading", { name: "Steam Tools" })).toBeVisible();
   await expect(settingsDialog.getByText("Steam Web API Key", { exact: true })).toBeVisible();
   const apiKeyInput = settingsDialog.locator('input[type="password"]').last();
   const apiSaveButton = settingsDialog.getByRole("button", { name: "Save", exact: true });
@@ -181,6 +192,16 @@ test("opens organized settings tabs, automation logs, and Steam controls without
   const steamPath = testInfo.outputPath("settings-steam.png");
   await page.screenshot({ path: steamPath, fullPage: true });
   await testInfo.attach("settings-steam", { path: steamPath, contentType: "image/png" });
+
+  await settingsDialog.getByRole("button", { name: "Steam Tools", exact: true }).click();
+  await expect(settingsDialog.getByRole("heading", { name: "Steam Tools" })).toBeVisible();
+  await expect(settingsDialog.getByText("Embedded SAM bridge")).toBeVisible();
+  await expect(settingsDialog.getByText("Allow achievement write actions")).toBeHidden();
+  await expect(settingsDialog.getByText("Allow card farming lab")).toBeHidden();
+
+  const toolsPath = testInfo.outputPath("settings-steam-tools.png");
+  await page.screenshot({ path: toolsPath, fullPage: true });
+  await testInfo.attach("settings-steam-tools", { path: toolsPath, contentType: "image/png" });
 
   await settingsDialog.getByRole("button", { name: "Data", exact: true }).click();
   await expect(settingsDialog.getByText("Steam App Index")).toBeVisible();

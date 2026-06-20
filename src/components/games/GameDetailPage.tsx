@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useCallback, useState, useEffect, useMemo, useRef } from "react";
 import { open } from "@tauri-apps/plugin-shell";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useGameStore } from "../../stores/gameStore";
@@ -6,6 +6,7 @@ import { useCategoryStore } from "../../stores/categoryStore";
 import { useNotesStore } from "../../stores/notesStore";
 import { useTagsStore } from "../../stores/tagsStore";
 import { useReviewStore } from "../../stores/reviewStore";
+import { useAchievementsStore } from "../../stores/achievementsStore";
 import {
   fetchGameDetails,
   fetchAchievements,
@@ -59,8 +60,6 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
     showDetailMetacritic,
     showDetailPrice,
     steamPath,
-    steamToolsEnabled,
-    steamToolsAchievementWritesEnabled,
   } = useSettingsStore();
   const collections = useCategoryStore((s) => s.collections);
   const addGameToCategory = useCategoryStore((s) => s.addGameToCategory);
@@ -72,12 +71,12 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
   const [achievements, setAchievements] = useState<AchievementSummary | null>(null);
   const [loadingDetails, setLoadingDetails] = useState(true);
   const [refreshingDetails, setRefreshingDetails] = useState(false);
-  const [loadingAchievements, setLoadingAchievements] = useState(true);
+  const [loadingAchievements, setLoadingAchievements] = useState(false);
   const [achError, setAchError] = useState("");
   const [samProbe, setSamProbe] = useState<SamBridgeProbe | null>(null);
   const [tab, setTab] = useState<"info" | "achievements">("info");
 
-  const cachedDetails = useGameStore((s) => s.details[game.appid]);
+  const cachedAchievementSummary = useAchievementsStore((s) => s.summaries[game.appid]);
 
   const gameCategories = useMemo(
     () =>
@@ -95,29 +94,97 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
     [collections]
   );
 
+  const gameHasSteamAchievements = (value: GameDetails | null) =>
+    value?.categories?.includes("Steam Achievements") === true;
+
   useEffect(() => {
+    let cancelled = false;
+    const cachedDetails = useGameStore.getState().details[game.appid];
+    setAchievements(null);
+    setLoadingAchievements(false);
+    setAchError("");
+    setSamProbe(null);
+
     if (cachedDetails) {
       setDetails(cachedDetails);
       setLoadingDetails(false);
+      return () => {
+        cancelled = true;
+      };
     } else {
+      setDetails(null);
+      setLoadingDetails(true);
       fetchGameDetails(game.appid, currencyToCountryCode(currency))
         .then((d) => {
+          if (cancelled) return;
           setDetails(d);
           useGameStore.getState().setDetails(game.appid, d);
         })
         .catch(() => {})
-        .finally(() => setLoadingDetails(false));
+        .finally(() => {
+          if (!cancelled) setLoadingDetails(false);
+        });
     }
 
-    fetchAchievements(apiKey, steamId64, game.appid)
-      .then(setAchievements)
-      .catch((e) => setAchError(String(e)))
-      .finally(() => setLoadingAchievements(false));
+    return () => {
+      cancelled = true;
+    };
+  }, [currency, game.appid]);
 
-    probeSamBridge(steamPath, game.appid)
-      .then(setSamProbe)
-      .catch(() => setSamProbe(null));
-  }, [apiKey, currency, game.appid, steamId64, steamPath]);
+  const loadAchievementData = useCallback(
+    async (force = false, detailsOverride?: GameDetails | null) => {
+      const activeDetails = detailsOverride === undefined ? details : detailsOverride;
+      if (!force && (achievements || achError)) return;
+      if (!activeDetails && loadingDetails) {
+        setLoadingAchievements(true);
+        return;
+      }
+      if (activeDetails && !gameHasSteamAchievements(activeDetails)) {
+        const empty: AchievementSummary = { total: 0, achieved: 0, achievements: [] };
+        setAchievements(empty);
+        setAchError("");
+        setLoadingAchievements(false);
+        useAchievementsStore.getState().setSummary(game.appid, empty);
+        return;
+      }
+
+      setLoadingAchievements(true);
+      setAchError("");
+      try {
+        const summary = await fetchAchievements(apiKey, steamId64, game.appid);
+        setAchievements(summary);
+        useAchievementsStore.getState().setSummary(game.appid, summary);
+      } catch (e) {
+        setAchError(String(e));
+      } finally {
+        setLoadingAchievements(false);
+      }
+    },
+    [achError, achievements, apiKey, details, game.appid, loadingDetails, steamId64]
+  );
+
+  const refreshSamProbe = useCallback(async () => {
+    setSamProbe(null);
+    try {
+      const probe = await probeSamBridge(steamPath, game.appid);
+      setSamProbe(probe);
+    } catch {
+      setSamProbe(null);
+    }
+  }, [game.appid, steamPath]);
+
+  useEffect(() => {
+    if (tab !== "achievements") return;
+    if (details && !gameHasSteamAchievements(details)) {
+      const empty: AchievementSummary = { total: 0, achieved: 0, achievements: [] };
+      setAchievements(empty);
+      setLoadingAchievements(false);
+      setSamProbe(null);
+      return;
+    }
+    void loadAchievementData(false);
+    if (details) void refreshSamProbe();
+  }, [details, loadAchievementData, refreshSamProbe, tab]);
 
   const hours = (game.playtime_forever / 60).toFixed(1);
   const lastPlayed = game.rtime_last_played
@@ -128,6 +195,7 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
     achievements && achievements.total > 0
       ? Math.round((achievements.achieved / achievements.total) * 100)
       : 0;
+  const achievementTabSummary = achievements ?? cachedAchievementSummary;
 
   const handleRefreshDetails = async () => {
     setRefreshingDetails(true);
@@ -135,6 +203,14 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
       const next = await fetchGameDetails(game.appid, currencyToCountryCode(currency));
       setDetails(next);
       useGameStore.getState().setDetails(game.appid, next);
+      if (tab === "achievements") {
+        await loadAchievementData(true, next);
+        if (gameHasSteamAchievements(next)) {
+          await refreshSamProbe();
+        } else {
+          setSamProbe(null);
+        }
+      }
     } finally {
       setRefreshingDetails(false);
     }
@@ -214,9 +290,9 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
           >
             <Trophy size={14} weight={tab === "achievements" ? "fill" : "regular"} />
             {t("achievements.title")}
-            {achievements && achievements.total > 0 && (
+            {achievementTabSummary && achievementTabSummary.total > 0 && (
               <span className="rounded-md bg-repressurizer-accent/15 px-1.5 py-0.5 text-[10px] font-mono text-repressurizer-accent tabular-nums">
-                {achievements.achieved}/{achievements.total}
+                {achievementTabSummary.achieved}/{achievementTabSummary.total}
               </span>
             )}
           </button>
@@ -261,8 +337,6 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
               error={achError}
               percent={achPercent}
               samProbe={samProbe}
-              steamToolsEnabled={steamToolsEnabled}
-              achievementWritesEnabled={steamToolsAchievementWritesEnabled}
             />
           )}
         </div>
@@ -765,16 +839,12 @@ function AchievementsTab({
   error,
   percent,
   samProbe,
-  steamToolsEnabled,
-  achievementWritesEnabled,
 }: {
   achievements: AchievementSummary | null;
   loading: boolean;
   error: string;
   percent: number;
   samProbe: SamBridgeProbe | null;
-  steamToolsEnabled: boolean;
-  achievementWritesEnabled: boolean;
 }) {
   const t = useT();
   const [search, setSearch] = useState("");
@@ -825,8 +895,6 @@ function AchievementsTab({
     <div className="space-y-4">
       <SamBridgePanel
         probe={samProbe}
-        steamToolsEnabled={steamToolsEnabled}
-        achievementWritesEnabled={achievementWritesEnabled}
       />
 
       {/* Progress bar */}
@@ -881,18 +949,11 @@ function AchievementsTab({
 
 function SamBridgePanel({
   probe,
-  steamToolsEnabled,
-  achievementWritesEnabled,
 }: {
   probe: SamBridgeProbe | null;
-  steamToolsEnabled: boolean;
-  achievementWritesEnabled: boolean;
 }) {
   const t = useT();
   const readiness = samReadinessLabel(t, probe);
-  const writeStatus = probe?.available && steamToolsEnabled && achievementWritesEnabled
-    ? t("detail.sam.writesEnabled")
-    : t("detail.sam.writesLocked");
 
   return (
     <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg p-4">
@@ -909,7 +970,7 @@ function SamBridgePanel({
         </span>
       </div>
 
-      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+      <div className="mt-3 grid gap-2 sm:grid-cols-2">
         <SamBridgeFact
           icon={<ShieldCheck size={14} />}
           label={t("detail.sam.webApi")}
@@ -920,18 +981,8 @@ function SamBridgePanel({
           label={t("detail.sam.localBridge")}
           value={readiness}
         />
-        <SamBridgeFact
-          icon={<Lock size={14} />}
-          label={t("detail.sam.writeActions")}
-          value={writeStatus}
-        />
       </div>
 
-      {probe?.notes?.[0] && (
-        <p className="mt-3 text-xs leading-relaxed text-repressurizer-text-faint">
-          {probe.notes[0]}
-        </p>
-      )}
     </div>
   );
 }
