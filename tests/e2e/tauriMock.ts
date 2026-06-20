@@ -451,7 +451,10 @@ export async function installTauriMock(page: Page) {
                 action === "lock_all" ||
                 requested.has(achievement.apiName);
               if (!targeted) return achievement;
-              const achieved = action === "unlock" || action === "unlock_all";
+              const achieved =
+                action === "unlock" ||
+                action === "unlock_selected" ||
+                action === "unlock_all";
               return {
                 ...achievement,
                 achieved,

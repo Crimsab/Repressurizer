@@ -1,16 +1,19 @@
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fs;
-use std::io::Read;
+use std::io::{Read, Write};
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
-#[cfg(not(windows))]
-use std::process::Command;
+use std::process::{Command, Stdio};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const SAM_SOURCE: &str = "Repressurizer SAM bridge";
 const SAM_REFERENCE_SOURCE: &str = "Steam Achievement Manager architecture";
 const SAM_LICENSE: &str = "zlib-compatible architecture reference";
 const EMBEDDED_BRIDGE_ARG: &str = "--repressurizer-sam-bridge";
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -112,7 +115,9 @@ pub fn sam_achievement_action(
     }
     validate_achievement_action_input(&input)?;
 
-    perform_bridge_achievement_action(input)
+    let bridge_path = std::env::current_exe()
+        .map_err(|error| format!("Could not resolve Repressurizer SAM runner path: {error}"))?;
+    run_bridge_achievement_action(&bridge_path, input)
 }
 
 pub fn run_embedded_bridge_from_env() -> Option<i32> {
@@ -211,6 +216,11 @@ fn validate_achievement_action_input(input: &SamAchievementActionInput) -> Resul
             }
             if ids.len() != 1 {
                 return Err("Single achievement actions must target exactly one achievement.".to_string());
+            }
+        }
+        "unlock_selected" | "lock_selected" => {
+            if normalized_achievement_ids(&input.achievement_ids).is_empty() {
+                return Err("At least one achievement API name is required.".to_string());
             }
         }
         "unlock_all" | "lock_all" | "restore_backup" => {}
@@ -334,6 +344,47 @@ fn build_probe(
     }
 }
 
+fn run_bridge_achievement_action(
+    bridge_path: &Path,
+    input: SamAchievementActionInput,
+) -> Result<SamAchievementActionResult, String> {
+    let mut command = Command::new(bridge_path);
+    #[cfg(windows)]
+    command.creation_flags(CREATE_NO_WINDOW);
+
+    let mut child = command
+        .arg(EMBEDDED_BRIDGE_ARG)
+        .arg("achievement-action")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|error| format!("Failed to start hidden SAM runner: {error}"))?;
+
+    if let Some(mut stdin) = child.stdin.take() {
+        let payload = serde_json::to_vec(&input).map_err(|error| error.to_string())?;
+        stdin
+            .write_all(&payload)
+            .map_err(|error| format!("Failed to write SAM action input: {error}"))?;
+    }
+
+    let output = child
+        .wait_with_output()
+        .map_err(|error| format!("Failed to wait for SAM action runner: {error}"))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        return Err(if stderr.is_empty() {
+            format!("SAM action runner exited with {}", output.status)
+        } else {
+            stderr
+        });
+    }
+
+    serde_json::from_slice::<SamAchievementActionResult>(&output.stdout)
+        .map_err(|error| format!("Failed to parse SAM action output: {error}"))
+}
+
 fn perform_bridge_achievement_action(
     input: SamAchievementActionInput,
 ) -> Result<SamAchievementActionResult, String> {
@@ -405,7 +456,7 @@ fn perform_bridge_achievement_action(
                 }
             }
         }
-        "unlock_all" => {
+        "unlock_selected" | "unlock_all" => {
             for id in &ids {
                 if bridge.set_achievement(id, true) {
                     attempted += 1;
@@ -414,7 +465,7 @@ fn perform_bridge_achievement_action(
                 }
             }
         }
-        "lock_all" => {
+        "lock_selected" | "lock_all" => {
             for id in &ids {
                 if bridge.set_achievement(id, false) {
                     attempted += 1;
@@ -1271,6 +1322,19 @@ mod tests {
 
         let error = validate_achievement_action_input(&input).unwrap_err();
         assert!(error.contains("exactly one"));
+    }
+
+    #[test]
+    fn selected_actions_allow_multiple_achievement_ids() {
+        let input = SamAchievementActionInput {
+            steam_path: "C:\\Steam".to_string(),
+            app_id: 1145360,
+            action: "unlock_selected".to_string(),
+            achievement_ids: vec!["ACH_ONE".to_string(), "ACH_TWO".to_string()],
+            backup_path: None,
+        };
+
+        validate_achievement_action_input(&input).unwrap();
     }
 
     #[test]

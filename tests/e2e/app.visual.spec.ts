@@ -212,6 +212,37 @@ test("single achievement write updates only the targeted achievement locally", a
   await expect(detail.getByRole("button", { name: "Lock all (2)" })).toBeVisible();
 });
 
+test("multi-select achievement writes act on selected locked achievements", async ({ page }) => {
+  await page.addInitScript(() => {
+    const raw = window.localStorage.getItem("repressurizer-settings");
+    if (!raw) return;
+    const settings = JSON.parse(raw);
+    settings.steamToolsEnabled = true;
+    settings.steamToolsAchievementWritesEnabled = true;
+    window.localStorage.setItem("repressurizer-settings", JSON.stringify(settings));
+  });
+  page.on("dialog", (dialog) => dialog.accept());
+
+  await page.goto("/");
+
+  await page.locator(".game-card").filter({ hasText: "Hades" }).dblclick();
+  const detail = page.locator(".fixed.inset-0").filter({
+    has: page.getByRole("heading", { name: "Hades" }),
+  });
+  await detail.getByRole("button", { name: /Achievements/ }).click();
+
+  await expect(detail.getByText("0 selected")).toBeVisible();
+  await expect(detail.getByLabel("Select Secret route")).toBeVisible();
+  await detail.getByRole("button", { name: "Locked", exact: true }).click();
+  await expect(detail.getByText("2 selected")).toBeVisible();
+  await expect(detail.getByRole("button", { name: "Unlock selected (2)" })).toBeVisible();
+
+  await detail.getByRole("button", { name: "Unlock selected (2)" }).click();
+  await expect(detail.getByText("3 / 3 achievements")).toBeVisible();
+  await expect(detail.getByText("0 selected")).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+});
+
 test("achievement details do not probe SAM while Steam Tools is disabled", async ({ page }) => {
   await page.goto("/");
 

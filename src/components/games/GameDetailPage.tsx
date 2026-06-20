@@ -267,11 +267,13 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
   const handleSamAchievementAction = useCallback(
     async (action: SamAchievementAction, achievementIds: string[]) => {
       const count = achievementIds.length;
+      const isUnlockAction =
+        action === "unlock" || action === "unlock_selected" || action === "unlock_all";
       const confirmMessage =
-        action === "unlock" || action === "unlock_all"
+        isUnlockAction
           ? t("detail.sam.confirmUnlock", { count })
           : t("detail.sam.confirmLock", { count });
-      if (!window.confirm(confirmMessage)) return;
+      if (!window.confirm(confirmMessage)) return false;
 
       setSamActionRunning(action);
       setSamActionMessage("");
@@ -293,8 +295,10 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
           })
         );
         void refreshSamProbe();
+        return true;
       } catch (error) {
         setSamActionError(String(error));
+        return false;
       } finally {
         setSamActionRunning("");
       }
@@ -954,10 +958,54 @@ function AchievementsTab({
   samActionRunning: string;
   samActionMessage: string;
   samActionError: string;
-  onSamAction: (action: SamAchievementAction, achievementIds: string[]) => void;
+  onSamAction: (action: SamAchievementAction, achievementIds: string[]) => Promise<boolean>;
 }) {
   const t = useT();
   const [search, setSearch] = useState("");
+  const [selectedAchievementIds, setSelectedAchievementIds] = useState<Set<string>>(
+    () => new Set()
+  );
+  const toggleAchievementSelection = useCallback((id: string) => {
+    setSelectedAchievementIds((current) => {
+      const next = new Set(current);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+  const replaceSelection = useCallback((ids: string[]) => {
+    setSelectedAchievementIds(new Set(ids));
+  }, []);
+  const clearSelection = useCallback(() => {
+    setSelectedAchievementIds(new Set());
+  }, []);
+  const runSelectedAction = useCallback(
+    async (action: SamAchievementAction, ids: string[]) => {
+      if (ids.length === 0) return;
+      const completed = await onSamAction(action, ids);
+      if (completed) {
+        clearSelection();
+      }
+    },
+    [clearSelection, onSamAction]
+  );
+
+  useEffect(() => {
+    if (!achievements) {
+      setSelectedAchievementIds(new Set());
+      return;
+    }
+    const availableIds = new Set(
+      achievements.achievements.map((achievement) => achievement.api_name)
+    );
+    setSelectedAchievementIds((current) => {
+      const next = new Set([...current].filter((id) => availableIds.has(id)));
+      return next.size === current.size ? current : next;
+    });
+  }, [achievements]);
 
   if (loading) {
     return (
@@ -1012,6 +1060,21 @@ function AchievementsTab({
     !!samProbe?.available &&
     !!samProbe?.writesSteam &&
     !samActionRunning;
+  const selectedIds = achievements.achievements
+    .filter((achievement) => selectedAchievementIds.has(achievement.api_name))
+    .map((achievement) => achievement.api_name);
+  const selectedLockedIds = achievements.achievements
+    .filter(
+      (achievement) =>
+        selectedAchievementIds.has(achievement.api_name) && !achievement.achieved
+    )
+    .map((achievement) => achievement.api_name);
+  const selectedUnlockedIds = achievements.achievements
+    .filter(
+      (achievement) =>
+        selectedAchievementIds.has(achievement.api_name) && achievement.achieved
+    )
+    .map((achievement) => achievement.api_name);
 
   return (
     <div className="space-y-4">
@@ -1063,6 +1126,23 @@ function AchievementsTab({
         />
       </div>
 
+      {canWrite && (
+        <AchievementSelectionToolbar
+          selectedCount={selectedIds.length}
+          selectedLockedCount={selectedLockedIds.length}
+          selectedUnlockedCount={selectedUnlockedIds.length}
+          runningAction={samActionRunning}
+          onSelectAll={() =>
+            replaceSelection(achievements.achievements.map((achievement) => achievement.api_name))
+          }
+          onSelectLocked={() => replaceSelection(lockedIds)}
+          onSelectUnlocked={() => replaceSelection(unlockedIds)}
+          onClear={clearSelection}
+          onUnlockSelected={() => void runSelectedAction("unlock_selected", selectedLockedIds)}
+          onLockSelected={() => void runSelectedAction("lock_selected", selectedUnlockedIds)}
+        />
+      )}
+
       {/* Achievement list */}
       <div className="space-y-1">
         {filtered.length === 0 ? (
@@ -1075,13 +1155,112 @@ function AchievementsTab({
               key={ach.api_name}
               achievement={ach}
               canWrite={canWrite}
+              selectable={canWrite}
+              selected={selectedAchievementIds.has(ach.api_name)}
+              onSelectToggle={() => toggleAchievementSelection(ach.api_name)}
               onToggle={() =>
-                onSamAction(ach.achieved ? "lock" : "unlock", [ach.api_name])
+                void onSamAction(ach.achieved ? "lock" : "unlock", [ach.api_name])
               }
             />
           ))
         )}
       </div>
+    </div>
+  );
+}
+
+function AchievementSelectionToolbar({
+  selectedCount,
+  selectedLockedCount,
+  selectedUnlockedCount,
+  runningAction,
+  onSelectAll,
+  onSelectLocked,
+  onSelectUnlocked,
+  onClear,
+  onUnlockSelected,
+  onLockSelected,
+}: {
+  selectedCount: number;
+  selectedLockedCount: number;
+  selectedUnlockedCount: number;
+  runningAction: string;
+  onSelectAll: () => void;
+  onSelectLocked: () => void;
+  onSelectUnlocked: () => void;
+  onClear: () => void;
+  onUnlockSelected: () => void;
+  onLockSelected: () => void;
+}) {
+  const t = useT();
+  const unlocking = runningAction === "unlock_selected";
+  const locking = runningAction === "lock_selected";
+
+  return (
+    <div className="rounded-lg border border-repressurizer-border-subtle bg-repressurizer-bg px-3 py-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-repressurizer-text">
+            {t("detail.sam.selected", { count: selectedCount })}
+          </span>
+          <button
+            type="button"
+            onClick={onSelectAll}
+            className="btn-press rounded-md border border-repressurizer-border bg-repressurizer-surface px-2 py-1 text-[11px] text-repressurizer-text-muted transition-colors hover:border-repressurizer-accent hover:text-repressurizer-text"
+          >
+            {t("detail.sam.selectAll")}
+          </button>
+          <button
+            type="button"
+            onClick={onSelectLocked}
+            className="btn-press rounded-md border border-repressurizer-border bg-repressurizer-surface px-2 py-1 text-[11px] text-repressurizer-text-muted transition-colors hover:border-repressurizer-accent hover:text-repressurizer-text"
+          >
+            {t("detail.sam.selectLocked")}
+          </button>
+          <button
+            type="button"
+            onClick={onSelectUnlocked}
+            className="btn-press rounded-md border border-repressurizer-border bg-repressurizer-surface px-2 py-1 text-[11px] text-repressurizer-text-muted transition-colors hover:border-repressurizer-accent hover:text-repressurizer-text"
+          >
+            {t("detail.sam.selectUnlocked")}
+          </button>
+          <button
+            type="button"
+            onClick={onClear}
+            disabled={selectedCount === 0}
+            className="btn-press rounded-md border border-transparent px-2 py-1 text-[11px] text-repressurizer-text-faint transition-colors hover:text-repressurizer-text disabled:opacity-40"
+          >
+            {t("detail.sam.clearSelection")}
+          </button>
+        </div>
+        <div className="flex shrink-0 flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={onUnlockSelected}
+            disabled={selectedLockedCount === 0 || !!runningAction}
+            className="btn-press rounded-lg border border-repressurizer-accent/40 bg-repressurizer-accent/10 px-3 py-1.5 text-xs font-medium text-repressurizer-accent transition-colors hover:bg-repressurizer-accent/15 disabled:opacity-40"
+          >
+            {unlocking
+              ? t("detail.sam.working")
+              : t("detail.sam.unlockSelected", { count: selectedLockedCount })}
+          </button>
+          <button
+            type="button"
+            onClick={onLockSelected}
+            disabled={selectedUnlockedCount === 0 || !!runningAction}
+            className="btn-press rounded-lg border border-repressurizer-border bg-repressurizer-surface px-3 py-1.5 text-xs font-medium text-repressurizer-text transition-colors hover:border-repressurizer-danger hover:text-repressurizer-danger disabled:opacity-40"
+          >
+            {locking
+              ? t("detail.sam.working")
+              : t("detail.sam.lockSelected", { count: selectedUnlockedCount })}
+          </button>
+        </div>
+      </div>
+      {selectedCount === 0 && (
+        <p className="mt-1 text-[11px] text-repressurizer-text-faint">
+          {t("detail.sam.noSelection")}
+        </p>
+      )}
     </div>
   );
 }
@@ -1207,10 +1386,16 @@ function samReadinessLabel(t: ReturnType<typeof useT>, probe: SamBridgeProbe | n
 function AchievementRow({
   achievement,
   canWrite,
+  selectable,
+  selected,
+  onSelectToggle,
   onToggle,
 }: {
   achievement: AchievementInfo;
   canWrite: boolean;
+  selectable: boolean;
+  selected: boolean;
+  onSelectToggle: () => void;
   onToggle: () => void;
 }) {
   const t = useT();
@@ -1220,10 +1405,30 @@ function AchievementRow({
 
   return (
     <div
-      className={`flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors ${
-        achievement.achieved ? "bg-repressurizer-bg" : "bg-repressurizer-bg/30 opacity-50"
+      className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors ${
+        selected
+          ? "border-repressurizer-accent/60 bg-repressurizer-accent/10"
+          : achievement.achieved
+            ? "border-transparent bg-repressurizer-bg"
+            : "border-transparent bg-repressurizer-bg/30 opacity-50"
       }`}
     >
+      {selectable && (
+        <label
+          className="btn-press flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-md border border-repressurizer-border bg-repressurizer-surface text-repressurizer-accent transition-colors hover:border-repressurizer-accent"
+          aria-label={t("detail.sam.selectAchievement", { name: achievement.name })}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={onSelectToggle}
+            className="sr-only"
+          />
+          {selected && <Check size={15} weight="bold" />}
+        </label>
+      )}
+
       {/* Icon */}
       {(achievement.icon || achievement.icon_gray) && (
         <img

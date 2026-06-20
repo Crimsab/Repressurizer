@@ -110,6 +110,8 @@ export interface SamBridgeProbe {
 export type SamAchievementAction =
   | "unlock"
   | "lock"
+  | "unlock_selected"
+  | "lock_selected"
   | "unlock_all"
   | "lock_all"
   | "restore_backup";
