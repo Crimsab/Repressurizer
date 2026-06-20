@@ -238,6 +238,11 @@ test("multi-select achievement writes act on selected locked achievements", asyn
   await expect(detail.getByText("2 selected")).toBeVisible();
   await expect(detail.getByRole("button", { name: "Unlock selected (2)" })).toBeVisible();
   await expect(detail.getByRole("button", { name: "Lock selected (0)" })).toBeHidden();
+  await detail.getByPlaceholder("Search achievements...").fill("Secret");
+  await expect(detail.getByText("Secret route")).toBeVisible();
+  const modalBox = await detail.locator(":scope > div").first().boundingBox();
+  expect(modalBox?.height ?? 0).toBeLessThan(760);
+  await detail.getByPlaceholder("Search achievements...").fill("");
 
   await detail.getByRole("button", { name: "Unlock selected (2)" }).click();
   await expect(detail.getByText("3 / 3 achievements")).toBeVisible();

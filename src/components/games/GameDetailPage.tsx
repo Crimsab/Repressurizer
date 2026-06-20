@@ -452,7 +452,7 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-auto p-6">
+        <div className="min-h-0 overflow-auto p-6">
           {tab === "info" && (
             <InfoTab
               details={details}

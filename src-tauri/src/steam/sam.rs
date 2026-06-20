@@ -523,8 +523,7 @@ fn perform_bridge_achievement_action(
     } else {
         true
     };
-    bridge.run_callbacks_for(std::time::Duration::from_millis(800));
-    bridge.prepare_user_stats();
+    bridge.run_callbacks_for(std::time::Duration::from_millis(1600));
 
     let mut after_states = bridge.capture_states(&backup_names);
     let unexpected_changes =
@@ -536,8 +535,7 @@ fn perform_bridge_achievement_action(
             }
         }
         store_stats = bridge.store_stats() && store_stats;
-        bridge.run_callbacks_for(std::time::Duration::from_millis(800));
-        bridge.prepare_user_stats();
+        bridge.run_callbacks_for(std::time::Duration::from_millis(1600));
         after_states = bridge.capture_states(&backup_names);
     }
 
@@ -772,6 +770,7 @@ use windows_steam::SamSteamBridge;
 #[cfg(windows)]
 mod windows_steam {
     use super::{find_steam_client_library, SamAchievementState};
+    use std::ffi::OsString;
     use libloading::Library;
     use std::ffi::{c_char, c_int, c_void, CStr, CString};
     use std::mem;
@@ -830,6 +829,7 @@ mod windows_steam {
         steam_free_last_callback: SteamFreeLastCallback,
         release_user: ReleaseUser,
         release_steam_pipe: ReleaseSteamPipe,
+        _steam_app_id_env: ScopedEnvVar,
     }
 
     impl SamSteamBridge {
@@ -842,8 +842,7 @@ mod windows_steam {
             let steam_client_path = find_steam_client_library(&steam_root)
                 .ok_or("Steam client library was not found under the configured Steam path.")?;
             prepend_dll_search_path(&steam_root);
-            std::env::set_var("SteamAppId", app_id.to_string());
-            std::env::set_var("SteamGameId", app_id.to_string());
+            let steam_app_id_env = ScopedEnvVar::set("SteamAppId", app_id.to_string());
 
             let library = unsafe { Library::new(&steam_client_path) }
                 .map_err(|error| format!("Failed to load steamclient: {error}"))?;
@@ -957,6 +956,7 @@ mod windows_steam {
                 steam_free_last_callback,
                 release_user,
                 release_steam_pipe,
+                _steam_app_id_env: steam_app_id_env,
             })
         }
 
@@ -1103,6 +1103,29 @@ mod windows_steam {
                 )
             };
             (achieved, unlock_time, valid)
+        }
+    }
+
+    struct ScopedEnvVar {
+        key: &'static str,
+        previous: Option<OsString>,
+    }
+
+    impl ScopedEnvVar {
+        fn set(key: &'static str, value: String) -> Self {
+            let previous = std::env::var_os(key);
+            std::env::set_var(key, value);
+            Self { key, previous }
+        }
+    }
+
+    impl Drop for ScopedEnvVar {
+        fn drop(&mut self) {
+            if let Some(previous) = &self.previous {
+                std::env::set_var(self.key, previous);
+            } else {
+                std::env::remove_var(self.key);
+            }
         }
     }
 
