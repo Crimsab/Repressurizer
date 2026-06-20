@@ -100,6 +100,7 @@ pub struct SamAchievementActionResult {
     pub action: String,
     pub changed: usize,
     pub failed: Vec<String>,
+    pub diagnostics: Vec<String>,
     pub before_backup_path: Option<String>,
     pub after_backup_path: Option<String>,
     pub before: SamAchievementBackup,
@@ -457,6 +458,11 @@ fn perform_bridge_achievement_action(
     let before_backup_path = save_achievement_backup(&before_backup).ok();
 
     let mut failed = Vec::new();
+    let mut diagnostics = vec![
+        format!("action={}", input.action),
+        format!("target_count={}", ids.len()),
+        "SteamAppId is scoped to the hidden SAM runner; SteamGameId is not set by Repressurizer.".to_string(),
+    ];
     let mut attempted = 0usize;
     let target_set: HashSet<String> = ids.iter().cloned().collect();
     let mut desired_states: HashMap<String, bool> = HashMap::new();
@@ -518,11 +524,24 @@ fn perform_bridge_achievement_action(
         other => return Err(format!("Unsupported SAM achievement action: {other}")),
     }
 
+    let post_set_states = bridge.capture_states(&backup_names);
+    let post_set_unapplied = unapplied_target_states(&post_set_states, &desired_states);
+    if post_set_unapplied.is_empty() {
+        diagnostics.push("local_state_after_set=desired".to_string());
+    } else {
+        diagnostics.push(format!(
+            "local_state_after_set_unapplied={}",
+            post_set_unapplied.join(",")
+        ));
+    }
+
     let mut store_stats = if attempted > 0 {
         bridge.store_stats()
     } else {
         true
     };
+    diagnostics.push(format!("attempted_writes={attempted}"));
+    diagnostics.push(format!("store_stats={store_stats}"));
     bridge.run_callbacks_for(std::time::Duration::from_millis(1600));
 
     let mut after_states = bridge.capture_states(&backup_names);
@@ -535,6 +554,11 @@ fn perform_bridge_achievement_action(
             }
         }
         store_stats = bridge.store_stats() && store_stats;
+        diagnostics.push(format!(
+            "restored_unexpected_non_target_changes={}",
+            unexpected_changes.len()
+        ));
+        diagnostics.push(format!("store_stats_after_non_target_restore={store_stats}"));
         bridge.run_callbacks_for(std::time::Duration::from_millis(1600));
         after_states = bridge.capture_states(&backup_names);
     }
@@ -546,6 +570,11 @@ fn perform_bridge_achievement_action(
         if !failed.iter().any(|failed_id| failed_id == id) {
             failed.push(id.clone());
         }
+    }
+    if unapplied.is_empty() {
+        diagnostics.push("post_store_target_state=desired".to_string());
+    } else {
+        diagnostics.push(format!("post_store_unapplied={}", unapplied.join(",")));
     }
     let changed =
         count_target_achievement_changes(&before_backup.achievements, &after_backup.achievements, &target_set);
@@ -577,6 +606,7 @@ fn perform_bridge_achievement_action(
         action: input.action,
         changed,
         failed,
+        diagnostics,
         before_backup_path,
         after_backup_path,
         before: before_backup,

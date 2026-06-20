@@ -147,6 +147,7 @@ export interface SamAchievementActionResult {
   action: SamAchievementAction | string;
   changed: number;
   failed: string[];
+  diagnostics: string[];
   beforeBackupPath: string | null;
   afterBackupPath: string | null;
   before: SamAchievementBackup;

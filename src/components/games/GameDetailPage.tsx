@@ -298,12 +298,21 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
         applySamResultToAchievements(result);
         const backup = result.beforeBackupPath ?? t("common.unknown");
         if (result.failed.length > 0) {
+          const diagnostics = result.diagnostics?.slice(0, 6).join(" · ") ?? "";
           setSamActionError(
-            t("detail.sam.actionFailed", {
-              count: result.failed.length,
-              ids: result.failed.join(", "),
-              backup,
-            })
+            [
+              t("detail.sam.actionFailed", {
+                count: result.failed.length,
+                ids: result.failed.join(", "),
+                backup,
+              }),
+              result.message,
+              diagnostics
+                ? t("detail.sam.actionDiagnostics", { details: diagnostics })
+                : "",
+            ]
+              .filter(Boolean)
+              .join(" ")
           );
         } else {
           setSamActionMessage(

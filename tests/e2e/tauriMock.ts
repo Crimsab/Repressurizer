@@ -474,6 +474,13 @@ export async function installTauriMock(page: Page) {
               action,
               changed,
               failed: [],
+              diagnostics: [
+                `action=${action}`,
+                `target_count=${requested.size}`,
+                "local_state_after_set=desired",
+                "store_stats=true",
+                "post_store_target_state=desired",
+              ],
               beforeBackupPath: "C:\\\\Users\\\\Crimsab\\\\AppData\\\\Roaming\\\\Repressurizer\\\\sam_backups\\\\1145360\\\\mock-before.json",
               afterBackupPath: "C:\\\\Users\\\\Crimsab\\\\AppData\\\\Roaming\\\\Repressurizer\\\\sam_backups\\\\1145360\\\\mock-after.json",
               before: {
