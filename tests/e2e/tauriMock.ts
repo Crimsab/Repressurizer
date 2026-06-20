@@ -231,6 +231,10 @@ export async function installTauriMock(page: Page) {
             return null;
           case "plugin:notification|is_permission_granted":
             return true;
+          case "plugin:dialog|confirm":
+            return true;
+          case "plugin:dialog|message":
+            return "Ok";
           case "plugin:autostart|is_enabled":
             return autostartEnabled;
           case "plugin:autostart|enable":

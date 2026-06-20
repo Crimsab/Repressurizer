@@ -1,6 +1,6 @@
 import { useCallback, useState, useEffect, useMemo, useRef } from "react";
 import { open as openPath } from "@tauri-apps/plugin-shell";
-import { open as openFileDialog } from "@tauri-apps/plugin-dialog";
+import { confirm as confirmDialog, open as openFileDialog } from "@tauri-apps/plugin-dialog";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useGameStore } from "../../stores/gameStore";
 import { useCategoryStore } from "../../stores/categoryStore";
@@ -325,11 +325,22 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
           : isUnlockAction
           ? t("detail.sam.confirmUnlock", { count })
           : t("detail.sam.confirmLock", { count });
-      if (!window.confirm(confirmMessage)) return false;
-
-      setSamActionRunning(action);
       setSamActionMessage("");
       setSamActionError("");
+
+      let confirmed = false;
+      try {
+        confirmed = await confirmDialog(confirmMessage, {
+          title: t("detail.sam.title"),
+          kind: "warning",
+        });
+      } catch (error) {
+        setSamActionError(String(error));
+        return false;
+      }
+      if (!confirmed) return false;
+
+      setSamActionRunning(action);
       try {
         const result = await runSamAchievementAction({
           steamPath,

@@ -21,6 +21,7 @@
       "allow": ["**"]
     },
     "dialog:default",
+    "dialog:allow-confirm",
     "dialog:allow-open",
     "dialog:allow-save",
     "shell:default",
