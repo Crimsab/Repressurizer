@@ -788,6 +788,8 @@
   "steamTools.sam.readiness.missingSteamPath": "Percorso Steam mancante",
   "steamTools.sam.readiness.missingSteamClientLibrary": "Client Steam mancante",
   "steamTools.sam.readiness.missingLocalBridge": "Bridge mancante",
+  "steamTools.sam.readiness.steamNotRunning": "Steam non aperto",
+  "steamTools.sam.readiness.bridgeError": "Errore bridge",
   "steamTools.achievements.title": "Achievement Manager",
   "steamTools.achievements.desc": "Usa la cache attuale della Steam Web API per una panoramica sicura. Il prossimo bridge potra aggiungere azioni locali stile SAM senza sostituire questa fonte read-only.",
   "steamTools.achievements.incomplete": "Incompleti",

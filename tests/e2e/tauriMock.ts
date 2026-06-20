@@ -365,11 +365,13 @@ export async function installTauriMock(page: Page) {
             return {
               appId: Number(args?.appId ?? 0),
               platform: "windows",
-              source: "Steam Achievement Manager architecture",
-              sourceLicense: "zlib",
+              source: "Repressurizer SAM bridge",
+              referenceSource: "Steam Achievement Manager architecture",
+              sourceLicense: "zlib-compatible architecture reference",
               dataSource: "samLocalBridge",
               available: false,
               readiness: "missingLocalBridge",
+              bridgeInvoked: false,
               steamPathExists: true,
               steamRunning: true,
               steamClientLibraryFound: true,
@@ -390,14 +392,14 @@ export async function installTauriMock(page: Page) {
                   label: "SAM local preflight",
                   status: "ready",
                   writesSteam: false,
-                  reason: "Checks Steam install, Steam client library, local bridge package, and platform support.",
+                  reason: "Checks Steam install, Steam client library, bundled bridge package, and Steam process status.",
                 },
                 {
                   id: "samReadAchievements",
                   label: "SAM local achievement read",
                   status: "blocked",
                   writesSteam: false,
-                  reason: "Requires a packaged local bridge before Repressurizer can read via Steamworks.",
+                  reason: "Requires the bundled local bridge and running Steam before Repressurizer can read via Steamworks.",
                 },
                 {
                   id: "samWriteAchievements",
@@ -407,7 +409,7 @@ export async function installTauriMock(page: Page) {
                   reason: "Requires the local bridge plus advanced write settings and per-action confirmation.",
                 },
               ],
-              notes: ["No packaged Repressurizer SAM bridge executable was found."],
+              notes: ["No bundled Repressurizer SAM bridge executable was found."],
             };
           default:
             return null;
