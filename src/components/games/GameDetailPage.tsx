@@ -187,12 +187,11 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
       setSamProbe(null);
       return;
     }
-    setSamProbe(null);
     try {
       const probe = await probeSamBridge(steamPath, game.appid);
       setSamProbe(probe);
     } catch {
-      setSamProbe(null);
+      setSamProbe((current) => current);
     }
   }, [game.appid, steamPath, steamToolsSamEnabled]);
 
@@ -1163,12 +1162,12 @@ function AchievementsTab({
   const manageableIds = achievements.achievements
     .filter((achievement) => !isProtectedAchievement(achievement))
     .map((achievement) => achievement.api_name);
-  const canWrite =
+  const samWritesAvailable =
     steamToolsEnabled &&
     steamToolsAchievementWritesEnabled &&
     !!samProbe?.available &&
-    !!samProbe?.writesSteam &&
-    !samActionRunning;
+    !!samProbe?.writesSteam;
+  const samActionBusy = !!samActionRunning;
   const selectedIds = achievements.achievements
     .filter((achievement) => selectedAchievementIds.has(achievement.api_name))
     .map((achievement) => achievement.api_name);
@@ -1241,7 +1240,7 @@ function AchievementsTab({
         />
       </div>
 
-      {canWrite && (
+      {samWritesAvailable && (
         <AchievementSelectionStrip
           selectedCount={selectedIds.length}
           selectedLockedCount={selectedLockedIds.length}
@@ -1269,8 +1268,9 @@ function AchievementsTab({
             <AchievementRow
               key={ach.api_name}
               achievement={ach}
-              canWrite={canWrite}
-              selectable={canWrite && !isProtectedAchievement(ach)}
+              canWrite={samWritesAvailable}
+              busy={samActionBusy}
+              selectable={samWritesAvailable && !isProtectedAchievement(ach)}
               selected={selectedAchievementIds.has(ach.api_name)}
               onSelectToggle={() => toggleAchievementSelection(ach.api_name)}
               onToggle={() =>
@@ -1310,6 +1310,7 @@ function AchievementSelectionStrip({
   const t = useT();
   const unlocking = runningAction === "unlock_selected";
   const locking = runningAction === "lock_selected";
+  const busy = !!runningAction;
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 border-b border-repressurizer-border-subtle pb-2">
@@ -1317,21 +1318,24 @@ function AchievementSelectionStrip({
         <button
           type="button"
           onClick={onSelectAll}
-          className="btn-press rounded-md px-2 py-1 text-[11px] text-repressurizer-text-faint transition-colors hover:bg-repressurizer-bg hover:text-repressurizer-text"
+          disabled={busy}
+          className="btn-press rounded-md px-2 py-1 text-[11px] text-repressurizer-text-faint transition-colors hover:bg-repressurizer-bg hover:text-repressurizer-text disabled:opacity-40"
         >
           {t("detail.sam.selectAll")}
         </button>
         <button
           type="button"
           onClick={onSelectLocked}
-          className="btn-press rounded-md px-2 py-1 text-[11px] text-repressurizer-text-faint transition-colors hover:bg-repressurizer-bg hover:text-repressurizer-text"
+          disabled={busy}
+          className="btn-press rounded-md px-2 py-1 text-[11px] text-repressurizer-text-faint transition-colors hover:bg-repressurizer-bg hover:text-repressurizer-text disabled:opacity-40"
         >
           {t("detail.sam.selectLocked")}
         </button>
         <button
           type="button"
           onClick={onSelectUnlocked}
-          className="btn-press rounded-md px-2 py-1 text-[11px] text-repressurizer-text-faint transition-colors hover:bg-repressurizer-bg hover:text-repressurizer-text"
+          disabled={busy}
+          className="btn-press rounded-md px-2 py-1 text-[11px] text-repressurizer-text-faint transition-colors hover:bg-repressurizer-bg hover:text-repressurizer-text disabled:opacity-40"
         >
           {t("detail.sam.selectUnlocked")}
         </button>
@@ -1339,9 +1343,10 @@ function AchievementSelectionStrip({
           <button
             type="button"
             onClick={onClear}
+            disabled={busy}
             aria-label={t("detail.sam.clearSelection")}
             title={t("detail.sam.clearSelection")}
-            className="btn-press inline-flex h-7 w-7 items-center justify-center rounded-md text-repressurizer-text-faint transition-colors hover:bg-repressurizer-bg hover:text-repressurizer-text"
+            className="btn-press inline-flex h-7 w-7 items-center justify-center rounded-md text-repressurizer-text-faint transition-colors hover:bg-repressurizer-bg hover:text-repressurizer-text disabled:opacity-40"
           >
             <Trash size={14} weight="bold" />
           </button>
@@ -1409,9 +1414,10 @@ function SamBridgePanel({
 }) {
   const t = useT();
   const readiness = samReadinessLabel(t, probe);
-  const canWrite = writesEnabled && !!probe?.available && !!probe?.writesSteam && !runningAction;
-  const lockBlocked = !canWrite || unlockedCount === 0;
-  const unlockBlocked = !canWrite || lockedCount === 0;
+  const canWrite = writesEnabled && !!probe?.available && !!probe?.writesSteam;
+  const busy = !!runningAction;
+  const lockBlocked = !canWrite || busy || unlockedCount === 0;
+  const unlockBlocked = !canWrite || busy || lockedCount === 0;
 
   return (
     <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3">
@@ -1494,6 +1500,7 @@ function samReadinessLabel(t: ReturnType<typeof useT>, probe: SamBridgeProbe | n
 function AchievementRow({
   achievement,
   canWrite,
+  busy,
   selectable,
   selected,
   onSelectToggle,
@@ -1501,6 +1508,7 @@ function AchievementRow({
 }: {
   achievement: AchievementInfo;
   canWrite: boolean;
+  busy: boolean;
   selectable: boolean;
   selected: boolean;
   onSelectToggle: () => void;
@@ -1524,13 +1532,14 @@ function AchievementRow({
     >
       {selectable && (
         <label
-          className="btn-press flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-md border border-repressurizer-border bg-repressurizer-surface text-repressurizer-accent transition-colors hover:border-repressurizer-accent"
+          className={`btn-press flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-repressurizer-border bg-repressurizer-surface text-repressurizer-accent transition-colors hover:border-repressurizer-accent ${busy ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
           aria-label={t("detail.sam.selectAchievement", { name: achievement.name })}
           onClick={(event) => event.stopPropagation()}
         >
           <input
             type="checkbox"
             checked={selected}
+            disabled={busy}
             onChange={onSelectToggle}
             className="sr-only"
           />
@@ -1590,6 +1599,7 @@ function AchievementRow({
       {canWrite && !protectedAchievement && (
         <button
           type="button"
+          disabled={busy}
           onClick={(event) => {
             event.stopPropagation();
             onToggle();
@@ -1598,7 +1608,7 @@ function AchievementRow({
             achievement.achieved
               ? "border-repressurizer-border text-repressurizer-text-muted hover:border-repressurizer-danger hover:text-repressurizer-danger"
               : "border-repressurizer-accent/40 bg-repressurizer-accent/10 text-repressurizer-accent hover:bg-repressurizer-accent/15"
-          }`}
+          } disabled:opacity-40`}
         >
           {achievement.achieved ? t("detail.sam.lock") : t("detail.sam.unlock")}
         </button>

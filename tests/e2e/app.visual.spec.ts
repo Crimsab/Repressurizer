@@ -251,6 +251,38 @@ test("multi-select achievement writes act on selected locked achievements", asyn
   await expectNoHorizontalOverflow(page);
 });
 
+test("achievement write controls stay visible while SAM action is running", async ({ page }) => {
+  await page.addInitScript(() => {
+    const raw = window.localStorage.getItem("repressurizer-settings");
+    if (!raw) return;
+    const settings = JSON.parse(raw);
+    settings.steamToolsEnabled = true;
+    settings.steamToolsAchievementWritesEnabled = true;
+    window.localStorage.setItem("repressurizer-settings", JSON.stringify(settings));
+    window.localStorage.setItem("repressurizer-sam-action-delay-ms", "900");
+  });
+  page.on("dialog", (dialog) => dialog.accept());
+
+  await page.goto("/");
+
+  await page.locator(".game-card").filter({ hasText: "Hades" }).dblclick();
+  const detail = page.locator(".fixed.inset-0").filter({
+    has: page.getByRole("heading", { name: "Hades" }),
+  });
+  await detail.getByRole("button", { name: /Achievements/ }).click();
+
+  await detail.getByRole("button", { name: "Locked", exact: true }).click();
+  await expect(detail.getByText("2 selected")).toBeVisible();
+
+  await detail.getByRole("button", { name: "Unlock selected (2)" }).click();
+
+  await expect(detail.getByText("2 selected")).toBeVisible();
+  await expect(detail.getByLabel("Select Secret route")).toBeVisible();
+  await expect(detail.getByRole("button", { name: "Working..." })).toBeVisible();
+  await expect(detail.getByRole("button", { name: "Locked", exact: true })).toBeDisabled();
+  await expect(detail.getByRole("button", { name: "Unlock all (2)" })).toBeDisabled();
+});
+
 test("achievement details do not probe SAM while Steam Tools is disabled", async ({ page }) => {
   await page.goto("/");
 

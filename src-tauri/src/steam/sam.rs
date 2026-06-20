@@ -625,7 +625,12 @@ fn perform_bridge_achievement_action(
     };
     diagnostics.push(format!("attempted_writes={attempted}"));
     diagnostics.push(format!("store_stats={store_stats}"));
-    bridge.run_callbacks_for(std::time::Duration::from_millis(1600));
+    let store_stats_callback = if attempted > 0 && store_stats {
+        bridge.wait_for_stats_stored(std::time::Duration::from_millis(900))
+    } else {
+        false
+    };
+    diagnostics.push(format!("store_stats_callback={store_stats_callback}"));
     let post_store_stats_requested = if attempted > 0 && store_stats {
         bridge.prepare_user_stats()
     } else {
@@ -652,7 +657,12 @@ fn perform_bridge_achievement_action(
         diagnostics.push(format!(
             "store_stats_after_non_target_restore={store_stats}"
         ));
-        bridge.run_callbacks_for(std::time::Duration::from_millis(1600));
+        let restore_store_stats_callback = bridge.wait_for_stats_stored(
+            std::time::Duration::from_millis(900),
+        );
+        diagnostics.push(format!(
+            "store_stats_after_non_target_restore_callback={restore_store_stats_callback}"
+        ));
         after_states = bridge.capture_states(&backup_names);
     }
 
@@ -1197,7 +1207,9 @@ impl SamSteamBridge {
     fn store_stats(&self) -> bool {
         false
     }
-    fn run_callbacks_for(&self, _duration: std::time::Duration) {}
+    fn wait_for_stats_stored(&self, _duration: std::time::Duration) -> bool {
+        false
+    }
 }
 
 #[cfg(windows)]
@@ -1218,6 +1230,8 @@ mod windows_steam {
     const STEAM_UTILS_VERSION: &[u8] = b"SteamUtils005\0";
     const STEAM_USER_VERSION: &[u8] = b"SteamUser012\0";
     const STEAM_USER_STATS_VERSION: &[u8] = b"STEAMUSERSTATS_INTERFACE_VERSION013\0";
+    const USER_STATS_RECEIVED_CALLBACK_ID: c_int = 1101;
+    const USER_STATS_STORED_CALLBACK_ID: c_int = 1102;
 
     type CreateInterface =
         unsafe extern "C" fn(version: *const c_char, return_code: *mut c_int) -> *mut c_void;
@@ -1445,7 +1459,7 @@ mod windows_steam {
             }
 
             let request = unsafe { request_user_stats(self.steam_user_stats, steam_id) };
-            self.run_callbacks_for(Duration::from_millis(1500));
+            let _ = self.wait_for_user_stats(Duration::from_millis(1500));
             request != 0
         }
 
@@ -1524,32 +1538,56 @@ mod windows_steam {
             unsafe { store(self.steam_user_stats) }
         }
 
-        pub fn run_callbacks_for(&self, duration: Duration) {
-            let end = Instant::now() + duration;
-            while Instant::now() < end {
-                self.run_callbacks_once();
-                thread::sleep(Duration::from_millis(50));
-            }
+        pub fn wait_for_stats_stored(&self, duration: Duration) -> bool {
+            self.run_callbacks_until(duration, |message| {
+                callback_matches_app(
+                    message,
+                    USER_STATS_STORED_CALLBACK_ID,
+                    self.active_app_id,
+                )
+            })
         }
 
-        fn run_callbacks_once(&self) {
-            loop {
-                let mut message = CallbackMessage {
-                    user: 0,
-                    id: 0,
-                    param_pointer: std::ptr::null_mut(),
-                    param_size: 0,
-                };
-                let mut call = 0;
-                let has_callback =
-                    unsafe { (self.steam_b_get_callback)(self.pipe, &mut message, &mut call) };
-                if !has_callback {
-                    break;
+        fn wait_for_user_stats(&self, duration: Duration) -> bool {
+            self.run_callbacks_until(duration, |message| {
+                callback_matches_app(
+                    message,
+                    USER_STATS_RECEIVED_CALLBACK_ID,
+                    self.active_app_id,
+                )
+            })
+        }
+
+        fn run_callbacks_until<F>(&self, duration: Duration, mut predicate: F) -> bool
+        where
+            F: FnMut(&CallbackMessage) -> bool,
+        {
+            let end = Instant::now() + duration;
+            while Instant::now() < end {
+                loop {
+                    let mut message = CallbackMessage {
+                        user: 0,
+                        id: 0,
+                        param_pointer: std::ptr::null_mut(),
+                        param_size: 0,
+                    };
+                    let mut call = 0;
+                    let has_callback =
+                        unsafe { (self.steam_b_get_callback)(self.pipe, &mut message, &mut call) };
+                    if !has_callback {
+                        break;
+                    }
+                    let matched = predicate(&message);
+                    unsafe {
+                        (self.steam_free_last_callback)(self.pipe);
+                    }
+                    if matched {
+                        return true;
+                    }
                 }
-                unsafe {
-                    (self.steam_free_last_callback)(self.pipe);
-                }
+                thread::sleep(Duration::from_millis(25));
             }
+            false
         }
 
         fn achievement_state(&self, name: &str) -> (bool, u32, bool) {
@@ -1574,6 +1612,21 @@ mod windows_steam {
             };
             (achieved, unlock_time, valid)
         }
+    }
+
+    fn callback_matches_app(message: &CallbackMessage, callback_id: c_int, app_id: u32) -> bool {
+        message.id == callback_id && callback_app_id(message) == Some(app_id)
+    }
+
+    fn callback_app_id(message: &CallbackMessage) -> Option<u32> {
+        if message.param_pointer.is_null() || message.param_size < mem::size_of::<u64>() as c_int {
+            return None;
+        }
+        let game_id = unsafe { std::ptr::read_unaligned(message.param_pointer.cast::<u64>()) };
+        if game_id <= u32::MAX as u64 {
+            return Some(game_id as u32);
+        }
+        Some((game_id & u32::MAX as u64) as u32)
     }
 
     struct ScopedEnvVar {

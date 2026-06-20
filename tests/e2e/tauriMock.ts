@@ -461,6 +461,10 @@ export async function installTauriMock(page: Page) {
           case "sam_backup_dir":
             return "C:\\\\Users\\\\Crimsab\\\\AppData\\\\Roaming\\\\Repressurizer\\\\sam_backups\\\\1145360";
           case "sam_achievement_action": {
+            const delayMs = Number(window.localStorage.getItem("repressurizer-sam-action-delay-ms") ?? 0);
+            if (delayMs > 0) {
+              await new Promise((resolve) => window.setTimeout(resolve, delayMs));
+            }
             const input = args?.input as {
               appId?: number;
               action?: string;
