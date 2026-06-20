@@ -118,12 +118,35 @@ test("opens the Steam Tools lab surface", async ({ page }, testInfo) => {
   await expect(steamTools.getByRole("heading", { name: "Achievement Manager" })).toBeVisible();
   await expect(steamTools.getByRole("heading", { name: "Card Farming" })).toBeVisible();
   await expect(steamTools.getByRole("heading", { name: "Bridge architecture" })).toBeVisible();
+  await expect(steamTools.getByRole("heading", { name: "SAM local bridge" })).toBeVisible();
+  await expect(steamTools.getByText("Missing bridge")).toBeVisible();
   await expect(steamTools.getByRole("button", { name: "Open achievements" })).toBeVisible();
   await expectNoHorizontalOverflow(page);
 
   const screenshotPath = testInfo.outputPath("steam-tools.png");
   await page.screenshot({ path: screenshotPath, fullPage: true });
   await testInfo.attach("steam-tools", { path: screenshotPath, contentType: "image/png" });
+});
+
+test("game achievement details show SAM bridge preflight separately from Steam Web API data", async ({ page }, testInfo) => {
+  await page.goto("/");
+
+  await page.locator(".game-card").filter({ hasText: "Hades" }).dblclick();
+  const detail = page.locator(".fixed.inset-0").filter({
+    has: page.getByRole("heading", { name: "Hades" }),
+  });
+  await expect(detail.getByRole("heading", { name: "Hades" })).toBeVisible();
+  await detail.getByRole("button", { name: "Achievements 1/3" }).click();
+
+  await expect(detail.getByRole("heading", { name: "SAM bridge" })).toBeVisible();
+  await expect(detail.getByText("Steam Web API", { exact: true })).toBeVisible();
+  await expect(detail.getByText("Missing bridge").first()).toBeVisible();
+  await expect(detail.getByText("1 / 3 achievements")).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+
+  const screenshotPath = testInfo.outputPath("game-achievements-sam-bridge.png");
+  await page.screenshot({ path: screenshotPath, fullPage: true });
+  await testInfo.attach("game-achievements-sam-bridge", { path: screenshotPath, contentType: "image/png" });
 });
 
 test("opens organized settings tabs, automation logs, and Steam controls without layout overflow", async ({ page }, testInfo) => {

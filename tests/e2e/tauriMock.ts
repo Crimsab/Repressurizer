@@ -325,6 +325,90 @@ export async function installTauriMock(page: Page) {
             return null;
           case "fetch_hltb":
             return { main_story: 12, main_extra: 18, completionist: 30 };
+          case "fetch_achievements":
+            return {
+              total: 3,
+              achieved: 1,
+              achievements: [
+                {
+                  api_name: "ACH_START",
+                  name: "Begin",
+                  description: "Start the game.",
+                  achieved: true,
+                  unlock_time: 1_700_000_000,
+                  icon: null,
+                  icon_gray: null,
+                },
+                {
+                  api_name: "ACH_SECRET",
+                  name: "Secret route",
+                  description: "Find a hidden route.",
+                  achieved: false,
+                  unlock_time: 0,
+                  icon: null,
+                  icon_gray: null,
+                },
+                {
+                  api_name: "ACH_COMPLETE",
+                  name: "Complete",
+                  description: "Finish the game.",
+                  achieved: false,
+                  unlock_time: 0,
+                  icon: null,
+                  icon_gray: null,
+                },
+              ],
+            };
+          case "fetch_achievements_summary":
+            return [3, 1];
+          case "probe_sam_bridge":
+            return {
+              appId: Number(args?.appId ?? 0),
+              platform: "windows",
+              source: "Steam Achievement Manager architecture",
+              sourceLicense: "zlib",
+              dataSource: "samLocalBridge",
+              available: false,
+              readiness: "missingLocalBridge",
+              steamPathExists: true,
+              steamRunning: true,
+              steamClientLibraryFound: true,
+              steamClientLibraryPath: "C:\\\\Program Files (x86)\\\\Steam\\\\steamclient64.dll",
+              localBridgeFound: false,
+              localBridgePath: null,
+              writesSteam: false,
+              capabilities: [
+                {
+                  id: "webApiAchievements",
+                  label: "Steam Web API achievement summaries",
+                  status: "ready",
+                  writesSteam: false,
+                  reason: "Already used by Repressurizer for read-only achievement progress.",
+                },
+                {
+                  id: "samProbe",
+                  label: "SAM local preflight",
+                  status: "ready",
+                  writesSteam: false,
+                  reason: "Checks Steam install, Steam client library, local bridge package, and platform support.",
+                },
+                {
+                  id: "samReadAchievements",
+                  label: "SAM local achievement read",
+                  status: "blocked",
+                  writesSteam: false,
+                  reason: "Requires a packaged local bridge before Repressurizer can read via Steamworks.",
+                },
+                {
+                  id: "samWriteAchievements",
+                  label: "SAM unlock / lock",
+                  status: "locked",
+                  writesSteam: true,
+                  reason: "Requires the local bridge plus advanced write settings and per-action confirmation.",
+                },
+              ],
+              notes: ["No packaged Repressurizer SAM bridge executable was found."],
+            };
           default:
             return null;
         }

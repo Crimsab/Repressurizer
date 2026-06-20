@@ -11,6 +11,7 @@ import {
   fetchAchievements,
   fetchHltb,
   currencyToCountryCode,
+  probeSamBridge,
 } from "../../lib/tauri";
 import { extractReleaseYear } from "../../lib/search";
 import { SteamImage } from "./SteamImage";
@@ -20,8 +21,9 @@ import type {
   GameDetails,
   AchievementSummary,
   AchievementInfo,
+  SamBridgeProbe,
 } from "../../lib/types";
-import { useT } from "../../lib/i18n";
+import { useT, type TranslationKey } from "../../lib/i18n";
 import {
   X,
   Clock,
@@ -31,6 +33,8 @@ import {
   Check,
   Lock,
   MagnifyingGlass,
+  ShieldCheck,
+  Wrench,
   WindowsLogo,
   LinuxLogo,
   AppleLogo,
@@ -54,6 +58,9 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
     showDetailHltb,
     showDetailMetacritic,
     showDetailPrice,
+    steamPath,
+    steamToolsEnabled,
+    steamToolsAchievementWritesEnabled,
   } = useSettingsStore();
   const collections = useCategoryStore((s) => s.collections);
   const addGameToCategory = useCategoryStore((s) => s.addGameToCategory);
@@ -67,6 +74,7 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
   const [refreshingDetails, setRefreshingDetails] = useState(false);
   const [loadingAchievements, setLoadingAchievements] = useState(true);
   const [achError, setAchError] = useState("");
+  const [samProbe, setSamProbe] = useState<SamBridgeProbe | null>(null);
   const [tab, setTab] = useState<"info" | "achievements">("info");
 
   const cachedDetails = useGameStore((s) => s.details[game.appid]);
@@ -105,7 +113,11 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
       .then(setAchievements)
       .catch((e) => setAchError(String(e)))
       .finally(() => setLoadingAchievements(false));
-  }, [game.appid]);
+
+    probeSamBridge(steamPath, game.appid)
+      .then(setSamProbe)
+      .catch(() => setSamProbe(null));
+  }, [apiKey, currency, game.appid, steamId64, steamPath]);
 
   const hours = (game.playtime_forever / 60).toFixed(1);
   const lastPlayed = game.rtime_last_played
@@ -248,6 +260,9 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
               loading={loadingAchievements}
               error={achError}
               percent={achPercent}
+              samProbe={samProbe}
+              steamToolsEnabled={steamToolsEnabled}
+              achievementWritesEnabled={steamToolsAchievementWritesEnabled}
             />
           )}
         </div>
@@ -749,11 +764,17 @@ function AchievementsTab({
   loading,
   error,
   percent,
+  samProbe,
+  steamToolsEnabled,
+  achievementWritesEnabled,
 }: {
   achievements: AchievementSummary | null;
   loading: boolean;
   error: string;
   percent: number;
+  samProbe: SamBridgeProbe | null;
+  steamToolsEnabled: boolean;
+  achievementWritesEnabled: boolean;
 }) {
   const t = useT();
   const [search, setSearch] = useState("");
@@ -802,6 +823,12 @@ function AchievementsTab({
 
   return (
     <div className="space-y-4">
+      <SamBridgePanel
+        probe={samProbe}
+        steamToolsEnabled={steamToolsEnabled}
+        achievementWritesEnabled={achievementWritesEnabled}
+      />
+
       {/* Progress bar */}
       <div className="rounded-xl bg-repressurizer-bg p-4 border border-repressurizer-border-subtle">
         <div className="mb-2.5 flex items-center justify-between">
@@ -850,6 +877,78 @@ function AchievementsTab({
       </div>
     </div>
   );
+}
+
+function SamBridgePanel({
+  probe,
+  steamToolsEnabled,
+  achievementWritesEnabled,
+}: {
+  probe: SamBridgeProbe | null;
+  steamToolsEnabled: boolean;
+  achievementWritesEnabled: boolean;
+}) {
+  const t = useT();
+  const readiness = samReadinessLabel(t, probe);
+  const writeStatus = probe?.available && steamToolsEnabled && achievementWritesEnabled
+    ? t("detail.sam.writesEnabled")
+    : t("detail.sam.writesLocked");
+
+  return (
+    <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-start gap-2.5">
+          <Wrench size={17} weight="duotone" className="mt-0.5 shrink-0 text-repressurizer-accent" />
+          <div className="min-w-0">
+            <h3 className="text-sm font-semibold text-repressurizer-text">{t("detail.sam.title")}</h3>
+            <p className="mt-1 text-xs leading-relaxed text-repressurizer-text-faint">{t("detail.sam.desc")}</p>
+          </div>
+        </div>
+        <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium ${probe?.available ? "border-repressurizer-success/30 bg-repressurizer-success/10 text-repressurizer-success" : "border-repressurizer-border bg-repressurizer-surface text-repressurizer-text-muted"}`}>
+          {readiness}
+        </span>
+      </div>
+
+      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+        <SamBridgeFact
+          icon={<ShieldCheck size={14} />}
+          label={t("detail.sam.webApi")}
+          value={t("steamTools.status.ready")}
+        />
+        <SamBridgeFact
+          icon={<Wrench size={14} />}
+          label={t("detail.sam.localBridge")}
+          value={readiness}
+        />
+        <SamBridgeFact
+          icon={<Lock size={14} />}
+          label={t("detail.sam.writeActions")}
+          value={writeStatus}
+        />
+      </div>
+
+      {probe?.notes?.[0] && (
+        <p className="mt-3 text-xs leading-relaxed text-repressurizer-text-faint">
+          {probe.notes[0]}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function SamBridgeFact({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+  return (
+    <div className="flex min-w-0 items-center gap-2 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-surface/40 px-3 py-2">
+      <span className="shrink-0 text-repressurizer-text-faint">{icon}</span>
+      <span className="min-w-0 flex-1 truncate text-[11px] text-repressurizer-text-muted">{label}</span>
+      <span className="shrink-0 truncate font-mono text-[11px] text-repressurizer-text tabular-nums">{value}</span>
+    </div>
+  );
+}
+
+function samReadinessLabel(t: ReturnType<typeof useT>, probe: SamBridgeProbe | null): string {
+  if (!probe) return t("steamTools.sam.checking");
+  return t(`steamTools.sam.readiness.${probe.readiness}` as TranslationKey);
 }
 
 function AchievementRow({ achievement }: { achievement: AchievementInfo }) {

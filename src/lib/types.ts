@@ -78,6 +78,33 @@ export interface AchievementSummary {
   achievements: AchievementInfo[];
 }
 
+export interface SamBridgeCapability {
+  id: string;
+  label: string;
+  status: "ready" | "blocked" | "locked" | "planned" | string;
+  writesSteam: boolean;
+  reason: string;
+}
+
+export interface SamBridgeProbe {
+  appId: number;
+  platform: string;
+  source: string;
+  sourceLicense: string;
+  dataSource: "samLocalBridge" | string;
+  available: boolean;
+  readiness: string;
+  steamPathExists: boolean;
+  steamRunning: boolean;
+  steamClientLibraryFound: boolean;
+  steamClientLibraryPath: string | null;
+  localBridgeFound: boolean;
+  localBridgePath: string | null;
+  writesSteam: boolean;
+  capabilities: SamBridgeCapability[];
+  notes: string[];
+}
+
 export type AppTheme = "dark" | "dim" | "light";
 export type AppLocale = string;
 export type AppStartupMode = "tray" | "window";

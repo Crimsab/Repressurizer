@@ -6,6 +6,7 @@ import type {
   GameDetails,
   BackupInfo,
   AchievementSummary,
+  SamBridgeProbe,
 } from "./types";
 
 export async function detectSteam(): Promise<SteamInfo> {
@@ -145,6 +146,10 @@ export async function fetchAchievementsSummary(
     steamId64,
     appId,
   });
+}
+
+export async function probeSamBridge(steamPath: string, appId: number): Promise<SamBridgeProbe> {
+  return invoke<SamBridgeProbe>("probe_sam_bridge", { steamPath, appId });
 }
 
 export interface WishlistItem {

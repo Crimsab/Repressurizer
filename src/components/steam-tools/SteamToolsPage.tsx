@@ -1,8 +1,10 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useGameStore } from "../../stores/gameStore";
 import { useAchievementsStore } from "../../stores/achievementsStore";
 import { useSettingsStore } from "../../stores/settingsStore";
-import { useT } from "../../lib/i18n";
+import { useT, type TranslationKey } from "../../lib/i18n";
+import { probeSamBridge } from "../../lib/tauri";
+import type { SamBridgeProbe } from "../../lib/types";
 import {
   Cards,
   CheckCircle,
@@ -30,6 +32,21 @@ export function SteamToolsPage({ onClose, onOpenAchievements }: SteamToolsPagePr
   const details = useGameStore((s) => s.details);
   const summaries = useAchievementsStore((s) => s.summaries);
   const settings = useSettingsStore();
+  const [samProbe, setSamProbe] = useState<SamBridgeProbe | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    probeSamBridge(settings.steamPath, 0)
+      .then((probe) => {
+        if (!cancelled) setSamProbe(probe);
+      })
+      .catch(() => {
+        if (!cancelled) setSamProbe(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [settings.steamPath]);
 
   const stats = useMemo(() => {
     const gameValues = Object.values(games);
@@ -57,7 +74,8 @@ export function SteamToolsPage({ onClose, onOpenAchievements }: SteamToolsPagePr
     };
   }, [details, games, summaries]);
 
-  const writeActionsLocked = !settings.steamToolsEnabled || !settings.steamToolsAchievementWritesEnabled;
+  const samReady = samProbe?.available === true;
+  const writeActionsLocked = !settings.steamToolsEnabled || !settings.steamToolsAchievementWritesEnabled || !samReady;
   const cardFarmingLocked = !settings.steamToolsEnabled || !settings.steamToolsCardFarmingEnabled;
 
   return (
@@ -165,7 +183,7 @@ export function SteamToolsPage({ onClose, onOpenAchievements }: SteamToolsPagePr
                 </p>
                 <div className="mt-3 space-y-2">
                   <SourceRow icon={<ShieldCheck size={14} />} label={t("steamTools.bridge.webApi")} value={t("steamTools.status.ready")} tone="ready" />
-                  <SourceRow icon={<LockKey size={14} />} label={t("steamTools.bridge.sam")} value={t("steamTools.status.planned")} tone="planned" />
+                  <SourceRow icon={<LockKey size={14} />} label={t("steamTools.bridge.sam")} value={samReadinessLabel(t, samProbe)} tone={samProbe?.available ? "ready" : "locked"} />
                   <SourceRow icon={<Cards size={14} />} label={t("steamTools.bridge.xpaw")} value={t("steamTools.status.planned")} tone="planned" />
                 </div>
               </div>
@@ -173,26 +191,44 @@ export function SteamToolsPage({ onClose, onOpenAchievements }: SteamToolsPagePr
               <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg p-4">
                 <div className="flex items-center gap-2">
                   <Info size={17} weight="duotone" className="text-repressurizer-text-muted" />
-                  <h3 className="text-sm font-semibold text-repressurizer-text">{t("steamTools.sources.title")}</h3>
+                  <h3 className="text-sm font-semibold text-repressurizer-text">{t("steamTools.sam.title")}</h3>
                 </div>
-                <ul className="mt-3 space-y-2 text-xs leading-relaxed text-repressurizer-text-faint">
-                  <li>{t("steamTools.sources.sam")}</li>
-                  <li>{t("steamTools.sources.sgi")}</li>
-                  <li>{t("steamTools.sources.xpaw")}</li>
-                </ul>
+                <p className="mt-2 text-xs leading-relaxed text-repressurizer-text-faint">
+                  {t("steamTools.sam.desc")}
+                </p>
+                <div className="mt-3 grid gap-2">
+                  <ProbeFact label={t("steamTools.sam.platform")} value={samProbe?.platform ?? t("steamTools.sam.checking")} />
+                  <ProbeFact label={t("steamTools.sam.steamClient")} value={booleanLabel(t, samProbe?.steamClientLibraryFound)} />
+                  <ProbeFact label={t("steamTools.sam.localBridge")} value={booleanLabel(t, samProbe?.localBridgeFound)} />
+                  <ProbeFact label={t("steamTools.sam.writes")} value={samProbe?.writesSteam ? t("steamTools.sam.available") : t("steamTools.status.readOnly")} />
+                </div>
+                {samProbe?.notes?.[0] && (
+                  <p className="mt-3 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-surface/45 px-3 py-2 text-xs leading-relaxed text-repressurizer-text-muted">
+                    {samProbe.notes[0]}
+                  </p>
+                )}
               </div>
 
               <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg p-4">
                 <div className="flex items-center gap-2">
                   <GameController size={17} weight="duotone" className="text-repressurizer-text-muted" />
-                  <h3 className="text-sm font-semibold text-repressurizer-text">{t("steamTools.next.title")}</h3>
+                  <h3 className="text-sm font-semibold text-repressurizer-text">{t("steamTools.sam.capabilities")}</h3>
                 </div>
-                <ol className="mt-3 list-decimal space-y-2 pl-4 text-xs leading-relaxed text-repressurizer-text-faint">
-                  <li>{t("steamTools.next.bridgeProbe")}</li>
-                  <li>{t("steamTools.next.readAchievements")}</li>
-                  <li>{t("steamTools.next.writeActions")}</li>
-                  <li>{t("steamTools.next.cardPlan")}</li>
-                </ol>
+                <div className="mt-3 space-y-2">
+                  {samProbe?.capabilities?.length ? (
+                    samProbe.capabilities.map((capability) => (
+                      <SourceRow
+                        key={capability.id}
+                        icon={capability.writesSteam ? <LockKey size={14} /> : <ShieldCheck size={14} />}
+                        label={samCapabilityLabel(t, capability.id)}
+                        value={samCapabilityStatusLabel(t, capability.status)}
+                        tone={samCapabilityTone(capability.status)}
+                      />
+                    ))
+                  ) : (
+                    <p className="text-xs leading-relaxed text-repressurizer-text-faint">{t("steamTools.sam.checking")}</p>
+                  )}
+                </div>
               </div>
             </aside>
           </div>
@@ -284,6 +320,40 @@ function SourceRow({
       <StatusPill tone={tone}>{value}</StatusPill>
     </div>
   );
+}
+
+function ProbeFact({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-surface/40 px-3 py-2">
+      <span className="min-w-0 truncate text-xs text-repressurizer-text-muted">{label}</span>
+      <span className="shrink-0 font-mono text-[11px] text-repressurizer-text tabular-nums">{value}</span>
+    </div>
+  );
+}
+
+function booleanLabel(t: ReturnType<typeof useT>, value: boolean | undefined): string {
+  if (value == null) return t("steamTools.sam.checking");
+  return value ? t("steamTools.sam.available") : t("steamTools.sam.notFound");
+}
+
+function samReadinessLabel(t: ReturnType<typeof useT>, probe: SamBridgeProbe | null): string {
+  if (!probe) return t("steamTools.sam.checking");
+  const key = `steamTools.sam.readiness.${probe.readiness}` as TranslationKey;
+  return t(key);
+}
+
+function samCapabilityLabel(t: ReturnType<typeof useT>, id: string): string {
+  return t(`steamTools.sam.capability.${id}` as TranslationKey);
+}
+
+function samCapabilityStatusLabel(t: ReturnType<typeof useT>, status: string): string {
+  return t(`steamTools.status.${status}` as TranslationKey);
+}
+
+function samCapabilityTone(status: string): Tone {
+  if (status === "ready") return "ready";
+  if (status === "locked") return "locked";
+  return "planned";
 }
 
 function DisabledAction({

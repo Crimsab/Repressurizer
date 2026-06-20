@@ -8,6 +8,7 @@ use std::path::PathBuf;
 use steam::api;
 use steam::collections;
 use steam::detector;
+use steam::sam;
 use tauri::{Emitter, Manager};
 
 #[derive(Serialize)]
@@ -520,6 +521,7 @@ pub fn run() {
             api::fetch_game_details,
             api::fetch_achievements,
             api::fetch_achievements_summary,
+            sam::probe_sam_bridge,
             api::fetch_wishlist,
             api::fetch_family_library,
             api::resolve_vanity_url,
