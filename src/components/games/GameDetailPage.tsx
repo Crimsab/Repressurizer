@@ -292,7 +292,6 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
             backup,
           })
         );
-        void loadAchievementData(true);
         void refreshSamProbe();
       } catch (error) {
         setSamActionError(String(error));
@@ -303,7 +302,6 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
     [
       applySamResultToAchievements,
       game.appid,
-      loadAchievementData,
       refreshSamProbe,
       steamPath,
       t,
@@ -1267,7 +1265,10 @@ function AchievementRow({
       {canWrite && (
         <button
           type="button"
-          onClick={onToggle}
+          onClick={(event) => {
+            event.stopPropagation();
+            onToggle();
+          }}
           className={`btn-press shrink-0 rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-colors ${
             achievement.achieved
               ? "border-repressurizer-border text-repressurizer-text-muted hover:border-repressurizer-danger hover:text-repressurizer-danger"

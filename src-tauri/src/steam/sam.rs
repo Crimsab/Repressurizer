@@ -1,19 +1,16 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs;
-use std::io::{Read, Write};
-#[cfg(windows)]
-use std::os::windows::process::CommandExt;
+use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+#[cfg(not(windows))]
+use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const SAM_SOURCE: &str = "Repressurizer SAM bridge";
 const SAM_REFERENCE_SOURCE: &str = "Steam Achievement Manager architecture";
 const SAM_LICENSE: &str = "zlib-compatible architecture reference";
 const EMBEDDED_BRIDGE_ARG: &str = "--repressurizer-sam-bridge";
-#[cfg(windows)]
-const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -100,27 +97,6 @@ pub struct SamAchievementActionResult {
 #[tauri::command]
 pub fn probe_sam_bridge(steam_path: String, app_id: u64) -> SamBridgeProbe {
     let bridge_path = std::env::current_exe().ok();
-
-    if let Some(bridge_path) = bridge_path.clone() {
-        match run_bridge_probe(&bridge_path, &steam_path, app_id) {
-            Ok(mut probe) => {
-                probe.bridge_invoked = true;
-                probe.local_bridge_found = true;
-                probe.local_bridge_path = Some(path_to_string(bridge_path));
-                return probe;
-            }
-            Err(error) => {
-                return build_probe(
-                    steam_path,
-                    app_id,
-                    Some(bridge_path),
-                    true,
-                    Some(format!("SAM bridge probe failed: {error}")),
-                );
-            }
-        }
-    }
-
     build_probe(steam_path, app_id, bridge_path, false, None)
 }
 
@@ -136,9 +112,7 @@ pub fn sam_achievement_action(
     }
     validate_achievement_action_input(&input)?;
 
-    let bridge_path = std::env::current_exe()
-        .map_err(|error| format!("Could not resolve Repressurizer bridge path: {error}"))?;
-    run_bridge_achievement_action(&bridge_path, input)
+    perform_bridge_achievement_action(input)
 }
 
 pub fn run_embedded_bridge_from_env() -> Option<i32> {
@@ -231,8 +205,12 @@ fn validate_achievement_action_input(input: &SamAchievementActionInput) -> Resul
 
     match input.action.as_str() {
         "unlock" | "lock" => {
-            if normalized_achievement_ids(&input.achievement_ids).is_empty() {
+            let ids = normalized_achievement_ids(&input.achievement_ids);
+            if ids.is_empty() {
                 return Err("At least one achievement API name is required.".to_string());
+            }
+            if ids.len() != 1 {
+                return Err("Single achievement actions must target exactly one achievement.".to_string());
             }
         }
         "unlock_all" | "lock_all" | "restore_backup" => {}
@@ -327,14 +305,14 @@ fn build_probe(
                 "SAM local achievement read",
                 if bridge_ready { "ready" } else { "blocked" },
                 false,
-                "Requires the embedded bridge mode and running Steam before Repressurizer can read via Steamworks.",
+                "Requires the local Rust SAM client and running Steam before Repressurizer can read via Steamworks.",
             ),
             capability(
                 "samWriteAchievements",
                 "SAM unlock / lock",
                 if bridge_ready { "ready" } else { "blocked" },
                 true,
-                "Can unlock and lock achievements through the embedded local bridge after explicit Settings opt-in and per-action confirmation.",
+                "Can unlock and lock achievements through the local Rust SAM client after explicit Settings opt-in and per-action confirmation.",
             ),
             capability(
                 "samStatsEdit",
@@ -356,84 +334,11 @@ fn build_probe(
     }
 }
 
-fn run_bridge_probe(
-    bridge_path: &Path,
-    steam_path: &str,
-    app_id: u64,
-) -> Result<SamBridgeProbe, String> {
-    let mut command = Command::new(bridge_path);
-    #[cfg(windows)]
-    command.creation_flags(CREATE_NO_WINDOW);
-
-    let output = command
-        .arg(EMBEDDED_BRIDGE_ARG)
-        .arg("probe")
-        .arg("--steam-path")
-        .arg(steam_path)
-        .arg("--app-id")
-        .arg(app_id.to_string())
-        .output()
-        .map_err(|error| error.to_string())?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        return Err(if stderr.is_empty() {
-            format!("bridge exited with {}", output.status)
-        } else {
-            stderr
-        });
-    }
-
-    serde_json::from_slice::<SamBridgeProbe>(&output.stdout).map_err(|error| error.to_string())
-}
-
-fn run_bridge_achievement_action(
-    bridge_path: &Path,
-    input: SamAchievementActionInput,
-) -> Result<SamAchievementActionResult, String> {
-    let mut command = Command::new(bridge_path);
-    #[cfg(windows)]
-    command.creation_flags(CREATE_NO_WINDOW);
-
-    let mut child = command
-        .arg(EMBEDDED_BRIDGE_ARG)
-        .arg("achievement-action")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|error| error.to_string())?;
-
-    if let Some(stdin) = child.stdin.as_mut() {
-        let payload = serde_json::to_vec(&input).map_err(|error| error.to_string())?;
-        stdin
-            .write_all(&payload)
-            .map_err(|error| format!("Failed to write SAM action input: {error}"))?;
-    }
-
-    let output = child
-        .wait_with_output()
-        .map_err(|error| format!("Failed to wait for SAM action bridge: {error}"))?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        return Err(if stderr.is_empty() {
-            format!("SAM action bridge exited with {}", output.status)
-        } else {
-            stderr
-        });
-    }
-
-    serde_json::from_slice::<SamAchievementActionResult>(&output.stdout)
-        .map_err(|error| format!("Failed to parse SAM action output: {error}"))
-}
-
 fn perform_bridge_achievement_action(
     input: SamAchievementActionInput,
 ) -> Result<SamAchievementActionResult, String> {
     let mut ids = normalized_achievement_ids(&input.achievement_ids);
-
-    if input.action == "restore_backup" {
+    let restore_backup = if input.action == "restore_backup" {
         let backup_path = input
             .backup_path
             .as_ref()
@@ -445,6 +350,12 @@ fn perform_bridge_achievement_action(
                 backup.app_id, input.app_id
             ));
         }
+        Some(backup)
+    } else {
+        None
+    };
+
+    if let Some(backup) = &restore_backup {
         ids = backup
             .achievements
             .iter()
@@ -472,13 +383,14 @@ fn perform_bridge_achievement_action(
     let before_backup_path = save_achievement_backup(&before_backup).ok();
 
     let mut failed = Vec::new();
-    let mut changed = 0usize;
+    let mut attempted = 0usize;
+    let target_set: HashSet<String> = ids.iter().cloned().collect();
 
     match input.action.as_str() {
         "unlock" => {
             for id in &ids {
                 if bridge.set_achievement(id, true) {
-                    changed += 1;
+                    attempted += 1;
                 } else {
                     failed.push(id.clone());
                 }
@@ -487,7 +399,7 @@ fn perform_bridge_achievement_action(
         "lock" => {
             for id in &ids {
                 if bridge.set_achievement(id, false) {
-                    changed += 1;
+                    attempted += 1;
                 } else {
                     failed.push(id.clone());
                 }
@@ -496,7 +408,7 @@ fn perform_bridge_achievement_action(
         "unlock_all" => {
             for id in &ids {
                 if bridge.set_achievement(id, true) {
-                    changed += 1;
+                    attempted += 1;
                 } else {
                     failed.push(id.clone());
                 }
@@ -505,17 +417,19 @@ fn perform_bridge_achievement_action(
         "lock_all" => {
             for id in &ids {
                 if bridge.set_achievement(id, false) {
-                    changed += 1;
+                    attempted += 1;
                 } else {
                     failed.push(id.clone());
                 }
             }
         }
         "restore_backup" => {
-            let backup = load_achievement_backup(input.backup_path.as_deref().unwrap_or_default())?;
+            let backup = restore_backup
+                .as_ref()
+                .ok_or("A backup path is required to restore achievement state.")?;
             for state in backup.achievements.iter().filter(|state| state.valid) {
                 if bridge.set_achievement(&state.api_name, state.achieved) {
-                    changed += 1;
+                    attempted += 1;
                 } else {
                     failed.push(state.api_name.clone());
                 }
@@ -524,25 +438,48 @@ fn perform_bridge_achievement_action(
         other => return Err(format!("Unsupported SAM achievement action: {other}")),
     }
 
-    let store_stats = if changed > 0 {
+    let mut store_stats = if attempted > 0 {
         bridge.store_stats()
     } else {
         true
     };
     bridge.run_callbacks_for(std::time::Duration::from_millis(800));
 
-    let after_states = bridge.capture_states(&backup_names);
+    let mut after_states = bridge.capture_states(&backup_names);
+    let unexpected_changes =
+        changed_non_target_states(&before_backup.achievements, &after_states, &target_set);
+    if !unexpected_changes.is_empty() {
+        for state in &unexpected_changes {
+            if !bridge.set_achievement(&state.api_name, state.achieved) {
+                failed.push(format!("restore_non_target:{}", state.api_name));
+            }
+        }
+        store_stats = bridge.store_stats() && store_stats;
+        bridge.run_callbacks_for(std::time::Duration::from_millis(800));
+        after_states = bridge.capture_states(&backup_names);
+    }
+
     let after_backup = build_achievement_backup(input.app_id, &input.action, "after", after_states);
     let after_backup_path = save_achievement_backup(&after_backup).ok();
+    let changed =
+        count_target_achievement_changes(&before_backup.achievements, &after_backup.achievements, &target_set);
 
-    if changed > 0 && !store_stats {
+    if attempted > 0 && !store_stats {
         return Err(format!(
-            "Steam rejected StoreStats after {changed} achievement change(s). Before backup: {}",
+            "Steam rejected StoreStats after {attempted} achievement write request(s). Before backup: {}",
             before_backup_path
                 .as_deref()
                 .unwrap_or("backup path unavailable")
         ));
     }
+    let message = if unexpected_changes.is_empty() {
+        "Achievement state updated. Backup contains unlock times for reference, but Steamworks does not expose an API to restore original unlock timestamps.".to_string()
+    } else {
+        format!(
+            "Achievement state updated, and {} unexpected non-target change(s) were restored. Backup contains unlock times for reference, but Steamworks does not expose an API to restore original unlock timestamps.",
+            unexpected_changes.len()
+        )
+    };
 
     Ok(SamAchievementActionResult {
         app_id: input.app_id,
@@ -555,8 +492,53 @@ fn perform_bridge_achievement_action(
         after: after_backup,
         store_stats,
         unlock_times_restorable: false,
-        message: "Achievement state updated. Backup contains unlock times for reference, but Steamworks does not expose an API to restore original unlock timestamps.".to_string(),
+        message,
     })
+}
+
+fn achievement_state_map(states: &[SamAchievementState]) -> HashMap<String, SamAchievementState> {
+    states
+        .iter()
+        .filter(|state| state.valid)
+        .map(|state| (state.api_name.clone(), state.clone()))
+        .collect()
+}
+
+fn count_target_achievement_changes(
+    before: &[SamAchievementState],
+    after: &[SamAchievementState],
+    target_set: &HashSet<String>,
+) -> usize {
+    let before_map = achievement_state_map(before);
+    after
+        .iter()
+        .filter(|state| state.valid && target_set.contains(&state.api_name))
+        .filter(|state| {
+            before_map
+                .get(&state.api_name)
+                .map(|before_state| before_state.achieved != state.achieved)
+                .unwrap_or(false)
+        })
+        .count()
+}
+
+fn changed_non_target_states(
+    before: &[SamAchievementState],
+    after: &[SamAchievementState],
+    target_set: &HashSet<String>,
+) -> Vec<SamAchievementState> {
+    let after_map = achievement_state_map(after);
+    before
+        .iter()
+        .filter(|state| state.valid && !target_set.contains(&state.api_name))
+        .filter(|state| {
+            after_map
+                .get(&state.api_name)
+                .map(|after_state| after_state.achieved != state.achieved)
+                .unwrap_or(false)
+        })
+        .cloned()
+        .collect()
 }
 
 fn normalized_achievement_ids(ids: &[String]) -> Vec<String> {
@@ -1172,20 +1154,56 @@ fn steam_client_candidates(steam_root: &Path) -> Vec<PathBuf> {
     }
 }
 
+#[cfg(windows)]
 fn is_steam_running() -> bool {
-    if cfg!(target_os = "windows") {
-        Command::new("tasklist")
-            .output()
-            .ok()
-            .and_then(|output| String::from_utf8(output.stdout).ok())
-            .map(|stdout| stdout.to_ascii_lowercase().contains("steam.exe"))
-            .unwrap_or(false)
-    } else {
-        Command::new("pgrep")
-            .args(["-x", "steam"])
-            .status()
-            .map(|status| status.success())
-            .unwrap_or(false)
+    windows_process::is_steam_running()
+}
+
+#[cfg(not(windows))]
+fn is_steam_running() -> bool {
+    Command::new("pgrep")
+        .args(["-x", "steam"])
+        .status()
+        .map(|status| status.success())
+        .unwrap_or(false)
+}
+
+#[cfg(windows)]
+mod windows_process {
+    use std::mem;
+    use windows_sys::Win32::Foundation::{CloseHandle, INVALID_HANDLE_VALUE};
+    use windows_sys::Win32::System::Diagnostics::ToolHelp::{
+        CreateToolhelp32Snapshot, Process32FirstW, Process32NextW, PROCESSENTRY32W,
+        TH32CS_SNAPPROCESS,
+    };
+
+    pub fn is_steam_running() -> bool {
+        unsafe {
+            let snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+            if snapshot == INVALID_HANDLE_VALUE {
+                return false;
+            }
+
+            let mut entry = mem::zeroed::<PROCESSENTRY32W>();
+            entry.dwSize = mem::size_of::<PROCESSENTRY32W>() as u32;
+
+            let mut has_process = Process32FirstW(snapshot, &mut entry) != 0;
+            while has_process {
+                if exe_name(&entry.szExeFile).eq_ignore_ascii_case("steam.exe") {
+                    CloseHandle(snapshot);
+                    return true;
+                }
+                has_process = Process32NextW(snapshot, &mut entry) != 0;
+            }
+
+            CloseHandle(snapshot);
+            false
+        }
+    }
+
+    fn exe_name(raw: &[u16]) -> String {
+        let len = raw.iter().position(|ch| *ch == 0).unwrap_or(raw.len());
+        String::from_utf16_lossy(&raw[..len])
     }
 }
 
@@ -1239,6 +1257,58 @@ mod tests {
         assert_eq!(probe.app_id, 39140);
         assert!(probe.bridge_invoked);
         assert!(probe.local_bridge_found);
+    }
+
+    #[test]
+    fn single_actions_reject_multiple_achievement_ids() {
+        let input = SamAchievementActionInput {
+            steam_path: "C:\\Steam".to_string(),
+            app_id: 1145360,
+            action: "unlock".to_string(),
+            achievement_ids: vec!["ACH_ONE".to_string(), "ACH_TWO".to_string()],
+            backup_path: None,
+        };
+
+        let error = validate_achievement_action_input(&input).unwrap_err();
+        assert!(error.contains("exactly one"));
+    }
+
+    #[test]
+    fn state_diff_separates_target_from_non_target_changes() {
+        let before = vec![
+            SamAchievementState {
+                api_name: "ACH_ONE".to_string(),
+                achieved: false,
+                unlock_time: 0,
+                valid: true,
+            },
+            SamAchievementState {
+                api_name: "ACH_TWO".to_string(),
+                achieved: false,
+                unlock_time: 0,
+                valid: true,
+            },
+        ];
+        let after = vec![
+            SamAchievementState {
+                api_name: "ACH_ONE".to_string(),
+                achieved: true,
+                unlock_time: 1,
+                valid: true,
+            },
+            SamAchievementState {
+                api_name: "ACH_TWO".to_string(),
+                achieved: true,
+                unlock_time: 1,
+                valid: true,
+            },
+        ];
+        let targets = HashSet::from(["ACH_ONE".to_string()]);
+
+        assert_eq!(count_target_achievement_changes(&before, &after, &targets), 1);
+        let unexpected = changed_non_target_states(&before, &after, &targets);
+        assert_eq!(unexpected.len(), 1);
+        assert_eq!(unexpected[0].api_name, "ACH_TWO");
     }
 
     fn temp_dir(name: &str) -> PathBuf {
