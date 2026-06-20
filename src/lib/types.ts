@@ -107,6 +107,53 @@ export interface SamBridgeProbe {
   notes: string[];
 }
 
+export type SamAchievementAction =
+  | "unlock"
+  | "lock"
+  | "unlock_all"
+  | "lock_all"
+  | "restore_backup";
+
+export interface SamAchievementActionInput {
+  steamPath: string;
+  appId: number;
+  action: SamAchievementAction;
+  achievementIds: string[];
+  backupPath: string | null;
+}
+
+export interface SamAchievementState {
+  apiName: string;
+  achieved: boolean;
+  unlockTime: number;
+  valid: boolean;
+}
+
+export interface SamAchievementBackup {
+  version: number;
+  appId: number;
+  action: SamAchievementAction | string;
+  phase: "before" | "after" | string;
+  capturedAt: string;
+  canRestoreUnlockTimes: boolean;
+  note: string;
+  achievements: SamAchievementState[];
+}
+
+export interface SamAchievementActionResult {
+  appId: number;
+  action: SamAchievementAction | string;
+  changed: number;
+  failed: string[];
+  beforeBackupPath: string | null;
+  afterBackupPath: string | null;
+  before: SamAchievementBackup;
+  after: SamAchievementBackup;
+  storeStats: boolean;
+  unlockTimesRestorable: boolean;
+  message: string;
+}
+
 export type AppTheme = "dark" | "dim" | "light";
 export type AppLocale = string;
 export type AppStartupMode = "tray" | "window";

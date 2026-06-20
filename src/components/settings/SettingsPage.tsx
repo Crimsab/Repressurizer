@@ -955,9 +955,25 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                     </div>
                     <div className="mt-3 grid gap-2 sm:grid-cols-2">
                       <MiniStat label={t("steamTools.sam.localBridge")} value={t("steamTools.sam.available")} />
-                      <MiniStat label={t("steamTools.sam.writes")} value={t("steamTools.status.readOnly")} />
+                      <MiniStat
+                        label={t("steamTools.sam.writes")}
+                        value={
+                          settings.steamToolsAchievementWritesEnabled
+                            ? t("detail.sam.writesEnabled")
+                            : t("detail.sam.writesLocked")
+                        }
+                      />
                     </div>
                   </div>
+                  {settings.steamToolsEnabled && (
+                    <ToggleRow
+                      icon={<Trophy size={15} weight="duotone" />}
+                      label={t("settings.steamTools.achievementWrites")}
+                      description={t("settings.steamTools.achievementWrites.desc")}
+                      checked={settings.steamToolsAchievementWritesEnabled}
+                      onChange={(v) => settings.setSettings({ steamToolsAchievementWritesEnabled: v })}
+                    />
+                  )}
                 </div>
               </div>
               )}

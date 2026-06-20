@@ -156,6 +156,36 @@ test("game achievement details show SAM bridge preflight separately from Steam W
   await testInfo.attach("game-achievements-sam-bridge", { path: screenshotPath, contentType: "image/png" });
 });
 
+test("achievement write controls require explicit Steam Tools write opt-in", async ({ page }) => {
+  await page.addInitScript(() => {
+    const raw = window.localStorage.getItem("repressurizer-settings");
+    if (!raw) return;
+    const settings = JSON.parse(raw);
+    settings.steamToolsEnabled = true;
+    settings.steamToolsAchievementWritesEnabled = true;
+    window.localStorage.setItem("repressurizer-settings", JSON.stringify(settings));
+  });
+  page.on("dialog", (dialog) => dialog.accept());
+
+  await page.goto("/");
+
+  await page.locator(".game-card").filter({ hasText: "Hades" }).dblclick();
+  const detail = page.locator(".fixed.inset-0").filter({
+    has: page.getByRole("heading", { name: "Hades" }),
+  });
+  await detail.getByRole("button", { name: /Achievements/ }).click();
+
+  await expect(detail.getByRole("heading", { name: "SAM bridge" })).toBeVisible();
+  await expect(detail.getByText("Ready").first()).toBeVisible();
+  await expect(detail.getByRole("button", { name: "Unlock all (2)" })).toBeVisible();
+  await expect(detail.getByRole("button", { name: "Lock all (1)" })).toBeVisible();
+  await expect(detail.getByRole("button", { name: "Unlock", exact: true }).first()).toBeVisible();
+
+  await detail.getByRole("button", { name: "Unlock all (2)" }).click();
+  await expect(detail.getByText("achievement change(s) stored")).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+});
+
 test("achievement details do not probe SAM while Steam Tools is disabled", async ({ page }) => {
   await page.goto("/");
 
@@ -219,6 +249,8 @@ test("opens organized settings tabs, automation logs, and Steam controls without
   await expect(settingsDialog.getByText("Embedded SAM bridge")).toBeVisible();
   await expect(settingsDialog.getByText("Allow achievement write actions")).toBeHidden();
   await expect(settingsDialog.getByText("Allow card farming lab")).toBeHidden();
+  await settingsDialog.getByRole("switch", { name: /Steam Tools/ }).click();
+  await expect(settingsDialog.getByText("Allow achievement write actions")).toBeVisible();
 
   const toolsPath = testInfo.outputPath("settings-steam-tools.png");
   await page.screenshot({ path: toolsPath, fullPage: true });

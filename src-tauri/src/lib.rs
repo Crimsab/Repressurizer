@@ -33,7 +33,7 @@ struct PostJsonExportInput {
     bearer_token: Option<String>,
 }
 
-fn app_data_dir() -> Option<PathBuf> {
+pub(crate) fn app_data_dir() -> Option<PathBuf> {
     dirs::data_dir().map(|dir| dir.join("Repressurizer"))
 }
 
@@ -46,7 +46,7 @@ fn steam_collections_path(steam_path: &str, steam_id3: &str) -> PathBuf {
         .join("cloud-storage-namespace-1.json")
 }
 
-fn read_app_setting_bool(key: &str) -> Option<bool> {
+pub(crate) fn read_app_setting_bool(key: &str) -> Option<bool> {
     let settings_path = app_data_dir()?.join("settings.json");
     let data = std::fs::read_to_string(settings_path).ok()?;
     let value = serde_json::from_str::<serde_json::Value>(&data).ok()?;
@@ -522,6 +522,7 @@ pub fn run() {
             api::fetch_achievements,
             api::fetch_achievements_summary,
             sam::probe_sam_bridge,
+            sam::sam_achievement_action,
             api::fetch_wishlist,
             api::fetch_family_library,
             api::resolve_vanity_url,

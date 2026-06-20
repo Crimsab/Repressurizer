@@ -1,8 +1,12 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
+use std::fs;
+use std::io::{Read, Write};
 #[cfg(windows)]
 use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 const SAM_SOURCE: &str = "Repressurizer SAM bridge";
 const SAM_REFERENCE_SOURCE: &str = "Steam Achievement Manager architecture";
@@ -44,6 +48,55 @@ pub struct SamBridgeProbe {
     pub notes: Vec<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SamAchievementActionInput {
+    pub steam_path: String,
+    pub app_id: u64,
+    pub action: String,
+    #[serde(default)]
+    pub achievement_ids: Vec<String>,
+    pub backup_path: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SamAchievementState {
+    pub api_name: String,
+    pub achieved: bool,
+    pub unlock_time: u64,
+    pub valid: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SamAchievementBackup {
+    pub version: u32,
+    pub app_id: u64,
+    pub action: String,
+    pub phase: String,
+    pub captured_at: String,
+    pub can_restore_unlock_times: bool,
+    pub note: String,
+    pub achievements: Vec<SamAchievementState>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SamAchievementActionResult {
+    pub app_id: u64,
+    pub action: String,
+    pub changed: usize,
+    pub failed: Vec<String>,
+    pub before_backup_path: Option<String>,
+    pub after_backup_path: Option<String>,
+    pub before: SamAchievementBackup,
+    pub after: SamAchievementBackup,
+    pub store_stats: bool,
+    pub unlock_times_restorable: bool,
+    pub message: String,
+}
+
 #[tauri::command]
 pub fn probe_sam_bridge(steam_path: String, app_id: u64) -> SamBridgeProbe {
     let bridge_path = std::env::current_exe().ok();
@@ -69,6 +122,23 @@ pub fn probe_sam_bridge(steam_path: String, app_id: u64) -> SamBridgeProbe {
     }
 
     build_probe(steam_path, app_id, bridge_path, false, None)
+}
+
+#[tauri::command]
+pub fn sam_achievement_action(
+    input: SamAchievementActionInput,
+) -> Result<SamAchievementActionResult, String> {
+    if !crate::read_app_setting_bool("steamToolsEnabled").unwrap_or(false) {
+        return Err("Steam Tools are disabled.".to_string());
+    }
+    if !crate::read_app_setting_bool("steamToolsAchievementWritesEnabled").unwrap_or(false) {
+        return Err("Achievement write actions are disabled in Settings.".to_string());
+    }
+    validate_achievement_action_input(&input)?;
+
+    let bridge_path = std::env::current_exe()
+        .map_err(|error| format!("Could not resolve Repressurizer bridge path: {error}"))?;
+    run_bridge_achievement_action(&bridge_path, input)
 }
 
 pub fn run_embedded_bridge_from_env() -> Option<i32> {
@@ -108,8 +178,9 @@ fn run_embedded_bridge_command(args: Vec<String>) -> Result<String, String> {
 
     match command.as_str() {
         "probe" => run_embedded_bridge_probe(args.collect()),
+        "achievement-action" => run_embedded_bridge_achievement_action(),
         "help" | "--help" | "-h" => Ok(format!(
-            "Repressurizer embedded SAM bridge\nusage: {EMBEDDED_BRIDGE_ARG} probe --steam-path <path> [--app-id <appid>]"
+            "Repressurizer embedded SAM bridge\nusage: {EMBEDDED_BRIDGE_ARG} probe --steam-path <path> [--app-id <appid>]\n       {EMBEDDED_BRIDGE_ARG} achievement-action < input.json"
         )),
         other => Err(format!("unknown embedded SAM bridge command: {other}")),
     }
@@ -138,6 +209,48 @@ fn run_embedded_bridge_probe(args: Vec<String>) -> Result<String, String> {
 
     serde_json::to_string(&probe_sam_bridge_for_cli(steam_path, app_id))
         .map_err(|error| error.to_string())
+}
+
+fn run_embedded_bridge_achievement_action() -> Result<String, String> {
+    let mut raw = String::new();
+    std::io::stdin()
+        .read_to_string(&mut raw)
+        .map_err(|error| format!("Failed to read SAM action input: {error}"))?;
+    let input = serde_json::from_str::<SamAchievementActionInput>(&raw)
+        .map_err(|error| format!("Invalid SAM action input: {error}"))?;
+    validate_achievement_action_input(&input)?;
+
+    let result = perform_bridge_achievement_action(input)?;
+    serde_json::to_string(&result).map_err(|error| error.to_string())
+}
+
+fn validate_achievement_action_input(input: &SamAchievementActionInput) -> Result<(), String> {
+    if input.app_id == 0 || input.app_id > u32::MAX as u64 {
+        return Err("A valid Steam appId is required.".to_string());
+    }
+
+    match input.action.as_str() {
+        "unlock" | "lock" => {
+            if normalized_achievement_ids(&input.achievement_ids).is_empty() {
+                return Err("At least one achievement API name is required.".to_string());
+            }
+        }
+        "unlock_all" | "lock_all" | "restore_backup" => {}
+        other => return Err(format!("Unsupported SAM achievement action: {other}")),
+    }
+
+    if input.action == "restore_backup"
+        && input
+            .backup_path
+            .as_deref()
+            .map(str::trim)
+            .unwrap_or_default()
+            .is_empty()
+    {
+        return Err("A backup path is required to restore achievement state.".to_string());
+    }
+
+    Ok(())
 }
 
 fn build_probe(
@@ -193,7 +306,7 @@ fn build_probe(
         steam_client_library_path: steam_client_library_path.map(path_to_string),
         local_bridge_found,
         local_bridge_path: local_bridge_path.map(path_to_string),
-        writes_steam: false,
+        writes_steam: bridge_ready,
         capabilities: vec![
             capability(
                 "webApiAchievements",
@@ -219,16 +332,16 @@ fn build_probe(
             capability(
                 "samWriteAchievements",
                 "SAM unlock / lock",
-                "locked",
+                if bridge_ready { "ready" } else { "blocked" },
                 true,
-                "Not implemented in this build; no Steam achievement write command is exposed.",
+                "Can unlock and lock achievements through the embedded local bridge after explicit Settings opt-in and per-action confirmation.",
             ),
             capability(
                 "samStatsEdit",
                 "SAM stats edit / reset",
                 "locked",
                 true,
-                "Not implemented in this build; no Steam stats reset command is exposed.",
+                "Stats editing is not exposed. Repressurizer only changes achievement state.",
             ),
         ],
         notes: notes_for_probe(
@@ -272,6 +385,694 @@ fn run_bridge_probe(
     }
 
     serde_json::from_slice::<SamBridgeProbe>(&output.stdout).map_err(|error| error.to_string())
+}
+
+fn run_bridge_achievement_action(
+    bridge_path: &Path,
+    input: SamAchievementActionInput,
+) -> Result<SamAchievementActionResult, String> {
+    let mut command = Command::new(bridge_path);
+    #[cfg(windows)]
+    command.creation_flags(CREATE_NO_WINDOW);
+
+    let mut child = command
+        .arg(EMBEDDED_BRIDGE_ARG)
+        .arg("achievement-action")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|error| error.to_string())?;
+
+    if let Some(stdin) = child.stdin.as_mut() {
+        let payload = serde_json::to_vec(&input).map_err(|error| error.to_string())?;
+        stdin
+            .write_all(&payload)
+            .map_err(|error| format!("Failed to write SAM action input: {error}"))?;
+    }
+
+    let output = child
+        .wait_with_output()
+        .map_err(|error| format!("Failed to wait for SAM action bridge: {error}"))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        return Err(if stderr.is_empty() {
+            format!("SAM action bridge exited with {}", output.status)
+        } else {
+            stderr
+        });
+    }
+
+    serde_json::from_slice::<SamAchievementActionResult>(&output.stdout)
+        .map_err(|error| format!("Failed to parse SAM action output: {error}"))
+}
+
+fn perform_bridge_achievement_action(
+    input: SamAchievementActionInput,
+) -> Result<SamAchievementActionResult, String> {
+    let mut ids = normalized_achievement_ids(&input.achievement_ids);
+
+    if input.action == "restore_backup" {
+        let backup_path = input
+            .backup_path
+            .as_ref()
+            .ok_or("A backup path is required to restore achievement state.")?;
+        let backup = load_achievement_backup(backup_path)?;
+        if backup.app_id != input.app_id {
+            return Err(format!(
+                "Backup appId {} does not match requested appId {}.",
+                backup.app_id, input.app_id
+            ));
+        }
+        ids = backup
+            .achievements
+            .iter()
+            .filter(|state| state.valid)
+            .map(|state| state.api_name.clone())
+            .collect();
+    }
+
+    let mut bridge = SamSteamBridge::connect(&input.steam_path, input.app_id)?;
+    bridge.prepare_user_stats();
+
+    let available_names = bridge.achievement_names().unwrap_or_default();
+    if ids.is_empty() {
+        ids = available_names.clone();
+    }
+    ids = dedupe_strings(ids);
+
+    let backup_names = if available_names.is_empty() {
+        ids.clone()
+    } else {
+        available_names.clone()
+    };
+    let before_states = bridge.capture_states(&backup_names);
+    let before_backup = build_achievement_backup(input.app_id, &input.action, "before", before_states);
+    let before_backup_path = save_achievement_backup(&before_backup).ok();
+
+    let mut failed = Vec::new();
+    let mut changed = 0usize;
+
+    match input.action.as_str() {
+        "unlock" => {
+            for id in &ids {
+                if bridge.set_achievement(id, true) {
+                    changed += 1;
+                } else {
+                    failed.push(id.clone());
+                }
+            }
+        }
+        "lock" => {
+            for id in &ids {
+                if bridge.set_achievement(id, false) {
+                    changed += 1;
+                } else {
+                    failed.push(id.clone());
+                }
+            }
+        }
+        "unlock_all" => {
+            for id in &ids {
+                if bridge.set_achievement(id, true) {
+                    changed += 1;
+                } else {
+                    failed.push(id.clone());
+                }
+            }
+        }
+        "lock_all" => {
+            for id in &ids {
+                if bridge.set_achievement(id, false) {
+                    changed += 1;
+                } else {
+                    failed.push(id.clone());
+                }
+            }
+        }
+        "restore_backup" => {
+            let backup = load_achievement_backup(input.backup_path.as_deref().unwrap_or_default())?;
+            for state in backup.achievements.iter().filter(|state| state.valid) {
+                if bridge.set_achievement(&state.api_name, state.achieved) {
+                    changed += 1;
+                } else {
+                    failed.push(state.api_name.clone());
+                }
+            }
+        }
+        other => return Err(format!("Unsupported SAM achievement action: {other}")),
+    }
+
+    let store_stats = if changed > 0 {
+        bridge.store_stats()
+    } else {
+        true
+    };
+    bridge.run_callbacks_for(std::time::Duration::from_millis(800));
+
+    let after_states = bridge.capture_states(&backup_names);
+    let after_backup = build_achievement_backup(input.app_id, &input.action, "after", after_states);
+    let after_backup_path = save_achievement_backup(&after_backup).ok();
+
+    if changed > 0 && !store_stats {
+        return Err(format!(
+            "Steam rejected StoreStats after {changed} achievement change(s). Before backup: {}",
+            before_backup_path
+                .as_deref()
+                .unwrap_or("backup path unavailable")
+        ));
+    }
+
+    Ok(SamAchievementActionResult {
+        app_id: input.app_id,
+        action: input.action,
+        changed,
+        failed,
+        before_backup_path,
+        after_backup_path,
+        before: before_backup,
+        after: after_backup,
+        store_stats,
+        unlock_times_restorable: false,
+        message: "Achievement state updated. Backup contains unlock times for reference, but Steamworks does not expose an API to restore original unlock timestamps.".to_string(),
+    })
+}
+
+fn normalized_achievement_ids(ids: &[String]) -> Vec<String> {
+    dedupe_strings(
+        ids.iter()
+            .map(|id| id.trim())
+            .filter(|id| !id.is_empty())
+            .map(ToString::to_string)
+            .collect(),
+    )
+}
+
+fn dedupe_strings(values: Vec<String>) -> Vec<String> {
+    let mut seen = HashSet::new();
+    let mut deduped = Vec::new();
+    for value in values {
+        if seen.insert(value.clone()) {
+            deduped.push(value);
+        }
+    }
+    deduped
+}
+
+fn build_achievement_backup(
+    app_id: u64,
+    action: &str,
+    phase: &str,
+    achievements: Vec<SamAchievementState>,
+) -> SamAchievementBackup {
+    SamAchievementBackup {
+        version: 1,
+        app_id,
+        action: action.to_string(),
+        phase: phase.to_string(),
+        captured_at: chrono::Utc::now().to_rfc3339(),
+        can_restore_unlock_times: false,
+        note: "Steamworks exposes unlock timestamps for backup/reference, but does not expose a public API to set or restore original unlock timestamps.".to_string(),
+        achievements,
+    }
+}
+
+fn save_achievement_backup(backup: &SamAchievementBackup) -> Result<String, String> {
+    let base = crate::app_data_dir()
+        .ok_or("Could not resolve Repressurizer app data directory.")?
+        .join("sam_backups")
+        .join(backup.app_id.to_string());
+    fs::create_dir_all(&base)
+        .map_err(|error| format!("Failed to create SAM backup directory: {error}"))?;
+
+    let timestamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|error| error.to_string())?
+        .as_secs();
+    let filename = format!(
+        "{}-{}-{}.json",
+        timestamp,
+        sanitize_filename_part(&backup.action),
+        sanitize_filename_part(&backup.phase)
+    );
+    let path = base.join(filename);
+    let json = serde_json::to_string_pretty(backup).map_err(|error| error.to_string())?;
+    fs::write(&path, json).map_err(|error| format!("Failed to write SAM backup: {error}"))?;
+    Ok(path_to_string(path))
+}
+
+fn load_achievement_backup(path: &str) -> Result<SamAchievementBackup, String> {
+    let raw = fs::read_to_string(path).map_err(|error| format!("Failed to read backup: {error}"))?;
+    serde_json::from_str(&raw).map_err(|error| format!("Failed to parse backup: {error}"))
+}
+
+fn sanitize_filename_part(value: &str) -> String {
+    let sanitized = value
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || ch == '-' || ch == '_' {
+                ch
+            } else {
+                '-'
+            }
+        })
+        .collect::<String>();
+    let trimmed = sanitized.trim_matches('-');
+    if trimmed.is_empty() {
+        "action".to_string()
+    } else {
+        trimmed.to_string()
+    }
+}
+
+#[cfg(not(windows))]
+struct SamSteamBridge;
+
+#[cfg(not(windows))]
+impl SamSteamBridge {
+    fn connect(_steam_path: &str, _app_id: u64) -> Result<Self, String> {
+        Err("SAM achievement writes are currently Windows-only because they use Steam's local steamclient interface.".to_string())
+    }
+
+    fn prepare_user_stats(&mut self) {}
+    fn achievement_names(&self) -> Result<Vec<String>, String> {
+        Ok(Vec::new())
+    }
+    fn capture_states(&self, _ids: &[String]) -> Vec<SamAchievementState> {
+        Vec::new()
+    }
+    fn set_achievement(&self, _name: &str, _achieved: bool) -> bool {
+        false
+    }
+    fn store_stats(&self) -> bool {
+        false
+    }
+    fn run_callbacks_for(&self, _duration: std::time::Duration) {}
+}
+
+#[cfg(windows)]
+use windows_steam::SamSteamBridge;
+
+#[cfg(windows)]
+mod windows_steam {
+    use super::{find_steam_client_library, SamAchievementState};
+    use libloading::Library;
+    use std::ffi::{c_char, c_int, c_void, CStr, CString};
+    use std::mem;
+    use std::path::{Path, PathBuf};
+    use std::thread;
+    use std::time::{Duration, Instant};
+
+    const STEAM_CLIENT_VERSION: &[u8] = b"SteamClient018\0";
+    const STEAM_UTILS_VERSION: &[u8] = b"SteamUtils005\0";
+    const STEAM_USER_VERSION: &[u8] = b"SteamUser012\0";
+    const STEAM_USER_STATS_VERSION: &[u8] = b"STEAMUSERSTATS_INTERFACE_VERSION013\0";
+
+    type CreateInterface =
+        unsafe extern "C" fn(version: *const c_char, return_code: *mut c_int) -> *mut c_void;
+    type SteamBGetCallback =
+        unsafe extern "C" fn(pipe: c_int, message: *mut CallbackMessage, call: *mut c_int) -> bool;
+    type SteamFreeLastCallback = unsafe extern "C" fn(pipe: c_int) -> bool;
+
+    type CreateSteamPipe = unsafe extern "system" fn(this: *mut c_void) -> c_int;
+    type ReleaseSteamPipe = unsafe extern "system" fn(this: *mut c_void, pipe: c_int) -> bool;
+    type ConnectToGlobalUser = unsafe extern "system" fn(this: *mut c_void, pipe: c_int) -> c_int;
+    type ReleaseUser = unsafe extern "system" fn(this: *mut c_void, pipe: c_int, user: c_int);
+    type GetSteamUser =
+        unsafe extern "system" fn(*mut c_void, c_int, c_int, *const c_char) -> *mut c_void;
+    type GetSteamUtils = unsafe extern "system" fn(*mut c_void, c_int, *const c_char) -> *mut c_void;
+    type GetSteamUserStats =
+        unsafe extern "system" fn(*mut c_void, c_int, c_int, *const c_char) -> *mut c_void;
+
+    type GetAppId = unsafe extern "system" fn(*mut c_void) -> u32;
+    type GetSteamId = unsafe extern "system" fn(*mut c_void, *mut u64);
+    type RequestUserStats = unsafe extern "system" fn(*mut c_void, u64) -> u64;
+    type GetNumAchievements = unsafe extern "system" fn(*mut c_void) -> u32;
+    type GetAchievementName = unsafe extern "system" fn(*mut c_void, u32) -> *const c_char;
+    type GetAchievementAndUnlockTime =
+        unsafe extern "system" fn(*mut c_void, *const c_char, *mut bool, *mut u32) -> bool;
+    type SetAchievement = unsafe extern "system" fn(*mut c_void, *const c_char) -> bool;
+    type ClearAchievement = unsafe extern "system" fn(*mut c_void, *const c_char) -> bool;
+    type StoreStats = unsafe extern "system" fn(*mut c_void) -> bool;
+
+    #[repr(C)]
+    struct CallbackMessage {
+        user: c_int,
+        id: c_int,
+        param_pointer: *mut c_void,
+        param_size: c_int,
+    }
+
+    pub struct SamSteamBridge {
+        _library: Library,
+        steam_client: *mut c_void,
+        steam_user: *mut c_void,
+        steam_user_stats: *mut c_void,
+        pipe: c_int,
+        user: c_int,
+        steam_b_get_callback: SteamBGetCallback,
+        steam_free_last_callback: SteamFreeLastCallback,
+        release_user: ReleaseUser,
+        release_steam_pipe: ReleaseSteamPipe,
+    }
+
+    impl SamSteamBridge {
+        pub fn connect(steam_path: &str, app_id: u64) -> Result<Self, String> {
+            if app_id == 0 || app_id > u32::MAX as u64 {
+                return Err("A valid Steam appId is required.".to_string());
+            }
+
+            let steam_root = PathBuf::from(steam_path.trim());
+            let steam_client_path = find_steam_client_library(&steam_root)
+                .ok_or("Steam client library was not found under the configured Steam path.")?;
+            prepend_dll_search_path(&steam_root);
+            std::env::set_var("SteamAppId", app_id.to_string());
+            std::env::set_var("SteamGameId", app_id.to_string());
+
+            let library = unsafe { Library::new(&steam_client_path) }
+                .map_err(|error| format!("Failed to load steamclient: {error}"))?;
+            let create_interface = unsafe {
+                *library
+                    .get::<CreateInterface>(b"CreateInterface")
+                    .map_err(|error| format!("CreateInterface not found: {error}"))?
+            };
+            let steam_b_get_callback = unsafe {
+                *library
+                    .get::<SteamBGetCallback>(b"Steam_BGetCallback")
+                    .map_err(|error| format!("Steam_BGetCallback not found: {error}"))?
+            };
+            let steam_free_last_callback = unsafe {
+                *library
+                    .get::<SteamFreeLastCallback>(b"Steam_FreeLastCallback")
+                    .map_err(|error| format!("Steam_FreeLastCallback not found: {error}"))?
+            };
+
+            let steam_client =
+                unsafe { create_interface(STEAM_CLIENT_VERSION.as_ptr().cast(), std::ptr::null_mut()) };
+            if steam_client.is_null() {
+                return Err("Failed to create ISteamClient018.".to_string());
+            }
+
+            let create_steam_pipe =
+                unsafe { vfunc::<CreateSteamPipe>(steam_client, SteamClientFn::CreateSteamPipe as usize) };
+            let release_steam_pipe =
+                unsafe { vfunc::<ReleaseSteamPipe>(steam_client, SteamClientFn::ReleaseSteamPipe as usize) };
+            let connect_to_global_user = unsafe {
+                vfunc::<ConnectToGlobalUser>(steam_client, SteamClientFn::ConnectToGlobalUser as usize)
+            };
+            let release_user =
+                unsafe { vfunc::<ReleaseUser>(steam_client, SteamClientFn::ReleaseUser as usize) };
+            let get_steam_user =
+                unsafe { vfunc::<GetSteamUser>(steam_client, SteamClientFn::GetISteamUser as usize) };
+            let get_steam_utils =
+                unsafe { vfunc::<GetSteamUtils>(steam_client, SteamClientFn::GetISteamUtils as usize) };
+            let get_steam_user_stats = unsafe {
+                vfunc::<GetSteamUserStats>(steam_client, SteamClientFn::GetISteamUserStats as usize)
+            };
+
+            let pipe = unsafe { create_steam_pipe(steam_client) };
+            if pipe == 0 {
+                return Err("Failed to create Steam pipe.".to_string());
+            }
+            let user = unsafe { connect_to_global_user(steam_client, pipe) };
+            if user == 0 {
+                unsafe {
+                    release_steam_pipe(steam_client, pipe);
+                }
+                return Err("Failed to connect to the logged-in Steam user.".to_string());
+            }
+
+            let steam_utils =
+                unsafe { get_steam_utils(steam_client, pipe, STEAM_UTILS_VERSION.as_ptr().cast()) };
+            if steam_utils.is_null() {
+                unsafe {
+                    release_user(steam_client, pipe, user);
+                    release_steam_pipe(steam_client, pipe);
+                }
+                return Err("Failed to get ISteamUtils.".to_string());
+            }
+            let get_app_id = unsafe { vfunc::<GetAppId>(steam_utils, SteamUtilsFn::GetAppId as usize) };
+            let active_app_id = unsafe { get_app_id(steam_utils) };
+            if active_app_id != app_id as u32 {
+                unsafe {
+                    release_user(steam_client, pipe, user);
+                    release_steam_pipe(steam_client, pipe);
+                }
+                return Err(format!(
+                    "Steam initialized appId {active_app_id}, expected {app_id}."
+                ));
+            }
+
+            let steam_user = unsafe {
+                get_steam_user(steam_client, user, pipe, STEAM_USER_VERSION.as_ptr().cast())
+            };
+            if steam_user.is_null() {
+                unsafe {
+                    release_user(steam_client, pipe, user);
+                    release_steam_pipe(steam_client, pipe);
+                }
+                return Err("Failed to get ISteamUser.".to_string());
+            }
+
+            let steam_user_stats = unsafe {
+                get_steam_user_stats(
+                    steam_client,
+                    user,
+                    pipe,
+                    STEAM_USER_STATS_VERSION.as_ptr().cast(),
+                )
+            };
+            if steam_user_stats.is_null() {
+                unsafe {
+                    release_user(steam_client, pipe, user);
+                    release_steam_pipe(steam_client, pipe);
+                }
+                return Err("Failed to get ISteamUserStats.".to_string());
+            }
+
+            Ok(Self {
+                _library: library,
+                steam_client,
+                steam_user,
+                steam_user_stats,
+                pipe,
+                user,
+                steam_b_get_callback,
+                steam_free_last_callback,
+                release_user,
+                release_steam_pipe,
+            })
+        }
+
+        pub fn prepare_user_stats(&mut self) {
+            let get_steam_id =
+                unsafe { vfunc::<GetSteamId>(self.steam_user, SteamUserFn::GetSteamId as usize) };
+            let request_user_stats = unsafe {
+                vfunc::<RequestUserStats>(
+                    self.steam_user_stats,
+                    SteamUserStatsFn::RequestUserStats as usize,
+                )
+            };
+            let mut steam_id = 0u64;
+            unsafe {
+                get_steam_id(self.steam_user, &mut steam_id);
+            }
+            if steam_id != 0 {
+                unsafe {
+                    request_user_stats(self.steam_user_stats, steam_id);
+                }
+                self.run_callbacks_for(Duration::from_millis(1500));
+            }
+        }
+
+        pub fn achievement_names(&self) -> Result<Vec<String>, String> {
+            let get_num = unsafe {
+                vfunc::<GetNumAchievements>(
+                    self.steam_user_stats,
+                    SteamUserStatsFn::GetNumAchievements as usize,
+                )
+            };
+            let get_name = unsafe {
+                vfunc::<GetAchievementName>(
+                    self.steam_user_stats,
+                    SteamUserStatsFn::GetAchievementName as usize,
+                )
+            };
+
+            let count = unsafe { get_num(self.steam_user_stats) };
+            let mut names = Vec::new();
+            for index in 0..count {
+                let ptr = unsafe { get_name(self.steam_user_stats, index) };
+                if ptr.is_null() {
+                    continue;
+                }
+                let name = unsafe { CStr::from_ptr(ptr) }.to_string_lossy().into_owned();
+                if !name.trim().is_empty() {
+                    names.push(name);
+                }
+            }
+            Ok(names)
+        }
+
+        pub fn capture_states(&self, ids: &[String]) -> Vec<SamAchievementState> {
+            ids.iter()
+                .map(|id| {
+                    let (achieved, unlock_time, valid) = self.achievement_state(id);
+                    SamAchievementState {
+                        api_name: id.clone(),
+                        achieved,
+                        unlock_time: unlock_time as u64,
+                        valid,
+                    }
+                })
+                .collect()
+        }
+
+        pub fn set_achievement(&self, name: &str, achieved: bool) -> bool {
+            let Ok(name) = CString::new(name) else {
+                return false;
+            };
+            if achieved {
+                let set = unsafe {
+                    vfunc::<SetAchievement>(
+                        self.steam_user_stats,
+                        SteamUserStatsFn::SetAchievement as usize,
+                    )
+                };
+                unsafe { set(self.steam_user_stats, name.as_ptr()) }
+            } else {
+                let clear = unsafe {
+                    vfunc::<ClearAchievement>(
+                        self.steam_user_stats,
+                        SteamUserStatsFn::ClearAchievement as usize,
+                    )
+                };
+                unsafe { clear(self.steam_user_stats, name.as_ptr()) }
+            }
+        }
+
+        pub fn store_stats(&self) -> bool {
+            let store = unsafe {
+                vfunc::<StoreStats>(self.steam_user_stats, SteamUserStatsFn::StoreStats as usize)
+            };
+            unsafe { store(self.steam_user_stats) }
+        }
+
+        pub fn run_callbacks_for(&self, duration: Duration) {
+            let end = Instant::now() + duration;
+            while Instant::now() < end {
+                self.run_callbacks_once();
+                thread::sleep(Duration::from_millis(50));
+            }
+        }
+
+        fn run_callbacks_once(&self) {
+            loop {
+                let mut message = CallbackMessage {
+                    user: 0,
+                    id: 0,
+                    param_pointer: std::ptr::null_mut(),
+                    param_size: 0,
+                };
+                let mut call = 0;
+                let has_callback =
+                    unsafe { (self.steam_b_get_callback)(self.pipe, &mut message, &mut call) };
+                if !has_callback {
+                    break;
+                }
+                unsafe {
+                    (self.steam_free_last_callback)(self.pipe);
+                }
+            }
+        }
+
+        fn achievement_state(&self, name: &str) -> (bool, u32, bool) {
+            let Ok(name) = CString::new(name) else {
+                return (false, 0, false);
+            };
+            let get = unsafe {
+                vfunc::<GetAchievementAndUnlockTime>(
+                    self.steam_user_stats,
+                    SteamUserStatsFn::GetAchievementAndUnlockTime as usize,
+                )
+            };
+            let mut achieved = false;
+            let mut unlock_time = 0u32;
+            let valid = unsafe {
+                get(
+                    self.steam_user_stats,
+                    name.as_ptr(),
+                    &mut achieved,
+                    &mut unlock_time,
+                )
+            };
+            (achieved, unlock_time, valid)
+        }
+    }
+
+    impl Drop for SamSteamBridge {
+        fn drop(&mut self) {
+            unsafe {
+                if self.user != 0 {
+                    (self.release_user)(self.steam_client, self.pipe, self.user);
+                    self.user = 0;
+                }
+                if self.pipe != 0 {
+                    (self.release_steam_pipe)(self.steam_client, self.pipe);
+                    self.pipe = 0;
+                }
+            }
+        }
+    }
+
+    #[repr(usize)]
+    enum SteamClientFn {
+        CreateSteamPipe = 0,
+        ReleaseSteamPipe = 1,
+        ConnectToGlobalUser = 2,
+        ReleaseUser = 4,
+        GetISteamUser = 5,
+        GetISteamUtils = 9,
+        GetISteamUserStats = 13,
+    }
+
+    #[repr(usize)]
+    enum SteamUserFn {
+        GetSteamId = 2,
+    }
+
+    #[repr(usize)]
+    enum SteamUtilsFn {
+        GetAppId = 9,
+    }
+
+    #[repr(usize)]
+    enum SteamUserStatsFn {
+        SetAchievement = 6,
+        ClearAchievement = 7,
+        GetAchievementAndUnlockTime = 8,
+        StoreStats = 9,
+        GetNumAchievements = 13,
+        GetAchievementName = 14,
+        RequestUserStats = 15,
+    }
+
+    unsafe fn vfunc<T: Copy>(object: *mut c_void, index: usize) -> T {
+        let vtable = *(object as *const *const *const c_void);
+        let function = *vtable.add(index);
+        mem::transmute_copy(&function)
+    }
+
+    fn prepend_dll_search_path(steam_root: &Path) {
+        let mut paths = vec![steam_root.to_path_buf(), steam_root.join("bin")];
+        if let Some(current) = std::env::var_os("PATH") {
+            paths.extend(std::env::split_paths(&current));
+        }
+        if let Ok(joined) = std::env::join_paths(paths) {
+            std::env::set_var("PATH", joined);
+        }
+    }
 }
 
 fn capability(

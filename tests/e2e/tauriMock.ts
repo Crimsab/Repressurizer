@@ -186,6 +186,21 @@ export async function installTauriMock(page: Page) {
     window.localStorage.setItem("repressurizer-settings", JSON.stringify(settings));
     let autostartEnabled = settings.startOnLogin;
     const notifications: Array<{ title: string; body?: string }> = [];
+    const readSettings = () => {
+      try {
+        return {
+          ...settings,
+          ...JSON.parse(window.localStorage.getItem("repressurizer-settings") ?? "{}"),
+        };
+      } catch {
+        return settings;
+      }
+    };
+    const mockAchievementStates = () => [
+      { apiName: "ACH_START", achieved: true, unlockTime: 1_700_000_000, valid: true },
+      { apiName: "ACH_SECRET", achieved: false, unlockTime: 0, valid: true },
+      { apiName: "ACH_COMPLETE", achieved: false, unlockTime: 0, valid: true },
+    ];
 
     class MockNotification {
       static permission: NotificationPermission = "granted";
@@ -361,7 +376,11 @@ export async function installTauriMock(page: Page) {
             };
           case "fetch_achievements_summary":
             return [3, 1];
-          case "probe_sam_bridge":
+          case "probe_sam_bridge": {
+            const currentSettings = readSettings();
+            const ready =
+              currentSettings.steamToolsEnabled &&
+              currentSettings.steamToolsAchievementWritesEnabled;
             return {
               appId: Number(args?.appId ?? 0),
               platform: "windows",
@@ -369,16 +388,16 @@ export async function installTauriMock(page: Page) {
               referenceSource: "Steam Achievement Manager architecture",
               sourceLicense: "zlib-compatible architecture reference",
               dataSource: "samLocalBridge",
-              available: false,
-              readiness: "steamNotRunning",
+              available: ready,
+              readiness: ready ? "ready" : "steamNotRunning",
               bridgeInvoked: true,
               steamPathExists: true,
-              steamRunning: false,
+              steamRunning: ready,
               steamClientLibraryFound: true,
               steamClientLibraryPath: "C:\\\\Program Files (x86)\\\\Steam\\\\steamclient64.dll",
               localBridgeFound: true,
               localBridgePath: "C:\\\\Program Files\\\\Repressurizer\\\\Repressurizer.exe",
-              writesSteam: false,
+              writesSteam: ready,
               capabilities: [
                 {
                   id: "webApiAchievements",
@@ -397,20 +416,86 @@ export async function installTauriMock(page: Page) {
                 {
                   id: "samReadAchievements",
                   label: "SAM local achievement read",
-                  status: "blocked",
+                  status: ready ? "ready" : "blocked",
                   writesSteam: false,
-                  reason: "Requires the embedded bridge mode and running Steam before Repressurizer can read via Steamworks.",
+                  reason: ready
+                    ? "Steam client is available to the embedded bridge."
+                    : "Requires the embedded bridge mode and running Steam before Repressurizer can read via Steamworks.",
                 },
                 {
                   id: "samWriteAchievements",
                   label: "SAM unlock / lock",
-                  status: "locked",
+                  status: ready ? "ready" : "locked",
                   writesSteam: true,
-                  reason: "Requires the local bridge plus advanced write settings and per-action confirmation.",
+                  reason: ready
+                    ? "Achievement write actions are enabled and still require per-action confirmation."
+                    : "Requires the local bridge plus advanced write settings and per-action confirmation.",
                 },
               ],
-              notes: ["Steam does not appear to be running; SAM-style local reads require the Steam client and logged-in user."],
+              notes: ready
+                ? ["Embedded Repressurizer SAM bridge was invoked."]
+                : ["Steam does not appear to be running; SAM-style local reads require the Steam client and logged-in user."],
             };
+          }
+          case "sam_achievement_action": {
+            const input = args?.input as {
+              appId?: number;
+              action?: string;
+              achievementIds?: string[];
+            };
+            const action = input?.action ?? "unlock";
+            const requested = new Set(input?.achievementIds ?? []);
+            const after = mockAchievementStates().map((achievement) => {
+              const targeted =
+                action === "unlock_all" ||
+                action === "lock_all" ||
+                requested.has(achievement.apiName);
+              if (!targeted) return achievement;
+              const achieved = action === "unlock" || action === "unlock_all";
+              return {
+                ...achievement,
+                achieved,
+                unlockTime: achieved ? 1_777_777_777 : 0,
+              };
+            });
+            const changed = after.filter((achievement) => {
+              const before = mockAchievementStates().find(
+                (state) => state.apiName === achievement.apiName
+              );
+              return before?.achieved !== achievement.achieved;
+            }).length;
+            return {
+              appId: Number(input?.appId ?? 0),
+              action,
+              changed,
+              failed: [],
+              beforeBackupPath: "C:\\\\Users\\\\Crimsab\\\\AppData\\\\Roaming\\\\Repressurizer\\\\sam_backups\\\\1145360\\\\mock-before.json",
+              afterBackupPath: "C:\\\\Users\\\\Crimsab\\\\AppData\\\\Roaming\\\\Repressurizer\\\\sam_backups\\\\1145360\\\\mock-after.json",
+              before: {
+                version: 1,
+                appId: Number(input?.appId ?? 0),
+                action,
+                phase: "before",
+                capturedAt: "2026-06-20T12:00:00.000Z",
+                canRestoreUnlockTimes: false,
+                note: "Mock backup. Steamworks cannot restore original unlock timestamps.",
+                achievements: mockAchievementStates(),
+              },
+              after: {
+                version: 1,
+                appId: Number(input?.appId ?? 0),
+                action,
+                phase: "after",
+                capturedAt: "2026-06-20T12:00:01.000Z",
+                canRestoreUnlockTimes: false,
+                note: "Mock backup. Steamworks cannot restore original unlock timestamps.",
+                achievements: after,
+              },
+              storeStats: changed > 0,
+              unlockTimesRestorable: false,
+              message: "Mock achievement action stored.",
+            };
+          }
           default:
             return null;
         }

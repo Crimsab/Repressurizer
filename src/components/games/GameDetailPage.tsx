@@ -13,6 +13,7 @@ import {
   fetchHltb,
   currencyToCountryCode,
   probeSamBridge,
+  runSamAchievementAction,
 } from "../../lib/tauri";
 import { extractReleaseYear } from "../../lib/search";
 import { SteamImage } from "./SteamImage";
@@ -23,6 +24,8 @@ import type {
   AchievementSummary,
   AchievementInfo,
   SamBridgeProbe,
+  SamAchievementAction,
+  SamAchievementActionResult,
 } from "../../lib/types";
 import { useT, type TranslationKey } from "../../lib/i18n";
 import {
@@ -61,6 +64,7 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
     showDetailPrice,
     steamPath,
     steamToolsEnabled,
+    steamToolsAchievementWritesEnabled,
   } = useSettingsStore();
   const collections = useCategoryStore((s) => s.collections);
   const addGameToCategory = useCategoryStore((s) => s.addGameToCategory);
@@ -75,6 +79,9 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
   const [loadingAchievements, setLoadingAchievements] = useState(false);
   const [achError, setAchError] = useState("");
   const [samProbe, setSamProbe] = useState<SamBridgeProbe | null>(null);
+  const [samActionRunning, setSamActionRunning] = useState("");
+  const [samActionMessage, setSamActionMessage] = useState("");
+  const [samActionError, setSamActionError] = useState("");
   const [tab, setTab] = useState<"info" | "achievements">("info");
 
   const cachedAchievementSummary = useAchievementsStore((s) => s.summaries[game.appid]);
@@ -225,6 +232,84 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
     }
   };
 
+  const applySamResultToAchievements = useCallback(
+    (result: SamAchievementActionResult) => {
+      setAchievements((current) => {
+        if (!current) return current;
+        const states = new Map(
+          result.after.achievements
+            .filter((state) => state.valid)
+            .map((state) => [state.apiName, state])
+        );
+        if (states.size === 0) return current;
+
+        const nextAchievements = current.achievements.map((achievement) => {
+          const state = states.get(achievement.api_name);
+          if (!state) return achievement;
+          return {
+            ...achievement,
+            achieved: state.achieved,
+            unlock_time: state.unlockTime,
+          };
+        });
+        const next: AchievementSummary = {
+          total: current.total,
+          achieved: nextAchievements.filter((achievement) => achievement.achieved).length,
+          achievements: sortAchievements(nextAchievements),
+        };
+        useAchievementsStore.getState().setSummary(game.appid, next);
+        return next;
+      });
+    },
+    [game.appid]
+  );
+
+  const handleSamAchievementAction = useCallback(
+    async (action: SamAchievementAction, achievementIds: string[]) => {
+      const count = achievementIds.length;
+      const confirmMessage =
+        action === "unlock" || action === "unlock_all"
+          ? t("detail.sam.confirmUnlock", { count })
+          : t("detail.sam.confirmLock", { count });
+      if (!window.confirm(confirmMessage)) return;
+
+      setSamActionRunning(action);
+      setSamActionMessage("");
+      setSamActionError("");
+      try {
+        const result = await runSamAchievementAction({
+          steamPath,
+          appId: game.appid,
+          action,
+          achievementIds,
+          backupPath: null,
+        });
+        applySamResultToAchievements(result);
+        const backup = result.beforeBackupPath ?? t("common.unknown");
+        setSamActionMessage(
+          t("detail.sam.actionDone", {
+            count: result.changed,
+            backup,
+          })
+        );
+        void loadAchievementData(true);
+        void refreshSamProbe();
+      } catch (error) {
+        setSamActionError(String(error));
+      } finally {
+        setSamActionRunning("");
+      }
+    },
+    [
+      applySamResultToAchievements,
+      game.appid,
+      loadAchievementData,
+      refreshSamProbe,
+      steamPath,
+      t,
+    ]
+  );
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
@@ -347,6 +432,11 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
               percent={achPercent}
               samProbe={samProbe}
               steamToolsEnabled={steamToolsEnabled}
+              steamToolsAchievementWritesEnabled={steamToolsAchievementWritesEnabled}
+              samActionRunning={samActionRunning}
+              samActionMessage={samActionMessage}
+              samActionError={samActionError}
+              onSamAction={handleSamAchievementAction}
             />
           )}
         </div>
@@ -850,6 +940,11 @@ function AchievementsTab({
   percent,
   samProbe,
   steamToolsEnabled,
+  steamToolsAchievementWritesEnabled,
+  samActionRunning,
+  samActionMessage,
+  samActionError,
+  onSamAction,
 }: {
   achievements: AchievementSummary | null;
   loading: boolean;
@@ -857,6 +952,11 @@ function AchievementsTab({
   percent: number;
   samProbe: SamBridgeProbe | null;
   steamToolsEnabled: boolean;
+  steamToolsAchievementWritesEnabled: boolean;
+  samActionRunning: string;
+  samActionMessage: string;
+  samActionError: string;
+  onSamAction: (action: SamAchievementAction, achievementIds: string[]) => void;
 }) {
   const t = useT();
   const [search, setSearch] = useState("");
@@ -902,10 +1002,34 @@ function AchievementsTab({
           a.description.toLowerCase().includes(q)
       )
     : achievements.achievements;
+  const unlockedIds = achievements.achievements
+    .filter((achievement) => achievement.achieved)
+    .map((achievement) => achievement.api_name);
+  const lockedIds = achievements.achievements
+    .filter((achievement) => !achievement.achieved)
+    .map((achievement) => achievement.api_name);
+  const canWrite =
+    steamToolsEnabled &&
+    steamToolsAchievementWritesEnabled &&
+    !!samProbe?.available &&
+    !!samProbe?.writesSteam &&
+    !samActionRunning;
 
   return (
     <div className="space-y-4">
-      {steamToolsEnabled && <SamBridgePanel probe={samProbe} />}
+      {steamToolsEnabled && (
+        <SamBridgePanel
+          probe={samProbe}
+          writesEnabled={steamToolsAchievementWritesEnabled}
+          runningAction={samActionRunning}
+          message={samActionMessage}
+          error={samActionError}
+          lockedCount={lockedIds.length}
+          unlockedCount={unlockedIds.length}
+          onUnlockAll={() => onSamAction("unlock_all", lockedIds)}
+          onLockAll={() => onSamAction("lock_all", unlockedIds)}
+        />
+      )}
 
       {/* Progress bar */}
       <div className="rounded-xl bg-repressurizer-bg p-4 border border-repressurizer-border-subtle">
@@ -949,7 +1073,14 @@ function AchievementsTab({
           </p>
         ) : (
           filtered.map((ach) => (
-            <AchievementRow key={ach.api_name} achievement={ach} />
+            <AchievementRow
+              key={ach.api_name}
+              achievement={ach}
+              canWrite={canWrite}
+              onToggle={() =>
+                onSamAction(ach.achieved ? "lock" : "unlock", [ach.api_name])
+              }
+            />
           ))
         )}
       </div>
@@ -959,11 +1090,30 @@ function AchievementsTab({
 
 function SamBridgePanel({
   probe,
+  writesEnabled,
+  runningAction,
+  message,
+  error,
+  lockedCount,
+  unlockedCount,
+  onUnlockAll,
+  onLockAll,
 }: {
   probe: SamBridgeProbe | null;
+  writesEnabled: boolean;
+  runningAction: string;
+  message: string;
+  error: string;
+  lockedCount: number;
+  unlockedCount: number;
+  onUnlockAll: () => void;
+  onLockAll: () => void;
 }) {
   const t = useT();
   const readiness = samReadinessLabel(t, probe);
+  const canWrite = writesEnabled && !!probe?.available && !!probe?.writesSteam && !runningAction;
+  const lockBlocked = !canWrite || unlockedCount === 0;
+  const unlockBlocked = !canWrite || lockedCount === 0;
 
   return (
     <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg p-4">
@@ -972,7 +1122,9 @@ function SamBridgePanel({
           <Wrench size={17} weight="duotone" className="mt-0.5 shrink-0 text-repressurizer-accent" />
           <div className="min-w-0">
             <h3 className="text-sm font-semibold text-repressurizer-text">{t("detail.sam.title")}</h3>
-            <p className="mt-1 text-xs leading-relaxed text-repressurizer-text-faint">{t("detail.sam.desc")}</p>
+            <p className="mt-1 text-xs leading-relaxed text-repressurizer-text-faint">
+              {writesEnabled ? t("detail.sam.writeDesc") : t("detail.sam.desc")}
+            </p>
           </div>
         </div>
         <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium ${probe?.available ? "border-repressurizer-success/30 bg-repressurizer-success/10 text-repressurizer-success" : "border-repressurizer-border bg-repressurizer-surface text-repressurizer-text-muted"}`}>
@@ -993,6 +1145,48 @@ function SamBridgePanel({
         />
       </div>
 
+      <div className="mt-3 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-surface/40 p-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs font-medium text-repressurizer-text">{t("detail.sam.writeActions")}</p>
+            <p className="mt-0.5 text-[11px] leading-relaxed text-repressurizer-text-faint">
+              {!writesEnabled
+                ? t("detail.sam.enableWrites")
+                : probe?.available
+                  ? t("detail.sam.backupNote")
+                  : t("detail.sam.bridgeRequired")}
+            </p>
+          </div>
+          <div className="flex shrink-0 flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={onUnlockAll}
+              disabled={unlockBlocked}
+              className="btn-press rounded-lg border border-repressurizer-border bg-repressurizer-bg px-3 py-1.5 text-xs font-medium text-repressurizer-text transition-colors hover:border-repressurizer-accent hover:text-repressurizer-accent disabled:opacity-40"
+            >
+              {runningAction === "unlock_all" ? t("detail.sam.working") : t("detail.sam.unlockAll", { count: lockedCount })}
+            </button>
+            <button
+              type="button"
+              onClick={onLockAll}
+              disabled={lockBlocked}
+              className="btn-press rounded-lg border border-repressurizer-border bg-repressurizer-bg px-3 py-1.5 text-xs font-medium text-repressurizer-text transition-colors hover:border-repressurizer-danger hover:text-repressurizer-danger disabled:opacity-40"
+            >
+              {runningAction === "lock_all" ? t("detail.sam.working") : t("detail.sam.lockAll", { count: unlockedCount })}
+            </button>
+          </div>
+        </div>
+        {message && (
+          <p className="mt-2 rounded-lg border border-repressurizer-success/20 bg-repressurizer-success/10 px-3 py-2 text-xs text-repressurizer-success">
+            {message}
+          </p>
+        )}
+        {error && (
+          <p className="mt-2 rounded-lg border border-repressurizer-danger/20 bg-repressurizer-danger/10 px-3 py-2 text-xs text-repressurizer-danger">
+            {error}
+          </p>
+        )}
+      </div>
     </div>
   );
 }
@@ -1012,7 +1206,15 @@ function samReadinessLabel(t: ReturnType<typeof useT>, probe: SamBridgeProbe | n
   return t(`steamTools.sam.readiness.${probe.readiness}` as TranslationKey);
 }
 
-function AchievementRow({ achievement }: { achievement: AchievementInfo }) {
+function AchievementRow({
+  achievement,
+  canWrite,
+  onToggle,
+}: {
+  achievement: AchievementInfo;
+  canWrite: boolean;
+  onToggle: () => void;
+}) {
   const t = useT();
   const unlockDate = achievement.unlock_time
     ? new Date(achievement.unlock_time * 1000).toLocaleDateString()
@@ -1062,8 +1264,31 @@ function AchievementRow({ achievement }: { achievement: AchievementInfo }) {
           {t("detail.locked")}
         </span>
       )}
+      {canWrite && (
+        <button
+          type="button"
+          onClick={onToggle}
+          className={`btn-press shrink-0 rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-colors ${
+            achievement.achieved
+              ? "border-repressurizer-border text-repressurizer-text-muted hover:border-repressurizer-danger hover:text-repressurizer-danger"
+              : "border-repressurizer-accent/40 bg-repressurizer-accent/10 text-repressurizer-accent hover:bg-repressurizer-accent/15"
+          }`}
+        >
+          {achievement.achieved ? t("detail.sam.lock") : t("detail.sam.unlock")}
+        </button>
+      )}
     </div>
   );
+}
+
+function sortAchievements(achievements: AchievementInfo[]): AchievementInfo[] {
+  return [...achievements].sort((a, b) => matchAchievementOrder(a, b));
+}
+
+function matchAchievementOrder(a: AchievementInfo, b: AchievementInfo): number {
+  if (a.achieved !== b.achieved) return a.achieved ? -1 : 1;
+  if (a.achieved && b.achieved) return b.unlock_time - a.unlock_time;
+  return a.name.localeCompare(b.name);
 }
 
 function StatCard({ label, value, icon }: { label: string; value: string; icon: React.ReactNode }) {
