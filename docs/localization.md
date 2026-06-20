@@ -37,11 +37,35 @@ Before opening a PR, run:
 
 ```bash
 bun run i18n:check
+bun run i18n:status
 bun run check
 ```
 
 `i18n:check` fails on missing keys, extra keys, or placeholder mismatches. It
 also prints likely hardcoded UI strings that should be moved into the catalog.
+
+`i18n:status` prints a compact translation coverage table, including values
+that still match English and probably need translation. Add `--details` to list
+the affected keys per locale.
+
+## Localization Status
+
+Run `bun run i18n:status` to print the current table, or `bun run i18n:status:write` to refresh this generated block.
+
+<!-- localization-status:start -->
+Canonical locale: `en`. Total canonical keys: 796.
+
+| Locale | Key coverage | Translated coverage | English fallback | Missing | Extra | Placeholder issues |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `en` | 100.0% | 100.0% | 0 | 0 | 0 | 0 |
+| `de` | 100.0% | 82.7% | 138 | 0 | 0 | 0 |
+| `es` | 100.0% | 84.3% | 125 | 0 | 0 | 0 |
+| `fr` | 100.0% | 83.4% | 132 | 0 | 0 | 0 |
+| `it` | 100.0% | 97.4% | 21 | 0 | 0 | 0 |
+| `pl` | 100.0% | 84.0% | 127 | 0 | 0 | 0 |
+| `tr` | 100.0% | 84.7% | 122 | 0 | 0 | 0 |
+| `zh-CN` | 100.0% | 85.3% | 117 | 0 | 0 | 0 |
+<!-- localization-status:end -->
 
 ## Current Locales
 
