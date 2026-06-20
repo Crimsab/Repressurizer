@@ -1,3 +1,13 @@
+//! Local Steam Achievement Manager integration.
+//!
+//! Credits and reference:
+//! - Steam Achievement Manager by Rick (gibbed)
+//! - Repository: https://github.com/gibbed/SteamAchievementManager
+//! - Original SAM license: zlib license
+//!
+//! Repressurizer's SAM support is an independent Rust implementation inspired by
+//! SAM's Steamworks architecture. This file does not vendor SAM source code.
+
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fs;
@@ -8,9 +18,11 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-const SAM_SOURCE: &str = "Repressurizer SAM bridge";
-const SAM_REFERENCE_SOURCE: &str = "Steam Achievement Manager architecture";
-const SAM_LICENSE: &str = "zlib-compatible architecture reference";
+const SAM_SOURCE: &str = "Repressurizer SAM integration";
+const SAM_REFERENCE_SOURCE: &str =
+    "Steam Achievement Manager by Rick (gibbed): https://github.com/gibbed/SteamAchievementManager";
+const SAM_LICENSE: &str =
+    "Original Steam Achievement Manager project: zlib license; Repressurizer implementation: independent Rust integration";
 const EMBEDDED_BRIDGE_ARG: &str = "--repressurizer-sam-bridge";
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
