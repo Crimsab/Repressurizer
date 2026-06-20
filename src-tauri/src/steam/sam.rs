@@ -16,7 +16,8 @@ use std::io::{Read, Write};
 use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::thread;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 const SAM_SOURCE: &str = "Repressurizer SAM integration";
 const SAM_REFERENCE_SOURCE: &str =
@@ -24,6 +25,7 @@ const SAM_REFERENCE_SOURCE: &str =
 const SAM_LICENSE: &str =
     "Original Steam Achievement Manager project: zlib license; Repressurizer implementation: independent Rust integration";
 const EMBEDDED_BRIDGE_ARG: &str = "--repressurizer-sam-bridge";
+const SAM_ACTION_RUNNER_TIMEOUT: Duration = Duration::from_secs(45);
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
 
@@ -381,6 +383,9 @@ fn run_bridge_achievement_action(
     let mut child = command
         .arg(EMBEDDED_BRIDGE_ARG)
         .arg("achievement-action")
+        .env_remove("SteamAppId")
+        .env_remove("SteamGameId")
+        .env_remove("SteamOverlayGameId")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -392,6 +397,37 @@ fn run_bridge_achievement_action(
         stdin
             .write_all(&payload)
             .map_err(|error| format!("Failed to write SAM action input: {error}"))?;
+    }
+
+    wait_for_bridge_child(child, SAM_ACTION_RUNNER_TIMEOUT)
+}
+
+fn wait_for_bridge_child(
+    mut child: std::process::Child,
+    timeout: Duration,
+) -> Result<SamAchievementActionResult, String> {
+    let started = Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => break,
+            Ok(None) if started.elapsed() < timeout => thread::sleep(Duration::from_millis(50)),
+            Ok(None) => {
+                let _ = child.kill();
+                let output = child.wait_with_output().map_err(|error| {
+                    format!("SAM action runner timed out and could not be collected: {error}")
+                })?;
+                let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+                return Err(if stderr.is_empty() {
+                    format!("SAM action runner timed out after {}s.", timeout.as_secs())
+                } else {
+                    format!(
+                        "SAM action runner timed out after {}s. {stderr}",
+                        timeout.as_secs()
+                    )
+                });
+            }
+            Err(error) => return Err(format!("Failed to poll SAM action runner: {error}")),
+        }
     }
 
     let output = child
@@ -467,8 +503,7 @@ fn perform_bridge_achievement_action(
         format!("target_count={}", ids.len()),
         format!("steam_initialized_app_id={active_app_id}"),
         format!("request_user_stats_before={initial_stats_requested}"),
-        "SteamAppId is scoped to the hidden SAM runner; SteamGameId is not set by Repressurizer."
-            .to_string(),
+        "Hidden SAM runner clears inherited SteamAppId, SteamGameId, and SteamOverlayGameId before setting the target SteamAppId.".to_string(),
     ];
     let mut attempted = 0usize;
     let target_set: HashSet<String> = ids.iter().cloned().collect();
@@ -917,6 +952,8 @@ mod windows_steam {
         shutdown_if_all_pipes_closed: ShutdownIfAllPipesClosed,
         active_app_id: u32,
         _steam_app_id_env: ScopedEnvVar,
+        _steam_game_id_env: ScopedEnvVar,
+        _steam_overlay_game_id_env: ScopedEnvVar,
     }
 
     impl SamSteamBridge {
@@ -930,6 +967,8 @@ mod windows_steam {
                 .ok_or("Steam client library was not found under the configured Steam path.")?;
             prepend_dll_search_path(&steam_root);
             let steam_app_id_env = ScopedEnvVar::set("SteamAppId", app_id.to_string());
+            let steam_game_id_env = ScopedEnvVar::remove("SteamGameId");
+            let steam_overlay_game_id_env = ScopedEnvVar::remove("SteamOverlayGameId");
 
             let library = unsafe { Library::new(&steam_client_path) }
                 .map_err(|error| format!("Failed to load steamclient: {error}"))?;
@@ -1061,6 +1100,8 @@ mod windows_steam {
                 shutdown_if_all_pipes_closed,
                 active_app_id,
                 _steam_app_id_env: steam_app_id_env,
+                _steam_game_id_env: steam_game_id_env,
+                _steam_overlay_game_id_env: steam_overlay_game_id_env,
             })
         }
 
@@ -1226,6 +1267,12 @@ mod windows_steam {
         fn set(key: &'static str, value: String) -> Self {
             let previous = std::env::var_os(key);
             std::env::set_var(key, value);
+            Self { key, previous }
+        }
+
+        fn remove(key: &'static str) -> Self {
+            let previous = std::env::var_os(key);
+            std::env::remove_var(key);
             Self { key, previous }
         }
     }
@@ -1631,6 +1678,21 @@ mod tests {
                 "ACH_MISSING:actual=missing,desired=true".to_string(),
             ]
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn bridge_child_timeout_reports_hung_runner() {
+        let child = Command::new("sh")
+            .arg("-c")
+            .arg("sleep 2")
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+
+        let error = wait_for_bridge_child(child, Duration::from_millis(10)).unwrap_err();
+        assert!(error.contains("timed out"));
     }
 
     fn temp_dir(name: &str) -> PathBuf {
