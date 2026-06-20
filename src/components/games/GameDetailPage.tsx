@@ -1269,7 +1269,7 @@ function AchievementsTab({
       )}
 
       {/* Achievement list */}
-      <div className="space-y-1 overflow-y-auto pr-1" style={{ maxHeight: "min(42vh, 520px)" }}>
+      <div className="space-y-1 pr-1" data-achievement-list>
         {filtered.length === 0 ? (
           <p className="py-4 text-center text-sm text-repressurizer-text-muted">
             {t("detail.noAchievementMatches", { query: search })}

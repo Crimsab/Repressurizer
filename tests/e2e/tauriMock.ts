@@ -196,11 +196,46 @@ export async function installTauriMock(page: Page) {
         return settings;
       }
     };
-    const mockAchievementStates = () => [
-      { apiName: "ACH_START", achieved: true, unlockTime: 1_700_000_000, valid: true },
-      { apiName: "ACH_SECRET", achieved: false, unlockTime: 0, valid: true },
-      { apiName: "ACH_COMPLETE", achieved: false, unlockTime: 0, valid: true },
-    ];
+    const mockAchievementStates = () => {
+      const count = Number(window.localStorage.getItem("repressurizer-achievement-count") ?? 3);
+      if (count <= 3) {
+        return [
+          { apiName: "ACH_START", achieved: true, unlockTime: 1_700_000_000, valid: true },
+          { apiName: "ACH_SECRET", achieved: false, unlockTime: 0, valid: true },
+          { apiName: "ACH_COMPLETE", achieved: false, unlockTime: 0, valid: true },
+        ];
+      }
+      return Array.from({ length: count }, (_, index) => ({
+        apiName: `ACH_CAT_${index + 1}`,
+        achieved: index === 0,
+        unlockTime: index === 0 ? 1_700_000_000 : 0,
+        valid: true,
+      }));
+    };
+    const mockAchievements = () =>
+      mockAchievementStates().map((state, index) => ({
+        api_name: state.apiName,
+        name:
+          state.apiName === "ACH_START"
+            ? "Begin"
+            : state.apiName === "ACH_SECRET"
+              ? "Secret route"
+              : state.apiName === "ACH_COMPLETE"
+                ? "Complete"
+                : `Cat ${index + 1}`,
+        description:
+          state.apiName === "ACH_START"
+            ? "Start the game."
+            : state.apiName === "ACH_SECRET"
+              ? "Find a hidden route."
+              : state.apiName === "ACH_COMPLETE"
+                ? "Finish the game."
+                : "ok",
+        achieved: state.achieved,
+        unlock_time: state.unlockTime,
+        icon: null,
+        icon_gray: null,
+      }));
 
     class MockNotification {
       static permission: NotificationPermission = "granted";
@@ -346,61 +381,22 @@ export async function installTauriMock(page: Page) {
             return { main_story: 12, main_extra: 18, completionist: 30 };
           case "fetch_achievements":
             return {
-              total: 3,
-              achieved: 1,
-              achievements: [
-                {
-                  api_name: "ACH_START",
-                  name: "Begin",
-                  description: "Start the game.",
-                  achieved: true,
-                  unlock_time: 1_700_000_000,
-                  icon: null,
-                  icon_gray: null,
-                },
-                {
-                  api_name: "ACH_SECRET",
-                  name: "Secret route",
-                  description: "Find a hidden route.",
-                  achieved: false,
-                  unlock_time: 0,
-                  icon: null,
-                  icon_gray: null,
-                },
-                {
-                  api_name: "ACH_COMPLETE",
-                  name: "Complete",
-                  description: "Finish the game.",
-                  achieved: false,
-                  unlock_time: 0,
-                  icon: null,
-                  icon_gray: null,
-                },
-              ],
+              total: mockAchievements().length,
+              achieved: mockAchievements().filter((achievement) => achievement.achieved).length,
+              achievements: mockAchievements(),
             };
           case "fetch_achievements_summary":
-            return [3, 1];
-          case "load_sam_achievement_schema":
             return [
-              {
-                apiName: "ACH_START",
-                permission: 0,
-                protectedAchievement: false,
-                flags: ["None"],
-              },
-              {
-                apiName: "ACH_SECRET",
-                permission: 0,
-                protectedAchievement: false,
-                flags: ["None"],
-              },
-              {
-                apiName: "ACH_COMPLETE",
-                permission: 0,
-                protectedAchievement: false,
-                flags: ["None"],
-              },
+              mockAchievementStates().length,
+              mockAchievementStates().filter((achievement) => achievement.achieved).length,
             ];
+          case "load_sam_achievement_schema":
+            return mockAchievementStates().map((achievement) => ({
+              apiName: achievement.apiName,
+              permission: 0,
+              protectedAchievement: false,
+              flags: ["None"],
+            }));
           case "probe_sam_bridge": {
             const currentSettings = readSettings();
             const ready =

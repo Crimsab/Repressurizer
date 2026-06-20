@@ -251,6 +251,46 @@ test("multi-select achievement writes act on selected locked achievements", asyn
   await expectNoHorizontalOverflow(page);
 });
 
+test("long achievement multi-select does not create a nested blank scroll panel", async ({ page }, testInfo) => {
+  await page.addInitScript(() => {
+    const raw = window.localStorage.getItem("repressurizer-settings");
+    if (!raw) return;
+    const settings = JSON.parse(raw);
+    settings.steamToolsEnabled = true;
+    settings.steamToolsAchievementWritesEnabled = true;
+    window.localStorage.setItem("repressurizer-settings", JSON.stringify(settings));
+    window.localStorage.setItem("repressurizer-achievement-count", "24");
+  });
+
+  await page.goto("/");
+
+  await page.locator(".game-card").filter({ hasText: "Hades" }).dblclick();
+  const detail = page.locator(".fixed.inset-0").filter({
+    has: page.getByRole("heading", { name: "Hades" }),
+  });
+  await detail.getByRole("button", { name: /Achievements/ }).click();
+
+  await detail.getByRole("button", { name: "Locked", exact: true }).click();
+  await expect(detail.getByText("23 selected")).toBeVisible();
+  await expect(detail.getByRole("button", { name: "Unlock selected (23)" })).toBeVisible();
+
+  const listMetrics = await detail.locator("[data-achievement-list]").evaluate((element) => {
+    const styles = window.getComputedStyle(element);
+    return {
+      overflowY: styles.overflowY,
+      clientHeight: element.clientHeight,
+      scrollHeight: element.scrollHeight,
+    };
+  });
+  expect(listMetrics.overflowY).toBe("visible");
+  expect(listMetrics.scrollHeight).toBe(listMetrics.clientHeight);
+
+  await expectNoHorizontalOverflow(page);
+  const screenshotPath = testInfo.outputPath("long-achievement-multi-select.png");
+  await page.screenshot({ path: screenshotPath, fullPage: true });
+  await testInfo.attach("long-achievement-multi-select", { path: screenshotPath, contentType: "image/png" });
+});
+
 test("achievement write controls stay visible while SAM action is running", async ({ page }) => {
   await page.addInitScript(() => {
     const raw = window.localStorage.getItem("repressurizer-settings");
