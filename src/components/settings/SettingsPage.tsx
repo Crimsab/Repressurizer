@@ -62,6 +62,10 @@ import {
   CloudArrowDown,
   UsersThree,
   MagnifyingGlass,
+  Cards,
+  LockKey,
+  SteamLogo,
+  Trophy,
 } from "@phosphor-icons/react";
 import { ACCENT_PRESETS, applyAccentColor, applyTheme } from "../../stores/settingsStore";
 import { getLocaleDisplayName, getLocaleFlag, normalizeLocale, SUPPORTED_LOCALES, useT } from "../../lib/i18n";
@@ -485,6 +489,17 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
           t("settings.family.tokenLabel"),
           t("settings.family.includeNonGames"),
           "family shared library token webapi",
+        ],
+      },
+      {
+        id: "steamtools",
+        tab: "steam" as const,
+        label: t("settings.steamTools"),
+        keywords: [
+          t("settings.steamTools"),
+          t("settings.steamTools.achievementWrites"),
+          t("settings.steamTools.cardFarming"),
+          "sam achievement unlock lock stats card farming idle xpaw steam tools lab",
         ],
       },
       {
@@ -913,6 +928,94 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                       {t("settings.family.cachedData", { date: new Date(familyLastFetched).toLocaleString() })}
                     </p>
                   )}
+                </div>
+              </div>
+              )}
+
+              {/* Steam Tools */}
+              {isSectionVisible("steamtools") && (
+              <div className="space-y-3">
+                <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("settings.steamTools")}</h3>
+                <div className="space-y-3">
+                  <ToggleRow
+                    icon={<SteamLogo size={15} weight="duotone" />}
+                    label={t("settings.steamTools")}
+                    description={t("settings.steamTools.desc")}
+                    checked={settings.steamToolsEnabled}
+                    onChange={(v) => settings.setSettings({ steamToolsEnabled: v })}
+                  />
+                  <ToggleRow
+                    icon={<Trophy size={15} weight="duotone" />}
+                    label={t("settings.steamTools.achievementWrites")}
+                    description={t("settings.steamTools.achievementWrites.desc")}
+                    checked={settings.steamToolsEnabled && settings.steamToolsAchievementWritesEnabled}
+                    onChange={(v) =>
+                      settings.setSettings({
+                        steamToolsEnabled: v ? true : settings.steamToolsEnabled,
+                        steamToolsAchievementWritesEnabled: v,
+                      })
+                    }
+                  />
+                  <ToggleRow
+                    icon={<Cards size={15} weight="duotone" />}
+                    label={t("settings.steamTools.cardFarming")}
+                    description={t("settings.steamTools.cardFarming.desc")}
+                    checked={settings.steamToolsEnabled && settings.steamToolsCardFarmingEnabled}
+                    onChange={(v) =>
+                      settings.setSettings({
+                        steamToolsEnabled: v ? true : settings.steamToolsEnabled,
+                        steamToolsCardFarmingEnabled: v,
+                      })
+                    }
+                  />
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <LockKey size={15} weight="duotone" className="text-repressurizer-text-faint" />
+                          <p className="truncate text-sm text-repressurizer-text">{t("settings.steamTools.maxConcurrent")}</p>
+                        </div>
+                        <span className="font-mono text-sm text-repressurizer-accent tabular-nums">
+                          {settings.steamToolsMaxConcurrentIdleApps ?? 8}
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min={1}
+                        max={32}
+                        step={1}
+                        value={settings.steamToolsMaxConcurrentIdleApps ?? 8}
+                        onChange={(e) => settings.setSettings({ steamToolsMaxConcurrentIdleApps: Number(e.target.value) })}
+                        className="mt-3 w-full accent-repressurizer-accent"
+                      />
+                      <p className="mt-2 text-xs leading-relaxed text-repressurizer-text-faint">
+                        {t("settings.steamTools.maxConcurrent.desc")}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <Timer size={15} weight="duotone" className="text-repressurizer-text-faint" />
+                          <p className="truncate text-sm text-repressurizer-text">{t("settings.steamTools.minPlaytime")}</p>
+                        </div>
+                        <span className="font-mono text-sm text-repressurizer-accent tabular-nums">
+                          {settings.steamToolsMinPlaytimeMinutes ?? 180}m
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min={0}
+                        max={300}
+                        step={15}
+                        value={settings.steamToolsMinPlaytimeMinutes ?? 180}
+                        onChange={(e) => settings.setSettings({ steamToolsMinPlaytimeMinutes: Number(e.target.value) })}
+                        className="mt-3 w-full accent-repressurizer-accent"
+                      />
+                      <p className="mt-2 text-xs leading-relaxed text-repressurizer-text-faint">
+                        {t("settings.steamTools.minPlaytime.desc")}
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
               )}

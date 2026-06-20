@@ -106,6 +106,26 @@ test("play history shows tracked deltas instead of lifetime playtime", async ({ 
   await expect(timeline.getByText("30.0h")).toBeHidden();
 });
 
+test("opens the Steam Tools lab surface", async ({ page }, testInfo) => {
+  await page.goto("/");
+
+  await page.getByTitle("Steam Tools").click();
+
+  const steamTools = page.locator(".fixed.inset-0").filter({
+    has: page.getByRole("heading", { name: "Steam Tools" }),
+  });
+  await expect(steamTools.getByRole("heading", { name: "Steam Tools" })).toBeVisible();
+  await expect(steamTools.getByRole("heading", { name: "Achievement Manager" })).toBeVisible();
+  await expect(steamTools.getByRole("heading", { name: "Card Farming" })).toBeVisible();
+  await expect(steamTools.getByRole("heading", { name: "Bridge architecture" })).toBeVisible();
+  await expect(steamTools.getByRole("button", { name: "Open achievements" })).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+
+  const screenshotPath = testInfo.outputPath("steam-tools.png");
+  await page.screenshot({ path: screenshotPath, fullPage: true });
+  await testInfo.attach("steam-tools", { path: screenshotPath, contentType: "image/png" });
+});
+
 test("opens organized settings tabs, automation logs, and Steam controls without layout overflow", async ({ page }, testInfo) => {
   await page.goto("/");
   await page.getByTitle("Settings").click();
@@ -126,6 +146,7 @@ test("opens organized settings tabs, automation logs, and Steam controls without
 
   await settingsDialog.getByRole("button", { name: "Steam", exact: true }).click();
   await expect(settingsDialog.getByRole("heading", { name: "Steam Family" })).toBeVisible();
+  await expect(settingsDialog.getByRole("heading", { name: "Steam Tools" })).toBeVisible();
   await expect(settingsDialog.getByText("Steam Web API Key", { exact: true })).toBeVisible();
   const apiKeyInput = settingsDialog.locator('input[type="password"]').last();
   const apiSaveButton = settingsDialog.getByRole("button", { name: "Save", exact: true });

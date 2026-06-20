@@ -16,6 +16,7 @@ import { ExportDialog } from "../export/ExportDialog";
 import { AutoCategorizeDialog } from "../categories/AutoCategorizeDialog";
 import { StatsPage } from "../stats/StatsPage";
 import { AchievementsPage } from "../achievements/AchievementsPage";
+import { SteamToolsPage } from "../steam-tools/SteamToolsPage";
 import { WishlistPage } from "../wishlist/WishlistPage";
 import { FriendCompareDialog } from "../friends/FriendCompareDialog";
 import { WhatToPlayNext } from "../recommend/WhatToPlayNext";
@@ -36,6 +37,7 @@ import {
   Robot,
   ChartBar,
   Trophy,
+  SteamLogo,
   BookmarkSimple,
   UsersThree,
   GameController,
@@ -106,6 +108,7 @@ export function Header() {
   const [showAutoCat, setShowAutoCat] = useState(false);
   const [showStats, setShowStats] = useState(false);
   const [showAchievements, setShowAchievements] = useState(false);
+  const [showSteamTools, setShowSteamTools] = useState(false);
   const [showWishlist, setShowWishlist] = useState(false);
   const [showFriendCompare, setShowFriendCompare] = useState(false);
   const [showRecommend, setShowRecommend] = useState(false);
@@ -337,6 +340,15 @@ export function Header() {
             <Trophy size={16} />
           </button>
 
+          {/* Steam Tools */}
+          <button
+            onClick={() => setShowSteamTools(true)}
+            title={t("toolbar.steamTools")}
+            className="btn-press flex items-center justify-center w-8 h-8 rounded-lg text-repressurizer-text-muted transition-colors hover:text-white hover:bg-repressurizer-surface-hover"
+          >
+            <SteamLogo size={16} />
+          </button>
+
           {/* Wishlist */}
           <button
             onClick={() => setShowWishlist(true)}
@@ -403,6 +415,15 @@ export function Header() {
       </header>
 
       {showAchievements && <AchievementsPage onClose={() => setShowAchievements(false)} />}
+      {showSteamTools && (
+        <SteamToolsPage
+          onClose={() => setShowSteamTools(false)}
+          onOpenAchievements={() => {
+            setShowSteamTools(false);
+            setShowAchievements(true);
+          }}
+        />
+      )}
       {showWishlist && <WishlistPage onClose={() => setShowWishlist(false)} />}
       {showFriendCompare && <FriendCompareDialog onClose={() => setShowFriendCompare(false)} />}
       {showStats && <StatsPage onClose={() => setShowStats(false)} />}

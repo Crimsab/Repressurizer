@@ -117,6 +117,12 @@ export interface AppSettings {
   // Fetch settings
   hltbConcurrency: number;
   achievementsConcurrency: number;
+  // Steam Tools lab
+  steamToolsEnabled: boolean;
+  steamToolsAchievementWritesEnabled: boolean;
+  steamToolsCardFarmingEnabled: boolean;
+  steamToolsMaxConcurrentIdleApps: number;
+  steamToolsMinPlaytimeMinutes: number;
   // Currency
   currency: string;
   // Onboarding
