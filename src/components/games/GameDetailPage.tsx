@@ -456,7 +456,7 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
       className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/70 p-4 backdrop-blur-sm"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="flex max-h-[90vh] min-h-0 w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_24px_64px_rgba(0,0,0,0.6)] animate-fade-in">
+      <div className="flex max-h-[90vh] min-h-0 w-full max-w-4xl flex-col overflow-clip rounded-2xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_24px_64px_rgba(0,0,0,0.6)] animate-fade-in">
         {/* Header image + overlay */}
         <div className="relative h-48 shrink-0 overflow-hidden bg-repressurizer-bg">
           <SteamImage
@@ -1723,6 +1723,7 @@ function AchievementRow({
 
   return (
     <div
+      data-achievement-row
       className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors ${
         selected
           ? "border-repressurizer-accent/80 bg-repressurizer-bg"
@@ -1732,20 +1733,20 @@ function AchievementRow({
       }`}
     >
       {selectable && (
-        <label
+        <button
+          type="button"
+          role="checkbox"
+          aria-checked={selected}
           className={`btn-press flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-repressurizer-border bg-repressurizer-surface text-repressurizer-accent transition-colors hover:border-repressurizer-accent ${busy ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`}
           aria-label={t("detail.sam.selectAchievement", { name: achievement.name })}
-          onClick={(event) => event.stopPropagation()}
+          disabled={busy}
+          onClick={(event) => {
+            event.stopPropagation();
+            onSelectToggle();
+          }}
         >
-          <input
-            type="checkbox"
-            checked={selected}
-            disabled={busy}
-            onChange={onSelectToggle}
-            className="sr-only"
-          />
           {selected && <Check size={15} weight="bold" />}
-        </label>
+        </button>
       )}
 
       {/* Icon */}

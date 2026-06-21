@@ -277,7 +277,7 @@ test("multi-select achievement writes act on selected locked achievements", asyn
   await detail.getByRole("button", { name: /Achievements/ }).click();
 
   await expect(detail.getByText("0 selected")).toBeHidden();
-  await expect(detail.getByLabel("Select Secret route")).toBeVisible();
+  await expect(detail.getByRole("checkbox", { name: "Select Secret route" })).toBeVisible();
   await detail.getByRole("button", { name: "Locked", exact: true }).click();
   await expect(detail.getByText("2 selected")).toBeVisible();
   await expect(detail.getByRole("button", { name: "Unlock selected (2)" })).toBeVisible();
@@ -345,6 +345,70 @@ test("long achievement multi-select does not create a nested blank scroll panel"
   await testInfo.attach("long-achievement-multi-select", { path: screenshotPath, contentType: "image/png" });
 });
 
+test("manual achievement checkbox selection does not scroll the modal shell", async ({ page }, testInfo) => {
+  await page.addInitScript(() => {
+    const raw = window.localStorage.getItem("repressurizer-settings");
+    if (!raw) return;
+    const settings = JSON.parse(raw);
+    settings.steamToolsEnabled = true;
+    settings.steamToolsAchievementWritesEnabled = true;
+    window.localStorage.setItem("repressurizer-settings", JSON.stringify(settings));
+    window.localStorage.setItem("repressurizer-achievement-count", "100");
+  });
+
+  await page.goto("/");
+
+  await page.locator(".game-card").filter({ hasText: "Hades" }).dblclick();
+  const detail = page.locator(".fixed.inset-0").filter({
+    has: page.getByRole("heading", { name: "Hades" }),
+  });
+  await detail.getByRole("button", { name: /Achievements/ }).click();
+
+  const readMetrics = async () =>
+    detail.locator("[data-game-detail-scroll]").evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      const shell = element.closest(".max-w-4xl") as HTMLElement | null;
+      const visibleRows = Array.from(document.querySelectorAll("[data-achievement-row]"))
+        .filter((row) => {
+          const rowRect = row.getBoundingClientRect();
+          return rowRect.bottom > rect.top && rowRect.top < rect.bottom;
+        }).length;
+      return {
+        shellScrollTop: shell?.scrollTop ?? 0,
+        rectTop: rect.top,
+        rectBottom: rect.bottom,
+        visibleRows,
+        activeTag: document.activeElement?.tagName ?? "",
+        activeClass: String(document.activeElement?.className ?? ""),
+      };
+    });
+
+  const start = await readMetrics();
+  expect(start.shellScrollTop).toBe(0);
+  expect(start.rectTop).toBeGreaterThan(0);
+
+  await detail.getByRole("checkbox", { name: "Select Cat 2", exact: true }).click();
+  await detail.getByRole("checkbox", { name: "Select Cat 3", exact: true }).click();
+  await detail.getByRole("checkbox", { name: "Select Cat 4", exact: true }).click();
+  await detail.locator("[data-game-detail-scroll]").evaluate((element) => {
+    element.scrollTop = 900;
+  });
+  await detail.getByRole("checkbox", { name: "Select Cat 20", exact: true }).click();
+
+  const after = await readMetrics();
+  expect(after.shellScrollTop).toBe(0);
+  expect(Math.abs(after.rectTop - start.rectTop)).toBeLessThan(1);
+  expect(after.visibleRows).toBeGreaterThan(4);
+  expect(after.activeTag).toBe("BUTTON");
+  expect(after.activeClass).not.toContain("sr-only");
+  await expect(detail.getByText("4 selected")).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+
+  const screenshotPath = testInfo.outputPath("manual-achievement-checkbox-selection.png");
+  await page.screenshot({ path: screenshotPath, fullPage: true });
+  await testInfo.attach("manual-achievement-checkbox-selection", { path: screenshotPath, contentType: "image/png" });
+});
+
 test("achievement write controls stay visible while SAM action is running", async ({ page }) => {
   await page.addInitScript(() => {
     const raw = window.localStorage.getItem("repressurizer-settings");
@@ -371,7 +435,7 @@ test("achievement write controls stay visible while SAM action is running", asyn
   await detail.getByRole("button", { name: "Unlock selected (2)" }).click();
 
   await expect(detail.getByText("2 selected")).toBeVisible();
-  await expect(detail.getByLabel("Select Secret route")).toBeVisible();
+  await expect(detail.getByRole("checkbox", { name: "Select Secret route" })).toBeVisible();
   await expect(detail.getByRole("button", { name: "Working..." })).toBeVisible();
   await expect(detail.getByRole("button", { name: "Locked", exact: true })).toBeDisabled();
   await expect(detail.getByRole("button", { name: "Unlock all (2)" })).toBeDisabled();
