@@ -494,6 +494,17 @@ export async function installTauriMock(page: Page) {
                 unlockedCount: 1,
                 canRestoreUnlockTimes: false,
               },
+              {
+                filename: "mock-lock-after.json",
+                path: "C:\\\\Users\\\\Crimsab\\\\AppData\\\\Roaming\\\\Repressurizer\\\\sam_backups\\\\1145360\\\\mock-lock-after.json",
+                appId: Number(args?.appId ?? 0),
+                action: "lock_selected",
+                phase: "after",
+                capturedAt: "2026-06-19T10:30:00.000Z",
+                achievementCount: mockAchievementStates().length,
+                unlockedCount: 0,
+                canRestoreUnlockTimes: false,
+              },
             ];
           case "open_sam_backup_dir":
             window.localStorage.setItem(

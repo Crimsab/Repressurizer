@@ -188,7 +188,7 @@ test("achievement write controls require explicit Steam Tools write opt-in", asy
   await expectNoHorizontalOverflow(page);
 });
 
-test("SAM backup buttons show the in-app backup viewer and restore a selected snapshot", async ({ page }) => {
+test("SAM backup buttons show the in-app backup viewer and restore a selected snapshot", async ({ page }, testInfo) => {
   await page.addInitScript(() => {
     const raw = window.localStorage.getItem("repressurizer-settings");
     if (!raw) return;
@@ -208,11 +208,36 @@ test("SAM backup buttons show the in-app backup viewer and restore a selected sn
 
   await detail.getByRole("button", { name: "Backups" }).click();
   const backupViewer = page.locator(".fixed.inset-0").filter({
-    has: page.getByRole("heading", { name: "SAM backups" }),
+    has: page.getByRole("heading", { name: "SAM backups for Hades" }),
   });
-  await expect(backupViewer.getByRole("heading", { name: "SAM backups" })).toBeVisible();
+  await expect(backupViewer.getByRole("heading", { name: "SAM backups for Hades" })).toBeVisible();
+  await expect(backupViewer.locator("[data-sam-backup-count]")).toContainText("Steam app 1145360");
+  await expect(backupViewer.locator("[data-sam-backup-count]")).toContainText("3 of 3 shown");
   await expect(backupViewer.getByText("mock-before.json")).toBeVisible();
   await expect(backupViewer.getByText("mock-after.json")).toBeVisible();
+  await expect(backupViewer.getByText("mock-lock-after.json")).toBeVisible();
+
+  await backupViewer.getByLabel("Action").selectOption("lock");
+  await expect(backupViewer.getByText("mock-lock-after.json")).toBeVisible();
+  await expect(backupViewer.getByText("mock-before.json")).toBeHidden();
+  await expect(backupViewer.locator("[data-sam-backup-count]")).toContainText("1 of 3 shown");
+
+  await backupViewer.getByLabel("Action").selectOption("all");
+  await backupViewer.getByLabel("Phase").selectOption("before");
+  await expect(backupViewer.getByText("mock-before.json")).toBeVisible();
+  await expect(backupViewer.getByText("mock-after.json")).toBeHidden();
+
+  await backupViewer.getByLabel("Phase").selectOption("all");
+  await backupViewer.getByPlaceholder("Search date, action, filename...").fill("mock-after");
+  await expect(backupViewer.getByText("mock-after.json")).toBeVisible();
+  await expect(backupViewer.getByText("mock-before.json")).toBeHidden();
+
+  await backupViewer.getByPlaceholder("Search date, action, filename...").fill("");
+  await backupViewer.getByLabel("Sort").selectOption("oldest");
+  await expect(backupViewer.locator("[data-sam-backup-row]").first()).toContainText("mock-lock-after.json");
+  const screenshotPath = testInfo.outputPath("sam-backup-viewer-filters.png");
+  await page.screenshot({ path: screenshotPath, fullPage: true });
+  await testInfo.attach("sam-backup-viewer-filters", { path: screenshotPath, contentType: "image/png" });
 
   await backupViewer.getByRole("button", { name: "Open folder" }).click();
   await expect
@@ -221,7 +246,11 @@ test("SAM backup buttons show the in-app backup viewer and restore a selected sn
     )
     .toBe("1145360");
 
-  await backupViewer.getByRole("button", { name: "Restore backup" }).last().click();
+  await backupViewer
+    .locator("[data-sam-backup-row]")
+    .filter({ hasText: "mock-before.json" })
+    .getByRole("button", { name: "Restore backup" })
+    .click();
   await expect
     .poll(() => page.evaluate(() => window.localStorage.getItem("repressurizer-last-sam-action")))
     .toBe("restore_backup");

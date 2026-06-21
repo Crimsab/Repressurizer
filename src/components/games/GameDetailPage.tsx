@@ -586,6 +586,8 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
       </div>
       {samBackupsOpen && (
         <SamBackupViewerDialog
+          gameName={String(game.name ?? "")}
+          appId={game.appid}
           backups={samBackups}
           loading={samBackupsLoading}
           error={samBackupsError}
@@ -1552,6 +1554,8 @@ function SamBridgePanel({
 }
 
 function SamBackupViewerDialog({
+  gameName,
+  appId,
   backups,
   loading,
   error,
@@ -1561,6 +1565,8 @@ function SamBackupViewerDialog({
   onRestore,
   onOpenFolder,
 }: {
+  gameName: string;
+  appId: number;
   backups: SamBackupInfo[];
   loading: boolean;
   error: string;
@@ -1571,6 +1577,52 @@ function SamBackupViewerDialog({
   onOpenFolder: () => void;
 }) {
   const t = useT();
+  const [query, setQuery] = useState("");
+  const [dayFilter, setDayFilter] = useState("all");
+  const [phaseFilter, setPhaseFilter] = useState("all");
+  const [actionFilter, setActionFilter] = useState("all");
+  const [sortMode, setSortMode] = useState("newest");
+
+  const backupDays = useMemo(() => {
+    const byDay = new Map<string, string>();
+    for (const backup of backups) {
+      const key = samBackupDayKey(backup.capturedAt);
+      if (!key || byDay.has(key)) continue;
+      byDay.set(key, formatSamBackupDay(backup.capturedAt));
+    }
+    return [...byDay.entries()].map(([value, label]) => ({ value, label }));
+  }, [backups]);
+
+  const filteredBackups = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    return backups
+      .filter((backup) => {
+        if (dayFilter !== "all" && samBackupDayKey(backup.capturedAt) !== dayFilter) return false;
+        if (phaseFilter !== "all" && backup.phase !== phaseFilter) return false;
+        if (actionFilter !== "all" && samBackupActionFamily(backup.action) !== actionFilter) return false;
+        if (!normalizedQuery) return true;
+        return [
+          backup.filename,
+          backup.action,
+          backup.phase,
+          formatSamBackupDate(backup.capturedAt),
+          formatSamBackupDay(backup.capturedAt),
+          gameName,
+          String(appId),
+          String(backup.achievementCount),
+          String(backup.unlockedCount),
+        ]
+          .join(" ")
+          .toLowerCase()
+          .includes(normalizedQuery);
+      })
+      .sort((a, b) => {
+        if (sortMode === "oldest") return samBackupTime(a.capturedAt) - samBackupTime(b.capturedAt);
+        if (sortMode === "unlocked") return b.unlockedCount - a.unlockedCount || samBackupTime(b.capturedAt) - samBackupTime(a.capturedAt);
+        if (sortMode === "filename") return a.filename.localeCompare(b.filename);
+        return samBackupTime(b.capturedAt) - samBackupTime(a.capturedAt);
+      });
+  }, [actionFilter, appId, backups, dayFilter, gameName, phaseFilter, query, sortMode]);
 
   return (
     <div
@@ -1579,14 +1631,21 @@ function SamBackupViewerDialog({
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <div className="flex w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_18px_56px_rgba(0,0,0,0.55)]" style={{ maxHeight: "min(680px, 82vh)" }}>
+      <div className="flex w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_18px_56px_rgba(0,0,0,0.55)]" style={{ maxHeight: "min(760px, 86vh)" }} data-sam-backup-viewer>
         <div className="flex shrink-0 items-start justify-between gap-4 border-b border-repressurizer-border px-5 py-4">
           <div className="min-w-0">
             <h3 className="text-base font-semibold text-repressurizer-text">
-              {t("detail.sam.backupsTitle")}
+              {t("detail.sam.backupsFor", { name: gameName })}
             </h3>
             <p className="mt-1 text-xs leading-relaxed text-repressurizer-text-muted">
               {t("detail.sam.backupsDesc")}
+            </p>
+            <p className="mt-1 font-mono text-[11px] text-repressurizer-text-faint" data-sam-backup-count>
+              {t("detail.sam.backupsMeta", {
+                appId,
+                shown: filteredBackups.length,
+                total: backups.length,
+              })}
             </p>
           </div>
           <button
@@ -1599,25 +1658,85 @@ function SamBackupViewerDialog({
           </button>
         </div>
 
-        <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-repressurizer-border-subtle px-5 py-3">
-          <button
-            type="button"
-            onClick={onRefresh}
-            disabled={loading || restoring}
-            className="btn-press inline-flex items-center gap-1.5 rounded-lg border border-repressurizer-border bg-repressurizer-bg px-3 py-1.5 text-xs font-medium text-repressurizer-text-muted transition-colors hover:text-repressurizer-text disabled:opacity-40"
-          >
-            <ArrowsClockwise size={13} className={loading ? "animate-spin" : ""} />
-            {t("settings.refresh")}
-          </button>
-          <button
-            type="button"
-            onClick={onOpenFolder}
-            disabled={loading || restoring}
-            className="btn-press inline-flex items-center gap-1.5 rounded-lg border border-repressurizer-border bg-repressurizer-bg px-3 py-1.5 text-xs font-medium text-repressurizer-text-muted transition-colors hover:text-repressurizer-text disabled:opacity-40"
-          >
-            <FolderOpen size={13} weight="bold" />
-            {t("detail.sam.openBackupFolder")}
-          </button>
+        <div className="shrink-0 space-y-3 border-b border-repressurizer-border-subtle px-5 py-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative min-w-[220px] flex-1">
+              <MagnifyingGlass
+                size={14}
+                weight="bold"
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-repressurizer-text-faint"
+              />
+              <input
+                type="search"
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder={t("detail.sam.searchBackups")}
+                className="h-9 w-full rounded-lg border border-repressurizer-border bg-repressurizer-bg pl-9 pr-3 text-sm text-repressurizer-text placeholder:text-repressurizer-text-faint transition-colors focus:border-repressurizer-accent focus:outline-none"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={onRefresh}
+              disabled={loading || restoring}
+              className="btn-press inline-flex h-9 items-center gap-1.5 rounded-lg border border-repressurizer-border bg-repressurizer-bg px-3 text-xs font-medium text-repressurizer-text-muted transition-colors hover:text-repressurizer-text disabled:opacity-40"
+            >
+              <ArrowsClockwise size={13} className={loading ? "animate-spin" : ""} />
+              {t("settings.refresh")}
+            </button>
+            <button
+              type="button"
+              onClick={onOpenFolder}
+              disabled={loading || restoring}
+              className="btn-press inline-flex h-9 items-center gap-1.5 rounded-lg border border-repressurizer-border bg-repressurizer-bg px-3 text-xs font-medium text-repressurizer-text-muted transition-colors hover:text-repressurizer-text disabled:opacity-40"
+            >
+              <FolderOpen size={13} weight="bold" />
+              {t("detail.sam.openBackupFolder")}
+            </button>
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-4">
+            <SamBackupSelect
+              label={t("detail.sam.filterDay")}
+              value={dayFilter}
+              onChange={setDayFilter}
+              options={[
+                { value: "all", label: t("detail.sam.filterDayAll") },
+                ...backupDays,
+              ]}
+            />
+            <SamBackupSelect
+              label={t("detail.sam.filterPhase")}
+              value={phaseFilter}
+              onChange={setPhaseFilter}
+              options={[
+                { value: "all", label: t("detail.sam.filterPhaseAll") },
+                { value: "before", label: t("detail.sam.backupPhaseBefore") },
+                { value: "after", label: t("detail.sam.backupPhaseAfter") },
+              ]}
+            />
+            <SamBackupSelect
+              label={t("detail.sam.filterAction")}
+              value={actionFilter}
+              onChange={setActionFilter}
+              options={[
+                { value: "all", label: t("detail.sam.filterActionAll") },
+                { value: "unlock", label: t("detail.sam.actionUnlock") },
+                { value: "lock", label: t("detail.sam.actionLock") },
+                { value: "restore", label: t("detail.sam.actionRestore") },
+              ]}
+            />
+            <SamBackupSelect
+              label={t("detail.sam.sortBackups")}
+              value={sortMode}
+              onChange={setSortMode}
+              options={[
+                { value: "newest", label: t("detail.sam.sortNewest") },
+                { value: "oldest", label: t("detail.sam.sortOldest") },
+                { value: "unlocked", label: t("detail.sam.sortUnlocked") },
+                { value: "filename", label: t("detail.sam.sortFilename") },
+              ]}
+            />
+          </div>
         </div>
 
         <div className="min-h-0 overflow-y-auto p-4" data-sam-backup-list>
@@ -1635,11 +1754,16 @@ function SamBackupViewerDialog({
             <p className="rounded-lg border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-8 text-center text-sm text-repressurizer-text-muted">
               {t("detail.sam.noBackups")}
             </p>
+          ) : filteredBackups.length === 0 ? (
+            <p className="rounded-lg border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-8 text-center text-sm text-repressurizer-text-muted">
+              {t("detail.sam.noBackupMatches")}
+            </p>
           ) : (
             <div className="space-y-2">
-              {backups.map((backup) => (
+              {filteredBackups.map((backup) => (
                 <div
                   key={backup.path}
+                  data-sam-backup-row
                   className="flex items-center justify-between gap-3 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-bg px-3 py-2.5"
                 >
                   <div className="min-w-0">
@@ -1682,15 +1806,69 @@ function SamBackupViewerDialog({
   );
 }
 
+function SamBackupSelect({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: Array<{ value: string; label: string }>;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="block min-w-0">
+      <span className="mb-1 block text-[10px] font-medium uppercase tracking-wider text-repressurizer-text-faint">
+        {label}
+      </span>
+      <select
+        aria-label={label}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="h-9 w-full rounded-lg border border-repressurizer-border bg-repressurizer-bg px-3 pr-8 text-xs font-medium text-repressurizer-text transition-colors focus:border-repressurizer-accent focus:outline-none"
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+function samBackupTime(value: string): number {
+  const time = new Date(value).getTime();
+  return Number.isNaN(time) ? 0 : time;
+}
+
+function samBackupDayKey(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
+}
+
 function formatSamBackupDate(value: string): string {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+}
+
+function formatSamBackupDay(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString();
 }
 
 function samBackupPhaseLabel(t: ReturnType<typeof useT>, phase: string): string {
   if (phase === "before") return t("detail.sam.backupPhaseBefore");
   if (phase === "after") return t("detail.sam.backupPhaseAfter");
   return phase || t("common.unknown");
+}
+
+function samBackupActionFamily(action: string): string {
+  if (action.startsWith("unlock")) return "unlock";
+  if (action.startsWith("lock")) return "lock";
+  if (action.startsWith("restore")) return "restore";
+  return action || "other";
 }
 
 function samReadinessLabel(t: ReturnType<typeof useT>, probe: SamBridgeProbe | null): string {
