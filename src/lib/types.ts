@@ -153,6 +153,18 @@ export interface SamAchievementBackup {
   achievements: SamAchievementState[];
 }
 
+export interface SamBackupInfo {
+  filename: string;
+  path: string;
+  appId: number;
+  action: string;
+  phase: string;
+  capturedAt: string;
+  achievementCount: number;
+  unlockedCount: number;
+  canRestoreUnlockTimes: boolean;
+}
+
 export interface SamAchievementActionResult {
   appId: number;
   action: SamAchievementAction | string;

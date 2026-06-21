@@ -106,6 +106,20 @@ pub struct SamAchievementBackup {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct SamBackupInfo {
+    pub filename: String,
+    pub path: String,
+    pub app_id: u64,
+    pub action: String,
+    pub phase: String,
+    pub captured_at: String,
+    pub achievement_count: usize,
+    pub unlocked_count: usize,
+    pub can_restore_unlock_times: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SamAchievementActionResult {
     pub app_id: u64,
     pub action: String,
@@ -146,9 +160,7 @@ pub fn sam_achievement_action(
 
 #[tauri::command]
 pub fn sam_backup_dir(app_id: u64) -> Result<String, String> {
-    if app_id == 0 || app_id > u32::MAX as u64 {
-        return Err("A valid Steam appId is required.".to_string());
-    }
+    validate_app_id(app_id)?;
     let path = sam_backup_base_dir(app_id)?;
     fs::create_dir_all(&path)
         .map_err(|error| format!("Failed to create SAM backup directory: {error}"))?;
@@ -156,10 +168,64 @@ pub fn sam_backup_dir(app_id: u64) -> Result<String, String> {
 }
 
 #[tauri::command]
-pub fn open_sam_backup_dir(app_id: u64) -> Result<(), String> {
-    if app_id == 0 || app_id > u32::MAX as u64 {
-        return Err("A valid Steam appId is required.".to_string());
+pub fn list_sam_backups(app_id: u64) -> Result<Vec<SamBackupInfo>, String> {
+    validate_app_id(app_id)?;
+    let base = sam_backup_base_dir(app_id)?;
+    fs::create_dir_all(&base)
+        .map_err(|error| format!("Failed to create SAM backup directory: {error}"))?;
+
+    let mut backups = Vec::new();
+    for entry in fs::read_dir(&base)
+        .map_err(|error| format!("Failed to list SAM backup directory: {error}"))?
+    {
+        let entry = entry.map_err(|error| format!("Failed to read SAM backup entry: {error}"))?;
+        let path = entry.path();
+        if path
+            .extension()
+            .and_then(|extension| extension.to_str())
+            .map(|extension| !extension.eq_ignore_ascii_case("json"))
+            .unwrap_or(true)
+        {
+            continue;
+        }
+
+        let backup = match load_achievement_backup(&path_to_string(path.clone())) {
+            Ok(backup) if backup.app_id == app_id => backup,
+            _ => continue,
+        };
+        let filename = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .unwrap_or_default()
+            .to_string();
+        backups.push(SamBackupInfo {
+            filename,
+            path: path_to_string(path),
+            app_id: backup.app_id,
+            action: backup.action,
+            phase: backup.phase,
+            captured_at: backup.captured_at,
+            achievement_count: backup.achievements.len(),
+            unlocked_count: backup
+                .achievements
+                .iter()
+                .filter(|achievement| achievement.valid && achievement.achieved)
+                .count(),
+            can_restore_unlock_times: backup.can_restore_unlock_times,
+        });
     }
+
+    backups.sort_by(|a, b| {
+        b.captured_at
+            .cmp(&a.captured_at)
+            .then_with(|| b.filename.cmp(&a.filename))
+    });
+    Ok(backups)
+}
+
+#[tauri::command]
+pub fn open_sam_backup_dir(app_id: u64) -> Result<(), String> {
+    validate_app_id(app_id)?;
     let path = sam_backup_base_dir(app_id)?;
     fs::create_dir_all(&path)
         .map_err(|error| format!("Failed to create SAM backup directory: {error}"))?;
@@ -258,9 +324,7 @@ fn run_embedded_bridge_achievement_action() -> Result<String, String> {
 }
 
 fn validate_achievement_action_input(input: &SamAchievementActionInput) -> Result<(), String> {
-    if input.app_id == 0 || input.app_id > u32::MAX as u64 {
-        return Err("A valid Steam appId is required.".to_string());
-    }
+    validate_app_id(input.app_id)?;
 
     match input.action.as_str() {
         "unlock" | "lock" => {
@@ -294,6 +358,13 @@ fn validate_achievement_action_input(input: &SamAchievementActionInput) -> Resul
         return Err("A backup path is required to restore achievement state.".to_string());
     }
 
+    Ok(())
+}
+
+fn validate_app_id(app_id: u64) -> Result<(), String> {
+    if app_id == 0 || app_id > u32::MAX as u64 {
+        return Err("A valid Steam appId is required.".to_string());
+    }
     Ok(())
 }
 

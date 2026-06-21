@@ -1,6 +1,7 @@
 import { useCallback, useState, useEffect, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
 import { open as openPath } from "@tauri-apps/plugin-shell";
-import { confirm as confirmDialog, open as openFileDialog } from "@tauri-apps/plugin-dialog";
+import { confirm as confirmDialog } from "@tauri-apps/plugin-dialog";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useGameStore } from "../../stores/gameStore";
 import { useCategoryStore } from "../../stores/categoryStore";
@@ -13,7 +14,7 @@ import {
   fetchAchievements,
   fetchHltb,
   currencyToCountryCode,
-  getSamBackupDir,
+  listSamBackups,
   loadSamAchievementSchema,
   openSamBackupDir,
   probeSamBridge,
@@ -31,6 +32,7 @@ import type {
   SamAchievementSchemaItem,
   SamAchievementAction,
   SamAchievementActionResult,
+  SamBackupInfo,
 } from "../../lib/types";
 import { useT, type TranslationKey } from "../../lib/i18n";
 import {
@@ -43,6 +45,7 @@ import {
   Lock,
   MagnifyingGlass,
   Wrench,
+  FolderOpen,
   Trash,
   WindowsLogo,
   LinuxLogo,
@@ -88,6 +91,10 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
   const [samActionMessage, setSamActionMessage] = useState("");
   const [samActionError, setSamActionError] = useState("");
   const [samSchemaKey, setSamSchemaKey] = useState("");
+  const [samBackupsOpen, setSamBackupsOpen] = useState(false);
+  const [samBackups, setSamBackups] = useState<SamBackupInfo[]>([]);
+  const [samBackupsLoading, setSamBackupsLoading] = useState(false);
+  const [samBackupsError, setSamBackupsError] = useState("");
   const [tab, setTab] = useState<"info" | "achievements">("info");
 
   const cachedAchievementSummary = useAchievementsStore((s) => s.summaries[game.appid]);
@@ -398,35 +405,58 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
     ]
   );
 
-  const handleOpenSamBackups = useCallback(async () => {
+  const loadSamBackupList = useCallback(async () => {
+    setSamBackupsLoading(true);
+    setSamBackupsError("");
     try {
-      await openSamBackupDir(game.appid);
+      setSamBackups(await listSamBackups(game.appid));
     } catch (error) {
-      setSamActionError(String(error));
+      setSamBackupsError(String(error));
+    } finally {
+      setSamBackupsLoading(false);
     }
   }, [game.appid]);
 
-  const handleRestoreSamBackup = useCallback(async () => {
-    try {
-      const backupDir = await getSamBackupDir(game.appid);
-      const selected = await openFileDialog({
-        multiple: false,
-        defaultPath: backupDir,
-        filters: [{ name: "SAM backup", extensions: ["json"] }],
-      });
-      if (typeof selected !== "string") return;
-      await handleSamAchievementAction("restore_backup", [], selected);
-    } catch (error) {
-      setSamActionError(String(error));
-    }
-  }, [handleSamAchievementAction]);
+  const handleOpenSamBackups = useCallback(async () => {
+    setSamBackupsOpen(true);
+    await loadSamBackupList();
+  }, [loadSamBackupList]);
 
-  return (
+  const handleRestoreSamBackup = useCallback(async () => {
+    setSamBackupsOpen(true);
+    await loadSamBackupList();
+  }, [loadSamBackupList]);
+
+  const handleRestoreSamBackupFromList = useCallback(
+    async (backup: SamBackupInfo) => {
+      const completed = await handleSamAchievementAction(
+        "restore_backup",
+        [],
+        backup.path
+      );
+      if (completed) {
+        setSamBackupsOpen(false);
+      } else {
+        await loadSamBackupList();
+      }
+    },
+    [handleSamAchievementAction, loadSamBackupList]
+  );
+
+  const handleOpenSamBackupFolder = useCallback(async () => {
+    try {
+      await openSamBackupDir(game.appid);
+    } catch (error) {
+      setSamBackupsError(String(error));
+    }
+  }, [game.appid]);
+
+  return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/70 p-4 backdrop-blur-sm"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_24px_64px_rgba(0,0,0,0.6)] animate-fade-in">
+      <div className="flex max-h-[90vh] min-h-0 w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_24px_64px_rgba(0,0,0,0.6)] animate-fade-in">
         {/* Header image + overlay */}
         <div className="relative h-48 shrink-0 overflow-hidden bg-repressurizer-bg">
           <SteamImage
@@ -520,7 +550,7 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
         </div>
 
         {/* Content */}
-        <div className="overflow-y-auto p-6" style={{ maxHeight: "calc(90vh - 244px)" }}>
+        <div className="min-h-0 overflow-y-auto p-6" data-game-detail-scroll>
           {tab === "info" && (
             <InfoTab
               details={details}
@@ -554,7 +584,20 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
           )}
         </div>
       </div>
-    </div>
+      {samBackupsOpen && (
+        <SamBackupViewerDialog
+          backups={samBackups}
+          loading={samBackupsLoading}
+          error={samBackupsError}
+          restoring={samActionRunning === "restore_backup"}
+          onClose={() => setSamBackupsOpen(false)}
+          onRefresh={loadSamBackupList}
+          onRestore={handleRestoreSamBackupFromList}
+          onOpenFolder={handleOpenSamBackupFolder}
+        />
+      )}
+    </div>,
+    document.body
   );
 }
 
@@ -1508,6 +1551,148 @@ function SamBridgePanel({
   );
 }
 
+function SamBackupViewerDialog({
+  backups,
+  loading,
+  error,
+  restoring,
+  onClose,
+  onRefresh,
+  onRestore,
+  onOpenFolder,
+}: {
+  backups: SamBackupInfo[];
+  loading: boolean;
+  error: string;
+  restoring: boolean;
+  onClose: () => void;
+  onRefresh: () => void;
+  onRestore: (backup: SamBackupInfo) => void;
+  onOpenFolder: () => void;
+}) {
+  const t = useT();
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/65 px-4 backdrop-blur-sm"
+      onClick={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <div className="flex w-full max-w-2xl flex-col overflow-hidden rounded-xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_18px_56px_rgba(0,0,0,0.55)]" style={{ maxHeight: "min(680px, 82vh)" }}>
+        <div className="flex shrink-0 items-start justify-between gap-4 border-b border-repressurizer-border px-5 py-4">
+          <div className="min-w-0">
+            <h3 className="text-base font-semibold text-repressurizer-text">
+              {t("detail.sam.backupsTitle")}
+            </h3>
+            <p className="mt-1 text-xs leading-relaxed text-repressurizer-text-muted">
+              {t("detail.sam.backupsDesc")}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label={t("common.close")}
+            className="btn-press flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-repressurizer-text-muted transition-colors hover:bg-repressurizer-surface-hover hover:text-white"
+          >
+            <X size={16} weight="bold" />
+          </button>
+        </div>
+
+        <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-repressurizer-border-subtle px-5 py-3">
+          <button
+            type="button"
+            onClick={onRefresh}
+            disabled={loading || restoring}
+            className="btn-press inline-flex items-center gap-1.5 rounded-lg border border-repressurizer-border bg-repressurizer-bg px-3 py-1.5 text-xs font-medium text-repressurizer-text-muted transition-colors hover:text-repressurizer-text disabled:opacity-40"
+          >
+            <ArrowsClockwise size={13} className={loading ? "animate-spin" : ""} />
+            {t("settings.refresh")}
+          </button>
+          <button
+            type="button"
+            onClick={onOpenFolder}
+            disabled={loading || restoring}
+            className="btn-press inline-flex items-center gap-1.5 rounded-lg border border-repressurizer-border bg-repressurizer-bg px-3 py-1.5 text-xs font-medium text-repressurizer-text-muted transition-colors hover:text-repressurizer-text disabled:opacity-40"
+          >
+            <FolderOpen size={13} weight="bold" />
+            {t("detail.sam.openBackupFolder")}
+          </button>
+        </div>
+
+        <div className="min-h-0 overflow-y-auto p-4" data-sam-backup-list>
+          {loading ? (
+            <div className="space-y-2">
+              {[...Array(4)].map((_, index) => (
+                <div key={index} className="skeleton h-16 w-full rounded-lg" />
+              ))}
+            </div>
+          ) : error ? (
+            <p className="rounded-lg border border-repressurizer-danger/20 bg-repressurizer-danger/10 px-3 py-2 text-sm text-repressurizer-danger">
+              {error}
+            </p>
+          ) : backups.length === 0 ? (
+            <p className="rounded-lg border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-8 text-center text-sm text-repressurizer-text-muted">
+              {t("detail.sam.noBackups")}
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {backups.map((backup) => (
+                <div
+                  key={backup.path}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-bg px-3 py-2.5"
+                >
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-medium text-repressurizer-text">
+                        {formatSamBackupDate(backup.capturedAt)}
+                      </span>
+                      <span className="rounded-md border border-repressurizer-border bg-repressurizer-surface px-1.5 py-0.5 text-[10px] font-medium text-repressurizer-text-muted">
+                        {samBackupPhaseLabel(t, backup.phase)}
+                      </span>
+                      <span className="rounded-md bg-repressurizer-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-repressurizer-accent">
+                        {backup.action.replace(/_/g, " ")}
+                      </span>
+                    </div>
+                    <p className="mt-1 truncate font-mono text-[11px] text-repressurizer-text-faint">
+                      {backup.filename}
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-repressurizer-text-muted">
+                      {t("detail.sam.backupStats", {
+                        count: backup.achievementCount,
+                        unlocked: backup.unlockedCount,
+                      })}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onRestore(backup)}
+                    disabled={restoring}
+                    className="btn-press shrink-0 rounded-lg border border-repressurizer-border bg-repressurizer-surface px-3 py-1.5 text-xs font-medium text-repressurizer-text transition-colors hover:border-repressurizer-accent hover:text-repressurizer-accent disabled:opacity-40"
+                  >
+                    {restoring ? t("detail.sam.working") : t("detail.sam.restoreBackup")}
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function formatSamBackupDate(value: string): string {
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+}
+
+function samBackupPhaseLabel(t: ReturnType<typeof useT>, phase: string): string {
+  if (phase === "before") return t("detail.sam.backupPhaseBefore");
+  if (phase === "after") return t("detail.sam.backupPhaseAfter");
+  return phase || t("common.unknown");
+}
+
 function samReadinessLabel(t: ReturnType<typeof useT>, probe: SamBridgeProbe | null): string {
   if (!probe) return t("steamTools.sam.checking");
   return t(`steamTools.sam.readiness.${probe.readiness}` as TranslationKey);
@@ -1540,7 +1725,7 @@ function AchievementRow({
     <div
       className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors ${
         selected
-          ? "border-repressurizer-accent/60 bg-repressurizer-accent/10"
+          ? "border-repressurizer-accent/80 bg-repressurizer-bg"
           : achievement.achieved
             ? "border-transparent bg-repressurizer-bg"
             : "border-transparent bg-repressurizer-bg/30 opacity-50"

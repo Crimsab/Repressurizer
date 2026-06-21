@@ -470,6 +470,31 @@ export async function installTauriMock(page: Page) {
           }
           case "sam_backup_dir":
             return "C:\\\\Users\\\\Crimsab\\\\AppData\\\\Roaming\\\\Repressurizer\\\\sam_backups\\\\1145360";
+          case "list_sam_backups":
+            return [
+              {
+                filename: "mock-after.json",
+                path: "C:\\\\Users\\\\Crimsab\\\\AppData\\\\Roaming\\\\Repressurizer\\\\sam_backups\\\\1145360\\\\mock-after.json",
+                appId: Number(args?.appId ?? 0),
+                action: "unlock_selected",
+                phase: "after",
+                capturedAt: "2026-06-20T12:00:01.000Z",
+                achievementCount: mockAchievementStates().length,
+                unlockedCount: mockAchievementStates().filter((achievement) => achievement.achieved).length,
+                canRestoreUnlockTimes: false,
+              },
+              {
+                filename: "mock-before.json",
+                path: "C:\\\\Users\\\\Crimsab\\\\AppData\\\\Roaming\\\\Repressurizer\\\\sam_backups\\\\1145360\\\\mock-before.json",
+                appId: Number(args?.appId ?? 0),
+                action: "unlock_selected",
+                phase: "before",
+                capturedAt: "2026-06-20T12:00:00.000Z",
+                achievementCount: mockAchievementStates().length,
+                unlockedCount: 1,
+                canRestoreUnlockTimes: false,
+              },
+            ];
           case "open_sam_backup_dir":
             window.localStorage.setItem(
               "repressurizer-open-sam-backup-dir-app-id",

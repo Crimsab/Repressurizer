@@ -524,6 +524,7 @@ pub fn run() {
             sam::load_sam_achievement_schema,
             sam::probe_sam_bridge,
             sam::sam_achievement_action,
+            sam::list_sam_backups,
             sam::sam_backup_dir,
             sam::open_sam_backup_dir,
             api::fetch_wishlist,

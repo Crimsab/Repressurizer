@@ -10,6 +10,7 @@ import type {
   SamAchievementSchemaItem,
   SamAchievementActionInput,
   SamAchievementActionResult,
+  SamBackupInfo,
 } from "./types";
 
 export async function detectSteam(): Promise<SteamInfo> {
@@ -173,6 +174,10 @@ export async function runSamAchievementAction(
 
 export async function getSamBackupDir(appId: number): Promise<string> {
   return invoke<string>("sam_backup_dir", { appId });
+}
+
+export async function listSamBackups(appId: number): Promise<SamBackupInfo[]> {
+  return invoke<SamBackupInfo[]>("list_sam_backups", { appId });
 }
 
 export async function openSamBackupDir(appId: number): Promise<void> {

@@ -188,7 +188,7 @@ test("achievement write controls require explicit Steam Tools write opt-in", asy
   await expectNoHorizontalOverflow(page);
 });
 
-test("SAM backup buttons open the local backup folder and restore from a picked file", async ({ page }) => {
+test("SAM backup buttons show the in-app backup viewer and restore a selected snapshot", async ({ page }) => {
   await page.addInitScript(() => {
     const raw = window.localStorage.getItem("repressurizer-settings");
     if (!raw) return;
@@ -207,18 +207,21 @@ test("SAM backup buttons open the local backup folder and restore from a picked 
   await detail.getByRole("button", { name: /Achievements/ }).click();
 
   await detail.getByRole("button", { name: "Backups" }).click();
+  const backupViewer = page.locator(".fixed.inset-0").filter({
+    has: page.getByRole("heading", { name: "SAM backups" }),
+  });
+  await expect(backupViewer.getByRole("heading", { name: "SAM backups" })).toBeVisible();
+  await expect(backupViewer.getByText("mock-before.json")).toBeVisible();
+  await expect(backupViewer.getByText("mock-after.json")).toBeVisible();
+
+  await backupViewer.getByRole("button", { name: "Open folder" }).click();
   await expect
     .poll(() =>
       page.evaluate(() => window.localStorage.getItem("repressurizer-open-sam-backup-dir-app-id"))
     )
     .toBe("1145360");
 
-  await detail.getByRole("button", { name: "Restore backup" }).click();
-  await expect
-    .poll(() =>
-      page.evaluate(() => window.localStorage.getItem("repressurizer-last-dialog-default-path"))
-    )
-    .toContain("sam_backups");
+  await backupViewer.getByRole("button", { name: "Restore backup" }).last().click();
   await expect
     .poll(() => page.evaluate(() => window.localStorage.getItem("repressurizer-last-sam-action")))
     .toBe("restore_backup");
@@ -324,6 +327,17 @@ test("long achievement multi-select does not create a nested blank scroll panel"
   });
   expect(listMetrics.overflowY).toBe("visible");
   expect(listMetrics.scrollHeight).toBe(listMetrics.clientHeight);
+
+  const detailScrollMetrics = await detail.locator("[data-game-detail-scroll]").evaluate((element) => {
+    const styles = window.getComputedStyle(element);
+    return {
+      overflowY: styles.overflowY,
+      clientHeight: element.clientHeight,
+      scrollHeight: element.scrollHeight,
+    };
+  });
+  expect(detailScrollMetrics.overflowY).toBe("auto");
+  expect(detailScrollMetrics.scrollHeight).toBeGreaterThan(detailScrollMetrics.clientHeight);
 
   await expectNoHorizontalOverflow(page);
   const screenshotPath = testInfo.outputPath("long-achievement-multi-select.png");
