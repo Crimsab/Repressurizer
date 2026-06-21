@@ -6,6 +6,7 @@
 [![Downloads](https://img.shields.io/github/downloads/Crimsab/Repressurizer/total)](https://github.com/Crimsab/Repressurizer/releases)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Built with Tauri](https://img.shields.io/badge/Tauri-Rust%20%2B%20React-24c8db)](https://tauri.app/)
+[![Localization status](https://img.shields.io/badge/i18n-status-16a34a)](docs/localization.md#localization-status)
 
 Repressurizer is a modern desktop Steam library manager for editing Steam collections, organizing backlogs, and deciding what to play next.
 
@@ -182,6 +183,8 @@ bun run build
 ```
 
 `bun run test` runs both unit tests and the Playwright browser smoke checks. Playwright attaches dashboard/settings screenshots under `test-results/` for visual review.
+
+Localization coverage is tracked in [docs/localization.md](docs/localization.md#localization-status). Use `bun run i18n:status` to print the table locally and `bun run i18n:status:write` to refresh the generated doc block.
 
 For a local Windows build:
 
