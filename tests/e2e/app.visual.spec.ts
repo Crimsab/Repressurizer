@@ -505,7 +505,7 @@ test("opens organized settings tabs, automation logs, and Steam controls without
     has: page.getByRole("heading", { name: "Settings" }),
   });
 
-  await expect(page.getByText("Crimsab (123456)")).toBeVisible();
+  await expect(page.getByText("DemoUser (123456)")).toBeVisible();
   await expectNoHorizontalOverflow(page);
   const box = await settingsDialog.boundingBox();
   expect(box?.width).toBeGreaterThan(900);

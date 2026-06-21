@@ -34,7 +34,7 @@ export async function installTauriMock(page: Page) {
       steamPath: "C:\\\\Program Files (x86)\\\\Steam",
       steamId3: "123456",
       steamId64: "76561198000000000",
-      steamPersonaName: "Crimsab",
+      steamPersonaName: "DemoUser",
       apiKey: "mock-key",
       setupComplete: true,
       showDynamicCategories: false,
@@ -65,7 +65,7 @@ export async function installTauriMock(page: Page) {
       checkUpdatesOnStartup: true,
       includeSteamFamilyNonGames: false,
       automationPublishEnabled: true,
-      automationPublishUrl: "http://homelab.local:3045/api/steam/repressurizer/import",
+      automationPublishUrl: "http://example.local:3045/api/steam/repressurizer/import",
       automationPublishBearerToken: "",
       automationPublishIntervalHours: 24,
       automationPublishLastChecksum: "a32:1fdd332b",
@@ -273,7 +273,7 @@ export async function installTauriMock(page: Page) {
           case "plugin:dialog|open": {
             const options = args?.options as { defaultPath?: string } | undefined;
             const backupPath =
-              "C:\\\\Users\\\\Crimsab\\\\AppData\\\\Roaming\\\\Repressurizer\\\\sam_backups\\\\1145360\\\\mock-before.json";
+              "C:\\\\Users\\\\DemoUser\\\\AppData\\\\Roaming\\\\Repressurizer\\\\sam_backups\\\\1145360\\\\mock-before.json";
             window.localStorage.setItem(
               "repressurizer-last-dialog-default-path",
               String(options?.defaultPath ?? "")
@@ -469,12 +469,12 @@ export async function installTauriMock(page: Page) {
             };
           }
           case "sam_backup_dir":
-            return "C:\\\\Users\\\\Crimsab\\\\AppData\\\\Roaming\\\\Repressurizer\\\\sam_backups\\\\1145360";
+            return "C:\\\\Users\\\\DemoUser\\\\AppData\\\\Roaming\\\\Repressurizer\\\\sam_backups\\\\1145360";
           case "list_sam_backups":
             return [
               {
                 filename: "mock-after.json",
-                path: "C:\\\\Users\\\\Crimsab\\\\AppData\\\\Roaming\\\\Repressurizer\\\\sam_backups\\\\1145360\\\\mock-after.json",
+                path: "C:\\\\Users\\\\DemoUser\\\\AppData\\\\Roaming\\\\Repressurizer\\\\sam_backups\\\\1145360\\\\mock-after.json",
                 appId: Number(args?.appId ?? 0),
                 action: "unlock_selected",
                 phase: "after",
@@ -485,7 +485,7 @@ export async function installTauriMock(page: Page) {
               },
               {
                 filename: "mock-before.json",
-                path: "C:\\\\Users\\\\Crimsab\\\\AppData\\\\Roaming\\\\Repressurizer\\\\sam_backups\\\\1145360\\\\mock-before.json",
+                path: "C:\\\\Users\\\\DemoUser\\\\AppData\\\\Roaming\\\\Repressurizer\\\\sam_backups\\\\1145360\\\\mock-before.json",
                 appId: Number(args?.appId ?? 0),
                 action: "unlock_selected",
                 phase: "before",
@@ -496,7 +496,7 @@ export async function installTauriMock(page: Page) {
               },
               {
                 filename: "mock-lock-after.json",
-                path: "C:\\\\Users\\\\Crimsab\\\\AppData\\\\Roaming\\\\Repressurizer\\\\sam_backups\\\\1145360\\\\mock-lock-after.json",
+                path: "C:\\\\Users\\\\DemoUser\\\\AppData\\\\Roaming\\\\Repressurizer\\\\sam_backups\\\\1145360\\\\mock-lock-after.json",
                 appId: Number(args?.appId ?? 0),
                 action: "lock_selected",
                 phase: "after",
@@ -564,8 +564,8 @@ export async function installTauriMock(page: Page) {
                 "store_stats=true",
                 "post_store_target_state=desired",
               ],
-              beforeBackupPath: "C:\\\\Users\\\\Crimsab\\\\AppData\\\\Roaming\\\\Repressurizer\\\\sam_backups\\\\1145360\\\\mock-before.json",
-              afterBackupPath: "C:\\\\Users\\\\Crimsab\\\\AppData\\\\Roaming\\\\Repressurizer\\\\sam_backups\\\\1145360\\\\mock-after.json",
+              beforeBackupPath: "C:\\\\Users\\\\DemoUser\\\\AppData\\\\Roaming\\\\Repressurizer\\\\sam_backups\\\\1145360\\\\mock-before.json",
+              afterBackupPath: "C:\\\\Users\\\\DemoUser\\\\AppData\\\\Roaming\\\\Repressurizer\\\\sam_backups\\\\1145360\\\\mock-after.json",
               before: {
                 version: 1,
                 appId: Number(input?.appId ?? 0),
