@@ -175,6 +175,10 @@ export async function getSamBackupDir(appId: number): Promise<string> {
   return invoke<string>("sam_backup_dir", { appId });
 }
 
+export async function openSamBackupDir(appId: number): Promise<void> {
+  return invoke<void>("open_sam_backup_dir", { appId });
+}
+
 export interface WishlistItem {
   appid: number;
   priority: number;

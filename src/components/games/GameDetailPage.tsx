@@ -15,6 +15,7 @@ import {
   currencyToCountryCode,
   getSamBackupDir,
   loadSamAchievementSchema,
+  openSamBackupDir,
   probeSamBridge,
   runSamAchievementAction,
 } from "../../lib/tauri";
@@ -350,7 +351,8 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
           backupPath,
         });
         applySamResultToAchievements(result);
-        const backup = result.beforeBackupPath ?? t("common.unknown");
+        const beforeBackup = result.beforeBackupPath ?? t("common.unknown");
+        const afterBackup = result.afterBackupPath ?? t("common.unknown");
         if (result.failed.length > 0) {
           const diagnostics = result.diagnostics?.slice(0, 6).join(" · ") ?? "";
           setSamActionError(
@@ -358,7 +360,8 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
               t("detail.sam.actionFailed", {
                 count: result.failed.length,
                 ids: result.failed.join(", "),
-                backup,
+                backup: beforeBackup,
+                afterBackup,
               }),
               result.message,
               diagnostics
@@ -372,7 +375,8 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
           setSamActionMessage(
             t("detail.sam.actionDone", {
               count: result.changed,
-              backup,
+              backup: beforeBackup,
+              afterBackup,
             })
           );
         }
@@ -396,8 +400,7 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
 
   const handleOpenSamBackups = useCallback(async () => {
     try {
-      const backupDir = await getSamBackupDir(game.appid);
-      await openPath(backupDir);
+      await openSamBackupDir(game.appid);
     } catch (error) {
       setSamActionError(String(error));
     }
@@ -405,8 +408,10 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
 
   const handleRestoreSamBackup = useCallback(async () => {
     try {
+      const backupDir = await getSamBackupDir(game.appid);
       const selected = await openFileDialog({
         multiple: false,
+        defaultPath: backupDir,
         filters: [{ name: "SAM backup", extensions: ["json"] }],
       });
       if (typeof selected !== "string") return;

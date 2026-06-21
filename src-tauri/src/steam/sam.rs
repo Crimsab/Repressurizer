@@ -156,6 +156,17 @@ pub fn sam_backup_dir(app_id: u64) -> Result<String, String> {
 }
 
 #[tauri::command]
+pub fn open_sam_backup_dir(app_id: u64) -> Result<(), String> {
+    if app_id == 0 || app_id > u32::MAX as u64 {
+        return Err("A valid Steam appId is required.".to_string());
+    }
+    let path = sam_backup_base_dir(app_id)?;
+    fs::create_dir_all(&path)
+        .map_err(|error| format!("Failed to create SAM backup directory: {error}"))?;
+    open_directory(&path)
+}
+
+#[tauri::command]
 pub fn load_sam_achievement_schema(
     steam_path: String,
     app_id: u64,
@@ -1742,6 +1753,32 @@ fn capability(
 
 fn path_to_string(path: PathBuf) -> String {
     path.to_string_lossy().into_owned()
+}
+
+fn open_directory(path: &Path) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    let status = Command::new("explorer")
+        .arg(path)
+        .creation_flags(CREATE_NO_WINDOW)
+        .status();
+
+    #[cfg(target_os = "macos")]
+    let status = Command::new("open").arg(path).status();
+
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let status = Command::new("xdg-open").arg(path).status();
+
+    let status = status.map_err(|error| {
+        format!("Failed to open SAM backup directory {}: {error}", path.display())
+    })?;
+    if status.success() {
+        Ok(())
+    } else {
+        Err(format!(
+            "Failed to open SAM backup directory {}: opener exited with {status}",
+            path.display()
+        ))
+    }
 }
 
 fn notes_for_probe(

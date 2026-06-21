@@ -270,6 +270,16 @@ export async function installTauriMock(page: Page) {
             return true;
           case "plugin:dialog|message":
             return "Ok";
+          case "plugin:dialog|open": {
+            const options = args?.options as { defaultPath?: string } | undefined;
+            const backupPath =
+              "C:\\\\Users\\\\Crimsab\\\\AppData\\\\Roaming\\\\Repressurizer\\\\sam_backups\\\\1145360\\\\mock-before.json";
+            window.localStorage.setItem(
+              "repressurizer-last-dialog-default-path",
+              String(options?.defaultPath ?? "")
+            );
+            return backupPath;
+          }
           case "plugin:autostart|is_enabled":
             return autostartEnabled;
           case "plugin:autostart|enable":
@@ -460,6 +470,12 @@ export async function installTauriMock(page: Page) {
           }
           case "sam_backup_dir":
             return "C:\\\\Users\\\\Crimsab\\\\AppData\\\\Roaming\\\\Repressurizer\\\\sam_backups\\\\1145360";
+          case "open_sam_backup_dir":
+            window.localStorage.setItem(
+              "repressurizer-open-sam-backup-dir-app-id",
+              String(args?.appId ?? 0)
+            );
+            return null;
           case "sam_achievement_action": {
             const delayMs = Number(window.localStorage.getItem("repressurizer-sam-action-delay-ms") ?? 0);
             if (delayMs > 0) {
@@ -469,8 +485,14 @@ export async function installTauriMock(page: Page) {
               appId?: number;
               action?: string;
               achievementIds?: string[];
+              backupPath?: string | null;
             };
             const action = input?.action ?? "unlock";
+            window.localStorage.setItem("repressurizer-last-sam-action", action);
+            window.localStorage.setItem(
+              "repressurizer-last-sam-backup-path",
+              String(input?.backupPath ?? "")
+            );
             const requested = new Set(input?.achievementIds ?? []);
             const after = mockAchievementStates().map((achievement) => {
               const targeted =

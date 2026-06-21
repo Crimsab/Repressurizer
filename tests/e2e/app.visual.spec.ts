@@ -188,6 +188,46 @@ test("achievement write controls require explicit Steam Tools write opt-in", asy
   await expectNoHorizontalOverflow(page);
 });
 
+test("SAM backup buttons open the local backup folder and restore from a picked file", async ({ page }) => {
+  await page.addInitScript(() => {
+    const raw = window.localStorage.getItem("repressurizer-settings");
+    if (!raw) return;
+    const settings = JSON.parse(raw);
+    settings.steamToolsEnabled = true;
+    settings.steamToolsAchievementWritesEnabled = true;
+    window.localStorage.setItem("repressurizer-settings", JSON.stringify(settings));
+  });
+
+  await page.goto("/");
+
+  await page.locator(".game-card").filter({ hasText: "Hades" }).dblclick();
+  const detail = page.locator(".fixed.inset-0").filter({
+    has: page.getByRole("heading", { name: "Hades" }),
+  });
+  await detail.getByRole("button", { name: /Achievements/ }).click();
+
+  await detail.getByRole("button", { name: "Backups" }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(() => window.localStorage.getItem("repressurizer-open-sam-backup-dir-app-id"))
+    )
+    .toBe("1145360");
+
+  await detail.getByRole("button", { name: "Restore backup" }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(() => window.localStorage.getItem("repressurizer-last-dialog-default-path"))
+    )
+    .toContain("sam_backups");
+  await expect
+    .poll(() => page.evaluate(() => window.localStorage.getItem("repressurizer-last-sam-action")))
+    .toBe("restore_backup");
+  await expect
+    .poll(() => page.evaluate(() => window.localStorage.getItem("repressurizer-last-sam-backup-path")))
+    .toContain("mock-before.json");
+  await expect(detail.getByText("After backup:")).toBeVisible();
+});
+
 test("single achievement write updates only the targeted achievement locally", async ({ page }) => {
   await page.addInitScript(() => {
     const raw = window.localStorage.getItem("repressurizer-settings");
