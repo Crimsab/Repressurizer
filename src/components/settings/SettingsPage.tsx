@@ -62,8 +62,8 @@ import {
   CloudArrowDown,
   UsersThree,
   MagnifyingGlass,
-  SteamLogo,
   Trophy,
+  Wrench,
 } from "@phosphor-icons/react";
 import { ACCENT_PRESETS, applyAccentColor, applyTheme } from "../../stores/settingsStore";
 import { getLocaleDisplayName, getLocaleFlag, normalizeLocale, SUPPORTED_LOCALES, useT } from "../../lib/i18n";
@@ -659,7 +659,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
       icon: <Warning size={14} />,
       badge: ignoredIds.length + hltbIgnoredIds.length,
     },
-    { id: "tools", label: t("settings.steamTools"), icon: <SteamLogo size={14} /> },
+    { id: "tools", label: t("settings.steamTools"), icon: <Wrench size={14} /> },
     { id: "about", label: t("settings.aboutTab"), icon: <Info size={14} /> },
   ];
   const filteredAutomationLogs = useMemo(() => {

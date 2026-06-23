@@ -7,7 +7,6 @@ import { probeSamBridge } from "../../lib/tauri";
 import type { SamBridgeProbe } from "../../lib/types";
 import {
   ArrowsClockwise,
-  SteamLogo,
   Trophy,
   Wrench,
   X,
@@ -98,7 +97,7 @@ export function SteamToolsPage({ onClose, onOpenAchievements }: SteamToolsPagePr
         <div className="flex items-start justify-between gap-4 border-b border-repressurizer-border-subtle px-5 py-4">
           <div className="flex min-w-0 items-start gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-repressurizer-accent/30 bg-repressurizer-accent/10 text-repressurizer-accent">
-              <SteamLogo size={22} weight="fill" />
+              <Wrench size={22} weight="duotone" />
             </div>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
