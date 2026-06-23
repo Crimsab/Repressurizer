@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback, useRef } from "react";
+import { lazy, Suspense, useMemo, useState, useCallback, useRef } from "react";
 import { useGameStore } from "../../stores/gameStore";
 import { useCategoryStore } from "../../stores/categoryStore";
 import { useStatusStore, STATUS_META } from "../../stores/statusStore";
@@ -9,13 +9,18 @@ import { useReviewStore } from "../../stores/reviewStore";
 import { useFamilyStore } from "../../stores/familyStore";
 import { MAX_FAIL_RUNS, useFailedGamesStore } from "../../stores/failedGamesStore";
 import { GameCard } from "./GameCard";
-import { ContextMenu } from "./ContextMenu";
-import { GameDetailPage } from "./GameDetailPage";
 import type { OwnedGame } from "../../lib/types";
 import { useT, type TranslationKey } from "../../lib/i18n";
 import { Spinner, MagnifyingGlass, FolderOpen, Clock, UsersThree } from "@phosphor-icons/react";
 import { extractReleaseYear, parseSearchQuery, matchesFilter, hasAdvancedFilters } from "../../lib/search";
 import { possibleDuplicateAppIds } from "../../lib/gameIdentity";
+
+const loadGameDetailPage = () => import("./GameDetailPage").then((m) => ({ default: m.GameDetailPage }));
+const loadContextMenu = () => import("./ContextMenu").then((m) => ({ default: m.ContextMenu }));
+const GameDetailPage = lazy(loadGameDetailPage);
+const ContextMenu = lazy(loadContextMenu);
+const preloadGameDetailPage = () => { void loadGameDetailPage(); };
+const preloadContextMenu = () => { void loadContextMenu(); };
 
 interface ContextMenuState {
   x: number;
@@ -60,10 +65,12 @@ export function GameGrid() {
 
   const handleContextMenu = useCallback((e: React.MouseEvent, game: OwnedGame) => {
     e.preventDefault();
+    preloadContextMenu();
     setContextMenu({ x: e.clientX, y: e.clientY, game });
   }, []);
 
   const handleDoubleClick = useCallback((game: OwnedGame) => {
+    preloadGameDetailPage();
     setDetailGame(game);
   }, []);
 
@@ -329,6 +336,7 @@ export function GameGrid() {
               game={game}
               onContextMenu={handleContextMenu}
               onDoubleClick={handleDoubleClick}
+              onIntent={preloadGameDetailPage}
               onShiftClick={handleShiftClick}
               isPossibleDuplicate={duplicateAppIds.has(game.appid)}
             />
@@ -345,6 +353,7 @@ export function GameGrid() {
               game={game}
               onContextMenu={handleContextMenu}
               onDoubleClick={handleDoubleClick}
+              onIntent={preloadGameDetailPage}
               onShiftClick={handleShiftClick}
               isPossibleDuplicate={duplicateAppIds.has(game.appid)}
             />
@@ -353,20 +362,24 @@ export function GameGrid() {
       )}
 
       {contextMenu && (
-        <ContextMenu
-          x={contextMenu.x}
-          y={contextMenu.y}
-          game={contextMenu.game}
-          onClose={() => setContextMenu(null)}
-          onViewDetails={handleDoubleClick}
-        />
+        <Suspense fallback={null}>
+          <ContextMenu
+            x={contextMenu.x}
+            y={contextMenu.y}
+            game={contextMenu.game}
+            onClose={() => setContextMenu(null)}
+            onViewDetails={handleDoubleClick}
+          />
+        </Suspense>
       )}
 
       {detailGame && (
-        <GameDetailPage
-          game={detailGame}
-          onClose={() => setDetailGame(null)}
-        />
+        <Suspense fallback={<div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm" />}>
+          <GameDetailPage
+            game={detailGame}
+            onClose={() => setDetailGame(null)}
+          />
+        </Suspense>
       )}
     </>
   );
@@ -376,12 +389,14 @@ function GameListRow({
   game,
   onContextMenu,
   onDoubleClick,
+  onIntent,
   onShiftClick,
   isPossibleDuplicate,
 }: {
   game: OwnedGame;
   onContextMenu: (e: React.MouseEvent, game: OwnedGame) => void;
   onDoubleClick: (game: OwnedGame) => void;
+  onIntent?: () => void;
   onShiftClick?: (appId: number) => void;
   isPossibleDuplicate?: boolean;
 }) {
@@ -432,6 +447,8 @@ function GameListRow({
       onClick={handleClick}
       onDoubleClick={() => onDoubleClick(game)}
       onContextMenu={(e) => onContextMenu(e, game)}
+      onPointerEnter={onIntent}
+      onFocus={onIntent}
       className={`group flex items-center gap-3 rounded-lg px-3 py-2 transition-colors ${
         isSelected
           ? "bg-repressurizer-accent/8 ring-1 ring-repressurizer-accent/40"

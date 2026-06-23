@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from "react";
+import { lazy, Suspense, useState, useEffect, useRef } from "react";
+import type { ReactNode } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { useGameStore } from "../../stores/gameStore";
 import type { SortBy } from "../../stores/gameStore";
@@ -11,16 +12,6 @@ import { saveCollections } from "../../lib/tauri";
 import { buildSavePreview, type SavePreview } from "../../lib/savePreview";
 import { hasAdvancedFilters } from "../../lib/search";
 import { useT, type TranslationKey } from "../../lib/i18n";
-import { SettingsPage } from "../settings/SettingsPage";
-import { ExportDialog } from "../export/ExportDialog";
-import { AutoCategorizeDialog } from "../categories/AutoCategorizeDialog";
-import { StatsPage } from "../stats/StatsPage";
-import { AchievementsPage } from "../achievements/AchievementsPage";
-import { SteamToolsPage } from "../steam-tools/SteamToolsPage";
-import { WishlistPage } from "../wishlist/WishlistPage";
-import { FriendCompareDialog } from "../friends/FriendCompareDialog";
-import { WhatToPlayNext } from "../recommend/WhatToPlayNext";
-import { PlayHistoryTimeline } from "../timeline/PlayHistoryTimeline";
 import {
   MagnifyingGlass,
   SquaresFour,
@@ -50,6 +41,36 @@ import {
   Tag,
   TextAa,
 } from "@phosphor-icons/react";
+
+const loadSettingsPage = () => import("../settings/SettingsPage").then((m) => ({ default: m.SettingsPage }));
+const loadExportDialog = () => import("../export/ExportDialog").then((m) => ({ default: m.ExportDialog }));
+const loadAutoCategorizeDialog = () => import("../categories/AutoCategorizeDialog").then((m) => ({ default: m.AutoCategorizeDialog }));
+const loadStatsPage = () => import("../stats/StatsPage").then((m) => ({ default: m.StatsPage }));
+const loadAchievementsPage = () => import("../achievements/AchievementsPage").then((m) => ({ default: m.AchievementsPage }));
+const loadSteamToolsPage = () => import("../steam-tools/SteamToolsPage").then((m) => ({ default: m.SteamToolsPage }));
+const loadWishlistPage = () => import("../wishlist/WishlistPage").then((m) => ({ default: m.WishlistPage }));
+const loadFriendCompareDialog = () => import("../friends/FriendCompareDialog").then((m) => ({ default: m.FriendCompareDialog }));
+const loadWhatToPlayNext = () => import("../recommend/WhatToPlayNext").then((m) => ({ default: m.WhatToPlayNext }));
+const loadPlayHistoryTimeline = () => import("../timeline/PlayHistoryTimeline").then((m) => ({ default: m.PlayHistoryTimeline }));
+const SettingsPage = lazy(loadSettingsPage);
+const ExportDialog = lazy(loadExportDialog);
+const AutoCategorizeDialog = lazy(loadAutoCategorizeDialog);
+const StatsPage = lazy(loadStatsPage);
+const AchievementsPage = lazy(loadAchievementsPage);
+const SteamToolsPage = lazy(loadSteamToolsPage);
+const WishlistPage = lazy(loadWishlistPage);
+const FriendCompareDialog = lazy(loadFriendCompareDialog);
+const WhatToPlayNext = lazy(loadWhatToPlayNext);
+const PlayHistoryTimeline = lazy(loadPlayHistoryTimeline);
+const preload = (loader: () => Promise<unknown>) => { void loader(); };
+
+function LazyOverlay({ children }: { children: ReactNode }) {
+  return (
+    <Suspense fallback={<div className="fixed inset-0 z-[80] bg-black/40 backdrop-blur-sm" />}>
+      {children}
+    </Suspense>
+  );
+}
 
 const SORT_OPTIONS: { value: SortBy; labelKey: TranslationKey; icon: React.ReactNode; hintKey?: TranslationKey }[] = [
   { value: "name",         labelKey: "sort.name",          icon: <TextAa size={12} /> },
@@ -320,6 +341,8 @@ export function Header() {
           {/* Auto-Categorize */}
           <button
             onClick={() => setShowAutoCat(true)}
+            onPointerEnter={() => preload(loadAutoCategorizeDialog)}
+            onFocus={() => preload(loadAutoCategorizeDialog)}
             title={`${t("toolbar.autoCategorize")} - ${cachedDetailsCount}/${gameCount} ${t("settings.cache")}`}
             className="btn-press relative flex items-center justify-center w-8 h-8 rounded-lg text-repressurizer-text-muted transition-colors hover:text-white hover:bg-repressurizer-surface-hover"
           >
@@ -334,6 +357,8 @@ export function Header() {
           {/* Achievements */}
           <button
             onClick={() => setShowAchievements(true)}
+            onPointerEnter={() => preload(loadAchievementsPage)}
+            onFocus={() => preload(loadAchievementsPage)}
             title={t("toolbar.achievements")}
             className="btn-press flex items-center justify-center w-8 h-8 rounded-lg text-repressurizer-text-muted transition-colors hover:text-white hover:bg-repressurizer-surface-hover"
           >
@@ -343,6 +368,8 @@ export function Header() {
           {/* Steam Tools */}
           <button
             onClick={() => setShowSteamTools(true)}
+            onPointerEnter={() => preload(loadSteamToolsPage)}
+            onFocus={() => preload(loadSteamToolsPage)}
             title={t("toolbar.steamTools")}
             className="btn-press flex items-center justify-center w-8 h-8 rounded-lg text-repressurizer-text-muted transition-colors hover:text-white hover:bg-repressurizer-surface-hover"
           >
@@ -352,6 +379,8 @@ export function Header() {
           {/* Wishlist */}
           <button
             onClick={() => setShowWishlist(true)}
+            onPointerEnter={() => preload(loadWishlistPage)}
+            onFocus={() => preload(loadWishlistPage)}
             title={t("toolbar.wishlist")}
             className="btn-press flex items-center justify-center w-8 h-8 rounded-lg text-repressurizer-text-muted transition-colors hover:text-white hover:bg-repressurizer-surface-hover"
           >
@@ -361,6 +390,8 @@ export function Header() {
           {/* Friend Compare */}
           <button
             onClick={() => setShowFriendCompare(true)}
+            onPointerEnter={() => preload(loadFriendCompareDialog)}
+            onFocus={() => preload(loadFriendCompareDialog)}
             title={t("toolbar.friendCompare")}
             className="btn-press flex items-center justify-center w-8 h-8 rounded-lg text-repressurizer-text-muted transition-colors hover:text-white hover:bg-repressurizer-surface-hover"
           >
@@ -370,6 +401,8 @@ export function Header() {
           {/* What to Play Next */}
           <button
             onClick={() => setShowRecommend(true)}
+            onPointerEnter={() => preload(loadWhatToPlayNext)}
+            onFocus={() => preload(loadWhatToPlayNext)}
             title={t("toolbar.recommend")}
             className="btn-press flex items-center justify-center w-8 h-8 rounded-lg text-repressurizer-text-muted transition-colors hover:text-white hover:bg-repressurizer-surface-hover"
           >
@@ -379,6 +412,8 @@ export function Header() {
           {/* Play History */}
           <button
             onClick={() => setShowTimeline(true)}
+            onPointerEnter={() => preload(loadPlayHistoryTimeline)}
+            onFocus={() => preload(loadPlayHistoryTimeline)}
             title={t("toolbar.timeline")}
             className="btn-press flex items-center justify-center w-8 h-8 rounded-lg text-repressurizer-text-muted transition-colors hover:text-white hover:bg-repressurizer-surface-hover"
           >
@@ -388,6 +423,8 @@ export function Header() {
           {/* Stats */}
           <button
             onClick={() => setShowStats(true)}
+            onPointerEnter={() => preload(loadStatsPage)}
+            onFocus={() => preload(loadStatsPage)}
             title={t("toolbar.stats")}
             className="btn-press flex items-center justify-center w-8 h-8 rounded-lg text-repressurizer-text-muted transition-colors hover:text-white hover:bg-repressurizer-surface-hover"
           >
@@ -397,6 +434,8 @@ export function Header() {
           {/* Export */}
           <button
             onClick={() => openExportDialog()}
+            onPointerEnter={() => preload(loadExportDialog)}
+            onFocus={() => preload(loadExportDialog)}
             title={t("toolbar.export")}
             className="btn-press flex items-center justify-center w-8 h-8 rounded-lg text-repressurizer-text-muted transition-colors hover:text-white hover:bg-repressurizer-surface-hover"
           >
@@ -406,6 +445,8 @@ export function Header() {
           {/* Settings */}
           <button
             onClick={() => setShowSettings(true)}
+            onPointerEnter={() => preload(loadSettingsPage)}
+            onFocus={() => preload(loadSettingsPage)}
             title={t("toolbar.settings")}
             className="btn-press flex items-center justify-center w-8 h-8 rounded-lg text-repressurizer-text-muted transition-colors hover:text-white hover:bg-repressurizer-surface-hover"
           >
@@ -414,24 +455,62 @@ export function Header() {
         </div>
       </header>
 
-      {showAchievements && <AchievementsPage onClose={() => setShowAchievements(false)} />}
-      {showSteamTools && (
-        <SteamToolsPage
-          onClose={() => setShowSteamTools(false)}
-          onOpenAchievements={() => {
-            setShowSteamTools(false);
-            setShowAchievements(true);
-          }}
-        />
+      {showAchievements && (
+        <LazyOverlay>
+          <AchievementsPage onClose={() => setShowAchievements(false)} />
+        </LazyOverlay>
       )}
-      {showWishlist && <WishlistPage onClose={() => setShowWishlist(false)} />}
-      {showFriendCompare && <FriendCompareDialog onClose={() => setShowFriendCompare(false)} />}
-      {showStats && <StatsPage onClose={() => setShowStats(false)} />}
-      {showAutoCat && <AutoCategorizeDialog onClose={() => setShowAutoCat(false)} />}
-      {showExport && <ExportDialog onClose={() => setShowExport(false)} />}
-      {showSettings && <SettingsPage onClose={() => setShowSettings(false)} />}
-      {showRecommend && <WhatToPlayNext onClose={() => setShowRecommend(false)} />}
-      {showTimeline && <PlayHistoryTimeline onClose={() => setShowTimeline(false)} />}
+      {showSteamTools && (
+        <LazyOverlay>
+          <SteamToolsPage
+            onClose={() => setShowSteamTools(false)}
+            onOpenAchievements={() => {
+              setShowSteamTools(false);
+              setShowAchievements(true);
+            }}
+          />
+        </LazyOverlay>
+      )}
+      {showWishlist && (
+        <LazyOverlay>
+          <WishlistPage onClose={() => setShowWishlist(false)} />
+        </LazyOverlay>
+      )}
+      {showFriendCompare && (
+        <LazyOverlay>
+          <FriendCompareDialog onClose={() => setShowFriendCompare(false)} />
+        </LazyOverlay>
+      )}
+      {showStats && (
+        <LazyOverlay>
+          <StatsPage onClose={() => setShowStats(false)} />
+        </LazyOverlay>
+      )}
+      {showAutoCat && (
+        <LazyOverlay>
+          <AutoCategorizeDialog onClose={() => setShowAutoCat(false)} />
+        </LazyOverlay>
+      )}
+      {showExport && (
+        <LazyOverlay>
+          <ExportDialog onClose={() => setShowExport(false)} />
+        </LazyOverlay>
+      )}
+      {showSettings && (
+        <LazyOverlay>
+          <SettingsPage onClose={() => setShowSettings(false)} />
+        </LazyOverlay>
+      )}
+      {showRecommend && (
+        <LazyOverlay>
+          <WhatToPlayNext onClose={() => setShowRecommend(false)} />
+        </LazyOverlay>
+      )}
+      {showTimeline && (
+        <LazyOverlay>
+          <PlayHistoryTimeline onClose={() => setShowTimeline(false)} />
+        </LazyOverlay>
+      )}
       {showSavePreview && (
         <SavePreviewDialog
           preview={savePreview}

@@ -1,12 +1,10 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { lazy, Suspense, useState, useEffect, useRef, useCallback } from "react";
 import { useCategoryStore } from "../../stores/categoryStore";
 import { useGameStore } from "../../stores/gameStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useExportUiStore } from "../../stores/exportUiStore";
 import { useFamilyStore } from "../../stores/familyStore";
 import type { OwnedGame, SteamCollection } from "../../lib/types";
-import { GameDetailPage } from "../games/GameDetailPage";
-import { MergeCategoriesDialog } from "../categories/MergeCategoriesDialog";
 import {
   GameController,
   Question,
@@ -28,6 +26,13 @@ import {
 } from "@phosphor-icons/react";
 import { useT } from "../../lib/i18n";
 import { SteamImage } from "../games/SteamImage";
+
+const loadGameDetailPage = () => import("../games/GameDetailPage").then((m) => ({ default: m.GameDetailPage }));
+const loadMergeCategoriesDialog = () => import("../categories/MergeCategoriesDialog").then((m) => ({ default: m.MergeCategoriesDialog }));
+const GameDetailPage = lazy(loadGameDetailPage);
+const MergeCategoriesDialog = lazy(loadMergeCategoriesDialog);
+const preloadGameDetailPage = () => { void loadGameDetailPage(); };
+const preloadMergeCategoriesDialog = () => { void loadMergeCategoriesDialog(); };
 
 interface CategoryContextMenuState {
   x: number;
@@ -265,7 +270,12 @@ export function Sidebar() {
         {/* Now Playing */}
         {showNowPlaying && nowPlayingGame && (
           <button
-            onClick={() => setDetailGame(nowPlayingGame)}
+            onClick={() => {
+              preloadGameDetailPage();
+              setDetailGame(nowPlayingGame);
+            }}
+            onPointerEnter={preloadGameDetailPage}
+            onFocus={preloadGameDetailPage}
             className="mb-2 w-full overflow-hidden rounded-xl border border-repressurizer-border bg-repressurizer-surface text-left transition-all hover:border-repressurizer-accent/50 hover:bg-repressurizer-surface-hover group"
           >
             <div className="relative h-14 overflow-hidden">
@@ -517,7 +527,12 @@ export function Sidebar() {
           </button>
           <button
             type="button"
-            onClick={() => setShowMerge(true)}
+            onClick={() => {
+              preloadMergeCategoriesDialog();
+              setShowMerge(true);
+            }}
+            onPointerEnter={preloadMergeCategoriesDialog}
+            onFocus={preloadMergeCategoriesDialog}
             disabled={selectedCategoryKeys.length < 2}
             className="btn-press flex min-w-0 items-center justify-center gap-1 rounded-lg border border-repressurizer-border px-2 py-1.5 text-[11px] font-medium text-repressurizer-text hover:bg-repressurizer-surface-hover disabled:cursor-not-allowed disabled:opacity-40"
           >
@@ -577,7 +592,9 @@ export function Sidebar() {
 
       {/* Game detail overlay */}
       {detailGame && (
-        <GameDetailPage game={detailGame} onClose={() => setDetailGame(null)} />
+        <Suspense fallback={<div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm" />}>
+          <GameDetailPage game={detailGame} onClose={() => setDetailGame(null)} />
+        </Suspense>
       )}
 
       {/* Category context menu */}
@@ -617,6 +634,7 @@ export function Sidebar() {
             setContextMenu(null);
           }}
           onMergeSelected={() => {
+            preloadMergeCategoriesDialog();
             setShowMerge(true);
             setContextMenu(null);
           }}
@@ -647,10 +665,12 @@ export function Sidebar() {
       )}
 
       {showMerge && selectedCategoryKeys.length >= 2 && (
-        <MergeCategoriesDialog
-          selectedKeys={selectedCategoryKeys}
-          onClose={() => setShowMerge(false)}
-        />
+        <Suspense fallback={<div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm" />}>
+          <MergeCategoriesDialog
+            selectedKeys={selectedCategoryKeys}
+            onClose={() => setShowMerge(false)}
+          />
+        </Suspense>
       )}
 
       {duplicateFor && (

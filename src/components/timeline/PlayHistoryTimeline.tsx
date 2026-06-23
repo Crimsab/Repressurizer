@@ -1,12 +1,15 @@
-import { useMemo, useState } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
 import { useGameStore } from "../../stores/gameStore";
 import { usePlayHistoryStore } from "../../stores/playHistoryStore";
 import { useSettingsStore } from "../../stores/settingsStore";
-import { GameDetailPage } from "../games/GameDetailPage";
 import { SteamImage } from "../games/SteamImage";
 import type { OwnedGame } from "../../lib/types";
 import { normalizeLocale, useT } from "../../lib/i18n";
 import { X, CalendarBlank, Clock, SquaresFour, List, Rows } from "@phosphor-icons/react";
+
+const loadGameDetailPage = () => import("../games/GameDetailPage").then((m) => ({ default: m.GameDetailPage }));
+const GameDetailPage = lazy(loadGameDetailPage);
+const preloadGameDetailPage = () => { void loadGameDetailPage(); };
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -141,6 +144,7 @@ export function PlayHistoryTimeline({ onClose }: PlayHistoryTimelineProps) {
   );
 
   const openGame = (appid: number) => {
+    preloadGameDetailPage();
     const game = gamesMap[appid];
     if (game) setDetailGame(game);
   };
@@ -276,11 +280,11 @@ export function PlayHistoryTimeline({ onClose }: PlayHistoryTimelineProps) {
                 <p className="text-xs">{t("timeline.empty.desc")}</p>
               </div>
             ) : viewMode === "grid" ? (
-              <GridView months={months} onOpenGame={openGame} locale={locale} />
+              <GridView months={months} onOpenGame={openGame} onIntent={preloadGameDetailPage} locale={locale} />
             ) : viewMode === "list" ? (
-              <ListView games={flatList} onOpenGame={openGame} locale={locale} />
+              <ListView games={flatList} onOpenGame={openGame} onIntent={preloadGameDetailPage} locale={locale} />
             ) : (
-              <StripView months={months} onOpenGame={openGame} />
+              <StripView months={months} onOpenGame={openGame} onIntent={preloadGameDetailPage} />
             )}
           </div>
         </div>
@@ -288,10 +292,12 @@ export function PlayHistoryTimeline({ onClose }: PlayHistoryTimelineProps) {
 
       {/* Game detail overlay */}
       {detailGame && (
-        <GameDetailPage
-          game={detailGame}
-          onClose={() => setDetailGame(null)}
-        />
+        <Suspense fallback={<div className="fixed inset-0 z-[60] bg-black/40 backdrop-blur-sm" />}>
+          <GameDetailPage
+            game={detailGame}
+            onClose={() => setDetailGame(null)}
+          />
+        </Suspense>
       )}
     </>
   );
@@ -302,10 +308,12 @@ export function PlayHistoryTimeline({ onClose }: PlayHistoryTimelineProps) {
 function GridView({
   months,
   onOpenGame,
+  onIntent,
   locale,
 }: {
   months: MonthData[];
   onOpenGame: (appid: number) => void;
+  onIntent: () => void;
   locale: string;
 }) {
   const t = useT();
@@ -336,6 +344,8 @@ function GridView({
                 <button
                   key={g.appid}
                   onClick={() => onOpenGame(g.appid)}
+                  onPointerEnter={onIntent}
+                  onFocus={onIntent}
                   className="group flex flex-col overflow-hidden rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg text-left transition-all duration-200 hover:border-repressurizer-accent/40 hover:shadow-[0_0_0_1px_rgba(16,185,129,0.12),0_8px_24px_rgba(0,0,0,0.4)] hover:-translate-y-0.5"
                 >
                   {/* Banner 16:9 */}
@@ -380,10 +390,12 @@ type FlatGame = GameEntry & { monthKey: string; monthLabel: string };
 function ListView({
   games,
   onOpenGame,
+  onIntent,
   locale,
 }: {
   games: FlatGame[];
   onOpenGame: (appid: number) => void;
+  onIntent: () => void;
   locale: string;
 }) {
   const t = useT();
@@ -422,6 +434,8 @@ function ListView({
             {/* Game row */}
             <button
               onClick={() => onOpenGame(g.appid)}
+              onPointerEnter={onIntent}
+              onFocus={onIntent}
               className="group flex w-full items-center gap-3 px-5 py-2.5 transition-colors hover:bg-repressurizer-surface-hover text-left"
             >
               {/* Thumbnail */}
@@ -461,9 +475,11 @@ function ListView({
 function StripView({
   months,
   onOpenGame,
+  onIntent,
 }: {
   months: MonthData[];
   onOpenGame: (appid: number) => void;
+  onIntent: () => void;
 }) {
   const t = useT();
   let lastYear = "";
@@ -502,6 +518,8 @@ function StripView({
                     <button
                       key={g.appid}
                       onClick={() => onOpenGame(g.appid)}
+                      onPointerEnter={onIntent}
+                      onFocus={onIntent}
                       className="group relative shrink-0 overflow-hidden rounded-lg border border-repressurizer-border-subtle hover:border-repressurizer-accent/50 transition-all duration-200 hover:shadow-[0_0_12px_rgba(16,185,129,0.15)]"
                       style={{ width: 96, height: 54 }}
                       title={`${g.name} — ${formatHours(g.playtime)}`}

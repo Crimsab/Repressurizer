@@ -12,11 +12,12 @@ interface GameCardProps {
   game: OwnedGame;
   onContextMenu: (e: React.MouseEvent, game: OwnedGame) => void;
   onDoubleClick: (game: OwnedGame) => void;
+  onIntent?: () => void;
   onShiftClick?: (appId: number) => void;
   isPossibleDuplicate?: boolean;
 }
 
-export function GameCard({ game, onContextMenu, onDoubleClick, onShiftClick, isPossibleDuplicate }: GameCardProps) {
+export function GameCard({ game, onContextMenu, onDoubleClick, onIntent, onShiftClick, isPossibleDuplicate }: GameCardProps) {
   const isSelected = useGameStore((s) => !!s.selectedGameIds[game.appid]);
   const toggleGameSelection = useGameStore((s) => s.toggleGameSelection);
   const clearSelection = useGameStore((s) => s.clearSelection);
@@ -76,6 +77,8 @@ export function GameCard({ game, onContextMenu, onDoubleClick, onShiftClick, isP
       }}
       onClick={handleClick}
       onContextMenu={(e) => onContextMenu(e, game)}
+      onPointerEnter={onIntent}
+      onFocus={onIntent}
       className={`game-card group cursor-pointer overflow-hidden rounded-xl ${
         isSelected
           ? "border-2 border-repressurizer-accent"

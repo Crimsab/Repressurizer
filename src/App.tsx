@@ -1,4 +1,4 @@
-import { Component, useEffect, useRef, useState } from "react";
+import { Component, lazy, Suspense, useEffect, useRef, useState } from "react";
 import type { ReactNode, ErrorInfo } from "react";
 import { check, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
@@ -32,15 +32,16 @@ import {
 import { appLog } from "./lib/appLog";
 import { notifyDesktop } from "./lib/desktopNotifications";
 import { useT } from "./lib/i18n";
-import { SetupWizard } from "./components/setup/SetupWizard";
 import { Header } from "./components/layout/Header";
 import { Sidebar } from "./components/layout/Sidebar";
 import { GameGrid } from "./components/games/GameGrid";
 import { StatusBar } from "./components/layout/StatusBar";
 import { FilterBar } from "./components/layout/FilterBar";
 import { ToastContainer } from "./components/ui/Toast";
-import { OnboardingTour } from "./components/ui/OnboardingTour";
 import { WarningCircle, ArrowCounterClockwise, GameController, CloudArrowDown, X } from "@phosphor-icons/react";
+
+const SetupWizard = lazy(() => import("./components/setup/SetupWizard").then((m) => ({ default: m.SetupWizard })));
+const OnboardingTour = lazy(() => import("./components/ui/OnboardingTour").then((m) => ({ default: m.OnboardingTour })));
 
 class ErrorBoundary extends Component<
   { children: ReactNode },
@@ -532,7 +533,13 @@ function AppContent() {
     }
   }, [interactiveStartupReady, settings.setupComplete, gameCount]);
 
-  if (!settings.setupComplete) return <SetupWizard />;
+  if (!settings.setupComplete) {
+    return (
+      <Suspense fallback={<LoadingScreen />}>
+        <SetupWizard />
+      </Suspense>
+    );
+  }
   if (reloading) return <LoadingScreen />;
   if (reloadError) return <ErrorScreen error={reloadError} onReset={() => settings.reset()} />;
 
@@ -560,12 +567,14 @@ function AppContent() {
         <StatusBar />
       </div>
       {showOnboarding && (
-        <OnboardingTour
-          onComplete={() => {
-            setShowOnboarding(false);
-            settings.setSettings({ onboardingComplete: true });
-          }}
-        />
+        <Suspense fallback={null}>
+          <OnboardingTour
+            onComplete={() => {
+              setShowOnboarding(false);
+              settings.setSettings({ onboardingComplete: true });
+            }}
+          />
+        </Suspense>
       )}
       {showCloseChoice && (
         <CloseChoiceDialog
