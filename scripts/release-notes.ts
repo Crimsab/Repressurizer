@@ -58,11 +58,13 @@ const releaseNotes = [
   "- `Repressurizer_*_x64-setup.exe`: Windows installer",
   "- `Repressurizer-portable-windows-x64.zip`: portable Windows build",
   "- `Repressurizer-portable.exe`: unpacked portable executable",
+  "- `Repressurizer-cli-windows-x64.zip`: command-line tools for scripts and automation",
+  "- `Repressurizer-cli.exe`: unpacked command-line executable",
   "- `latest.json`: updater manifest",
   "",
   "## Install Notes",
   "",
-  "Use the installer for normal Windows installs. Use the portable ZIP when you want a self-contained executable.",
+  "Use the installer for normal Windows installs. Use the portable ZIP when you want a self-contained executable. Use the CLI ZIP for scriptable diagnostics, snapshot validation/export, automation publishing, and guarded SAM commands.",
   ""
 ].join("\n");
 

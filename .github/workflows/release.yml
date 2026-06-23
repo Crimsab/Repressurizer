@@ -155,7 +155,6 @@ jobs:
           request_rate: 4
           files: |
             artifacts/*.exe
-            artifacts/*.zip
 
       - name: Check VirusTotal verdicts
         id: vt-verdict
