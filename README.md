@@ -123,7 +123,7 @@ Auto-categorizing uses cached metadata when possible, fetches missing Steam deta
 - HowLongToBeat: fetches main story, main plus extras, completionist time, and confidence data.
 - Automation export: writes or publishes a stable `repressurizer.library-snapshot.v1` JSON snapshot with games, collections, Steam metadata, HLTB data, and optional achievement/wishlist/Steam Family summaries. HTTP targets are configurable and uploads are skipped when the snapshot checksum has not changed.
 - Integration libraries: TypeScript receivers can use `@crimsab/repressurizer-integration`; Rust receivers can use `repressurizer-integration`.
-- CLI: the release includes `repressurizer-cli` for JSON diagnostics, snapshot export/publish, cache inspection, backups, SAM probe/schema/backup commands, and guarded SAM achievement actions.
+- CLI: the release includes `repressurizer-cli` for JSON diagnostics, snapshot export/publish, cache inspection, backups, SAM probe/schema/backup commands, and guarded one-line SAM achievement actions that use the saved Steam path.
 - Local Steam files: reads and writes collection data directly, with backups.
 
 For setup, receiver expectations, CLI usage, and schema/package details, see [docs/automation-export.md](docs/automation-export.md), [docs/cli.md](docs/cli.md), and [docs/integrations/repressurizer-snapshot-v1.md](docs/integrations/repressurizer-snapshot-v1.md).

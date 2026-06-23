@@ -20,6 +20,11 @@ repressurizer-cli sam probe <steam_path> <app_id>
 repressurizer-cli sam schema <steam_path> <app_id>
 repressurizer-cli sam backups <app_id>
 repressurizer-cli sam backup-dir <app_id>
+repressurizer-cli sam unlock <app_id> <achievement_id...> --yes
+repressurizer-cli sam lock <app_id> <achievement_id...> --yes
+repressurizer-cli sam unlock-all <app_id> --yes
+repressurizer-cli sam lock-all <app_id> --yes
+repressurizer-cli sam restore <app_id> <backup_path> --yes
 repressurizer-cli sam action <input.json|-> --yes
 ```
 
@@ -48,3 +53,12 @@ Example action input:
 ```
 
 Use `-` instead of a file path to read the action JSON from stdin.
+
+The short commands use the Steam path saved during Repressurizer setup:
+
+```powershell
+.\repressurizer-cli.exe sam unlock 632470 ACHIEVEMENT_API_NAME --yes
+.\repressurizer-cli.exe sam lock 632470 ACHIEVEMENT_API_NAME --yes
+.\repressurizer-cli.exe sam unlock-all 632470 --yes
+.\repressurizer-cli.exe sam restore 632470 "C:\Users\you\AppData\Roaming\Repressurizer\sam_backups\632470\backup.json" --yes
+```

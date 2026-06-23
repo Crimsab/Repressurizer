@@ -26,6 +26,11 @@ fn usage() -> ! {
            repressurizer-cli sam schema <steam_path> <app_id>\n\
            repressurizer-cli sam backups <app_id>\n\
            repressurizer-cli sam backup-dir <app_id>\n\
+           repressurizer-cli sam unlock <app_id> <achievement_id...> --yes\n\
+           repressurizer-cli sam lock <app_id> <achievement_id...> --yes\n\
+           repressurizer-cli sam unlock-all <app_id> --yes\n\
+           repressurizer-cli sam lock-all <app_id> --yes\n\
+           repressurizer-cli sam restore <app_id> <backup_path> --yes\n\
            repressurizer-cli sam action <input.json|-> --yes\n"
     );
     process::exit(2);
@@ -198,6 +203,104 @@ fn sam_command(args: &[String]) -> Result<(), String> {
             "SAM action writes to Steam achievement state. Re-run with: sam action <input.json|-> --yes"
                 .to_string(),
         ),
+        Some("unlock") | Some("lock") | Some("unlock-all") | Some("lock-all") | Some("restore") => {
+            run_sam_short_action(args)
+        }
+        _ => usage(),
+    }
+}
+
+fn run_sam_short_action(args: &[String]) -> Result<(), String> {
+    if let Some(command) = args.first().map(String::as_str) {
+        if args.last().map(String::as_str) != Some("--yes") {
+            return Err(format!(
+                "SAM {command} writes to Steam achievement state. Re-run with --yes."
+            ));
+        }
+    }
+    let steam_path = saved_steam_path()?;
+    let input = short_sam_action_input(args, steam_path)?;
+    let result = sam::sam_achievement_action(input)?;
+    print_json(&result)
+}
+
+fn short_sam_action_input(
+    args: &[String],
+    steam_path: String,
+) -> Result<sam::SamAchievementActionInput, String> {
+    let Some(command) = args.first().map(String::as_str) else {
+        usage();
+    };
+    if args.last().map(String::as_str) != Some("--yes") {
+        return Err(format!(
+            "SAM {command} writes to Steam achievement state. Re-run with --yes."
+        ));
+    }
+
+    let app_id = args
+        .get(1)
+        .ok_or_else(|| format!("sam {command} needs an appId"))?
+        .as_str();
+    let app_id = parse_app_id(app_id)?;
+    match command {
+        "unlock" | "lock" => {
+            if args.len() < 4 {
+                return Err(format!(
+                    "sam {command} needs at least one achievement API name"
+                ));
+            }
+            let achievement_ids = args[2..args.len() - 1]
+                .iter()
+                .filter(|id| !id.trim().is_empty())
+                .cloned()
+                .collect::<Vec<_>>();
+            if achievement_ids.is_empty() {
+                return Err(format!(
+                    "sam {command} needs at least one achievement API name"
+                ));
+            }
+            Ok(sam::SamAchievementActionInput {
+                steam_path,
+                app_id,
+                action: if command == "unlock" {
+                    "unlock_selected".to_string()
+                } else {
+                    "lock_selected".to_string()
+                },
+                achievement_ids,
+                backup_path: None,
+            })
+        }
+        "unlock-all" | "lock-all" => {
+            if args.len() != 3 {
+                return Err(format!("sam {command} usage: sam {command} <app_id> --yes"));
+            }
+            Ok(sam::SamAchievementActionInput {
+                steam_path,
+                app_id,
+                action: if command == "unlock-all" {
+                    "unlock_all".to_string()
+                } else {
+                    "lock_all".to_string()
+                },
+                achievement_ids: Vec::new(),
+                backup_path: None,
+            })
+        }
+        "restore" => {
+            if args.len() != 4 {
+                return Err(
+                    "sam restore usage: sam restore <app_id> <backup_path> --yes".to_string(),
+                );
+            }
+            Ok(sam::SamAchievementActionInput {
+                steam_path,
+                app_id,
+                action: "restore_backup".to_string(),
+                achievement_ids: Vec::new(),
+                backup_path: args.get(2).cloned(),
+            })
+        }
         _ => usage(),
     }
 }
@@ -218,6 +321,34 @@ fn read_sam_action_input(path: &str) -> Result<sam::SamAchievementActionInput, S
 
 fn parse_sam_action_input(raw: &str) -> Result<sam::SamAchievementActionInput, String> {
     serde_json::from_str(raw).map_err(|error| format!("invalid SAM action JSON: {error}"))
+}
+
+fn saved_steam_path() -> Result<String, String> {
+    let settings = read_settings_json().map_err(|error| {
+        format!(
+            "No saved Steam path found. Complete Repressurizer setup first or use sam action JSON. ({error})"
+        )
+    })?;
+    settings
+        .get("steamPath")
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|path| !path.is_empty())
+        .map(ToString::to_string)
+        .ok_or_else(|| {
+            "No saved Steam path found. Complete Repressurizer setup first or use sam action JSON."
+                .to_string()
+        })
+}
+
+fn read_settings_json() -> Result<Value, String> {
+    let path = app_data_dir()
+        .map(|dir| dir.join("settings.json"))
+        .ok_or_else(|| "Could not resolve Repressurizer app data directory".to_string())?;
+    let data = fs::read_to_string(&path)
+        .map_err(|error| format!("failed to read settings file {}: {error}", path.display()))?;
+    serde_json::from_str::<Value>(&data)
+        .map_err(|error| format!("failed to parse settings file {}: {error}", path.display()))
 }
 
 fn block_on<T>(future: impl std::future::Future<Output = Result<T, String>>) -> Result<T, String> {
@@ -377,5 +508,37 @@ mod tests {
             parse_sam_action_input(r#"{"appId":632470}"#).expect_err("missing fields should fail");
 
         assert!(error.contains("invalid SAM action JSON"));
+    }
+
+    #[test]
+    fn builds_short_sam_unlock_input_from_args() {
+        let steam_path = "C:\\Program Files (x86)\\Steam".to_string();
+        let args = vec![
+            "unlock".to_string(),
+            "632470".to_string(),
+            "ACH_ONE".to_string(),
+            "ACH_TWO".to_string(),
+            "--yes".to_string(),
+        ];
+        let input = short_sam_action_input(&args, steam_path).expect("short SAM action");
+
+        assert_eq!(input.steam_path, "C:\\Program Files (x86)\\Steam");
+        assert_eq!(input.app_id, 632470);
+        assert_eq!(input.action, "unlock_selected");
+        assert_eq!(input.achievement_ids, vec!["ACH_ONE", "ACH_TWO"]);
+        assert!(input.backup_path.is_none());
+    }
+
+    #[test]
+    fn short_sam_actions_require_yes() {
+        let steam_path = "C:\\Program Files (x86)\\Steam".to_string();
+        let args = vec![
+            "unlock".to_string(),
+            "632470".to_string(),
+            "ACH_ONE".to_string(),
+        ];
+        let error = short_sam_action_input(&args, steam_path).expect_err("--yes is required");
+
+        assert!(error.contains("Re-run with --yes"));
     }
 }
