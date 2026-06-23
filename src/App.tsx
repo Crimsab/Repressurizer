@@ -148,6 +148,7 @@ function AppContent() {
   const hydrateFamily = useFamilyStore((s) => s.hydrate);
   const hydratePlayHistory = usePlayHistoryStore((s) => s.hydrate);
   const hydrateSteamAppIndex = useSteamAppIndexStore((s) => s.hydrate);
+  const hydrateSettingsFromDisk = useSettingsStore((s) => s.hydrateFromDisk);
   const setCollections = useCategoryStore((s) => s.setCollections);
   const [reloading, setReloading] = useState(false);
   const [reloadError, setReloadError] = useState("");
@@ -157,7 +158,7 @@ function AppContent() {
 
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showCloseChoice, setShowCloseChoice] = useState(false);
-  const [startupContext, setStartupContext] = useState<{ launchedFromAutostart: boolean } | null>(null);
+  const [startupContext, setStartupContext] = useState<{ launchedFromAutostart: boolean; mainWindowCreated: boolean } | null>(null);
   const [windowActivated, setWindowActivated] = useState(false);
 
   const automationPublishConfigured =
@@ -189,21 +190,24 @@ function AppContent() {
   const theme = useSettingsStore((s) => s.theme);
   useEffect(() => { applyAccentColor(accentColor); }, [accentColor]);
   useEffect(() => { applyTheme(theme ?? "dark"); }, [theme]);
+  useEffect(() => {
+    hydrateSettingsFromDisk().catch(() => {});
+  }, [hydrateSettingsFromDisk]);
 
   useEffect(() => {
     let cancelled = false;
     getStartupContext()
       .then((context) => {
         if (cancelled) return;
-        const next = context ?? { launchedFromAutostart: false };
+        const next = context ?? { launchedFromAutostart: false, mainWindowCreated: true };
         setStartupContext(next);
-        if (!next.launchedFromAutostart) {
+        if (!next.launchedFromAutostart || next.mainWindowCreated) {
           setWindowActivated(true);
         }
       })
       .catch(() => {
         if (cancelled) return;
-        setStartupContext({ launchedFromAutostart: false });
+        setStartupContext({ launchedFromAutostart: false, mainWindowCreated: true });
         setWindowActivated(true);
       });
     return () => {
@@ -440,34 +444,6 @@ function AppContent() {
     }, 7000);
     return () => window.clearTimeout(timer);
   }, [startupContext, quietTrayStartup, settings.setupComplete, settings.checkUpdatesOnStartup]);
-
-  useEffect(() => {
-    if (!settings.setupComplete || !settings.automationPublishEnabled || !settings.automationPublishUrl.trim()) return;
-    let cancelled = false;
-
-    const run = async () => {
-      try {
-        if (cancelled) return;
-        await publishAutomationFromStores(false, false);
-      } catch (error) {
-        console.warn("Automation export publish failed:", error);
-      }
-    };
-
-    const startupTimer = window.setTimeout(() => void run(), 10000);
-    const intervalHours = Math.max(1, Number(settings.automationPublishIntervalHours || 24));
-    const intervalTimer = window.setInterval(() => void run(), intervalHours * 60 * 60 * 1000);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(startupTimer);
-      window.clearInterval(intervalTimer);
-    };
-  }, [
-    settings.setupComplete,
-    settings.automationPublishEnabled,
-    settings.automationPublishUrl,
-    settings.automationPublishIntervalHours,
-  ]);
 
   const installUpdate = async () => {
     if (!availableUpdate) return;

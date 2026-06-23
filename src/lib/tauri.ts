@@ -445,6 +445,7 @@ export async function quitApp(): Promise<void> {
 
 export interface StartupContext {
   launchedFromAutostart: boolean;
+  mainWindowCreated: boolean;
 }
 
 export async function getStartupContext(): Promise<StartupContext> {

@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import type { AppSettings, AppTheme } from "../lib/types";
 
 interface SettingsState extends AppSettings {
+  hydrateFromDisk: () => Promise<void>;
   setSettings: (settings: Partial<AppSettings>) => void;
   reset: () => void;
 }
@@ -139,6 +140,20 @@ function darkenHex(hex: string, amount: number): string {
 
 export const useSettingsStore = create<SettingsState>((set) => ({
   ...loadFromStorage(),
+  hydrateFromDisk: async () => {
+    try {
+      const raw = await invoke<string | null>("load_app_data", { key: "settings.json" });
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as Partial<AppSettings>;
+      set((state) => {
+        const next = { ...state, ...parsed };
+        saveToStorage(next);
+        return next;
+      });
+    } catch {
+      // Disk settings are a best-effort sync source for native background updates.
+    }
+  },
   setSettings: (settings) =>
     set((state) => {
       const next = { ...state, ...settings };

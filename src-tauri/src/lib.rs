@@ -1,3 +1,4 @@
+pub mod automation;
 pub mod categorizer;
 pub mod hltb;
 pub mod steam;
@@ -29,6 +30,7 @@ struct HttpPublishResult {
 #[serde(rename_all = "camelCase")]
 struct StartupContext {
     launched_from_autostart: bool,
+    main_window_created: bool,
 }
 
 #[derive(Deserialize)]
@@ -152,9 +154,10 @@ fn quit_app(app: tauri::AppHandle) {
 }
 
 #[tauri::command]
-fn get_startup_context() -> StartupContext {
+fn get_startup_context(app: tauri::AppHandle) -> StartupContext {
     StartupContext {
         launched_from_autostart: launched_from_autostart(),
+        main_window_created: app.get_webview_window("main").is_some(),
     }
 }
 
@@ -484,7 +487,7 @@ pub fn run() {
                         let _ = app.emit("repressurizer-open-settings-requested", ());
                     }
                     "publish_snapshot" => {
-                        let _ = app.emit("repressurizer-publish-automation-requested", ());
+                        automation::trigger_publish_now();
                     }
                     "create_backup" => {
                         let _ = app.emit("repressurizer-create-backup-requested", ());
@@ -512,17 +515,14 @@ pub fn run() {
             let tray_only_startup = launched_from_autostart()
                 && read_app_setting_bool("startOnLogin").unwrap_or(false)
                 && read_app_setting_string("startOnLoginMode").as_deref() != Some("window");
-            let webview_automation_required = read_app_setting_bool("automationPublishEnabled")
-                .unwrap_or(false)
-                && read_app_setting_string("automationPublishUrl")
-                    .map(|url| !url.trim().is_empty())
-                    .unwrap_or(false);
 
-            if tray_only_startup && !webview_automation_required {
+            if tray_only_startup {
                 hide_main_window_handle(app.handle());
             } else {
                 show_main_window(app.handle());
             }
+
+            automation::start_worker(app.handle().clone());
 
             Ok(())
         })

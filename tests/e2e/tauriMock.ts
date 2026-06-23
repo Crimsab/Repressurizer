@@ -289,7 +289,7 @@ export async function installTauriMock(page: Page) {
             autostartEnabled = false;
             return null;
           case "get_startup_context":
-            return { launchedFromAutostart: false };
+            return { launchedFromAutostart: false, mainWindowCreated: true };
           case "fetch_library":
             return games;
           case "fetch_steam_app_list":
