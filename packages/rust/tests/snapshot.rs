@@ -1,8 +1,10 @@
 use repressurizer_integration::{
-    compute_library_snapshot_checksum, diff_library_snapshots, get_snapshot_hltb,
-    index_snapshot_by_app_id, parse_library_snapshot_str, validate_library_snapshot,
-    verify_library_snapshot_checksum, LibrarySnapshot, LibrarySnapshotGame,
-    LIBRARY_SNAPSHOT_SCHEMA_JSON, LIBRARY_SNAPSHOT_SCHEMA_VERSION,
+    compute_library_snapshot_checksum, diff_library_snapshots, get_snapshot_achievements,
+    get_snapshot_flags, get_snapshot_hltb, get_snapshot_ownership, get_snapshot_wishlist,
+    group_snapshot_games_by_collection, index_snapshot_by_app_id, parse_library_snapshot_str,
+    summarize_snapshot, validate_library_snapshot, verify_library_snapshot_checksum,
+    LibrarySnapshot, LibrarySnapshotGame, LibrarySnapshotGameFlags, LIBRARY_SNAPSHOT_SCHEMA_JSON,
+    LIBRARY_SNAPSHOT_SCHEMA_VERSION,
 };
 
 const FIXTURE: &str = include_str!("fixtures/repressurizer-library-snapshot-v1.json");
@@ -29,6 +31,33 @@ fn indexes_games_and_exposes_hltb_by_app_id() {
         get_snapshot_hltb(&snapshot, 632470).and_then(|hltb| hltb.main_story),
         Some(23.0)
     );
+    assert_eq!(
+        get_snapshot_achievements(&snapshot, 632470).map(|achievements| achievements.total),
+        Some(45)
+    );
+    assert_eq!(
+        get_snapshot_wishlist(&snapshot, 632470).map(|wishlist| wishlist.priority),
+        Some(1)
+    );
+    assert_eq!(
+        get_snapshot_ownership(&snapshot, 632470).map(|ownership| ownership.family_shared),
+        Some(true)
+    );
+    assert_eq!(
+        get_snapshot_flags(&snapshot, 632470).map(|flags| flags.has_achievements),
+        Some(true)
+    );
+    assert_eq!(
+        group_snapshot_games_by_collection(&snapshot)
+            .get("user-collections.rpg")
+            .and_then(|games| games.first())
+            .map(|game| game.app_id),
+        Some(632470)
+    );
+    let summary = summarize_snapshot(&snapshot);
+    assert_eq!(summary.achievements, 1);
+    assert_eq!(summary.wishlist, 1);
+    assert_eq!(summary.family_shared, 1);
 }
 
 #[test]
@@ -48,8 +77,25 @@ fn diffs_snapshots_by_app_id() {
         collections: Vec::new(),
         details: None,
         hltb: None,
+        achievements: None,
+        wishlist: None,
+        ownership: None,
+        flags: Some(LibrarySnapshotGameFlags {
+            collection_only: false,
+            has_details: false,
+            missing_details: true,
+            has_hltb: false,
+            has_achievements: false,
+            wishlist: false,
+            family_shared: false,
+            owned_by_current_user: true,
+            non_game: false,
+        }),
     });
     next.summary.game_count = 2;
+    next.summary.achievement_count = Some(1);
+    next.summary.wishlist_count = Some(1);
+    next.summary.family_shared_count = Some(1);
     next.checksum = compute_library_snapshot_checksum(&next);
 
     let diff = diff_library_snapshots(&previous, &next);

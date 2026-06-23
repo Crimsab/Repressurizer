@@ -67,6 +67,18 @@
         "hltbCount": {
           "type": "integer",
           "minimum": 0
+        },
+        "achievementCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "wishlistCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "familySharedCount": {
+          "type": "integer",
+          "minimum": 0
         }
       }
     },
@@ -247,6 +259,172 @@
         }
       }
     },
+    "achievements": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "total", "achieved", "percent", "complete", "hasDetails"],
+      "properties": {
+        "source": {
+          "const": "steam_web_api"
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "achieved": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "percent": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "maximum": 100
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "hasDetails": {
+          "type": "boolean"
+        }
+      }
+    },
+    "wishlist": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "priority", "dateAdded", "dateAddedAt", "fetchedAt"],
+      "properties": {
+        "source": {
+          "const": "steam_wishlist"
+        },
+        "priority": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "dateAdded": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "dateAddedAt": {
+          "type": ["string", "null"],
+          "format": "date-time"
+        },
+        "fetchedAt": {
+          "type": ["string", "null"],
+          "format": "date-time"
+        }
+      }
+    },
+    "ownership": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "authUsed",
+        "ownerSteamIdTail",
+        "ownerSteamIdTails",
+        "ownerCount",
+        "ownedByCurrentUser",
+        "familyShared",
+        "excluded",
+        "excludeReason",
+        "nonGame",
+        "appType",
+        "fetchedAt"
+      ],
+      "properties": {
+        "source": {
+          "const": "steam_family"
+        },
+        "authUsed": {
+          "type": ["string", "null"]
+        },
+        "ownerSteamIdTail": {
+          "type": ["string", "null"],
+          "minLength": 1,
+          "maxLength": 4
+        },
+        "ownerSteamIdTails": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4
+          }
+        },
+        "ownerCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "ownedByCurrentUser": {
+          "type": "boolean"
+        },
+        "familyShared": {
+          "type": "boolean"
+        },
+        "excluded": {
+          "type": "boolean"
+        },
+        "excludeReason": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "nonGame": {
+          "type": "boolean"
+        },
+        "appType": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "fetchedAt": {
+          "type": ["string", "null"],
+          "format": "date-time"
+        }
+      }
+    },
+    "flags": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "collectionOnly",
+        "hasDetails",
+        "missingDetails",
+        "hasHltb",
+        "hasAchievements",
+        "wishlist",
+        "familyShared",
+        "ownedByCurrentUser",
+        "nonGame"
+      ],
+      "properties": {
+        "collectionOnly": {
+          "type": "boolean"
+        },
+        "hasDetails": {
+          "type": "boolean"
+        },
+        "missingDetails": {
+          "type": "boolean"
+        },
+        "hasHltb": {
+          "type": "boolean"
+        },
+        "hasAchievements": {
+          "type": "boolean"
+        },
+        "wishlist": {
+          "type": "boolean"
+        },
+        "familyShared": {
+          "type": "boolean"
+        },
+        "ownedByCurrentUser": {
+          "type": "boolean"
+        },
+        "nonGame": {
+          "type": "boolean"
+        }
+      }
+    },
     "game": {
       "type": "object",
       "additionalProperties": false,
@@ -314,6 +492,39 @@
               "type": "null"
             }
           ]
+        },
+        "achievements": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/achievements"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "wishlist": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/wishlist"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ownership": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/ownership"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "flags": {
+          "$ref": "#/$defs/flags"
         }
       }
     }

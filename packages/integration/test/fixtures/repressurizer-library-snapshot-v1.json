@@ -12,7 +12,10 @@
   "summary": {
     "gameCount": 1,
     "collectionCount": 1,
-    "hltbCount": 1
+    "hltbCount": 1,
+    "achievementCount": 1,
+    "wishlistCount": 1,
+    "familySharedCount": 1
   },
   "collections": [
     {
@@ -63,8 +66,48 @@
         "hltbGameId": 57335,
         "matchedName": "Disco Elysium",
         "confidence": 118.2
+      },
+      "achievements": {
+        "source": "steam_web_api",
+        "total": 45,
+        "achieved": 12,
+        "percent": 26.7,
+        "complete": false,
+        "hasDetails": false
+      },
+      "wishlist": {
+        "source": "steam_wishlist",
+        "priority": 1,
+        "dateAdded": 1700000100,
+        "dateAddedAt": "2023-11-14T22:15:00.000Z",
+        "fetchedAt": "2026-06-18T18:01:00.000Z"
+      },
+      "ownership": {
+        "source": "steam_family",
+        "authUsed": "access_token",
+        "ownerSteamIdTail": "2345",
+        "ownerSteamIdTails": ["9999"],
+        "ownerCount": 1,
+        "ownedByCurrentUser": false,
+        "familyShared": true,
+        "excluded": false,
+        "excludeReason": 0,
+        "nonGame": false,
+        "appType": 1,
+        "fetchedAt": "2026-06-18T18:02:00.000Z"
+      },
+      "flags": {
+        "collectionOnly": false,
+        "hasDetails": true,
+        "missingDetails": false,
+        "hasHltb": true,
+        "hasAchievements": true,
+        "wishlist": true,
+        "familyShared": true,
+        "ownedByCurrentUser": false,
+        "nonGame": false
       }
     }
   ],
-  "checksum": "fnv1a32:71296933"
+  "checksum": "fnv1a32:bc3677bc"
 }

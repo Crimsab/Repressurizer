@@ -23,9 +23,9 @@ Every snapshot contains:
 - `generatedAt`: export time, ISO date-time
 - `source`: app name and Repressurizer version
 - `steam`: privacy-safe Steam metadata, with only the SteamID64 tail
-- `summary`: counts for games, collections, and HLTB records
+- `summary`: counts for games, collections, HLTB records, and optional enriched records
 - `collections`: collection keys, labels, dynamic flag, and appIds
-- `games`: one row per Steam appId, with playtime, last played, collections, Steam details, and optional HLTB data
+- `games`: one row per Steam appId, with playtime, last played, collections, Steam details, optional HLTB data, and optional enrichment blocks
 - `checksum`: stable `fnv1a32` checksum computed from content, excluding `generatedAt`
 
 Receivers should key records by `appId`. Display `source` and `schemaVersion` near imported data so users can distinguish Repressurizer snapshots from live Steam API data, local app databases, or manual imports.
@@ -44,6 +44,17 @@ HLTB values are exported per game when Repressurizer has matched data:
 The value is still third-party matched metadata, not Steam metadata. Receivers should keep the HLTB provenance visible and may apply their own confidence threshold before showing or storing it.
 
 Game Vault currently accepts this snapshot through `POST /api/steam/repressurizer/import` and stores collection/game/HLTB rows in its own database. It should prefer this structured JSON over older ad-hoc exports.
+
+## Optional Enrichment Blocks
+
+Snapshot v1 is additive. Newer Repressurizer versions may include these optional game blocks:
+
+- `achievements`: read-only Steam Web API completion summary with `total`, `achieved`, `percent`, and `complete`.
+- `wishlist`: wishlist priority and Steam-added timestamp from the local wishlist cache.
+- `ownership`: Steam Family ownership state. Full Steam IDs are not exported; only short tails are included for debugging.
+- `flags`: derived booleans for common receiver filters such as `collectionOnly`, `missingDetails`, `hasHltb`, `hasAchievements`, `wishlist`, and `familyShared`.
+
+Receivers should treat these fields as optional. They may be missing on older snapshots or when the related Repressurizer cache has not been fetched yet.
 
 ## Receiver Contract
 
@@ -82,7 +93,7 @@ const gamesByAppId = indexSnapshotByAppId(result.snapshot);
 
 ## Versioning
 
-Use `schemaVersion` for breaking wire-format changes. Additive fields should ship in a new minor package version first; receivers should ignore unknown package versions but should not accept unknown schema versions as v1.
+Use `schemaVersion` for breaking wire-format changes. Additive optional fields stay in `repressurizer.library-snapshot.v1` and ship in a new minor package version first; receivers should ignore unknown package versions but should not accept unknown schema versions as v1.
 
 ## Package Release
 

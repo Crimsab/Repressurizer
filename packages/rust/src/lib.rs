@@ -43,6 +43,12 @@ pub struct LibrarySnapshotSummary {
     pub game_count: usize,
     pub collection_count: usize,
     pub hltb_count: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub achievement_count: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wishlist_count: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub family_shared_count: Option<usize>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -111,6 +117,66 @@ pub struct LibrarySnapshotGame {
     pub collections: Vec<LibrarySnapshotCollectionRef>,
     pub details: Option<LibrarySnapshotGameDetails>,
     pub hltb: Option<LibrarySnapshotHltb>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub achievements: Option<LibrarySnapshotAchievements>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub wishlist: Option<LibrarySnapshotWishlist>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ownership: Option<LibrarySnapshotOwnership>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub flags: Option<LibrarySnapshotGameFlags>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct LibrarySnapshotAchievements {
+    pub source: String,
+    pub total: u32,
+    pub achieved: u32,
+    pub percent: Option<f64>,
+    pub complete: bool,
+    pub has_details: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct LibrarySnapshotWishlist {
+    pub source: String,
+    pub priority: u32,
+    pub date_added: u64,
+    pub date_added_at: Option<String>,
+    pub fetched_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct LibrarySnapshotOwnership {
+    pub source: String,
+    pub auth_used: Option<String>,
+    pub owner_steam_id_tail: Option<String>,
+    pub owner_steam_id_tails: Vec<String>,
+    pub owner_count: usize,
+    pub owned_by_current_user: bool,
+    pub family_shared: bool,
+    pub excluded: bool,
+    pub exclude_reason: u32,
+    pub non_game: bool,
+    pub app_type: u32,
+    pub fetched_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct LibrarySnapshotGameFlags {
+    pub collection_only: bool,
+    pub has_details: bool,
+    pub missing_details: bool,
+    pub has_hltb: bool,
+    pub has_achievements: bool,
+    pub wishlist: bool,
+    pub family_shared: bool,
+    pub owned_by_current_user: bool,
+    pub non_game: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -171,6 +237,18 @@ pub struct LibrarySnapshotDiff {
     pub removed: Vec<LibrarySnapshotGame>,
     pub changed: Vec<LibrarySnapshotChange>,
     pub unchanged: Vec<LibrarySnapshotGame>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LibrarySnapshotSummaryStats {
+    pub games: usize,
+    pub collections: usize,
+    pub hltb: usize,
+    pub achievements: usize,
+    pub wishlist: usize,
+    pub family_shared: usize,
+    pub collection_only: usize,
+    pub missing_details: usize,
 }
 
 pub fn parse_library_snapshot_str(input: &str) -> Result<LibrarySnapshot, SnapshotError> {
@@ -246,6 +324,58 @@ pub fn validate_library_snapshot(
             &mut issues,
             "$.summary.hltbCount",
             "must match games with HLTB data",
+        );
+    }
+    let achievement_count = snapshot
+        .games
+        .iter()
+        .filter(|game| game.achievements.is_some())
+        .count();
+    if snapshot
+        .summary
+        .achievement_count
+        .is_some_and(|count| count != achievement_count)
+    {
+        push_issue(
+            &mut issues,
+            "$.summary.achievementCount",
+            "must match games with achievements data",
+        );
+    }
+    let wishlist_count = snapshot
+        .games
+        .iter()
+        .filter(|game| game.wishlist.is_some())
+        .count();
+    if snapshot
+        .summary
+        .wishlist_count
+        .is_some_and(|count| count != wishlist_count)
+    {
+        push_issue(
+            &mut issues,
+            "$.summary.wishlistCount",
+            "must match games with wishlist data",
+        );
+    }
+    let family_shared_count = snapshot
+        .games
+        .iter()
+        .filter(|game| {
+            game.ownership
+                .as_ref()
+                .is_some_and(|ownership| ownership.family_shared)
+        })
+        .count();
+    if snapshot
+        .summary
+        .family_shared_count
+        .is_some_and(|count| count != family_shared_count)
+    {
+        push_issue(
+            &mut issues,
+            "$.summary.familySharedCount",
+            "must match family-shared games",
         );
     }
 
@@ -327,6 +457,99 @@ pub fn validate_library_snapshot(
                 format!("{path}.hltb.confidence"),
             );
         }
+        if let Some(achievements) = &game.achievements {
+            if achievements.source != "steam_web_api" {
+                push_issue(
+                    &mut issues,
+                    format!("{path}.achievements.source"),
+                    "must be steam_web_api",
+                );
+            }
+            if achievements.achieved > achievements.total {
+                push_issue(
+                    &mut issues,
+                    format!("{path}.achievements.achieved"),
+                    "must be less than or equal to total",
+                );
+            }
+            check_optional_non_negative(
+                &mut issues,
+                &achievements.percent,
+                format!("{path}.achievements.percent"),
+            );
+            if achievements.percent.is_some_and(|percent| percent > 100.0) {
+                push_issue(
+                    &mut issues,
+                    format!("{path}.achievements.percent"),
+                    "must be less than or equal to 100",
+                );
+            }
+        }
+        if let Some(wishlist) = &game.wishlist {
+            if wishlist.source != "steam_wishlist" {
+                push_issue(
+                    &mut issues,
+                    format!("{path}.wishlist.source"),
+                    "must be steam_wishlist",
+                );
+            }
+            if let Some(date_added_at) = &wishlist.date_added_at {
+                if !is_rfc3339(date_added_at) {
+                    push_issue(
+                        &mut issues,
+                        format!("{path}.wishlist.dateAddedAt"),
+                        "must be a valid date-time",
+                    );
+                }
+            }
+            if let Some(fetched_at) = &wishlist.fetched_at {
+                if !is_rfc3339(fetched_at) {
+                    push_issue(
+                        &mut issues,
+                        format!("{path}.wishlist.fetchedAt"),
+                        "must be a valid date-time",
+                    );
+                }
+            }
+        }
+        if let Some(ownership) = &game.ownership {
+            if ownership.source != "steam_family" {
+                push_issue(
+                    &mut issues,
+                    format!("{path}.ownership.source"),
+                    "must be steam_family",
+                );
+            }
+            if ownership
+                .owner_steam_id_tail
+                .as_ref()
+                .is_some_and(|tail| tail.len() > 4)
+            {
+                push_issue(
+                    &mut issues,
+                    format!("{path}.ownership.ownerSteamIdTail"),
+                    "must be at most four characters",
+                );
+            }
+            for (tail_index, tail) in ownership.owner_steam_id_tails.iter().enumerate() {
+                if tail.len() > 4 {
+                    push_issue(
+                        &mut issues,
+                        format!("{path}.ownership.ownerSteamIdTails[{tail_index}]"),
+                        "must be at most four characters",
+                    );
+                }
+            }
+            if let Some(fetched_at) = &ownership.fetched_at {
+                if !is_rfc3339(fetched_at) {
+                    push_issue(
+                        &mut issues,
+                        format!("{path}.ownership.fetchedAt"),
+                        "must be a valid date-time",
+                    );
+                }
+            }
+        }
     }
 
     if !snapshot.checksum.starts_with("fnv1a32:")
@@ -366,10 +589,127 @@ pub fn get_snapshot_hltb(snapshot: &LibrarySnapshot, app_id: u32) -> Option<&Lib
     get_snapshot_game(snapshot, app_id).and_then(|game| game.hltb.as_ref())
 }
 
+pub fn get_snapshot_achievements(
+    snapshot: &LibrarySnapshot,
+    app_id: u32,
+) -> Option<&LibrarySnapshotAchievements> {
+    get_snapshot_game(snapshot, app_id).and_then(|game| game.achievements.as_ref())
+}
+
+pub fn get_snapshot_wishlist(
+    snapshot: &LibrarySnapshot,
+    app_id: u32,
+) -> Option<&LibrarySnapshotWishlist> {
+    get_snapshot_game(snapshot, app_id).and_then(|game| game.wishlist.as_ref())
+}
+
+pub fn get_snapshot_ownership(
+    snapshot: &LibrarySnapshot,
+    app_id: u32,
+) -> Option<&LibrarySnapshotOwnership> {
+    get_snapshot_game(snapshot, app_id).and_then(|game| game.ownership.as_ref())
+}
+
+pub fn get_snapshot_flags(
+    snapshot: &LibrarySnapshot,
+    app_id: u32,
+) -> Option<&LibrarySnapshotGameFlags> {
+    get_snapshot_game(snapshot, app_id).and_then(|game| game.flags.as_ref())
+}
+
 pub fn list_snapshot_collections(snapshot: &LibrarySnapshot) -> Vec<LibrarySnapshotCollection> {
     let mut collections = snapshot.collections.clone();
     collections.sort_by(|a, b| a.name.cmp(&b.name).then_with(|| a.key.cmp(&b.key)));
     collections
+}
+
+pub fn group_snapshot_games_by_collection(
+    snapshot: &LibrarySnapshot,
+) -> HashMap<String, Vec<&LibrarySnapshotGame>> {
+    let mut grouped = HashMap::new();
+    for collection in &snapshot.collections {
+        grouped.insert(collection.key.clone(), Vec::new());
+    }
+    for game in &snapshot.games {
+        for collection in &game.collections {
+            grouped
+                .entry(collection.key.clone())
+                .or_insert_with(Vec::new)
+                .push(game);
+        }
+    }
+    for games in grouped.values_mut() {
+        games.sort_by(|a, b| a.name.cmp(&b.name).then_with(|| a.app_id.cmp(&b.app_id)));
+    }
+    grouped
+}
+
+pub fn summarize_snapshot(snapshot: &LibrarySnapshot) -> LibrarySnapshotSummaryStats {
+    LibrarySnapshotSummaryStats {
+        games: snapshot.games.len(),
+        collections: snapshot.collections.len(),
+        hltb: snapshot
+            .games
+            .iter()
+            .filter(|game| game.hltb.is_some())
+            .count(),
+        achievements: snapshot
+            .games
+            .iter()
+            .filter(|game| game.achievements.is_some())
+            .count(),
+        wishlist: snapshot
+            .games
+            .iter()
+            .filter(|game| game.wishlist.is_some())
+            .count(),
+        family_shared: snapshot
+            .games
+            .iter()
+            .filter(|game| {
+                game.ownership
+                    .as_ref()
+                    .is_some_and(|ownership| ownership.family_shared)
+            })
+            .count(),
+        collection_only: snapshot
+            .games
+            .iter()
+            .filter(|game| {
+                game.flags
+                    .as_ref()
+                    .map(|flags| flags.collection_only)
+                    .unwrap_or(game.is_collection_only)
+            })
+            .count(),
+        missing_details: snapshot
+            .games
+            .iter()
+            .filter(|game| {
+                game.flags
+                    .as_ref()
+                    .map(|flags| flags.missing_details)
+                    .unwrap_or(game.details.is_none())
+            })
+            .count(),
+    }
+}
+
+pub fn filter_snapshot_games<F>(
+    snapshot: &LibrarySnapshot,
+    mut predicate: F,
+) -> Vec<LibrarySnapshotGame>
+where
+    F: FnMut(&LibrarySnapshotGame) -> bool,
+{
+    let mut games = snapshot
+        .games
+        .iter()
+        .filter(|game| predicate(game))
+        .cloned()
+        .collect::<Vec<_>>();
+    sort_games(&mut games);
+    games
 }
 
 pub fn compute_library_snapshot_checksum(snapshot: &LibrarySnapshot) -> String {

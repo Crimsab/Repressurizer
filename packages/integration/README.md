@@ -8,6 +8,7 @@ This package contains:
 - runtime validation helpers
 - checksum verification
 - appId lookup helpers
+- achievement, wishlist, ownership, and flags helpers
 - snapshot diff helpers
 - the canonical JSON Schema
 
@@ -15,6 +16,7 @@ This package contains:
 import {
   validateLibrarySnapshot,
   indexSnapshotByAppId,
+  summarizeSnapshot,
 } from "@crimsab/repressurizer-integration";
 
 const result = validateLibrarySnapshot(JSON.parse(body), { verifyChecksum: true });
@@ -23,7 +25,9 @@ if (!result.ok) {
   console.error(result.issues);
 } else {
   const games = indexSnapshotByAppId(result.snapshot);
+  const summary = summarizeSnapshot(result.snapshot);
   console.log(games.get(632470));
+  console.log(summary);
 }
 ```
 

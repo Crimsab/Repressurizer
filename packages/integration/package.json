@@ -1,6 +1,6 @@
 {
   "name": "@crimsab/repressurizer-integration",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Schema-first Repressurizer snapshot contract and TypeScript helpers for library receivers.",
   "license": "GPL-3.0-only",
   "repository": {
