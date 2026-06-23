@@ -92,9 +92,54 @@ fn ensure_main_window(app: &tauri::AppHandle) -> tauri::Result<tauri::WebviewWin
     tauri::WebviewWindowBuilder::from_config(app, window_config)?.build()
 }
 
+fn set_webview_memory_target(window: &tauri::WebviewWindow, low: bool) {
+    #[cfg(target_os = "windows")]
+    {
+        let target_name = if low { "low" } else { "normal" };
+        let target_level = if low {
+            webview2_com::Microsoft::Web::WebView2::Win32::COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_LOW
+        } else {
+            webview2_com::Microsoft::Web::WebView2::Win32::COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_NORMAL
+        };
+
+        if let Err(error) = window.with_webview(move |webview| {
+            use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2_19;
+            use windows_core::Interface;
+
+            let result = unsafe {
+                webview
+                    .controller()
+                    .CoreWebView2()
+                    .and_then(|core| core.cast::<ICoreWebView2_19>())
+                    .and_then(|core| core.SetMemoryUsageTargetLevel(target_level))
+            };
+
+            if let Err(error) = result {
+                log::debug!(
+                    "Failed to set WebView2 memory target to {}: {}",
+                    target_name,
+                    error
+                );
+            }
+        }) {
+            log::debug!(
+                "Failed to access WebView2 for memory target {}: {}",
+                target_name,
+                error
+            );
+        }
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = (window, low);
+    }
+}
+
 fn show_main_window(app: &tauri::AppHandle) {
     match ensure_main_window(app) {
         Ok(window) => {
+            set_webview_memory_target(&window, false);
             let _ = window.show();
             let _ = window.unminimize();
             let _ = window.set_focus();
@@ -109,6 +154,7 @@ fn show_main_window(app: &tauri::AppHandle) {
 fn hide_main_window_handle(app: &tauri::AppHandle) {
     let _ = app.emit("repressurizer-window-hidden", ());
     if let Some(window) = app.get_webview_window("main") {
+        set_webview_memory_target(&window, true);
         let _ = window.hide();
     }
 }
@@ -530,6 +576,11 @@ pub fn run() {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 if read_app_setting_bool("minimizeToTray").unwrap_or(false) {
                     api.prevent_close();
+                    if let Some(webview_window) =
+                        window.app_handle().get_webview_window(window.label())
+                    {
+                        set_webview_memory_target(&webview_window, true);
+                    }
                     let _ = window.emit("repressurizer-window-hidden", ());
                     let _ = window.hide();
                     return;
