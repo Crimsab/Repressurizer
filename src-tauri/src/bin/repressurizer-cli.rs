@@ -1,3 +1,6 @@
+use repressurizer_integration::{
+    parse_library_snapshot_str, summarize_snapshot, verify_library_snapshot_checksum,
+};
 use repressurizer_lib::{
     automation,
     steam::{collections, detector, sam},
@@ -5,40 +8,72 @@ use repressurizer_lib::{
 use serde_json::{json, Value};
 use std::{env, fs, io::Read, path::PathBuf, process};
 
+const GENERAL_HELP: &str = r#"Repressurizer CLI
+
+Usage:
+  repressurizer-cli help
+  repressurizer-cli version
+  repressurizer-cli detect [steam_path]
+  repressurizer-cli load <steam_path> <steam_id3>
+  repressurizer-cli save <steam_path> <steam_id3> <collections.json>
+  repressurizer-cli backup <steam_path> <steam_id3> [description]
+  repressurizer-cli list-backups <steam_path> <steam_id3>
+  repressurizer-cli restore <steam_path> <steam_id3> <backup_filename>
+  repressurizer-cli delete-backup <steam_path> <steam_id3> <backup_filename>
+  repressurizer-cli cache-info
+  repressurizer-cli settings show
+  repressurizer-cli diagnostics <steam_path> <steam_id3> <steam_id64>
+  repressurizer-cli snapshot export [output.json]
+  repressurizer-cli snapshot validate <snapshot.json>
+  repressurizer-cli automation status
+  repressurizer-cli automation publish-now
+  repressurizer-cli sam help
+  repressurizer-cli sam probe <steam_path> <app_id>
+  repressurizer-cli sam schema <steam_path> <app_id>
+  repressurizer-cli sam achievements <app_id> [filter]
+  repressurizer-cli sam backups <app_id>
+  repressurizer-cli sam backup-dir <app_id>
+  repressurizer-cli sam unlock <app_id> <achievement_id...> --yes
+  repressurizer-cli sam lock <app_id> <achievement_id...> --yes
+  repressurizer-cli sam unlock-all <app_id> --yes
+  repressurizer-cli sam lock-all <app_id> --yes
+  repressurizer-cli sam restore <app_id> <backup_path> --yes
+  repressurizer-cli sam action <input.json|-> --yes
+"#;
+
+const SAM_HELP: &str = r#"Repressurizer CLI SAM commands
+
+Read-only:
+  repressurizer-cli sam probe <steam_path> <app_id>
+  repressurizer-cli sam schema <steam_path> <app_id>
+  repressurizer-cli sam achievements <app_id> [filter]
+  repressurizer-cli sam backups <app_id>
+  repressurizer-cli sam backup-dir <app_id>
+
+Write-capable, requires --yes and Steam Tools write settings enabled:
+  repressurizer-cli sam unlock <app_id> <achievement_id...> --yes
+  repressurizer-cli sam lock <app_id> <achievement_id...> --yes
+  repressurizer-cli sam unlock-all <app_id> --yes
+  repressurizer-cli sam lock-all <app_id> --yes
+  repressurizer-cli sam restore <app_id> <backup_path> --yes
+  repressurizer-cli sam action <input.json|-> --yes
+
+Short write commands use the Steam path saved by Repressurizer setup.
+"#;
+
 fn usage() -> ! {
-    eprintln!(
-        "Repressurizer CLI\n\n\
-         Usage:\n\
-           repressurizer-cli version\n\
-           repressurizer-cli detect [steam_path]\n\
-           repressurizer-cli load <steam_path> <steam_id3>\n\
-           repressurizer-cli save <steam_path> <steam_id3> <collections.json>\n\
-           repressurizer-cli backup <steam_path> <steam_id3> [description]\n\
-           repressurizer-cli list-backups <steam_path> <steam_id3>\n\
-           repressurizer-cli restore <steam_path> <steam_id3> <backup_filename>\n\
-           repressurizer-cli delete-backup <steam_path> <steam_id3> <backup_filename>\n\
-           repressurizer-cli cache-info\n\
-           repressurizer-cli diagnostics <steam_path> <steam_id3> <steam_id64>\n\
-           repressurizer-cli snapshot export [output.json]\n\
-           repressurizer-cli automation status\n\
-           repressurizer-cli automation publish-now\n\
-           repressurizer-cli sam probe <steam_path> <app_id>\n\
-           repressurizer-cli sam schema <steam_path> <app_id>\n\
-           repressurizer-cli sam backups <app_id>\n\
-           repressurizer-cli sam backup-dir <app_id>\n\
-           repressurizer-cli sam unlock <app_id> <achievement_id...> --yes\n\
-           repressurizer-cli sam lock <app_id> <achievement_id...> --yes\n\
-           repressurizer-cli sam unlock-all <app_id> --yes\n\
-           repressurizer-cli sam lock-all <app_id> --yes\n\
-           repressurizer-cli sam restore <app_id> <backup_path> --yes\n\
-           repressurizer-cli sam action <input.json|-> --yes\n"
-    );
+    eprintln!("{}", GENERAL_HELP.trim_end());
     process::exit(2);
 }
 
 fn print_json<T: serde::Serialize>(value: &T) -> Result<(), String> {
     let text = serde_json::to_string_pretty(value).map_err(|e| e.to_string())?;
     println!("{text}");
+    Ok(())
+}
+
+fn print_help(text: &str) -> Result<(), String> {
+    println!("{}", text.trim_end());
     Ok(())
 }
 
@@ -60,6 +95,7 @@ fn run() -> Result<(), String> {
     };
 
     match command {
+        "help" | "--help" | "-h" => print_help(GENERAL_HELP),
         "version" => print_json(&json!({
             "name": "Repressurizer CLI",
             "version": env!("CARGO_PKG_VERSION"),
@@ -123,6 +159,7 @@ fn run() -> Result<(), String> {
             Ok(())
         }
         "cache-info" => print_json(&cache_info()),
+        "settings" => settings_command(&args[1..]),
         "diagnostics" => {
             if args.len() != 4 {
                 usage();
@@ -144,12 +181,17 @@ fn two_args(args: &[String]) -> Result<(String, String), String> {
 }
 
 fn snapshot_command(args: &[String]) -> Result<(), String> {
-    if args.first().map(String::as_str) != Some("export") || args.len() > 2 {
-        usage();
+    match args.first().map(String::as_str) {
+        Some("export") if args.len() <= 2 => snapshot_export_command(args.get(1)),
+        Some("validate") if args.len() == 2 => snapshot_validate_command(&args[1]),
+        _ => usage(),
     }
+}
+
+fn snapshot_export_command(path: Option<&String>) -> Result<(), String> {
     let snapshot = block_on(automation::build_snapshot_from_settings())?;
     let output = serde_json::to_string_pretty(&snapshot).map_err(|error| error.to_string())?;
-    if let Some(path) = args.get(1) {
+    if let Some(path) = path {
         fs::write(path, output).map_err(|error| format!("failed to write {path}: {error}"))?;
         println!("snapshot exported to {path}");
         Ok(())
@@ -157,6 +199,76 @@ fn snapshot_command(args: &[String]) -> Result<(), String> {
         println!("{output}");
         Ok(())
     }
+}
+
+fn snapshot_validate_command(path: &str) -> Result<(), String> {
+    let data = fs::read_to_string(path)
+        .map_err(|error| format!("failed to read snapshot {path}: {error}"))?;
+    match parse_library_snapshot_str(&data) {
+        Ok(snapshot) => {
+            let summary = summarize_snapshot(&snapshot);
+            print_json(&json!({
+                "valid": true,
+                "path": path,
+                "schemaVersion": snapshot.schema_version,
+                "generatedAt": snapshot.generated_at,
+                "source": snapshot.source,
+                "checksum": snapshot.checksum,
+                "checksumValid": verify_library_snapshot_checksum(&snapshot),
+                "summary": {
+                    "games": summary.games,
+                    "collections": summary.collections,
+                    "hltb": summary.hltb,
+                    "achievements": summary.achievements,
+                    "wishlist": summary.wishlist,
+                    "familyShared": summary.family_shared,
+                    "collectionOnly": summary.collection_only,
+                    "missingDetails": summary.missing_details,
+                },
+            }))
+        }
+        Err(error) => {
+            print_json(&json!({
+                "valid": false,
+                "path": path,
+                "error": error.to_string(),
+            }))?;
+            Err("snapshot validation failed".to_string())
+        }
+    }
+}
+
+fn settings_command(args: &[String]) -> Result<(), String> {
+    match args.first().map(String::as_str) {
+        Some("show") if args.len() == 1 => settings_show(),
+        _ => usage(),
+    }
+}
+
+fn settings_show() -> Result<(), String> {
+    let path = settings_path()?;
+    let path_text = path.display().to_string();
+    let data = match fs::read_to_string(&path) {
+        Ok(data) => data,
+        Err(error) => {
+            return print_json(&json!({
+                "settingsAvailable": false,
+                "path": path_text,
+                "error": format!("failed to read settings file: {error}"),
+            }));
+        }
+    };
+    let settings = match serde_json::from_str::<Value>(&data) {
+        Ok(settings) => settings,
+        Err(error) => {
+            return print_json(&json!({
+                "settingsAvailable": false,
+                "path": path_text,
+                "error": format!("failed to parse settings file: {error}"),
+            }));
+        }
+    };
+    print_json(&settings_summary(&settings, &path_text))
 }
 
 fn automation_command(args: &[String]) -> Result<(), String> {
@@ -174,6 +286,7 @@ fn automation_command(args: &[String]) -> Result<(), String> {
 
 fn sam_command(args: &[String]) -> Result<(), String> {
     match args.first().map(String::as_str) {
+        Some("help") | Some("--help") | Some("-h") => print_help(SAM_HELP),
         Some("probe") if args.len() == 3 => {
             let app_id = parse_app_id(&args[2])?;
             let probe = sam::probe_sam_bridge_for_cli(args[1].clone(), app_id);
@@ -183,6 +296,19 @@ fn sam_command(args: &[String]) -> Result<(), String> {
             let app_id = parse_app_id(&args[2])?;
             let schema = sam::load_sam_achievement_schema(args[1].clone(), app_id)?;
             print_json(&schema)
+        }
+        Some("achievements") if args.len() == 2 || args.len() == 3 => {
+            let app_id = parse_app_id(&args[1])?;
+            let filter = args.get(2).map(String::as_str);
+            let steam_path = saved_steam_path()?;
+            let schema = sam::load_sam_achievement_schema(steam_path, app_id)?;
+            let achievements = filter_sam_schema_items(schema, filter);
+            print_json(&json!({
+                "appId": app_id,
+                "filter": filter,
+                "count": achievements.len(),
+                "achievements": achievements,
+            }))
         }
         Some("backups") if args.len() == 2 => {
             let app_id = parse_app_id(&args[1])?;
@@ -342,13 +468,17 @@ fn saved_steam_path() -> Result<String, String> {
 }
 
 fn read_settings_json() -> Result<Value, String> {
-    let path = app_data_dir()
-        .map(|dir| dir.join("settings.json"))
-        .ok_or_else(|| "Could not resolve Repressurizer app data directory".to_string())?;
+    let path = settings_path()?;
     let data = fs::read_to_string(&path)
         .map_err(|error| format!("failed to read settings file {}: {error}", path.display()))?;
     serde_json::from_str::<Value>(&data)
         .map_err(|error| format!("failed to parse settings file {}: {error}", path.display()))
+}
+
+fn settings_path() -> Result<PathBuf, String> {
+    app_data_dir()
+        .map(|dir| dir.join("settings.json"))
+        .ok_or_else(|| "Could not resolve Repressurizer app data directory".to_string())
 }
 
 fn block_on<T>(future: impl std::future::Future<Output = Result<T, String>>) -> Result<T, String> {
@@ -460,8 +590,113 @@ fn diagnostics(steam_path: &str, steam_id3: &str, steam_id64: &str) -> Value {
     })
 }
 
+fn settings_summary(settings: &Value, path: &str) -> Value {
+    json!({
+        "settingsAvailable": true,
+        "path": path,
+        "setupComplete": setting_bool(settings, "setupComplete"),
+        "steam": {
+            "steamPathConfigured": setting_configured(settings, "steamPath"),
+            "steamPath": string_or_null(setting_str(settings, "steamPath")),
+            "steamId3": string_or_null(&redact_tail(setting_str(settings, "steamId3"))),
+            "steamId64": string_or_null(&redact_tail(setting_str(settings, "steamId64"))),
+            "personaName": string_or_null(setting_str(settings, "steamPersonaName")),
+        },
+        "credentials": {
+            "apiKeyConfigured": setting_configured(settings, "apiKey"),
+            "steamFamilyStoreTokenConfigured": steam_family_token_configured(),
+        },
+        "automation": {
+            "publishEnabled": setting_bool(settings, "automationPublishEnabled"),
+            "publishUrlConfigured": setting_configured(settings, "automationPublishUrl"),
+            "intervalHours": setting_u64(settings, "automationPublishIntervalHours"),
+            "lastChecksum": string_or_null(setting_str(settings, "automationPublishLastChecksum")),
+            "lastPublishedAt": string_or_null(setting_str(settings, "automationPublishLastPublishedAt")),
+            "lastAttemptedAt": string_or_null(setting_str(settings, "automationPublishLastAttemptedAt")),
+            "lastStatus": string_or_null(setting_str(settings, "automationPublishLastStatus")),
+            "lastMessage": string_or_null(setting_str(settings, "automationPublishLastMessage")),
+            "lastHttpStatus": settings.get("automationPublishLastHttpStatus").cloned().unwrap_or(Value::Null),
+            "bearerTokenConfigured": setting_configured(settings, "automationPublishBearerToken"),
+        },
+        "steamTools": {
+            "enabled": setting_bool(settings, "steamToolsEnabled"),
+            "achievementWritesEnabled": setting_bool(settings, "steamToolsAchievementWritesEnabled"),
+            "cardFarmingEnabled": setting_bool(settings, "steamToolsCardFarmingEnabled"),
+            "maxConcurrentIdleApps": setting_u64(settings, "steamToolsMaxConcurrentIdleApps"),
+            "minPlaytimeMinutes": setting_u64(settings, "steamToolsMinPlaytimeMinutes"),
+        },
+        "startup": {
+            "minimizeToTray": setting_bool(settings, "minimizeToTray"),
+            "startOnLogin": setting_bool(settings, "startOnLogin"),
+            "startOnLoginMode": string_or_null(setting_str(settings, "startOnLoginMode")),
+            "checkUpdatesOnStartup": setting_bool(settings, "checkUpdatesOnStartup"),
+            "desktopNotifications": setting_bool(settings, "desktopNotifications"),
+        },
+        "privacy": {
+            "apiKeyIncluded": false,
+            "bearerTokenIncluded": false,
+            "steamFamilyStoreTokenIncluded": false,
+            "steamIdsRedacted": true,
+        }
+    })
+}
+
+fn filter_sam_schema_items(
+    items: Vec<sam::SamAchievementSchemaItem>,
+    filter: Option<&str>,
+) -> Vec<sam::SamAchievementSchemaItem> {
+    let Some(needle) = filter.map(str::trim).filter(|value| !value.is_empty()) else {
+        return items;
+    };
+    let needle = needle.to_ascii_lowercase();
+    items
+        .into_iter()
+        .filter(|item| {
+            item.api_name.to_ascii_lowercase().contains(&needle)
+                || item
+                    .flags
+                    .iter()
+                    .any(|flag| flag.to_ascii_lowercase().contains(&needle))
+                || (item.protected_achievement && "protected".contains(&needle))
+        })
+        .collect()
+}
+
 fn app_data_dir() -> Option<PathBuf> {
     dirs::data_dir().map(|dir| dir.join("Repressurizer"))
+}
+
+fn steam_family_token_configured() -> bool {
+    app_data_dir()
+        .map(|dir| dir.join("steam_family_token.json"))
+        .and_then(|path| fs::read_to_string(path).ok())
+        .map(|data| !data.trim().is_empty())
+        .unwrap_or(false)
+}
+
+fn setting_bool(settings: &Value, key: &str) -> bool {
+    settings.get(key).and_then(Value::as_bool).unwrap_or(false)
+}
+
+fn setting_u64(settings: &Value, key: &str) -> u64 {
+    settings.get(key).and_then(Value::as_u64).unwrap_or(0)
+}
+
+fn setting_str<'a>(settings: &'a Value, key: &str) -> &'a str {
+    settings.get(key).and_then(Value::as_str).unwrap_or("")
+}
+
+fn setting_configured(settings: &Value, key: &str) -> bool {
+    !setting_str(settings, key).trim().is_empty()
+}
+
+fn string_or_null(value: &str) -> Value {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        Value::Null
+    } else {
+        Value::String(trimmed.to_string())
+    }
 }
 
 fn redact_tail(value: &str) -> String {
@@ -540,5 +775,58 @@ mod tests {
         let error = short_sam_action_input(&args, steam_path).expect_err("--yes is required");
 
         assert!(error.contains("Re-run with --yes"));
+    }
+
+    #[test]
+    fn settings_summary_redacts_sensitive_values() {
+        let settings = json!({
+            "setupComplete": true,
+            "steamPath": "C:\\Program Files (x86)\\Steam",
+            "steamId3": "123456",
+            "steamId64": "76561198000012345",
+            "steamPersonaName": "Player",
+            "apiKey": "secret",
+            "automationPublishBearerToken": "secret-token",
+            "automationPublishEnabled": true,
+            "automationPublishUrl": "https://example.test/snapshot",
+            "automationPublishIntervalHours": 12,
+            "steamToolsEnabled": true,
+            "steamToolsAchievementWritesEnabled": true,
+        });
+        let summary = settings_summary(&settings, "/tmp/settings.json");
+
+        assert_eq!(summary["steam"]["steamId3"], "***3456");
+        assert_eq!(summary["steam"]["steamId64"], "***2345");
+        assert_eq!(summary["credentials"]["apiKeyConfigured"], true);
+        assert_eq!(summary["automation"]["bearerTokenConfigured"], true);
+        assert_eq!(summary["privacy"]["apiKeyIncluded"], false);
+    }
+
+    #[test]
+    fn filters_sam_schema_by_api_name_flags_and_protected_status() {
+        let items = vec![
+            sam::SamAchievementSchemaItem {
+                api_name: "ACH_STORY_ONE".to_string(),
+                permission: 0,
+                protected_achievement: false,
+                flags: vec!["story".to_string()],
+            },
+            sam::SamAchievementSchemaItem {
+                api_name: "ACH_ONLINE_ONLY".to_string(),
+                permission: 1,
+                protected_achievement: true,
+                flags: vec!["online".to_string()],
+            },
+        ];
+
+        assert_eq!(
+            filter_sam_schema_items(items.clone(), Some("story")).len(),
+            1
+        );
+        assert_eq!(
+            filter_sam_schema_items(items.clone(), Some("ONLINE")).len(),
+            1
+        );
+        assert_eq!(filter_sam_schema_items(items, Some("protected")).len(), 1);
     }
 }

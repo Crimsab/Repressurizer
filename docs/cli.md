@@ -3,6 +3,7 @@
 `repressurizer-cli` exposes read-only and backup-oriented operations for scripts and personal automation.
 
 ```text
+repressurizer-cli help
 repressurizer-cli version
 repressurizer-cli detect [steam_path]
 repressurizer-cli load <steam_path> <steam_id3>
@@ -12,12 +13,16 @@ repressurizer-cli list-backups <steam_path> <steam_id3>
 repressurizer-cli restore <steam_path> <steam_id3> <backup_filename>
 repressurizer-cli delete-backup <steam_path> <steam_id3> <backup_filename>
 repressurizer-cli cache-info
+repressurizer-cli settings show
 repressurizer-cli diagnostics <steam_path> <steam_id3> <steam_id64>
 repressurizer-cli snapshot export [output.json]
+repressurizer-cli snapshot validate <snapshot.json>
 repressurizer-cli automation status
 repressurizer-cli automation publish-now
+repressurizer-cli sam help
 repressurizer-cli sam probe <steam_path> <app_id>
 repressurizer-cli sam schema <steam_path> <app_id>
+repressurizer-cli sam achievements <app_id> [filter]
 repressurizer-cli sam backups <app_id>
 repressurizer-cli sam backup-dir <app_id>
 repressurizer-cli sam unlock <app_id> <achievement_id...> --yes
@@ -30,9 +35,15 @@ repressurizer-cli sam action <input.json|-> --yes
 
 Most commands print JSON so receivers can pipe the output into validation, dashboards, or local jobs.
 
-`snapshot export` and `automation publish-now` read Repressurizer's app settings from the normal app data directory. They require the desktop app to have completed setup and saved the Steam path, Steam account, and Steam Web API key.
+`settings show`, `snapshot export`, and `automation publish-now` read Repressurizer's app settings from the normal app data directory. Snapshot export and publish require the desktop app to have completed setup and saved the Steam path, Steam account, and Steam Web API key.
+
+`settings show` prints an operational summary with secrets redacted. It reports whether API keys, publish bearer tokens, and the Steam Family Store token are configured, but never prints those secret values. Steam IDs are tail-redacted.
+
+`snapshot validate` checks a `repressurizer.library-snapshot.v1` file with the same Rust integration package receivers can use. It verifies schema invariants and checksum, prints a compact JSON summary on success, and exits non-zero on invalid snapshots.
 
 SAM probe, schema, backup listing, and backup directory commands are read-only.
+
+`sam achievements` is also read-only. It uses the Steam path saved during Repressurizer setup, loads the SAM achievement schema for an app, and can filter by achievement API name, flags, or `protected`.
 
 `sam action` is the only write-capable SAM command. It requires `--yes`, reads the same JSON shape used by the app's internal SAM action runner, creates before/after backups through the normal Repressurizer SAM backup flow, and still honors the app settings guardrails:
 
@@ -57,6 +68,9 @@ Use `-` instead of a file path to read the action JSON from stdin.
 The short commands use the Steam path saved during Repressurizer setup:
 
 ```powershell
+.\repressurizer-cli.exe settings show
+.\repressurizer-cli.exe snapshot validate .\repressurizer-library-snapshot.json
+.\repressurizer-cli.exe sam achievements 632470 story
 .\repressurizer-cli.exe sam unlock 632470 ACHIEVEMENT_API_NAME --yes
 .\repressurizer-cli.exe sam lock 632470 ACHIEVEMENT_API_NAME --yes
 .\repressurizer-cli.exe sam unlock-all 632470 --yes
