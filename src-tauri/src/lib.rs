@@ -73,13 +73,35 @@ fn launched_from_autostart() -> bool {
     std::env::args().any(|arg| arg == "--repressurizer-autostart")
 }
 
-fn show_main_window(app: &tauri::AppHandle) {
+fn ensure_main_window(app: &tauri::AppHandle) -> tauri::Result<tauri::WebviewWindow> {
     if let Some(window) = app.get_webview_window("main") {
-        let _ = window.show();
-        let _ = window.unminimize();
-        let _ = window.set_focus();
+        return Ok(window);
     }
-    let _ = app.emit("repressurizer-window-shown", ());
+
+    let window_config = app
+        .config()
+        .app
+        .windows
+        .iter()
+        .find(|window| window.label == "main")
+        .or_else(|| app.config().app.windows.first())
+        .expect("main window config missing");
+
+    tauri::WebviewWindowBuilder::from_config(app, window_config)?.build()
+}
+
+fn show_main_window(app: &tauri::AppHandle) {
+    match ensure_main_window(app) {
+        Ok(window) => {
+            let _ = window.show();
+            let _ = window.unminimize();
+            let _ = window.set_focus();
+            let _ = app.emit("repressurizer-window-shown", ());
+        }
+        Err(error) => {
+            log::error!("Failed to create/show main window: {}", error);
+        }
+    }
 }
 
 fn hide_main_window_handle(app: &tauri::AppHandle) {
@@ -487,11 +509,19 @@ pub fn run() {
                 })
                 .build(app)?;
 
-            if launched_from_autostart()
+            let tray_only_startup = launched_from_autostart()
                 && read_app_setting_bool("startOnLogin").unwrap_or(false)
-                && read_app_setting_string("startOnLoginMode").as_deref() != Some("window")
-            {
+                && read_app_setting_string("startOnLoginMode").as_deref() != Some("window");
+            let webview_automation_required = read_app_setting_bool("automationPublishEnabled")
+                .unwrap_or(false)
+                && read_app_setting_string("automationPublishUrl")
+                    .map(|url| !url.trim().is_empty())
+                    .unwrap_or(false);
+
+            if tray_only_startup && !webview_automation_required {
                 hide_main_window_handle(app.handle());
+            } else {
+                show_main_window(app.handle());
             }
 
             Ok(())

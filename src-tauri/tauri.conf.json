@@ -12,6 +12,8 @@
   "app": {
     "windows": [
       {
+        "label": "main",
+        "create": false,
         "title": "Repressurizer - Steam Library Manager",
         "width": 1280,
         "height": 800,
