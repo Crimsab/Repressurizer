@@ -24,6 +24,7 @@ Always download the newest build from the [latest release page](https://github.c
 
 - Recommended: `Repressurizer_..._x64-setup.exe` for the normal Windows installer.
 - Portable: `Repressurizer-portable-windows-x64.zip` if you prefer to run it without installing.
+- CLI: `Repressurizer-cli-windows-x64.zip` for scriptable diagnostics, snapshot export, and read-only Steam tooling.
 - Auto-update metadata: `latest.json` is used by the built-in updater.
 
 Older releases remain available on the [releases page](https://github.com/Crimsab/Repressurizer/releases).
@@ -120,11 +121,12 @@ Auto-categorizing uses cached metadata when possible, fetches missing Steam deta
 - Steam Store API: game details, genres, categories, release dates, platforms, Metacritic, price data, and artwork.
 - Steam Family: detects Family-shared apps with the Web API key when possible, with an optional Store `webapi_token` fallback for accounts where Steam requires Store-session auth.
 - HowLongToBeat: fetches main story, main plus extras, completionist time, and confidence data.
-- Automation export: writes or publishes a stable `repressurizer.library-snapshot.v1` JSON snapshot with games, collections, Steam metadata, and HLTB data. HTTP targets are configurable and uploads are skipped when the snapshot checksum has not changed.
+- Automation export: writes or publishes a stable `repressurizer.library-snapshot.v1` JSON snapshot with games, collections, Steam metadata, HLTB data, and optional achievement/wishlist/Steam Family summaries. HTTP targets are configurable and uploads are skipped when the snapshot checksum has not changed.
 - Integration libraries: TypeScript receivers can use `@crimsab/repressurizer-integration`; Rust receivers can use `repressurizer-integration`.
+- CLI: the release includes `repressurizer-cli` for JSON diagnostics, snapshot export/publish, cache inspection, backups, and read-only SAM probe/schema commands.
 - Local Steam files: reads and writes collection data directly, with backups.
 
-For setup, receiver expectations, and schema/package details, see [docs/automation-export.md](docs/automation-export.md) and [docs/integrations/repressurizer-snapshot-v1.md](docs/integrations/repressurizer-snapshot-v1.md).
+For setup, receiver expectations, CLI usage, and schema/package details, see [docs/automation-export.md](docs/automation-export.md), [docs/cli.md](docs/cli.md), and [docs/integrations/repressurizer-snapshot-v1.md](docs/integrations/repressurizer-snapshot-v1.md).
 
 ### Planning And Discovery Tools
 
@@ -203,6 +205,7 @@ Release builds are produced by GitHub Actions as:
 
 - NSIS installer
 - portable Windows zip
+- CLI Windows zip
 
 Version tags are created from `package.json` (`v0.1.0`, `v0.2.0`, ...). Each tag triggers a GitHub Release with generated changelog notes and Windows artifacts.
 After CI passes, matching integration package tags are also created from `packages/integration/package.json` and `packages/rust/Cargo.toml` when those versions have not been released yet.
