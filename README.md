@@ -7,6 +7,11 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Built with Tauri](https://img.shields.io/badge/Tauri-Rust%20%2B%20React-24c8db)](https://tauri.app/)
 [![Localization status](https://img.shields.io/badge/i18n-status-16a34a)](docs/localization.md#localization-status)
+[![npm package](https://img.shields.io/npm/v/@crimsab/repressurizer-integration?label=npm)](https://www.npmjs.com/package/@crimsab/repressurizer-integration)
+[![npm downloads](https://img.shields.io/npm/dw/@crimsab/repressurizer-integration?label=npm%20downloads)](https://www.npmjs.com/package/@crimsab/repressurizer-integration)
+[![crates.io](https://img.shields.io/crates/v/repressurizer-integration?label=crates.io)](https://crates.io/crates/repressurizer-integration)
+[![crate downloads](https://img.shields.io/crates/d/repressurizer-integration?label=crate%20downloads)](https://crates.io/crates/repressurizer-integration)
+[![docs.rs](https://img.shields.io/docsrs/repressurizer-integration?label=docs.rs)](https://docs.rs/repressurizer-integration)
 
 Repressurizer is a modern desktop Steam library manager for editing Steam collections, organizing backlogs, and deciding what to play next.
 
@@ -122,7 +127,7 @@ Auto-categorizing uses cached metadata when possible, fetches missing Steam deta
 - Steam Family: detects Family-shared apps with the Web API key when possible, with an optional Store `webapi_token` fallback for accounts where Steam requires Store-session auth.
 - HowLongToBeat: fetches main story, main plus extras, completionist time, and confidence data.
 - Automation export: writes or publishes a stable `repressurizer.library-snapshot.v1` JSON snapshot with games, collections, Steam metadata, HLTB data, and optional achievement/wishlist/Steam Family summaries. HTTP targets are configurable and uploads are skipped when the snapshot checksum has not changed.
-- Integration libraries: TypeScript receivers can use `@crimsab/repressurizer-integration`; Rust receivers can use `repressurizer-integration`.
+- Integration libraries: TypeScript receivers can use [`@crimsab/repressurizer-integration`](https://www.npmjs.com/package/@crimsab/repressurizer-integration); Rust receivers can use [`repressurizer-integration`](https://crates.io/crates/repressurizer-integration). Registry download counts are approximate and include automated registry, CI, and indexer traffic.
 - CLI: the release includes `repressurizer-cli` for JSON diagnostics, redacted settings inspection, snapshot export/validation/publish, cache inspection, backups, SAM probe/schema/achievement listing, and guarded one-line SAM achievement actions that use the saved Steam path.
 - Local Steam files: reads and writes collection data directly, with backups.
 
