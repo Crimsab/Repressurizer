@@ -3,7 +3,7 @@ use repressurizer_lib::{
     steam::{collections, detector, sam},
 };
 use serde_json::{json, Value};
-use std::{env, fs, path::PathBuf, process};
+use std::{env, fs, io::Read, path::PathBuf, process};
 
 fn usage() -> ! {
     eprintln!(
@@ -23,7 +23,10 @@ fn usage() -> ! {
            repressurizer-cli automation status\n\
            repressurizer-cli automation publish-now\n\
            repressurizer-cli sam probe <steam_path> <app_id>\n\
-           repressurizer-cli sam schema <steam_path> <app_id>\n"
+           repressurizer-cli sam schema <steam_path> <app_id>\n\
+           repressurizer-cli sam backups <app_id>\n\
+           repressurizer-cli sam backup-dir <app_id>\n\
+           repressurizer-cli sam action <input.json|-> --yes\n"
     );
     process::exit(2);
 }
@@ -35,6 +38,10 @@ fn print_json<T: serde::Serialize>(value: &T) -> Result<(), String> {
 }
 
 fn main() {
+    if let Some(exit_code) = sam::run_embedded_bridge_from_env() {
+        process::exit(exit_code);
+    }
+
     if let Err(error) = run() {
         eprintln!("error: {error}");
         process::exit(1);
@@ -172,8 +179,45 @@ fn sam_command(args: &[String]) -> Result<(), String> {
             let schema = sam::load_sam_achievement_schema(args[1].clone(), app_id)?;
             print_json(&schema)
         }
+        Some("backups") if args.len() == 2 => {
+            let app_id = parse_app_id(&args[1])?;
+            let backups = sam::list_sam_backups(app_id)?;
+            print_json(&backups)
+        }
+        Some("backup-dir") if args.len() == 2 => {
+            let app_id = parse_app_id(&args[1])?;
+            let path = sam::sam_backup_dir(app_id)?;
+            print_json(&json!({ "path": path }))
+        }
+        Some("action") if args.len() == 3 && args[2] == "--yes" => {
+            let input = read_sam_action_input(&args[1])?;
+            let result = sam::sam_achievement_action(input)?;
+            print_json(&result)
+        }
+        Some("action") => Err(
+            "SAM action writes to Steam achievement state. Re-run with: sam action <input.json|-> --yes"
+                .to_string(),
+        ),
         _ => usage(),
     }
+}
+
+fn read_sam_action_input(path: &str) -> Result<sam::SamAchievementActionInput, String> {
+    let raw = if path == "-" {
+        let mut input = String::new();
+        std::io::stdin()
+            .read_to_string(&mut input)
+            .map_err(|error| format!("failed to read SAM action input from stdin: {error}"))?;
+        input
+    } else {
+        fs::read_to_string(path)
+            .map_err(|error| format!("failed to read SAM action input {path}: {error}"))?
+    };
+    parse_sam_action_input(&raw)
+}
+
+fn parse_sam_action_input(raw: &str) -> Result<sam::SamAchievementActionInput, String> {
+    serde_json::from_str(raw).map_err(|error| format!("invalid SAM action JSON: {error}"))
 }
 
 fn block_on<T>(future: impl std::future::Future<Output = Result<T, String>>) -> Result<T, String> {
@@ -302,4 +346,36 @@ fn redact_tail(value: &str) -> String {
         .rev()
         .collect::<String>();
     format!("***{tail}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_sam_action_input_json() {
+        let input = parse_sam_action_input(
+            r#"{
+              "steamPath": "C:\\Program Files (x86)\\Steam",
+              "appId": 632470,
+              "action": "unlock_selected",
+              "achievementIds": ["ACH_ONE"],
+              "backupPath": null
+            }"#,
+        )
+        .expect("valid SAM action input");
+
+        assert_eq!(input.app_id, 632470);
+        assert_eq!(input.action, "unlock_selected");
+        assert_eq!(input.achievement_ids, vec!["ACH_ONE"]);
+        assert!(input.backup_path.is_none());
+    }
+
+    #[test]
+    fn rejects_invalid_sam_action_input_json() {
+        let error =
+            parse_sam_action_input(r#"{"appId":632470}"#).expect_err("missing fields should fail");
+
+        assert!(error.contains("invalid SAM action JSON"));
+    }
 }

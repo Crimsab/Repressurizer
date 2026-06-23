@@ -18,10 +18,33 @@ repressurizer-cli automation status
 repressurizer-cli automation publish-now
 repressurizer-cli sam probe <steam_path> <app_id>
 repressurizer-cli sam schema <steam_path> <app_id>
+repressurizer-cli sam backups <app_id>
+repressurizer-cli sam backup-dir <app_id>
+repressurizer-cli sam action <input.json|-> --yes
 ```
 
 Most commands print JSON so receivers can pipe the output into validation, dashboards, or local jobs.
 
 `snapshot export` and `automation publish-now` read Repressurizer's app settings from the normal app data directory. They require the desktop app to have completed setup and saved the Steam path, Steam account, and Steam Web API key.
 
-SAM commands are read-only in the public CLI surface. Achievement write actions remain app-gated and intentionally are not exposed as casual CLI commands.
+SAM probe, schema, backup listing, and backup directory commands are read-only.
+
+`sam action` is the only write-capable SAM command. It requires `--yes`, reads the same JSON shape used by the app's internal SAM action runner, creates before/after backups through the normal Repressurizer SAM backup flow, and still honors the app settings guardrails:
+
+- Steam Tools must be enabled.
+- Achievement writes must be enabled in Settings.
+- Protected achievements are blocked by the SAM schema when detected.
+
+Example action input:
+
+```json
+{
+  "steamPath": "C:\\Program Files (x86)\\Steam",
+  "appId": 632470,
+  "action": "unlock_selected",
+  "achievementIds": ["ACHIEVEMENT_API_NAME"],
+  "backupPath": null
+}
+```
+
+Use `-` instead of a file path to read the action JSON from stdin.
