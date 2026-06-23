@@ -106,25 +106,23 @@ test("play history shows tracked deltas instead of lifetime playtime", async ({ 
   await expect(timeline.getByText("30.0h")).toBeHidden();
 });
 
-test("opens the Steam Tools lab surface", async ({ page }, testInfo) => {
+test("keeps Steam Tools in Settings instead of the home toolbar", async ({ page }, testInfo) => {
   await page.goto("/");
 
-  await page.getByTitle("Steam Tools").click();
+  await expect(page.getByTitle("Steam Tools")).toBeHidden();
+  await page.getByTitle("Settings").click();
 
-  const steamTools = page.locator(".fixed.inset-0").filter({
-    has: page.getByRole("heading", { name: "Steam Tools" }),
+  const settingsDialog = page.locator(".fixed.inset-0").filter({
+    has: page.getByRole("heading", { name: "Settings" }),
   });
-  await expect(steamTools.getByRole("heading", { name: "Steam Tools" })).toBeVisible();
-  await expect(steamTools.getByRole("heading", { name: "Achievement Manager", exact: true })).toBeVisible();
-  await expect(steamTools.getByRole("heading", { name: "SAM integration: Steam Achievement Manager" })).toBeVisible();
-  await expect(steamTools.getByText("Steam not running")).toBeVisible();
-  await expect(steamTools.getByRole("button", { name: "Open achievements" })).toBeVisible();
-  await expect(steamTools.getByRole("button", { name: "Refresh" })).toBeVisible();
+  await settingsDialog.getByRole("button", { name: "Steam Tools", exact: true }).click();
+  await expect(settingsDialog.getByRole("heading", { name: "Steam Tools" })).toBeVisible();
+  await expect(settingsDialog.getByText("SAM integration: Steam Achievement Manager")).toBeVisible();
   await expectNoHorizontalOverflow(page);
 
-  const screenshotPath = testInfo.outputPath("steam-tools.png");
+  const screenshotPath = testInfo.outputPath("settings-steam-tools-entry.png");
   await page.screenshot({ path: screenshotPath, fullPage: true });
-  await testInfo.attach("steam-tools", { path: screenshotPath, contentType: "image/png" });
+  await testInfo.attach("settings-steam-tools-entry", { path: screenshotPath, contentType: "image/png" });
 });
 
 test("game achievement details show Steam Achievement Manager preflight separately from Steam Web API data", async ({ page }, testInfo) => {

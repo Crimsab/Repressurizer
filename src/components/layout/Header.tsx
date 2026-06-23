@@ -28,7 +28,6 @@ import {
   Robot,
   ChartBar,
   Trophy,
-  SteamLogo,
   BookmarkSimple,
   UsersThree,
   GameController,
@@ -47,7 +46,6 @@ const loadExportDialog = () => import("../export/ExportDialog").then((m) => ({ d
 const loadAutoCategorizeDialog = () => import("../categories/AutoCategorizeDialog").then((m) => ({ default: m.AutoCategorizeDialog }));
 const loadStatsPage = () => import("../stats/StatsPage").then((m) => ({ default: m.StatsPage }));
 const loadAchievementsPage = () => import("../achievements/AchievementsPage").then((m) => ({ default: m.AchievementsPage }));
-const loadSteamToolsPage = () => import("../steam-tools/SteamToolsPage").then((m) => ({ default: m.SteamToolsPage }));
 const loadWishlistPage = () => import("../wishlist/WishlistPage").then((m) => ({ default: m.WishlistPage }));
 const loadFriendCompareDialog = () => import("../friends/FriendCompareDialog").then((m) => ({ default: m.FriendCompareDialog }));
 const loadWhatToPlayNext = () => import("../recommend/WhatToPlayNext").then((m) => ({ default: m.WhatToPlayNext }));
@@ -57,7 +55,6 @@ const ExportDialog = lazy(loadExportDialog);
 const AutoCategorizeDialog = lazy(loadAutoCategorizeDialog);
 const StatsPage = lazy(loadStatsPage);
 const AchievementsPage = lazy(loadAchievementsPage);
-const SteamToolsPage = lazy(loadSteamToolsPage);
 const WishlistPage = lazy(loadWishlistPage);
 const FriendCompareDialog = lazy(loadFriendCompareDialog);
 const WhatToPlayNext = lazy(loadWhatToPlayNext);
@@ -129,7 +126,6 @@ export function Header() {
   const [showAutoCat, setShowAutoCat] = useState(false);
   const [showStats, setShowStats] = useState(false);
   const [showAchievements, setShowAchievements] = useState(false);
-  const [showSteamTools, setShowSteamTools] = useState(false);
   const [showWishlist, setShowWishlist] = useState(false);
   const [showFriendCompare, setShowFriendCompare] = useState(false);
   const [showRecommend, setShowRecommend] = useState(false);
@@ -365,17 +361,6 @@ export function Header() {
             <Trophy size={16} />
           </button>
 
-          {/* Steam Tools */}
-          <button
-            onClick={() => setShowSteamTools(true)}
-            onPointerEnter={() => preload(loadSteamToolsPage)}
-            onFocus={() => preload(loadSteamToolsPage)}
-            title={t("toolbar.steamTools")}
-            className="btn-press flex items-center justify-center w-8 h-8 rounded-lg text-repressurizer-text-muted transition-colors hover:text-white hover:bg-repressurizer-surface-hover"
-          >
-            <SteamLogo size={16} />
-          </button>
-
           {/* Wishlist */}
           <button
             onClick={() => setShowWishlist(true)}
@@ -458,17 +443,6 @@ export function Header() {
       {showAchievements && (
         <LazyOverlay>
           <AchievementsPage onClose={() => setShowAchievements(false)} />
-        </LazyOverlay>
-      )}
-      {showSteamTools && (
-        <LazyOverlay>
-          <SteamToolsPage
-            onClose={() => setShowSteamTools(false)}
-            onOpenAchievements={() => {
-              setShowSteamTools(false);
-              setShowAchievements(true);
-            }}
-          />
         </LazyOverlay>
       )}
       {showWishlist && (
