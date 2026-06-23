@@ -1,4 +1,4 @@
-import { Component, useEffect, useState } from "react";
+import { Component, useEffect, useRef, useState } from "react";
 import type { ReactNode, ErrorInfo } from "react";
 import { check, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
@@ -155,6 +155,9 @@ function AppContent() {
   const [availableUpdate, setAvailableUpdate] = useState<Update | null>(null);
   const [installingUpdate, setInstallingUpdate] = useState(false);
   const toast = useToastStore;
+  const tRef = useRef(t);
+  const reloadLibraryRef = useRef<(notify?: boolean, startupBackup?: boolean) => Promise<void>>(async () => {});
+  const publishAutomationRef = useRef<(notify?: boolean, force?: boolean) => Promise<void>>(async () => {});
 
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showCloseChoice, setShowCloseChoice] = useState(false);
@@ -350,6 +353,12 @@ function AppContent() {
   };
 
   useEffect(() => {
+    tRef.current = t;
+    reloadLibraryRef.current = reloadLibraryFromStores;
+    publishAutomationRef.current = publishAutomationFromStores;
+  });
+
+  useEffect(() => {
     if (!interactiveStartupReady || settings.steamPersonaName || !settings.apiKey || !settings.steamId64) return;
     fetchPlayerSummary(settings.apiKey, settings.steamId64)
       .then((summary) => {
@@ -385,53 +394,42 @@ function AppContent() {
   }, []);
 
   useEffect(() => {
-    let unlistenRefresh: (() => void) | undefined;
-    let unlistenPublish: (() => void) | undefined;
-    let unlistenBackup: (() => void) | undefined;
-
-    listen("repressurizer-refresh-library-requested", () => {
-      void reloadLibraryFromStores(true).catch(() => {});
-    })
-      .then((fn) => {
-        unlistenRefresh = fn;
-      })
-      .catch(() => {});
-
-    listen("repressurizer-publish-automation-requested", () => {
-      void publishAutomationFromStores(true, true).catch(() => {});
-    })
-      .then((fn) => {
-        unlistenPublish = fn;
-      })
-      .catch(() => {});
-
-    listen("repressurizer-create-backup-requested", () => {
-      const currentSettings = useSettingsStore.getState();
-      createManualBackup(currentSettings.steamPath, currentSettings.steamId3, "Manual backup from tray")
-        .then(() => {
-          const message = t("backups.created");
-          toast.getState().success(message);
-          void appLog.info("Manual backup created from tray");
-          void sendWorkflowNotification(message, true);
+    let disposed = false;
+    const unlisteners: Array<() => void> = [];
+    const register = <T,>(event: string, handler: (event: { payload: T }) => void) => {
+      listen<T>(event, handler)
+        .then((fn) => {
+          if (disposed) {
+            fn();
+          } else {
+            unlisteners.push(fn);
+          }
         })
-        .catch((error) => {
-          const message = t("toast.backupFailed", { error: String(error) });
-          toast.getState().error(message);
-          void appLog.error("Manual backup from tray failed", { error: String(error) });
-          void sendWorkflowNotification(message, true, true);
-        });
-    })
-      .then((fn) => {
-        unlistenBackup = fn;
-      })
-      .catch(() => {});
+        .catch(() => {});
+    };
+
+    register("repressurizer-refresh-library-requested", () => {
+      void reloadLibraryRef.current(true).catch(() => {});
+    });
+
+    register("repressurizer-publish-automation-requested", () => {
+      void publishAutomationRef.current(true, true).catch(() => {});
+    });
+
+    register<{ success: boolean; message: string }>("repressurizer-create-backup-finished", ({ payload }) => {
+      const translate = tRef.current;
+      if (payload.success) {
+        toast.getState().success(translate("backups.created"));
+      } else {
+        toast.getState().error(translate("toast.backupFailed", { error: payload.message }));
+      }
+    });
 
     return () => {
-      unlistenRefresh?.();
-      unlistenPublish?.();
-      unlistenBackup?.();
+      disposed = true;
+      unlisteners.forEach((unlisten) => unlisten());
     };
-  }, [t]);
+  }, []);
 
   useEffect(() => {
     if (startupContext === null || quietTrayStartup || !settings.setupComplete || settings.checkUpdatesOnStartup === false) return;

@@ -6,11 +6,15 @@ pub mod steam;
 use categorizer::commands;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use steam::api;
 use steam::collections;
 use steam::detector;
 use steam::sam;
 use tauri::{Emitter, Manager};
+use tauri_plugin_notification::NotificationExt;
+
+static TRAY_BACKUP_RUNNING: AtomicBool = AtomicBool::new(false);
 
 #[derive(Serialize)]
 struct CacheInfo {
@@ -31,6 +35,21 @@ struct HttpPublishResult {
 struct StartupContext {
     launched_from_autostart: bool,
     main_window_created: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct TrayBackupSettings {
+    setup_complete: bool,
+    steam_path: String,
+    steam_id3: String,
+}
+
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TrayBackupResult {
+    success: bool,
+    message: String,
 }
 
 #[derive(Deserialize)]
@@ -157,6 +176,84 @@ fn hide_main_window_handle(app: &tauri::AppHandle) {
         set_webview_memory_target(&window, true);
         let _ = window.hide();
     }
+}
+
+fn read_tray_backup_settings() -> Result<TrayBackupSettings, String> {
+    let settings_path =
+        app_data_dir().ok_or("Could not resolve Repressurizer app data directory")?.join("settings.json");
+    let data = std::fs::read_to_string(&settings_path)
+        .map_err(|error| format!("Failed to read settings file {}: {}", settings_path.display(), error))?;
+    serde_json::from_str::<TrayBackupSettings>(&data)
+        .map_err(|error| format!("Failed to parse settings file {}: {}", settings_path.display(), error))
+}
+
+fn create_backup_from_saved_settings() -> Result<(), String> {
+    let settings = read_tray_backup_settings()?;
+    if !settings.setup_complete {
+        return Err("Complete setup before creating a backup.".to_string());
+    }
+    if settings.steam_path.trim().is_empty() || settings.steam_id3.trim().is_empty() {
+        return Err("Steam path and Steam user ID are required to create a backup.".to_string());
+    }
+
+    collections::create_manual_backup(
+        settings.steam_path,
+        settings.steam_id3,
+        "Manual backup from tray".to_string(),
+    )
+}
+
+fn is_main_window_visible(app: &tauri::AppHandle) -> bool {
+    app.get_webview_window("main")
+        .and_then(|window| window.is_visible().ok())
+        .unwrap_or(false)
+}
+
+fn notify_backup_result(app: &tauri::AppHandle, message: &str, ui_visible: bool) {
+    if ui_visible {
+        return;
+    }
+
+    if let Err(error) = app
+        .notification()
+        .builder()
+        .title("Repressurizer")
+        .body(message)
+        .show()
+    {
+        log::debug!("Failed to send backup notification: {}", error);
+    }
+}
+
+fn create_tray_backup(app: tauri::AppHandle) {
+    if TRAY_BACKUP_RUNNING.swap(true, Ordering::SeqCst) {
+        log::debug!("Ignoring tray backup request while another backup is running");
+        return;
+    }
+
+    tauri::async_runtime::spawn_blocking(move || {
+        let result = match create_backup_from_saved_settings() {
+            Ok(()) => {
+                log::info!("Manual backup created from tray");
+                TrayBackupResult {
+                    success: true,
+                    message: "Manual backup created.".to_string(),
+                }
+            }
+            Err(error) => {
+                log::error!("Manual backup from tray failed: {}", error);
+                TrayBackupResult {
+                    success: false,
+                    message: format!("Backup failed: {}", error),
+                }
+            }
+        };
+
+        let _ = app.emit("repressurizer-create-backup-finished", result.clone());
+        let ui_visible = is_main_window_visible(&app);
+        notify_backup_result(&app, &result.message, ui_visible);
+        TRAY_BACKUP_RUNNING.store(false, Ordering::SeqCst);
+    });
 }
 
 fn redact_tail(value: &str) -> String {
@@ -536,7 +633,7 @@ pub fn run() {
                         automation::trigger_publish_now();
                     }
                     "create_backup" => {
-                        let _ = app.emit("repressurizer-create-backup-requested", ());
+                        create_tray_backup(app.clone());
                     }
                     "hide" => {
                         hide_main_window_handle(app);
