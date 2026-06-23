@@ -14,6 +14,8 @@ import { useSettingsStore } from "../../stores/settingsStore";
 import { useGameStore } from "../../stores/gameStore";
 import { useCategoryStore } from "../../stores/categoryStore";
 import { useFamilyStore } from "../../stores/familyStore";
+import { useAchievementsStore } from "../../stores/achievementsStore";
+import { useWishlistStore } from "../../stores/wishlistStore";
 import { useSteamAppIndexStore } from "../../stores/steamAppIndexStore";
 import { familyAppsToOwnedGames } from "../../lib/familyLibrary";
 import { isSteamAppIndexStale } from "../../lib/steamAppIndex";
@@ -298,12 +300,22 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
     setPublishingAutomation(true);
     setMessage("");
     try {
+      const achievementState = useAchievementsStore.getState();
+      const wishlistState = useWishlistStore.getState();
+      const familyState = useFamilyStore.getState();
       const result = await publishAutomationSnapshot({
         settings,
         games,
         collections: useCategoryStore.getState().collections,
         details,
         hltbData,
+        achievements: achievementState.summaries,
+        wishlistItems: wishlistState.items,
+        wishlistLastFetched: wishlistState.lastFetched,
+        familyApps: familyState.apps,
+        familyAuthUsed: familyState.authUsed,
+        familyOwnerSteamId: familyState.ownerSteamId,
+        familyLastFetched: familyState.lastFetched,
         appVersion: __APP_VERSION__,
       });
       settings.setSettings({

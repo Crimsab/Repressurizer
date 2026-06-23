@@ -1,5 +1,5 @@
-import type { GameDetails, OwnedGame, SteamCollection } from "./types";
-import type { HltbData } from "./tauri";
+import type { AchievementSummary, GameDetails, OwnedGame, SteamCollection } from "./types";
+import type { FamilyLibraryApp, HltbData, WishlistItem } from "./tauri";
 
 export const LIBRARY_SNAPSHOT_SCHEMA_VERSION = "repressurizer.library-snapshot.v1" as const;
 
@@ -8,6 +8,13 @@ export interface LibrarySnapshotOptions {
   collections: SteamCollection[];
   details?: Record<number, GameDetails>;
   hltbData?: Record<number, HltbData>;
+  achievements?: Record<number, AchievementSummary>;
+  wishlistItems?: WishlistItem[];
+  wishlistLastFetched?: number | null;
+  familyApps?: Record<number, FamilyLibraryApp>;
+  familyAuthUsed?: string | null;
+  familyOwnerSteamId?: string | null;
+  familyLastFetched?: number | null;
   appVersion?: string;
   steamId64?: string;
   steamPersonaName?: string;
@@ -29,6 +36,9 @@ export interface LibrarySnapshot {
     gameCount: number;
     collectionCount: number;
     hltbCount: number;
+    achievementCount: number;
+    wishlistCount: number;
+    familySharedCount: number;
   };
   collections: LibrarySnapshotCollection[];
   games: LibrarySnapshotGame[];
@@ -81,6 +91,46 @@ export interface LibrarySnapshotGame {
     matchedName: string | null;
     confidence: number | null;
   } | null;
+  achievements: {
+    source: "steam_web_api";
+    total: number;
+    achieved: number;
+    percent: number | null;
+    complete: boolean;
+    hasDetails: boolean;
+  } | null;
+  wishlist: {
+    source: "steam_wishlist";
+    priority: number;
+    dateAdded: number;
+    dateAddedAt: string | null;
+    fetchedAt: string | null;
+  } | null;
+  ownership: {
+    source: "steam_family";
+    authUsed: string | null;
+    ownerSteamIdTail: string | null;
+    ownerSteamIdTails: string[];
+    ownerCount: number;
+    ownedByCurrentUser: boolean;
+    familyShared: boolean;
+    excluded: boolean;
+    excludeReason: number;
+    nonGame: boolean;
+    appType: number;
+    fetchedAt: string | null;
+  } | null;
+  flags: {
+    collectionOnly: boolean;
+    hasDetails: boolean;
+    missingDetails: boolean;
+    hasHltb: boolean;
+    hasAchievements: boolean;
+    wishlist: boolean;
+    familyShared: boolean;
+    ownedByCurrentUser: boolean;
+    nonGame: boolean;
+  };
 }
 
 function roundHours(minutes: number): number {
@@ -90,6 +140,15 @@ function roundHours(minutes: number): number {
 function isoFromSteamTimestamp(ts: number): string | null {
   if (!ts) return null;
   return new Date(ts * 1000).toISOString();
+}
+
+function compareStableStrings(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+function isoFromMillis(ts?: number | null): string | null {
+  if (!ts) return null;
+  return new Date(ts).toISOString();
 }
 
 function steamTail(steamId64?: string): string | null {
@@ -112,15 +171,91 @@ function toHltbExport(hltb?: HltbData | null): LibrarySnapshotGame["hltb"] {
   };
 }
 
+function toAchievementsExport(summary?: AchievementSummary | null): LibrarySnapshotGame["achievements"] {
+  if (!summary) return null;
+  const total = Math.max(0, Number(summary.total || 0));
+  const achieved = Math.min(Math.max(0, Number(summary.achieved || 0)), total);
+  return {
+    source: "steam_web_api",
+    total,
+    achieved,
+    percent: total > 0 ? Math.round((achieved / total) * 1000) / 10 : null,
+    complete: total > 0 && achieved >= total,
+    hasDetails: Array.isArray(summary.achievements) && summary.achievements.length > 0,
+  };
+}
+
+function toWishlistExport(
+  item?: WishlistItem | null,
+  fetchedAt?: string | null
+): LibrarySnapshotGame["wishlist"] {
+  if (!item) return null;
+  return {
+    source: "steam_wishlist",
+    priority: item.priority,
+    dateAdded: item.date_added,
+    dateAddedAt: isoFromSteamTimestamp(item.date_added),
+    fetchedAt: fetchedAt ?? null,
+  };
+}
+
+function toOwnershipExport(
+  app?: FamilyLibraryApp | null,
+  authUsed?: string | null,
+  ownerSteamId?: string | null,
+  fetchedAt?: string | null
+): LibrarySnapshotGame["ownership"] {
+  if (!app) return null;
+  const ownerSteamIdTails = [...new Set((app.owner_steamids ?? []).map(steamTail).filter(Boolean) as string[])].sort(
+    compareStableStrings
+  );
+  return {
+    source: "steam_family",
+    authUsed: authUsed?.trim() || null,
+    ownerSteamIdTail: steamTail(ownerSteamId ?? undefined),
+    ownerSteamIdTails,
+    ownerCount: app.owner_steamids?.length ?? 0,
+    ownedByCurrentUser: Boolean(app.is_owned_by_current_user),
+    familyShared: Boolean(app.is_family_shared) && app.exclude_reason === 0,
+    excluded: app.exclude_reason !== 0,
+    excludeReason: app.exclude_reason,
+    nonGame: Boolean(app.is_non_game),
+    appType: app.app_type,
+    fetchedAt: fetchedAt ?? null,
+  };
+}
+
+function toFlagsExport(
+  isCollectionOnly: boolean,
+  details: LibrarySnapshotGame["details"],
+  hltb: LibrarySnapshotGame["hltb"],
+  achievements: LibrarySnapshotGame["achievements"],
+  wishlist: LibrarySnapshotGame["wishlist"],
+  ownership: LibrarySnapshotGame["ownership"]
+): LibrarySnapshotGame["flags"] {
+  const familyShared = Boolean(ownership?.familyShared);
+  return {
+    collectionOnly: isCollectionOnly,
+    hasDetails: Boolean(details),
+    missingDetails: !details,
+    hasHltb: Boolean(hltb),
+    hasAchievements: Boolean(achievements),
+    wishlist: Boolean(wishlist),
+    familyShared,
+    ownedByCurrentUser: ownership?.ownedByCurrentUser ?? !familyShared,
+    nonGame: ownership?.nonGame ?? false,
+  };
+}
+
 function toDetailsExport(details?: GameDetails | null): LibrarySnapshotGame["details"] {
   if (!details) return null;
   return {
     releaseDate: details.release_date ?? null,
-    genres: [...(details.genres ?? [])].sort((a, b) => a.localeCompare(b)),
-    categories: [...(details.categories ?? [])].sort((a, b) => a.localeCompare(b)),
+    genres: [...(details.genres ?? [])].sort(compareStableStrings),
+    categories: [...(details.categories ?? [])].sort(compareStableStrings),
     metacriticScore: details.metacritic_score ?? null,
-    developers: [...(details.developers ?? [])].sort((a, b) => a.localeCompare(b)),
-    publishers: [...(details.publishers ?? [])].sort((a, b) => a.localeCompare(b)),
+    developers: [...(details.developers ?? [])].sort(compareStableStrings),
+    publishers: [...(details.publishers ?? [])].sort(compareStableStrings),
     platforms: {
       windows: Boolean(details.platforms?.windows),
       mac: Boolean(details.platforms?.mac),
@@ -139,7 +274,7 @@ function stableStringify(value: unknown): string {
   if (value && typeof value === "object") {
     const entries = Object.entries(value as Record<string, unknown>)
       .filter(([, item]) => item !== undefined)
-      .sort(([a], [b]) => a.localeCompare(b));
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
     return `{${entries.map(([key, item]) => `${JSON.stringify(key)}:${stableStringify(item)}`).join(",")}}`;
   }
   return JSON.stringify(value);
@@ -164,7 +299,7 @@ export function buildLibrarySnapshot(options: LibrarySnapshotOptions): LibrarySn
       gameCount: collection.added.length,
       appIds: [...collection.added].sort((a, b) => a - b),
     }))
-    .sort((a, b) => a.name.localeCompare(b.name) || a.key.localeCompare(b.key));
+    .sort((a, b) => compareStableStrings(a.name, b.name) || compareStableStrings(a.key, b.key));
 
   const collectionRefsByAppId = new Map<number, LibrarySnapshotGame["collections"]>();
   for (const collection of collections) {
@@ -179,10 +314,24 @@ export function buildLibrarySnapshot(options: LibrarySnapshotOptions): LibrarySn
     }
   }
 
+  const wishlistFetchedAt = isoFromMillis(options.wishlistLastFetched);
+  const wishlistByAppId = new Map((options.wishlistItems ?? []).map((item) => [item.appid, item]));
+  const familyFetchedAt = isoFromMillis(options.familyLastFetched);
+  const familyByAppId = new Map(Object.values(options.familyApps ?? {}).map((app) => [app.appid, app]));
+
   const games = Object.values(options.games)
     .sort((a, b) => a.appid - b.appid)
     .map((game) => {
+      const details = toDetailsExport(options.details?.[game.appid]);
       const hltb = toHltbExport(options.hltbData?.[game.appid]);
+      const achievements = toAchievementsExport(options.achievements?.[game.appid]);
+      const wishlist = toWishlistExport(wishlistByAppId.get(game.appid), wishlistFetchedAt);
+      const ownership = toOwnershipExport(
+        familyByAppId.get(game.appid),
+        options.familyAuthUsed,
+        options.familyOwnerSteamId,
+        familyFetchedAt
+      );
       return {
         appId: game.appid,
         name: String(game.name ?? ""),
@@ -192,10 +341,14 @@ export function buildLibrarySnapshot(options: LibrarySnapshotOptions): LibrarySn
         lastPlayedAt: isoFromSteamTimestamp(game.rtime_last_played),
         isCollectionOnly: Boolean(game.is_collection_only),
         collections: (collectionRefsByAppId.get(game.appid) ?? []).sort(
-          (a, b) => a.name.localeCompare(b.name) || a.key.localeCompare(b.key)
+          (a, b) => compareStableStrings(a.name, b.name) || compareStableStrings(a.key, b.key)
         ),
-        details: toDetailsExport(options.details?.[game.appid]),
+        details,
         hltb,
+        achievements,
+        wishlist,
+        ownership,
+        flags: toFlagsExport(Boolean(game.is_collection_only), details, hltb, achievements, wishlist, ownership),
       };
     });
 
@@ -213,6 +366,9 @@ export function buildLibrarySnapshot(options: LibrarySnapshotOptions): LibrarySn
       gameCount: games.length,
       collectionCount: collections.length,
       hltbCount: games.filter((game) => game.hltb).length,
+      achievementCount: games.filter((game) => game.achievements).length,
+      wishlistCount: games.filter((game) => game.wishlist).length,
+      familySharedCount: games.filter((game) => game.ownership?.familyShared).length,
     },
     collections,
     games,

@@ -13,6 +13,10 @@ The HTTP body uses the public `repressurizer.library-snapshot.v1` schema and inc
 - Repressurizer collections
 - Steam metadata already known to Repressurizer
 - HLTB values when Repressurizer has matched them
+- optional achievement completion summaries from the local Repressurizer cache
+- optional wishlist membership and added-date metadata from the local cache
+- optional Steam Family ownership flags with Steam IDs redacted to short tails
+- derived flags such as missing details, collection-only, wishlist, and family-shared state
 - a stable checksum used to detect changed snapshots
 
 Receivers should key game rows by `appId`.
@@ -36,6 +40,7 @@ Automation export is read-only:
 - it does not write to Steam
 - it does not import games automatically into another app
 - it does not send Steam cookies or browser sessions
+- it does not send Steam Web API keys, bearer tokens, or full Steam IDs
 - it does not expose a command channel back into Repressurizer
 
 Use a trusted local endpoint for personal setups. If the endpoint is reachable outside your machine or LAN, require a bearer token and HTTPS.
@@ -74,7 +79,7 @@ Rust receivers can use:
 repressurizer-integration
 ```
 
-Both libraries are schema-first helpers for validating snapshots, checking checksums, indexing by `appId`, diffing snapshots, and reading HLTB values.
+Both libraries are schema-first helpers for validating snapshots, checking checksums, indexing by `appId`, diffing snapshots, summarizing receiver-relevant counts, and reading HLTB/achievement/wishlist/ownership values.
 
 See also:
 

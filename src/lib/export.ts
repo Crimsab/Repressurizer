@@ -1,8 +1,8 @@
 import type { OwnedGame, SteamCollection } from "./types";
 import { computeStats } from "./stats";
 import { generateLibrarySnapshotJson } from "./automationExport";
-import type { GameDetails } from "./types";
-import type { HltbData } from "./tauri";
+import type { AchievementSummary, GameDetails } from "./types";
+import type { FamilyLibraryApp, HltbData, WishlistItem } from "./tauri";
 
 export type ExportScope = "all" | "category" | "categories" | "categories_pick" | "stats" | "snapshot";
 export type ExportFormat = "json" | "csv" | "txt" | "md";
@@ -18,6 +18,13 @@ export interface ExportOptions {
   categoryKeys?: string[];
   details?: Record<number, GameDetails>;
   hltbData?: Record<number, HltbData>;
+  achievements?: Record<number, AchievementSummary>;
+  wishlistItems?: WishlistItem[];
+  wishlistLastFetched?: number | null;
+  familyApps?: Record<number, FamilyLibraryApp>;
+  familyAuthUsed?: string | null;
+  familyOwnerSteamId?: string | null;
+  familyLastFetched?: number | null;
   appVersion?: string;
   steamId64?: string;
   steamPersonaName?: string;
@@ -102,6 +109,13 @@ function toJSON(opts: ExportOptions): string {
       collections: opts.collections,
       details: opts.details,
       hltbData: opts.hltbData,
+      achievements: opts.achievements,
+      wishlistItems: opts.wishlistItems,
+      wishlistLastFetched: opts.wishlistLastFetched,
+      familyApps: opts.familyApps,
+      familyAuthUsed: opts.familyAuthUsed,
+      familyOwnerSteamId: opts.familyOwnerSteamId,
+      familyLastFetched: opts.familyLastFetched,
       appVersion: opts.appVersion,
       steamId64: opts.steamId64,
       steamPersonaName: opts.steamPersonaName,

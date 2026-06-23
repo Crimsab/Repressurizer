@@ -49,6 +49,33 @@ struct SnapshotGameInput {
     is_collection_only: bool,
 }
 
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct CachedAchievementSummary {
+    total: u32,
+    achieved: u32,
+    #[serde(default)]
+    achievements: Vec<Value>,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct WishlistCache {
+    #[serde(default)]
+    items: Vec<api::WishlistItem>,
+    last_fetched: Option<u64>,
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+struct FamilyCache {
+    #[serde(default)]
+    apps: Vec<api::FamilyLibraryApp>,
+    auth_used: Option<String>,
+    owner_steam_id: Option<String>,
+    last_fetched: Option<u64>,
+}
+
 pub fn start_worker(_app: tauri::AppHandle) {
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(STARTUP_DELAY).await;
@@ -67,6 +94,46 @@ pub fn trigger_publish_now() {
             log::warn!("Manual automation export failed: {}", error);
         }
     });
+}
+
+pub async fn build_snapshot_from_settings() -> Result<Value, String> {
+    let settings_value = read_settings_value()?;
+    let settings = parse_settings(&settings_value)?;
+    build_snapshot(&settings).await
+}
+
+pub async fn publish_now_for_cli() -> Result<Value, String> {
+    publish_once(true).await?;
+    automation_status_from_settings()
+}
+
+pub fn automation_status_from_settings() -> Result<Value, String> {
+    let settings_value = match read_settings_value() {
+        Ok(value) => value,
+        Err(error) => {
+            return Ok(json!({
+                "settingsAvailable": false,
+                "setupComplete": false,
+                "publishEnabled": false,
+                "publishUrlConfigured": false,
+                "error": error,
+            }));
+        }
+    };
+    let settings = parse_settings(&settings_value)?;
+    Ok(json!({
+        "settingsAvailable": true,
+        "setupComplete": settings.setup_complete,
+        "publishEnabled": settings.automation_publish_enabled,
+        "publishUrlConfigured": !settings.automation_publish_url.trim().is_empty(),
+        "intervalHours": settings.automation_publish_interval_hours,
+        "lastChecksum": string_or_null(&settings.automation_publish_last_checksum),
+        "lastPublishedAt": string_or_null(&settings.automation_publish_last_published_at),
+        "lastAttemptedAt": string_or_null(&settings.automation_publish_last_attempted_at),
+        "lastStatus": settings_value.get("automationPublishLastStatus").cloned().unwrap_or(Value::Null),
+        "lastMessage": settings_value.get("automationPublishLastMessage").cloned().unwrap_or(Value::Null),
+        "lastHttpStatus": settings_value.get("automationPublishLastHttpStatus").cloned().unwrap_or(Value::Null),
+    }))
 }
 
 async fn publish_once(force: bool) -> Result<(), String> {
@@ -183,6 +250,9 @@ async fn build_snapshot(settings: &AutomationSettings) -> Result<Value, String> 
 
     let details: HashMap<String, api::GameDetails> = load_cache("details_cache.json");
     let hltb_data: HashMap<String, HltbData> = load_cache("hltb_cache.json");
+    let achievements: HashMap<String, CachedAchievementSummary> = load_cache("achievements.json");
+    let wishlist: WishlistCache = load_json_file("wishlist.json").unwrap_or_default();
+    let family: FamilyCache = load_json_file("steam_family.json").unwrap_or_default();
     let games = merge_collection_only_games(owned_games, &collections, &details);
 
     Ok(build_library_snapshot(
@@ -190,6 +260,9 @@ async fn build_snapshot(settings: &AutomationSettings) -> Result<Value, String> 
         collections,
         details,
         hltb_data,
+        achievements,
+        wishlist,
+        family,
         settings,
     ))
 }
@@ -244,6 +317,9 @@ fn build_library_snapshot(
     collections: Vec<collections::SteamCollection>,
     details: HashMap<String, api::GameDetails>,
     hltb_data: HashMap<String, HltbData>,
+    achievements: HashMap<String, CachedAchievementSummary>,
+    wishlist: WishlistCache,
+    family: FamilyCache,
     settings: &AutomationSettings,
 ) -> Value {
     let mut exported_collections: Vec<Value> = collections
@@ -291,6 +367,21 @@ fn build_library_snapshot(
         }
     }
 
+    let wishlist_fetched_at = wishlist.last_fetched.and_then(iso_from_millis);
+    let wishlist_by_appid = wishlist
+        .items
+        .into_iter()
+        .map(|item| (item.appid, item))
+        .collect::<HashMap<_, _>>();
+    let family_fetched_at = family.last_fetched.and_then(iso_from_millis);
+    let family_auth_used = family.auth_used.clone();
+    let family_owner_tail = family.owner_steam_id.as_deref().and_then(steam_tail);
+    let family_by_appid = family
+        .apps
+        .into_iter()
+        .map(|app| (app.appid, app))
+        .collect::<HashMap<_, _>>();
+
     games.sort_by_key(|game| game.appid);
     let exported_games: Vec<Value> = games
         .into_iter()
@@ -304,6 +395,29 @@ fn build_library_snapshot(
             });
             let details = details.get(&game.appid.to_string());
             let hltb = hltb_data.get(&game.appid.to_string());
+            let hltb_exported = hltb.and_then(hltb_export);
+            let achievement_exported = achievements
+                .get(&game.appid.to_string())
+                .map(achievement_export);
+            let wishlist_exported = wishlist_by_appid
+                .get(&game.appid)
+                .map(|item| wishlist_export(item, wishlist_fetched_at.as_deref()));
+            let ownership_exported = family_by_appid.get(&game.appid).map(|app| {
+                ownership_export(
+                    app,
+                    family_auth_used.as_deref(),
+                    family_owner_tail.as_deref(),
+                    family_fetched_at.as_deref(),
+                )
+            });
+            let flags = flags_export(
+                game.is_collection_only,
+                details.is_some(),
+                hltb_exported.is_some(),
+                achievement_exported.as_ref(),
+                wishlist_exported.as_ref(),
+                ownership_exported.as_ref(),
+            );
             json!({
                 "appId": game.appid,
                 "name": game.name,
@@ -314,7 +428,11 @@ fn build_library_snapshot(
                 "isCollectionOnly": game.is_collection_only,
                 "collections": refs,
                 "details": details.map(details_export).unwrap_or(Value::Null),
-                "hltb": hltb.and_then(hltb_export).unwrap_or(Value::Null),
+                "hltb": hltb_exported.unwrap_or(Value::Null),
+                "achievements": achievement_exported.unwrap_or(Value::Null),
+                "wishlist": wishlist_exported.unwrap_or(Value::Null),
+                "ownership": ownership_exported.unwrap_or(Value::Null),
+                "flags": flags,
             })
         })
         .collect();
@@ -322,6 +440,23 @@ fn build_library_snapshot(
     let hltb_count = exported_games
         .iter()
         .filter(|game| !game.get("hltb").unwrap_or(&Value::Null).is_null())
+        .count();
+    let achievement_count = exported_games
+        .iter()
+        .filter(|game| !game.get("achievements").unwrap_or(&Value::Null).is_null())
+        .count();
+    let wishlist_count = exported_games
+        .iter()
+        .filter(|game| !game.get("wishlist").unwrap_or(&Value::Null).is_null())
+        .count();
+    let family_shared_count = exported_games
+        .iter()
+        .filter(|game| {
+            game.get("ownership")
+                .and_then(|ownership| ownership.get("familyShared"))
+                .and_then(Value::as_bool)
+                .unwrap_or(false)
+        })
         .count();
     let payload = json!({
         "schemaVersion": SNAPSHOT_SCHEMA_VERSION,
@@ -337,6 +472,9 @@ fn build_library_snapshot(
             "gameCount": exported_games.len(),
             "collectionCount": exported_collections.len(),
             "hltbCount": hltb_count,
+            "achievementCount": achievement_count,
+            "wishlistCount": wishlist_count,
+            "familySharedCount": family_shared_count,
         },
         "collections": exported_collections,
         "games": exported_games,
@@ -395,6 +533,94 @@ fn hltb_export(hltb: &HltbData) -> Option<Value> {
         "matchedName": hltb.game_name,
         "confidence": hltb.confidence,
     }))
+}
+
+fn achievement_export(summary: &CachedAchievementSummary) -> Value {
+    let percent = if summary.total == 0 {
+        Value::Null
+    } else {
+        json!(round_percent(summary.achieved, summary.total))
+    };
+    json!({
+        "source": "steam_web_api",
+        "total": summary.total,
+        "achieved": summary.achieved.min(summary.total),
+        "percent": percent,
+        "complete": summary.total > 0 && summary.achieved >= summary.total,
+        "hasDetails": !summary.achievements.is_empty(),
+    })
+}
+
+fn wishlist_export(item: &api::WishlistItem, fetched_at: Option<&str>) -> Value {
+    json!({
+        "source": "steam_wishlist",
+        "priority": item.priority,
+        "dateAdded": item.date_added,
+        "dateAddedAt": iso_from_steam_timestamp(item.date_added),
+        "fetchedAt": fetched_at,
+    })
+}
+
+fn ownership_export(
+    app: &api::FamilyLibraryApp,
+    auth_used: Option<&str>,
+    owner_tail: Option<&str>,
+    fetched_at: Option<&str>,
+) -> Value {
+    let mut owner_tails = app
+        .owner_steamids
+        .iter()
+        .filter_map(|owner| steam_tail(owner))
+        .collect::<Vec<_>>();
+    owner_tails.sort();
+    owner_tails.dedup();
+    json!({
+        "source": "steam_family",
+        "authUsed": auth_used,
+        "ownerSteamIdTail": owner_tail,
+        "ownerSteamIdTails": owner_tails,
+        "ownerCount": app.owner_steamids.len(),
+        "ownedByCurrentUser": app.is_owned_by_current_user,
+        "familyShared": app.is_family_shared && app.exclude_reason == 0,
+        "excluded": app.exclude_reason != 0,
+        "excludeReason": app.exclude_reason,
+        "nonGame": app.is_non_game,
+        "appType": app.app_type,
+        "fetchedAt": fetched_at,
+    })
+}
+
+fn flags_export(
+    is_collection_only: bool,
+    has_details: bool,
+    has_hltb: bool,
+    achievements: Option<&Value>,
+    wishlist: Option<&Value>,
+    ownership: Option<&Value>,
+) -> Value {
+    let family_shared = ownership
+        .and_then(|value| value.get("familyShared"))
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let owned_by_current_user = ownership
+        .and_then(|value| value.get("ownedByCurrentUser"))
+        .and_then(Value::as_bool)
+        .unwrap_or(!family_shared);
+    let non_game = ownership
+        .and_then(|value| value.get("nonGame"))
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    json!({
+        "collectionOnly": is_collection_only,
+        "hasDetails": has_details,
+        "missingDetails": !has_details,
+        "hasHltb": has_hltb,
+        "hasAchievements": achievements.is_some(),
+        "wishlist": wishlist.is_some(),
+        "familyShared": family_shared,
+        "ownedByCurrentUser": owned_by_current_user,
+        "nonGame": non_game,
+    })
 }
 
 async fn post_json(url: &str, body: &str, bearer_token: Option<&str>) -> Result<u16, String> {
@@ -543,8 +769,21 @@ where
     serde_json::from_str::<HashMap<String, T>>(&data).unwrap_or_default()
 }
 
+fn load_json_file<T>(name: &str) -> Option<T>
+where
+    T: for<'de> Deserialize<'de>,
+{
+    let path = app_data_dir()?.join(name);
+    let data = std::fs::read_to_string(path).ok()?;
+    serde_json::from_str::<T>(&data).ok()
+}
+
 fn round_hours(minutes: u64) -> f64 {
     ((minutes as f64 / 60.0) * 10.0).round() / 10.0
+}
+
+fn round_percent(achieved: u32, total: u32) -> f64 {
+    ((achieved.min(total) as f64 / total as f64) * 1000.0).round() / 10.0
 }
 
 fn iso_from_steam_timestamp(timestamp: u64) -> Option<String> {
@@ -552,6 +791,14 @@ fn iso_from_steam_timestamp(timestamp: u64) -> Option<String> {
         return None;
     }
     chrono::DateTime::<Utc>::from_timestamp(timestamp as i64, 0)
+        .map(|date| date.to_rfc3339_opts(SecondsFormat::Millis, true))
+}
+
+fn iso_from_millis(timestamp: u64) -> Option<String> {
+    if timestamp == 0 {
+        return None;
+    }
+    chrono::DateTime::<Utc>::from_timestamp_millis(timestamp as i64)
         .map(|date| date.to_rfc3339_opts(SecondsFormat::Millis, true))
 }
 

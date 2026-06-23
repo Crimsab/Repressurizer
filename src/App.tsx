@@ -236,6 +236,9 @@ function AppContent() {
     const gameState = useGameStore.getState();
     const categoryState = useCategoryStore.getState();
     const hltbState = useHltbStore.getState();
+    const achievementsState = useAchievementsStore.getState();
+    const wishlistState = useWishlistStore.getState();
+    const familyState = useFamilyStore.getState();
     if (Object.keys(gameState.games).length === 0 || categoryState.collections.length === 0) {
       const message = t("settings.automationExport.skippedNoData");
       settingsStore.setSettings(automationPublishStatusPatch(settingsStore, "skipped", message));
@@ -251,6 +254,13 @@ function AppContent() {
       collections: categoryState.collections,
       details: gameState.details,
       hltbData: hltbState.data,
+      achievements: achievementsState.summaries,
+      wishlistItems: wishlistState.items,
+      wishlistLastFetched: wishlistState.lastFetched,
+      familyApps: familyState.apps,
+      familyAuthUsed: familyState.authUsed,
+      familyOwnerSteamId: familyState.ownerSteamId,
+      familyLastFetched: familyState.lastFetched,
       appVersion: __APP_VERSION__,
     };
     const snapshot = buildAutomationSnapshotFromContext(context);

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { buildLibrarySnapshot, LIBRARY_SNAPSHOT_SCHEMA_VERSION } from "./automationExport";
-import type { GameDetails, OwnedGame, SteamCollection } from "./types";
-import type { HltbData } from "./tauri";
+import type { AchievementSummary, GameDetails, OwnedGame, SteamCollection } from "./types";
+import type { FamilyLibraryApp, HltbData } from "./tauri";
 
 function game(appid: number, name: string, playtime = 0, lastPlayed = 0): OwnedGame {
   return {
@@ -46,6 +46,22 @@ function details(appId: number): GameDetails {
   };
 }
 
+function familyApp(appId: number): FamilyLibraryApp {
+  return {
+    appid: appId,
+    name: "Disco Elysium",
+    owner_steamids: ["76561198000099999"],
+    exclude_reason: 0,
+    playtime_forever: 180,
+    rtime_last_played: 1_700_000_000,
+    img_icon_hash: null,
+    app_type: 1,
+    is_non_game: false,
+    is_owned_by_current_user: false,
+    is_family_shared: true,
+  };
+}
+
 describe("buildLibrarySnapshot", () => {
   it("exports a stable appId-oriented snapshot with HLTB provenance", () => {
     const hltb: HltbData = {
@@ -56,6 +72,11 @@ describe("buildLibrarySnapshot", () => {
       game_name: "Disco Elysium",
       confidence: 118.2,
     };
+    const achievements: AchievementSummary = {
+      total: 45,
+      achieved: 12,
+      achievements: [],
+    };
 
     const snapshot = buildLibrarySnapshot({
       games: {
@@ -64,6 +85,13 @@ describe("buildLibrarySnapshot", () => {
       collections: [collection("user-collections.rpg", "RPG", [632470])],
       details: { 632470: details(632470) },
       hltbData: { 632470: hltb },
+      achievements: { 632470: achievements },
+      wishlistItems: [{ appid: 632470, priority: 1, date_added: 1_700_000_100 }],
+      wishlistLastFetched: Date.parse("2026-06-18T18:01:00.000Z"),
+      familyApps: { 632470: familyApp(632470) },
+      familyAuthUsed: "access_token",
+      familyOwnerSteamId: "76561198000012345",
+      familyLastFetched: Date.parse("2026-06-18T18:02:00.000Z"),
       appVersion: "0.2.0",
       steamId64: "76561198000012345",
       steamPersonaName: "Tester",
@@ -71,7 +99,14 @@ describe("buildLibrarySnapshot", () => {
     });
 
     expect(snapshot.schemaVersion).toBe(LIBRARY_SNAPSHOT_SCHEMA_VERSION);
-    expect(snapshot.summary).toEqual({ gameCount: 1, collectionCount: 1, hltbCount: 1 });
+    expect(snapshot.summary).toEqual({
+      gameCount: 1,
+      collectionCount: 1,
+      hltbCount: 1,
+      achievementCount: 1,
+      wishlistCount: 1,
+      familySharedCount: 1,
+    });
     expect(snapshot.steam.steamId64Tail).toBe("2345");
     expect(snapshot.games[0]).toMatchObject({
       appId: 632470,
@@ -85,6 +120,28 @@ describe("buildLibrarySnapshot", () => {
         hltbGameId: 57335,
         matchedName: "Disco Elysium",
         confidence: 118.2,
+      },
+      achievements: {
+        source: "steam_web_api",
+        total: 45,
+        achieved: 12,
+        percent: 26.7,
+      },
+      wishlist: {
+        source: "steam_wishlist",
+        priority: 1,
+        dateAddedAt: "2023-11-14T22:15:00.000Z",
+      },
+      ownership: {
+        source: "steam_family",
+        ownerSteamIdTail: "2345",
+        ownerSteamIdTails: ["9999"],
+        familyShared: true,
+      },
+      flags: {
+        hasAchievements: true,
+        wishlist: true,
+        familyShared: true,
       },
     });
     expect(snapshot.checksum).toMatch(/^fnv1a32:[0-9a-f]{8}$/);

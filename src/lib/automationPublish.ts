@@ -1,7 +1,7 @@
 import { buildLibrarySnapshot, type LibrarySnapshot } from "./automationExport";
 import { postJsonExport, type HttpPublishResult } from "./tauri";
-import type { AppSettings, GameDetails, OwnedGame, SteamCollection } from "./types";
-import type { HltbData } from "./tauri";
+import type { AchievementSummary, AppSettings, GameDetails, OwnedGame, SteamCollection } from "./types";
+import type { FamilyLibraryApp, HltbData, WishlistItem } from "./tauri";
 
 export interface AutomationPublishContext {
   settings: AppSettings;
@@ -9,6 +9,13 @@ export interface AutomationPublishContext {
   collections: SteamCollection[];
   details: Record<number, GameDetails>;
   hltbData: Record<number, HltbData>;
+  achievements?: Record<number, AchievementSummary>;
+  wishlistItems?: WishlistItem[];
+  wishlistLastFetched?: number | null;
+  familyApps?: Record<number, FamilyLibraryApp>;
+  familyAuthUsed?: string | null;
+  familyOwnerSteamId?: string | null;
+  familyLastFetched?: number | null;
   appVersion: string;
 }
 
@@ -63,6 +70,13 @@ export function buildAutomationSnapshotFromContext(context: AutomationPublishCon
     collections: context.collections,
     details: context.details,
     hltbData: context.hltbData,
+    achievements: context.achievements,
+    wishlistItems: context.wishlistItems,
+    wishlistLastFetched: context.wishlistLastFetched,
+    familyApps: context.familyApps,
+    familyAuthUsed: context.familyAuthUsed,
+    familyOwnerSteamId: context.familyOwnerSteamId,
+    familyLastFetched: context.familyLastFetched,
     appVersion: context.appVersion,
     steamId64: context.settings.steamId64,
     steamPersonaName: context.settings.steamPersonaName,
