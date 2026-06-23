@@ -155,7 +155,6 @@ function AppContent() {
   const [availableUpdate, setAvailableUpdate] = useState<Update | null>(null);
   const [installingUpdate, setInstallingUpdate] = useState(false);
   const toast = useToastStore;
-  const tRef = useRef(t);
   const reloadLibraryRef = useRef<(notify?: boolean, startupBackup?: boolean) => Promise<void>>(async () => {});
   const publishAutomationRef = useRef<(notify?: boolean, force?: boolean) => Promise<void>>(async () => {});
 
@@ -353,7 +352,6 @@ function AppContent() {
   };
 
   useEffect(() => {
-    tRef.current = t;
     reloadLibraryRef.current = reloadLibraryFromStores;
     publishAutomationRef.current = publishAutomationFromStores;
   });
@@ -416,13 +414,19 @@ function AppContent() {
       void publishAutomationRef.current(true, true).catch(() => {});
     });
 
-    register<{ success: boolean; message: string }>("repressurizer-create-backup-finished", ({ payload }) => {
-      const translate = tRef.current;
-      if (payload.success) {
-        toast.getState().success(translate("backups.created"));
-      } else {
-        toast.getState().error(translate("toast.backupFailed", { error: payload.message }));
+    register<{ level: "success" | "error" | "warning" | "info"; message: string }>(
+      "repressurizer-tray-message",
+      ({ payload }) => {
+        const level =
+          payload.level === "warning" || payload.level === "info" || payload.level === "error"
+            ? payload.level
+            : "success";
+        toast.getState()[level](payload.message);
       }
+    );
+
+    register("repressurizer-settings-updated", () => {
+      void hydrateSettingsFromDisk().catch(() => {});
     });
 
     return () => {

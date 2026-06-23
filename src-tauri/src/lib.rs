@@ -13,6 +13,7 @@ use steam::detector;
 use steam::sam;
 use tauri::{Emitter, Manager};
 use tauri_plugin_notification::NotificationExt;
+use tauri_plugin_shell::ShellExt;
 
 static TRAY_BACKUP_RUNNING: AtomicBool = AtomicBool::new(false);
 
@@ -52,6 +53,13 @@ struct TrayBackupResult {
     message: String,
 }
 
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TrayMessage {
+    level: String,
+    message: String,
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct PostJsonExportInput {
@@ -62,6 +70,12 @@ struct PostJsonExportInput {
 
 pub(crate) fn app_data_dir() -> Option<PathBuf> {
     dirs::data_dir().map(|dir| dir.join("Repressurizer"))
+}
+
+fn settings_file_path() -> Result<PathBuf, String> {
+    app_data_dir()
+        .map(|dir| dir.join("settings.json"))
+        .ok_or("Could not resolve Repressurizer app data directory".to_string())
 }
 
 fn steam_collections_path(steam_path: &str, steam_id3: &str) -> PathBuf {
@@ -88,6 +102,26 @@ fn read_app_setting_string(key: &str) -> Option<String> {
         .get(key)
         .and_then(|v| v.as_str())
         .map(ToString::to_string)
+}
+
+fn read_settings_json() -> Result<serde_json::Value, String> {
+    let settings_path = settings_file_path()?;
+    let data = std::fs::read_to_string(&settings_path)
+        .map_err(|error| format!("Failed to read settings file {}: {}", settings_path.display(), error))?;
+    serde_json::from_str::<serde_json::Value>(&data)
+        .map_err(|error| format!("Failed to parse settings file {}: {}", settings_path.display(), error))
+}
+
+fn write_settings_json(value: &serde_json::Value) -> Result<(), String> {
+    let settings_path = settings_file_path()?;
+    if let Some(parent) = settings_path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|error| format!("Failed to create settings directory: {}", error))?;
+    }
+    let data = serde_json::to_string(value)
+        .map_err(|error| format!("Failed to serialize settings: {}", error))?;
+    std::fs::write(&settings_path, data)
+        .map_err(|error| format!("Failed to write settings file {}: {}", settings_path.display(), error))
 }
 
 fn launched_from_autostart() -> bool {
@@ -179,12 +213,8 @@ fn hide_main_window_handle(app: &tauri::AppHandle) {
 }
 
 fn read_tray_backup_settings() -> Result<TrayBackupSettings, String> {
-    let settings_path =
-        app_data_dir().ok_or("Could not resolve Repressurizer app data directory")?.join("settings.json");
-    let data = std::fs::read_to_string(&settings_path)
-        .map_err(|error| format!("Failed to read settings file {}: {}", settings_path.display(), error))?;
-    serde_json::from_str::<TrayBackupSettings>(&data)
-        .map_err(|error| format!("Failed to parse settings file {}: {}", settings_path.display(), error))
+    serde_json::from_value(read_settings_json()?)
+        .map_err(|error| format!("Failed to parse tray backup settings: {}", error))
 }
 
 fn create_backup_from_saved_settings() -> Result<(), String> {
@@ -209,8 +239,15 @@ fn is_main_window_visible(app: &tauri::AppHandle) -> bool {
         .unwrap_or(false)
 }
 
-fn notify_backup_result(app: &tauri::AppHandle, message: &str, ui_visible: bool) {
+fn notify_tray_message(app: &tauri::AppHandle, level: &str, message: &str, ui_visible: bool) {
     if ui_visible {
+        let _ = app.emit(
+            "repressurizer-tray-message",
+            TrayMessage {
+                level: level.to_string(),
+                message: message.to_string(),
+            },
+        );
         return;
     }
 
@@ -221,7 +258,7 @@ fn notify_backup_result(app: &tauri::AppHandle, message: &str, ui_visible: bool)
         .body(message)
         .show()
     {
-        log::debug!("Failed to send backup notification: {}", error);
+        log::debug!("Failed to send tray notification: {}", error);
     }
 }
 
@@ -249,11 +286,116 @@ fn create_tray_backup(app: tauri::AppHandle) {
             }
         };
 
-        let _ = app.emit("repressurizer-create-backup-finished", result.clone());
         let ui_visible = is_main_window_visible(&app);
-        notify_backup_result(&app, &result.message, ui_visible);
+        notify_tray_message(
+            &app,
+            if result.success { "success" } else { "error" },
+            &result.message,
+            ui_visible,
+        );
         TRAY_BACKUP_RUNNING.store(false, Ordering::SeqCst);
     });
+}
+
+fn set_automation_enabled(enabled: bool) -> Result<(), String> {
+    let mut settings = read_settings_json()?;
+    settings["automationPublishEnabled"] = serde_json::Value::Bool(enabled);
+    write_settings_json(&settings)
+}
+
+fn automation_status_message() -> Result<String, String> {
+    let settings = read_settings_json()?;
+    let enabled = settings
+        .get("automationPublishEnabled")
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false);
+    let url_configured = settings
+        .get("automationPublishUrl")
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .is_some_and(|url| !url.is_empty());
+    let status = settings
+        .get("automationPublishLastStatus")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default();
+    let message = settings
+        .get("automationPublishLastMessage")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default();
+    let http_status = settings
+        .get("automationPublishLastHttpStatus")
+        .and_then(serde_json::Value::as_u64)
+        .unwrap_or(0);
+
+    if !enabled {
+        return Ok("Automation is paused.".to_string());
+    }
+    if !url_configured {
+        return Ok("Automation is enabled, but the export URL is not configured.".to_string());
+    }
+    if status.is_empty() {
+        return Ok("Automation is enabled. No publish has run yet.".to_string());
+    }
+
+    let http = if http_status > 0 {
+        format!(" HTTP {}.", http_status)
+    } else {
+        String::new()
+    };
+    let detail = if message.trim().is_empty() {
+        String::new()
+    } else {
+        format!(" {}", message.trim())
+    };
+    Ok(format!("Automation {}.{}{}", status, http, detail))
+}
+
+#[allow(deprecated)]
+fn open_path(app: &tauri::AppHandle, path: PathBuf) -> Result<(), String> {
+    app.shell()
+        .open(path.to_string_lossy().to_string(), None)
+        .map_err(|error| format!("Failed to open {}: {}", path.display(), error))
+}
+
+fn open_app_data_folder(app: &tauri::AppHandle) -> Result<(), String> {
+    let dir = app_data_dir().ok_or("Could not resolve Repressurizer app data directory")?;
+    std::fs::create_dir_all(&dir)
+        .map_err(|error| format!("Failed to create data folder {}: {}", dir.display(), error))?;
+    open_path(app, dir)
+}
+
+fn open_logs_folder(app: &tauri::AppHandle) -> Result<(), String> {
+    let dir = app
+        .path()
+        .app_log_dir()
+        .map_err(|error| format!("Could not resolve Repressurizer log folder: {}", error))?;
+    std::fs::create_dir_all(&dir)
+        .map_err(|error| format!("Failed to create log folder {}: {}", dir.display(), error))?;
+    open_path(app, dir)
+}
+
+fn open_backups_folder(app: &tauri::AppHandle) -> Result<(), String> {
+    let settings = read_tray_backup_settings()?;
+    if settings.steam_path.trim().is_empty() || settings.steam_id3.trim().is_empty() {
+        return Err("Steam path and Steam user ID are required to open backups.".to_string());
+    }
+    let collections_path = steam_collections_path(&settings.steam_path, &settings.steam_id3);
+    let dir = collections_path
+        .parent()
+        .ok_or("Could not resolve Steam collections folder")?
+        .to_path_buf();
+    if !dir.exists() {
+        return Err(format!("Steam collections folder does not exist: {}", dir.display()));
+    }
+    open_path(app, dir)
+}
+
+fn notify_result(app: &tauri::AppHandle, result: Result<String, String>) {
+    let ui_visible = is_main_window_visible(app);
+    match result {
+        Ok(message) => notify_tray_message(app, "success", &message, ui_visible),
+        Err(error) => notify_tray_message(app, "error", &error, ui_visible),
+    }
 }
 
 fn redact_tail(value: &str) -> String {
@@ -577,6 +719,7 @@ pub fn run() {
             use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 
             let show = MenuItem::with_id(app, "show", "Open Repressurizer", true, None::<&str>)?;
+            let settings = MenuItem::with_id(app, "settings", "Open Settings", true, None::<&str>)?;
             let refresh = MenuItem::with_id(
                 app,
                 "refresh_library",
@@ -593,22 +736,55 @@ pub fn run() {
             )?;
             let backup =
                 MenuItem::with_id(app, "create_backup", "Create Backup", true, None::<&str>)?;
-            let settings = MenuItem::with_id(app, "settings", "Settings", true, None::<&str>)?;
+            let automation_toggle = MenuItem::with_id(
+                app,
+                "toggle_automation",
+                "Pause/Resume Automation",
+                true,
+                None::<&str>,
+            )?;
+            let automation_status = MenuItem::with_id(
+                app,
+                "automation_status",
+                "Last Publish Status",
+                true,
+                None::<&str>,
+            )?;
+            let open_backups = MenuItem::with_id(
+                app,
+                "open_backups_folder",
+                "Open Backups Folder",
+                true,
+                None::<&str>,
+            )?;
+            let open_logs =
+                MenuItem::with_id(app, "open_logs_folder", "Open Logs Folder", true, None::<&str>)?;
+            let open_data =
+                MenuItem::with_id(app, "open_data_folder", "Open Data Folder", true, None::<&str>)?;
             let hide = MenuItem::with_id(app, "hide", "Minimize to Tray", true, None::<&str>)?;
             let separator = PredefinedMenuItem::separator(app)?;
             let separator_two = PredefinedMenuItem::separator(app)?;
+            let separator_three = PredefinedMenuItem::separator(app)?;
+            let separator_four = PredefinedMenuItem::separator(app)?;
             let quit = MenuItem::with_id(app, "quit", "Quit Repressurizer", true, None::<&str>)?;
             let menu = Menu::with_items(
                 app,
                 &[
                     &show,
-                    &refresh,
-                    &publish,
-                    &backup,
-                    &separator,
                     &settings,
-                    &hide,
+                    &separator,
+                    &refresh,
+                    &backup,
+                    &publish,
                     &separator_two,
+                    &automation_toggle,
+                    &automation_status,
+                    &separator_three,
+                    &open_backups,
+                    &open_logs,
+                    &open_data,
+                    &separator_four,
+                    &hide,
                     &quit,
                 ],
             )?;
@@ -617,7 +793,7 @@ pub fn run() {
                 .icon(app.default_window_icon().cloned().unwrap())
                 .menu(&menu)
                 .tooltip("Repressurizer - Steam Library Manager")
-                .on_menu_event(|app, event| match event.id.as_ref() {
+                .on_menu_event(move |app, event| match event.id.as_ref() {
                     "show" => {
                         show_main_window(app);
                     }
@@ -631,9 +807,51 @@ pub fn run() {
                     }
                     "publish_snapshot" => {
                         automation::trigger_publish_now();
+                        notify_tray_message(
+                            app,
+                            "info",
+                            "Automation publish queued. Check status again shortly.",
+                            is_main_window_visible(app),
+                        );
                     }
                     "create_backup" => {
                         create_tray_backup(app.clone());
+                    }
+                    "toggle_automation" => {
+                        let next_enabled =
+                            !read_app_setting_bool("automationPublishEnabled").unwrap_or(false);
+                        let result = set_automation_enabled(next_enabled).map(|()| {
+                            let _ = app.emit("repressurizer-settings-updated", ());
+                            if next_enabled {
+                                "Automation resumed.".to_string()
+                            } else {
+                                "Automation paused.".to_string()
+                            }
+                        });
+                        notify_result(app, result);
+                    }
+                    "automation_status" => {
+                        notify_result(app, automation_status_message());
+                    }
+                    "open_backups_folder" => {
+                        notify_result(
+                            app,
+                            open_backups_folder(app)
+                                .map(|()| "Backups folder opened.".to_string()),
+                        );
+                    }
+                    "open_logs_folder" => {
+                        notify_result(
+                            app,
+                            open_logs_folder(app).map(|()| "Logs folder opened.".to_string()),
+                        );
+                    }
+                    "open_data_folder" => {
+                        notify_result(
+                            app,
+                            open_app_data_folder(app)
+                                .map(|()| "Data folder opened.".to_string()),
+                        );
                     }
                     "hide" => {
                         hide_main_window_handle(app);
