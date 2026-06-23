@@ -21,7 +21,7 @@ import { useToastStore } from "./stores/toastStore";
 import { useFamilyStore } from "./stores/familyStore";
 import { usePlayHistoryStore } from "./stores/playHistoryStore";
 import { useSteamAppIndexStore } from "./stores/steamAppIndexStore";
-import { fetchLibrary, loadCollections, createManualBackup, fetchPlayerSummary, hideMainWindow, quitApp } from "./lib/tauri";
+import { fetchLibrary, loadCollections, createManualBackup, fetchPlayerSummary, hideMainWindow, quitApp, getStartupContext } from "./lib/tauri";
 import { mergeCollectionOnlyGames } from "./lib/libraryMerge";
 import {
   automationPublishDue,
@@ -157,6 +157,16 @@ function AppContent() {
 
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showCloseChoice, setShowCloseChoice] = useState(false);
+  const [startupContext, setStartupContext] = useState<{ launchedFromAutostart: boolean } | null>(null);
+  const [windowActivated, setWindowActivated] = useState(false);
+
+  const automationPublishConfigured =
+    settings.automationPublishEnabled && settings.automationPublishUrl.trim().length > 0;
+  const quietTrayStartup =
+    startupContext?.launchedFromAutostart === true &&
+    (settings.startOnLoginMode ?? "tray") !== "window" &&
+    !automationPublishConfigured;
+  const interactiveStartupReady = startupContext !== null && (!quietTrayStartup || windowActivated);
 
   const shouldNotifyDesktop = (userInitiated = false, isError = false) =>
     useSettingsStore.getState().desktopNotifications !== false && (userInitiated || isError);
@@ -179,6 +189,27 @@ function AppContent() {
   const theme = useSettingsStore((s) => s.theme);
   useEffect(() => { applyAccentColor(accentColor); }, [accentColor]);
   useEffect(() => { applyTheme(theme ?? "dark"); }, [theme]);
+
+  useEffect(() => {
+    let cancelled = false;
+    getStartupContext()
+      .then((context) => {
+        if (cancelled) return;
+        const next = context ?? { launchedFromAutostart: false };
+        setStartupContext(next);
+        if (!next.launchedFromAutostart) {
+          setWindowActivated(true);
+        }
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setStartupContext({ launchedFromAutostart: false });
+        setWindowActivated(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const publishAutomationFromStores = async (notify = false, force = false) => {
     const currentSettings = useSettingsStore.getState();
@@ -315,7 +346,7 @@ function AppContent() {
   };
 
   useEffect(() => {
-    if (settings.steamPersonaName || !settings.apiKey || !settings.steamId64) return;
+    if (!interactiveStartupReady || settings.steamPersonaName || !settings.apiKey || !settings.steamId64) return;
     fetchPlayerSummary(settings.apiKey, settings.steamId64)
       .then((summary) => {
         if (summary.personaname) {
@@ -323,11 +354,23 @@ function AppContent() {
         }
       })
       .catch(() => {});
-  }, [settings.steamPersonaName, settings.apiKey, settings.steamId64]);
+  }, [interactiveStartupReady, settings.steamPersonaName, settings.apiKey, settings.steamId64]);
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
     listen("repressurizer-close-requested", () => setShowCloseChoice(true))
+      .then((fn) => {
+        unlisten = fn;
+      })
+      .catch(() => {});
+    return () => {
+      unlisten?.();
+    };
+  }, []);
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    listen("repressurizer-window-shown", () => setWindowActivated(true))
       .then((fn) => {
         unlisten = fn;
       })
@@ -387,7 +430,7 @@ function AppContent() {
   }, [t]);
 
   useEffect(() => {
-    if (!settings.setupComplete || settings.checkUpdatesOnStartup === false) return;
+    if (startupContext === null || quietTrayStartup || !settings.setupComplete || settings.checkUpdatesOnStartup === false) return;
     const timer = window.setTimeout(() => {
       check()
         .then((update) => {
@@ -396,7 +439,7 @@ function AppContent() {
         .catch(() => {});
     }, 7000);
     return () => window.clearTimeout(timer);
-  }, [settings.setupComplete, settings.checkUpdatesOnStartup]);
+  }, [startupContext, quietTrayStartup, settings.setupComplete, settings.checkUpdatesOnStartup]);
 
   useEffect(() => {
     if (!settings.setupComplete || !settings.automationPublishEnabled || !settings.automationPublishUrl.trim()) return;
@@ -440,6 +483,7 @@ function AppContent() {
 
   // Load cached data from Rust file cache on startup
   useEffect(() => {
+    if (!interactiveStartupReady) return;
     hydrateDetailsCache();
     hydrateHltbCache();
     hydrateFailedCache();
@@ -455,7 +499,7 @@ function AppContent() {
     hydratePlayHistory();
     hydrateSteamAppIndex();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [interactiveStartupReady]);
 
   // Disable transitions during window resize to prevent layout thrashing
   useEffect(() => {
@@ -505,10 +549,10 @@ function AppContent() {
   }, []);
 
   useEffect(() => {
-    if (settings.setupComplete && gameCount === 0) {
+    if (interactiveStartupReady && settings.setupComplete && gameCount === 0) {
       void reloadLibraryFromStores(false, true);
     }
-  }, [settings.setupComplete]);
+  }, [interactiveStartupReady, settings.setupComplete, gameCount]);
 
   if (!settings.setupComplete) return <SetupWizard />;
   if (reloading) return <LoadingScreen />;

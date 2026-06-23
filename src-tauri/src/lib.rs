@@ -25,6 +25,12 @@ struct HttpPublishResult {
     response_preview: String,
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct StartupContext {
+    launched_from_autostart: bool,
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct PostJsonExportInput {
@@ -67,6 +73,22 @@ fn launched_from_autostart() -> bool {
     std::env::args().any(|arg| arg == "--repressurizer-autostart")
 }
 
+fn show_main_window(app: &tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+    }
+    let _ = app.emit("repressurizer-window-shown", ());
+}
+
+fn hide_main_window_handle(app: &tauri::AppHandle) {
+    let _ = app.emit("repressurizer-window-hidden", ());
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.hide();
+    }
+}
+
 fn redact_tail(value: &str) -> String {
     if value.is_empty() {
         return String::new();
@@ -99,14 +121,19 @@ fn save_app_data(_app: tauri::AppHandle, key: String, data: String) {
 
 #[tauri::command]
 fn hide_main_window(app: tauri::AppHandle) {
-    if let Some(window) = app.get_webview_window("main") {
-        let _ = window.hide();
-    }
+    hide_main_window_handle(&app);
 }
 
 #[tauri::command]
 fn quit_app(app: tauri::AppHandle) {
     app.exit(0);
+}
+
+#[tauri::command]
+fn get_startup_context() -> StartupContext {
+    StartupContext {
+        launched_from_autostart: launched_from_autostart(),
+    }
 }
 
 #[tauri::command]
@@ -355,11 +382,7 @@ pub fn run() {
                 argv,
                 cwd
             );
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.show();
-                let _ = window.unminimize();
-                let _ = window.set_focus();
-            }
+            show_main_window(app);
             let _ = app.emit("repressurizer-second-instance-requested", ());
         }));
     }
@@ -402,8 +425,7 @@ pub fn run() {
             )?;
             let backup =
                 MenuItem::with_id(app, "create_backup", "Create Backup", true, None::<&str>)?;
-            let settings =
-                MenuItem::with_id(app, "settings", "Settings", true, None::<&str>)?;
+            let settings = MenuItem::with_id(app, "settings", "Settings", true, None::<&str>)?;
             let hide = MenuItem::with_id(app, "hide", "Minimize to Tray", true, None::<&str>)?;
             let separator = PredefinedMenuItem::separator(app)?;
             let separator_two = PredefinedMenuItem::separator(app)?;
@@ -429,25 +451,14 @@ pub fn run() {
                 .tooltip("Repressurizer - Steam Library Manager")
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "show" => {
-                        if let Some(w) = app.get_webview_window("main") {
-                            let _ = w.show();
-                            let _ = w.set_focus();
-                        }
+                        show_main_window(app);
                     }
                     "refresh_library" => {
-                        if let Some(w) = app.get_webview_window("main") {
-                            let _ = w.show();
-                            let _ = w.unminimize();
-                            let _ = w.set_focus();
-                        }
+                        show_main_window(app);
                         let _ = app.emit("repressurizer-refresh-library-requested", ());
                     }
                     "settings" => {
-                        if let Some(w) = app.get_webview_window("main") {
-                            let _ = w.show();
-                            let _ = w.unminimize();
-                            let _ = w.set_focus();
-                        }
+                        show_main_window(app);
                         let _ = app.emit("repressurizer-open-settings-requested", ());
                     }
                     "publish_snapshot" => {
@@ -457,9 +468,7 @@ pub fn run() {
                         let _ = app.emit("repressurizer-create-backup-requested", ());
                     }
                     "hide" => {
-                        if let Some(w) = app.get_webview_window("main") {
-                            let _ = w.hide();
-                        }
+                        hide_main_window_handle(app);
                     }
                     "quit" => {
                         app.exit(0);
@@ -473,11 +482,7 @@ pub fn run() {
                         ..
                     } = event
                     {
-                        if let Some(w) = tray.app_handle().get_webview_window("main") {
-                            let _ = w.show();
-                            let _ = w.unminimize();
-                            let _ = w.set_focus();
-                        }
+                        show_main_window(tray.app_handle());
                     }
                 })
                 .build(app)?;
@@ -486,9 +491,7 @@ pub fn run() {
                 && read_app_setting_bool("startOnLogin").unwrap_or(false)
                 && read_app_setting_string("startOnLoginMode").as_deref() != Some("window")
             {
-                if let Some(w) = app.get_webview_window("main") {
-                    let _ = w.hide();
-                }
+                hide_main_window_handle(app.handle());
             }
 
             Ok(())
@@ -497,6 +500,7 @@ pub fn run() {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 if read_app_setting_bool("minimizeToTray").unwrap_or(false) {
                     api.prevent_close();
+                    let _ = window.emit("repressurizer-window-hidden", ());
                     let _ = window.hide();
                     return;
                 }
@@ -553,6 +557,7 @@ pub fn run() {
             export_diagnostics,
             hide_main_window,
             quit_app,
+            get_startup_context,
             post_json_export,
             load_app_data,
             save_app_data,

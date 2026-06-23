@@ -443,6 +443,14 @@ export async function quitApp(): Promise<void> {
   return invoke<void>("quit_app");
 }
 
+export interface StartupContext {
+  launchedFromAutostart: boolean;
+}
+
+export async function getStartupContext(): Promise<StartupContext> {
+  return invoke<StartupContext>("get_startup_context");
+}
+
 export interface HttpPublishResult {
   status: number;
   response_preview: string;
