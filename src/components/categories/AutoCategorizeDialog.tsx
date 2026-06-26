@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo, type ReactNode } from "react";
 import { useGameStore } from "../../stores/gameStore";
 import { useCategoryStore } from "../../stores/categoryStore";
 import { useSettingsStore } from "../../stores/settingsStore";
@@ -13,6 +13,11 @@ import {
   applyAutoCategorizeAssignments,
   withExpectedAutoCategories,
 } from "../../lib/autoCategorizeApply";
+import {
+  sortAutoCategorizePreviewEntries,
+  type PreviewSortContext,
+  type PreviewSortMode,
+} from "../../lib/autoCategorizePreview";
 import {
   runHoursCategorizer,
   runGenreCategorizer,
@@ -37,7 +42,7 @@ import {
   type NameConfig,
   type YearGrouping,
 } from "../../lib/tauri";
-import type { OwnedGame } from "../../lib/types";
+import type { GameDetails, OwnedGame } from "../../lib/types";
 import type { HltbData } from "../../lib/tauri";
 import {
   X,
@@ -133,6 +138,96 @@ function presetId(): string {
   return `preset-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+interface AutoCatMetadata {
+  totalDetails: number;
+  flagValues: string[];
+  genreValues: string[];
+  languageValues: string[];
+  studioValues: string[];
+  gamesWithFlags: number;
+  gamesWithGenres: number;
+  gamesWithLanguages: number;
+  gamesWithStudios: number;
+}
+
+function buildAutoCatMetadata(details: GameDetails[]): AutoCatMetadata {
+  const flagValues = new Set<string>();
+  const genreValues = new Set<string>();
+  const languageValues = new Set<string>();
+  const studioValues = new Set<string>();
+  let gamesWithFlags = 0;
+  let gamesWithGenres = 0;
+  let gamesWithLanguages = 0;
+  let gamesWithStudios = 0;
+
+  for (const detail of details) {
+    if ((detail.categories ?? []).length > 0) gamesWithFlags += 1;
+    if ((detail.genres ?? []).length > 0) gamesWithGenres += 1;
+    if ((detail.supported_languages ?? []).length > 0) gamesWithLanguages += 1;
+    if ((detail.developers ?? []).length > 0 || (detail.publishers ?? []).length > 0) {
+      gamesWithStudios += 1;
+    }
+
+    for (const value of detail.categories ?? []) addCleanValue(flagValues, value);
+    for (const value of detail.genres ?? []) addCleanValue(genreValues, value);
+    for (const value of detail.supported_languages ?? []) addCleanValue(languageValues, value);
+    for (const value of detail.developers ?? []) addCleanValue(studioValues, value);
+    for (const value of detail.publishers ?? []) addCleanValue(studioValues, value);
+  }
+
+  return {
+    totalDetails: details.length,
+    flagValues: sortValues([...flagValues]),
+    genreValues: sortValues([...genreValues]),
+    languageValues: sortValues([...languageValues]),
+    studioValues: sortValues([...studioValues]),
+    gamesWithFlags,
+    gamesWithGenres,
+    gamesWithLanguages,
+    gamesWithStudios,
+  };
+}
+
+function addCleanValue(target: Set<string>, value: string | null | undefined) {
+  const clean = value?.trim();
+  if (clean) target.add(clean);
+}
+
+function sortValues(values: string[]): string[] {
+  return values.sort((a, b) => a.localeCompare(b, undefined, {
+    numeric: true,
+    sensitivity: "base",
+  }));
+}
+
+function detailNeedsFetchForType(type: CategorizerType, detail: GameDetails | undefined): boolean {
+  if (!categorizerNeedsDetails(type)) return false;
+  if (!detail) return true;
+
+  if (type === "genre") return (detail.genres ?? []).length === 0;
+  if (type === "tags" || type === "flags") return (detail.categories ?? []).length === 0;
+  if (type === "language") return (detail.supported_languages ?? []).length === 0;
+  if (type === "devpub") {
+    return (detail.developers ?? []).length === 0 && (detail.publishers ?? []).length === 0;
+  }
+  if (type === "platform") {
+    const platforms = detail.platforms;
+    return !platforms || (!platforms.windows && !platforms.mac && !platforms.linux);
+  }
+
+  return false;
+}
+
+function detailIdsNeedingFetchForType(
+  type: CategorizerType,
+  games: Record<number, OwnedGame>,
+  details: Record<number, GameDetails>
+): number[] {
+  return Object.keys(games)
+    .map(Number)
+    .filter((id) => detailNeedsFetchForType(type, details[id]));
+}
+
 // Pure JS HLTB categorizer
 function runHltbCategorizerJs(
   games: OwnedGame[],
@@ -222,9 +317,11 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
 
   const [fetchError, setFetchError] = useState("");
   const [result, setResult] = useState<CategorizeResult | null>(persist.lastResult);
+  const [previewContext, setPreviewContext] = useState<PreviewSortContext | null>(null);
   const [runError, setRunError] = useState("");
 
   const categorizer = CATEGORIZERS.find((c) => c.value === type)!;
+  const metadata = useMemo(() => buildAutoCatMetadata(Object.values(details)), [details]);
 
   // When background details fetch completes and we were waiting → run categorizer
   useEffect(() => {
@@ -342,8 +439,13 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
     setWaitingForFetch(false);
 
     if (presets.some((preset) => categorizerNeedsDetails(preset.type))) {
-      const allIds = Object.keys(games).map(Number);
-      const missing = allIds.filter((id) => !details[id]);
+      const missing = [
+        ...new Set(
+          presets.flatMap((preset) =>
+            detailIdsNeedingFetchForType(preset.type, games, details)
+          )
+        ),
+      ];
 
       if (missing.length > 0) {
         if (!apiKey) {
@@ -386,8 +488,7 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
     }
 
     if (categorizer.needsDetails) {
-      const allIds = Object.keys(games).map(Number);
-      const missing = allIds.filter((id) => !details[id]);
+      const missing = detailIdsNeedingFetchForType(type, games, details);
 
       if (missing.length > 0) {
         if (!apiKey) {
@@ -510,6 +611,7 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
       );
 
       setResult(res);
+      setPreviewContext({ type, config });
       persist.set({ lastResult: res });
       gotoStep("preview");
     } catch (e) {
@@ -570,6 +672,7 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
       };
 
       setResult(res);
+      setPreviewContext(null);
       persist.set({ lastResult: res });
       gotoStep("preview");
     } catch (e) {
@@ -642,6 +745,7 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
               platformConfig={platformConfig} setPlatformConfig={setPlatformConfig}
               nameConfig={nameConfig} setNameConfig={setNameConfig}
               hltbConfig={hltbConfig} setHltbConfig={setHltbConfig}
+              metadata={metadata}
               presetName={presetName}
               setPresetName={setPresetName}
               onSavePreset={handleSavePreset}
@@ -662,6 +766,7 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
           {step === "preview" && result && (
             <PreviewStep
               result={result}
+              context={previewContext}
               onBack={() => gotoStep("configure")}
               onApply={handleApply}
             />
@@ -921,7 +1026,7 @@ function ConfigureStep({
   devPubConfig, setDevPubConfig, flagsConfig, setFlagsConfig,
   languageConfig, setLanguageConfig,
   platformConfig, setPlatformConfig, nameConfig, setNameConfig,
-  hltbConfig, setHltbConfig, presetName, setPresetName, onSavePreset,
+  hltbConfig, setHltbConfig, metadata, presetName, setPresetName, onSavePreset,
   loadedPresetId, error, onBack, onNext,
 }: {
   type: CategorizerType;
@@ -935,6 +1040,7 @@ function ConfigureStep({
   platformConfig: PlatformConfig; setPlatformConfig: (c: PlatformConfig) => void;
   nameConfig: NameConfig; setNameConfig: (c: NameConfig) => void;
   hltbConfig: HoursConfig; setHltbConfig: (c: HoursConfig) => void;
+  metadata: AutoCatMetadata;
   presetName: string;
   setPresetName: (name: string) => void;
   onSavePreset: () => void;
@@ -977,13 +1083,13 @@ function ConfigureStep({
       )}
 
       {type === "hours" && <HoursConfigForm config={hoursConfig} onChange={setHoursConfig} />}
-      {type === "genre" && <GenreConfigForm config={genreConfig} onChange={setGenreConfig} />}
-      {type === "tags" && <TagsConfigForm config={tagsConfig} onChange={setTagsConfig} />}
+      {type === "genre" && <GenreConfigForm config={genreConfig} onChange={setGenreConfig} suggestions={metadata.genreValues} />}
+      {type === "tags" && <TagsConfigForm config={tagsConfig} onChange={setTagsConfig} suggestions={metadata.flagValues} />}
       {type === "year" && <YearConfigForm config={yearConfig} onChange={setYearConfig} />}
       {type === "hltb" && <HoursConfigForm config={hltbConfig} onChange={setHltbConfig} label={t("auto.hltbBuckets")} />}
-      {type === "devpub" && <DevPubConfigForm config={devPubConfig} onChange={setDevPubConfig} />}
-      {type === "flags" && <FlagsConfigForm config={flagsConfig} onChange={setFlagsConfig} />}
-      {type === "language" && <LanguageConfigForm config={languageConfig} onChange={setLanguageConfig} />}
+      {type === "devpub" && <DevPubConfigForm config={devPubConfig} onChange={setDevPubConfig} suggestions={metadata.studioValues} metadata={metadata} />}
+      {type === "flags" && <FlagsConfigForm config={flagsConfig} onChange={setFlagsConfig} suggestions={metadata.flagValues} metadata={metadata} />}
+      {type === "language" && <LanguageConfigForm config={languageConfig} onChange={setLanguageConfig} suggestions={metadata.languageValues} metadata={metadata} />}
       {type === "platform" && <PlatformConfigForm config={platformConfig} onChange={setPlatformConfig} />}
       {type === "name" && <NameConfigForm config={nameConfig} onChange={setNameConfig} />}
       {type === "score" && (
@@ -1080,7 +1186,15 @@ function HoursConfigForm({ config, onChange, label }: { config: HoursConfig; onC
   );
 }
 
-function GenreConfigForm({ config, onChange }: { config: GenreConfig; onChange: (c: GenreConfig) => void }) {
+function GenreConfigForm({
+  config,
+  onChange,
+  suggestions,
+}: {
+  config: GenreConfig;
+  onChange: (c: GenreConfig) => void;
+  suggestions: string[];
+}) {
   const t = useT();
   const [newIgnored, setNewIgnored] = useState("");
   return (
@@ -1102,14 +1216,23 @@ function GenreConfigForm({ config, onChange }: { config: GenreConfig; onChange: 
         items={config.ignored_genres}
         newItem={newIgnored}
         setNewItem={setNewIgnored}
-        onAdd={() => { if (newIgnored.trim()) { onChange({ ...config, ignored_genres: [...config.ignored_genres, newIgnored.trim()] }); setNewIgnored(""); } }}
+        onAddItem={(value) => onChange({ ...config, ignored_genres: [...config.ignored_genres, value] })}
         onRemove={(v) => onChange({ ...config, ignored_genres: config.ignored_genres.filter((g) => g !== v) })}
+        suggestions={suggestions}
       />
     </div>
   );
 }
 
-function TagsConfigForm({ config, onChange }: { config: TagsConfig; onChange: (c: TagsConfig) => void }) {
+function TagsConfigForm({
+  config,
+  onChange,
+  suggestions,
+}: {
+  config: TagsConfig;
+  onChange: (c: TagsConfig) => void;
+  suggestions: string[];
+}) {
   const t = useT();
   const [newTag, setNewTag] = useState("");
   return (
@@ -1131,8 +1254,9 @@ function TagsConfigForm({ config, onChange }: { config: TagsConfig; onChange: (c
         items={config.included_tags}
         newItem={newTag}
         setNewItem={setNewTag}
-        onAdd={() => { if (newTag.trim()) { onChange({ ...config, included_tags: [...config.included_tags, newTag.trim()] }); setNewTag(""); } }}
+        onAddItem={(value) => onChange({ ...config, included_tags: [...config.included_tags, value] })}
         onRemove={(v) => onChange({ ...config, included_tags: config.included_tags.filter((t) => t !== v) })}
+        suggestions={suggestions}
       />
     </div>
   );
@@ -1174,7 +1298,17 @@ function YearConfigForm({ config, onChange }: { config: YearConfig; onChange: (c
   );
 }
 
-function DevPubConfigForm({ config, onChange }: { config: DevPubConfig; onChange: (c: DevPubConfig) => void }) {
+function DevPubConfigForm({
+  config,
+  onChange,
+  suggestions,
+  metadata,
+}: {
+  config: DevPubConfig;
+  onChange: (c: DevPubConfig) => void;
+  suggestions: string[];
+  metadata: AutoCatMetadata;
+}) {
   const [newName, setNewName] = useState("");
   return (
     <div className="space-y-4">
@@ -1209,19 +1343,26 @@ function DevPubConfigForm({ config, onChange }: { config: DevPubConfig; onChange
         items={config.selected}
         newItem={newName}
         setNewItem={setNewName}
-        onAdd={() => {
-          if (newName.trim()) {
-            onChange({ ...config, selected: [...config.selected, newName.trim()] });
-            setNewName("");
-          }
-        }}
+        onAddItem={(value) => onChange({ ...config, selected: [...config.selected, value] })}
         onRemove={(value) => onChange({ ...config, selected: config.selected.filter((item) => item !== value) })}
+        suggestions={suggestions}
+        status={<MetadataStatus label="Studios" valueCount={suggestions.length} gameCount={metadata.gamesWithStudios} totalDetails={metadata.totalDetails} />}
       />
     </div>
   );
 }
 
-function FlagsConfigForm({ config, onChange }: { config: FlagsConfig; onChange: (c: FlagsConfig) => void }) {
+function FlagsConfigForm({
+  config,
+  onChange,
+  suggestions,
+  metadata,
+}: {
+  config: FlagsConfig;
+  onChange: (c: FlagsConfig) => void;
+  suggestions: string[];
+  metadata: AutoCatMetadata;
+}) {
   const [newFlag, setNewFlag] = useState("");
   return (
     <div className="space-y-4">
@@ -1244,19 +1385,26 @@ function FlagsConfigForm({ config, onChange }: { config: FlagsConfig; onChange: 
         items={config.included_flags}
         newItem={newFlag}
         setNewItem={setNewFlag}
-        onAdd={() => {
-          if (newFlag.trim()) {
-            onChange({ ...config, included_flags: [...config.included_flags, newFlag.trim()] });
-            setNewFlag("");
-          }
-        }}
+        onAddItem={(value) => onChange({ ...config, included_flags: [...config.included_flags, value] })}
         onRemove={(value) => onChange({ ...config, included_flags: config.included_flags.filter((item) => item !== value) })}
+        suggestions={suggestions}
+        status={<MetadataStatus label="Flags" valueCount={suggestions.length} gameCount={metadata.gamesWithFlags} totalDetails={metadata.totalDetails} />}
       />
     </div>
   );
 }
 
-function LanguageConfigForm({ config, onChange }: { config: LanguageConfig; onChange: (c: LanguageConfig) => void }) {
+function LanguageConfigForm({
+  config,
+  onChange,
+  suggestions,
+  metadata,
+}: {
+  config: LanguageConfig;
+  onChange: (c: LanguageConfig) => void;
+  suggestions: string[];
+  metadata: AutoCatMetadata;
+}) {
   const [newLanguage, setNewLanguage] = useState("");
   return (
     <div className="space-y-4">
@@ -1279,13 +1427,10 @@ function LanguageConfigForm({ config, onChange }: { config: LanguageConfig; onCh
         items={config.included_languages}
         newItem={newLanguage}
         setNewItem={setNewLanguage}
-        onAdd={() => {
-          if (newLanguage.trim()) {
-            onChange({ ...config, included_languages: [...config.included_languages, newLanguage.trim()] });
-            setNewLanguage("");
-          }
-        }}
+        onAddItem={(value) => onChange({ ...config, included_languages: [...config.included_languages, value] })}
         onRemove={(value) => onChange({ ...config, included_languages: config.included_languages.filter((item) => item !== value) })}
+        suggestions={suggestions}
+        status={<MetadataStatus label="Languages" valueCount={suggestions.length} gameCount={metadata.gamesWithLanguages} totalDetails={metadata.totalDetails} />}
       />
     </div>
   );
@@ -1363,29 +1508,120 @@ function CheckboxRow({
   );
 }
 
-function TagListInput({
-  label, items, newItem, setNewItem, onAdd, onRemove,
+function MetadataStatus({
+  label,
+  valueCount,
+  gameCount,
+  totalDetails,
 }: {
-  label: string; items: string[]; newItem: string; setNewItem: (v: string) => void;
-  onAdd: () => void; onRemove: (v: string) => void;
+  label: string;
+  valueCount: number;
+  gameCount: number;
+  totalDetails: number;
 }) {
   const t = useT();
   return (
+    <div className="mb-2 flex flex-wrap items-center gap-2 text-[11px] text-repressurizer-text-faint">
+      <span className="rounded-md bg-repressurizer-surface-hover px-2 py-0.5">
+        {label}: <span className="font-mono text-repressurizer-text tabular-nums">{valueCount}</span>
+      </span>
+      <span className="rounded-md bg-repressurizer-surface-hover px-2 py-0.5">
+        {t("auto.metadataCoverage", { count: gameCount, total: totalDetails })}
+      </span>
+    </div>
+  );
+}
+
+function TagListInput({
+  label,
+  items,
+  newItem,
+  setNewItem,
+  onAddItem,
+  onRemove,
+  suggestions = [],
+  status,
+}: {
+  label: string;
+  items: string[];
+  newItem: string;
+  setNewItem: (v: string) => void;
+  onAddItem: (v: string) => void;
+  onRemove: (v: string) => void;
+  suggestions?: string[];
+  status?: ReactNode;
+}) {
+  const t = useT();
+  const [focused, setFocused] = useState(false);
+  const normalizedItems = useMemo(() => new Set(items.map((item) => item.toLocaleLowerCase())), [items]);
+  const query = newItem.trim().toLocaleLowerCase();
+  const visibleSuggestions = useMemo(
+    () =>
+      suggestions
+        .filter((item) => !normalizedItems.has(item.toLocaleLowerCase()))
+        .filter((item) => !query || item.toLocaleLowerCase().includes(query))
+        .slice(0, 24),
+    [normalizedItems, query, suggestions]
+  );
+  const shouldShowSuggestions = suggestions.length > 0 && (focused || query.length > 0);
+
+  const addValue = (raw: string) => {
+    const value = raw.trim();
+    if (!value) return;
+    if (!normalizedItems.has(value.toLocaleLowerCase())) {
+      onAddItem(value);
+    }
+    setNewItem("");
+    setFocused(false);
+  };
+
+  return (
     <div>
       <label className="mb-1.5 block text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{label}</label>
+      {status}
       <div className="flex gap-2 mb-2">
         <input
           type="text"
           value={newItem}
           onChange={(e) => setNewItem(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && onAdd()}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              addValue(newItem);
+            }
+          }}
           placeholder={t("auto.typeEnter")}
           className="flex-1 rounded-lg border border-repressurizer-border bg-repressurizer-bg px-3 py-1.5 text-sm text-repressurizer-text placeholder:text-repressurizer-text-faint focus:border-repressurizer-accent focus:outline-none"
         />
-        <button onClick={onAdd} className="btn-press flex items-center justify-center w-8 h-8 rounded-lg bg-repressurizer-accent/15 text-repressurizer-accent hover:bg-repressurizer-accent/25">
+        <button onClick={() => addValue(newItem)} className="btn-press flex items-center justify-center w-8 h-8 rounded-lg bg-repressurizer-accent/15 text-repressurizer-accent hover:bg-repressurizer-accent/25">
           <Plus size={14} weight="bold" />
         </button>
       </div>
+      {shouldShowSuggestions && (
+        <div className="mb-2 max-h-32 overflow-auto rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg p-2">
+          {visibleSuggestions.length > 0 ? (
+            <div className="flex flex-wrap gap-1.5">
+              {visibleSuggestions.map((item) => (
+                <button
+                  key={item}
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => addValue(item)}
+                  className="btn-press rounded-md border border-repressurizer-border-subtle bg-repressurizer-surface px-2 py-1 text-xs text-repressurizer-text transition-colors hover:border-repressurizer-accent hover:text-repressurizer-accent"
+                >
+                  {item}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="px-2 py-1 text-xs text-repressurizer-text-faint">
+              {t("auto.noSuggestions")}
+            </p>
+          )}
+        </div>
+      )}
       {items.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {items.map((item) => (
@@ -1453,14 +1689,19 @@ function FetchStep({ progress, total, error, waiting }: {
 // Step: Preview
 // ============================================================
 
-function PreviewStep({ result, onBack, onApply }: {
+function PreviewStep({ result, context, onBack, onApply }: {
   result: CategorizeResult;
+  context: PreviewSortContext | null;
   onBack: () => void;
   onApply: () => void;
 }) {
   const t = useT();
   const games = useGameStore((s) => s.games);
-  const entries = Object.entries(result.assignments).sort((a, b) => b[1].length - a[1].length);
+  const [sortMode, setSortMode] = useState<PreviewSortMode>("count");
+  const entries = useMemo(
+    () => sortAutoCategorizePreviewEntries(result.assignments, sortMode, context),
+    [context, result.assignments, sortMode]
+  );
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   const toggle = (name: string) => {
@@ -1486,6 +1727,32 @@ function PreviewStep({ result, onBack, onApply }: {
             <p className="mt-0.5 text-[11px] text-repressurizer-text-faint">{s.label}</p>
           </div>
         ))}
+      </div>
+
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[11px] font-medium uppercase tracking-wider text-repressurizer-text-faint">
+          {t("auto.previewSort")}
+        </p>
+        <div className="flex rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg p-1">
+          {([
+            ["count", t("auto.sortCount")],
+            ["name", t("auto.sortName")],
+            ["natural", t("auto.sortNatural")],
+          ] as Array<[PreviewSortMode, string]>).map(([mode, label]) => (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => setSortMode(mode)}
+              className={`btn-press rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
+                sortMode === mode
+                  ? "bg-repressurizer-accent/15 text-repressurizer-accent"
+                  : "text-repressurizer-text-faint hover:text-repressurizer-text"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Category list — expandable */}

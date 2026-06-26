@@ -74,6 +74,71 @@ test("supports regex search and advanced duplicate filters", async ({ page }) =>
   await expect(page.locator(".game-card")).toHaveCount(2);
 });
 
+test("AutoCat shows cached metadata suggestions and preview sorting controls", async ({ page }) => {
+  await page.addInitScript(() => {
+    const makeDetail = (
+      appId: number,
+      name: string,
+      categories: string[],
+      supportedLanguages = ["English"]
+    ) => ({
+      app_id: appId,
+      name,
+      genres: ["Adventure"],
+      categories,
+      release_date: "Jan 1, 2020",
+      metacritic_score: null,
+      developers: ["Demo Studio"],
+      publishers: ["Demo Publisher"],
+      supported_languages: supportedLanguages,
+      platforms: { windows: true, mac: false, linux: false },
+      header_image: null,
+      capsule_image: null,
+      price_initial: null,
+      price_final: null,
+      price_currency: null,
+      is_free: false,
+    });
+
+    const details = {
+      632470: makeDetail(632470, "Disco Elysium - The Final Cut", ["Single-player", "Steam Cloud"], ["English", "French"]),
+      1145360: makeDetail(1145360, "Hades", ["Single-player", "Steam Achievements", "Steam Cloud"], ["English", "Italian"]),
+      753640: makeDetail(753640, "Outer Wilds", ["Single-player"], ["English"]),
+      39140: makeDetail(39140, "FINAL FANTASY VII", ["Single-player", "Steam Cloud"], ["English", "German", "French"]),
+      12100: makeDetail(12100, "Grand Theft Auto III", ["Single-player"], ["English", "Italian"]),
+      1546970: makeDetail(1546970, "Grand Theft Auto III - The Definitive Edition", ["Single-player"], ["English"]),
+      1462040: makeDetail(1462040, "FINAL FANTASY VII REMAKE INTERGRADE", ["Single-player"], ["English"]),
+      3280350: makeDetail(3280350, "DEATH STRANDING 2: ON THE BEACH", ["Single-player"], ["English"]),
+      2499860: makeDetail(2499860, "DRAGON QUEST VII Reimagined", ["Single-player"], ["English"]),
+      1643320: makeDetail(1643320, "S.T.A.L.K.E.R. 2: Heart of Chornobyl", ["Single-player"], ["English"]),
+      1426210: makeDetail(1426210, "It Takes Two", ["Shared/Split Screen Co-op"], ["English"]),
+    };
+
+    window.localStorage.setItem("repressurizer-mock-details-cache", JSON.stringify(details));
+  });
+
+  await page.goto("/");
+  await page.getByTitle(/Auto-Categorize/).click();
+
+  const dialog = page.locator(".fixed.inset-0").filter({
+    has: page.getByRole("heading", { name: "Auto-Categorize" }),
+  });
+  await dialog.getByRole("button", { name: /Store flags/ }).click();
+
+  await expect(dialog.getByText(/Flags:\s*4/)).toBeVisible();
+  await expect(dialog.getByText("11/11 games with metadata")).toBeVisible();
+
+  await dialog.getByPlaceholder("Type and press Enter").click();
+  await dialog.getByRole("button", { name: "Steam Cloud" }).click();
+  await expect(dialog.getByText("Steam Cloud")).toBeVisible();
+
+  await dialog.getByRole("button", { name: "Run" }).click();
+  await expect(dialog.getByText("Preview sort")).toBeVisible();
+  await expect(dialog.getByText("(Flag) Steam Cloud")).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Games", exact: true })).toBeVisible();
+  await dialog.getByRole("button", { name: "Natural" }).click();
+});
+
 test("creates a category from the compact sidebar plus button", async ({ page }) => {
   await page.addInitScript(() => {
     const raw = window.localStorage.getItem("repressurizer-settings");

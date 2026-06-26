@@ -359,12 +359,12 @@ async fn fetch_game_details_with_country(
     let url = match country_code {
         Some(cc) if !cc.is_empty() => {
             format!(
-                "https://store.steampowered.com/api/appdetails?appids={}&cc={}",
+                "https://store.steampowered.com/api/appdetails?appids={}&cc={}&l=english",
                 app_id, cc
             )
         }
         _ => format!(
-            "https://store.steampowered.com/api/appdetails?appids={}",
+            "https://store.steampowered.com/api/appdetails?appids={}&l=english",
             app_id
         ),
     };

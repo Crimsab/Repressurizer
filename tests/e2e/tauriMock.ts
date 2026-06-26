@@ -264,6 +264,10 @@ export async function installTauriMock(page: Page) {
         switch (cmd) {
           case "plugin:log|log":
             return null;
+          case "plugin:event|listen":
+            return 1;
+          case "plugin:event|unlisten":
+            return null;
           case "plugin:notification|is_permission_granted":
             return true;
           case "plugin:dialog|confirm":
@@ -369,6 +373,7 @@ export async function installTauriMock(page: Page) {
           case "create_manual_backup":
             return null;
           case "load_details_cache":
+            return window.localStorage.getItem("repressurizer-mock-details-cache");
           case "load_failed_cache":
           case "load_achievements_cache":
           case "load_friends_cache":
@@ -392,6 +397,66 @@ export async function installTauriMock(page: Page) {
             return null;
           case "fetch_hltb":
             return { main_story: 12, main_extra: 18, completionist: 30 };
+          case "run_flags_categorizer": {
+            const gameDetails = (args?.gameDetails ?? []) as Array<{
+              app_id: number;
+              categories?: string[];
+            }>;
+            const config = (args?.config ?? {}) as {
+              prefix?: string;
+              max_flags?: number;
+              included_flags?: string[];
+            };
+            const included = new Set((config.included_flags ?? []).map((item) => item.toLowerCase()));
+            const assignments: Record<string, number[]> = {};
+            let gamesCategorized = 0;
+            for (const detail of gameDetails) {
+              let added = 0;
+              for (const flag of detail.categories ?? []) {
+                if (included.size > 0 && !included.has(flag.toLowerCase())) continue;
+                if (config.max_flags && added >= config.max_flags) break;
+                const name = `${config.prefix ?? ""}${flag}`;
+                assignments[name] = [...(assignments[name] ?? []), detail.app_id];
+                added += 1;
+              }
+              if (added > 0) gamesCategorized += 1;
+            }
+            return {
+              assignments,
+              games_processed: gameDetails.length,
+              games_categorized: gamesCategorized,
+            };
+          }
+          case "run_language_categorizer": {
+            const gameDetails = (args?.gameDetails ?? []) as Array<{
+              app_id: number;
+              supported_languages?: string[];
+            }>;
+            const config = (args?.config ?? {}) as {
+              prefix?: string;
+              max_languages?: number;
+              included_languages?: string[];
+            };
+            const included = new Set((config.included_languages ?? []).map((item) => item.toLowerCase()));
+            const assignments: Record<string, number[]> = {};
+            let gamesCategorized = 0;
+            for (const detail of gameDetails) {
+              let added = 0;
+              for (const language of detail.supported_languages ?? []) {
+                if (included.size > 0 && !included.has(language.toLowerCase())) continue;
+                if (config.max_languages && added >= config.max_languages) break;
+                const name = `${config.prefix ?? ""}${language}`;
+                assignments[name] = [...(assignments[name] ?? []), detail.app_id];
+                added += 1;
+              }
+              if (added > 0) gamesCategorized += 1;
+            }
+            return {
+              assignments,
+              games_processed: gameDetails.length,
+              games_categorized: gamesCategorized,
+            };
+          }
           case "fetch_achievements":
             return {
               total: mockAchievements().length,
@@ -604,5 +669,12 @@ export async function installTauriMock(page: Page) {
     };
 
     (window as unknown as { __TAURI_INTERNALS__: typeof tauriInternals }).__TAURI_INTERNALS__ = tauriInternals;
+    (
+      window as unknown as {
+        __TAURI_EVENT_PLUGIN_INTERNALS__: { unregisterListener: () => void };
+      }
+    ).__TAURI_EVENT_PLUGIN_INTERNALS__ = {
+      unregisterListener: () => {},
+    };
   });
 }
