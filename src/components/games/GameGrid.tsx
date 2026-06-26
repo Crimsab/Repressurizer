@@ -8,6 +8,7 @@ import { useAchievementsStore } from "../../stores/achievementsStore";
 import { useReviewStore } from "../../stores/reviewStore";
 import { useFamilyStore } from "../../stores/familyStore";
 import { MAX_FAIL_RUNS, useFailedGamesStore } from "../../stores/failedGamesStore";
+import { matchesSavedAdvancedFilter, useAdvancedFilterStore } from "../../stores/advancedFilterStore";
 import { GameCard } from "./GameCard";
 import type { OwnedGame } from "../../lib/types";
 import { useT, type TranslationKey } from "../../lib/i18n";
@@ -47,6 +48,8 @@ export function GameGrid() {
   const reviews = useReviewStore((s) => s.reviews);
   const familyApps = useFamilyStore((s) => s.apps);
   const failedGames = useFailedGamesStore((s) => s.fails);
+  const savedAdvancedFilters = useAdvancedFilterStore((s) => s.filters);
+  const activeAdvancedFilterId = useAdvancedFilterStore((s) => s.activeFilterId);
   const { activeCategory, collections } = useCategoryStore();
   const lastClickedId = useRef<number | null>(null);
 
@@ -61,6 +64,10 @@ export function GameGrid() {
           .map(([id]) => Number(id))
       ),
     [failedGames]
+  );
+  const activeAdvancedFilter = useMemo(
+    () => savedAdvancedFilters.find((filter) => filter.id === activeAdvancedFilterId) ?? null,
+    [savedAdvancedFilters, activeAdvancedFilterId]
   );
 
   const handleContextMenu = useCallback((e: React.MouseEvent, game: OwnedGame) => {
@@ -232,6 +239,12 @@ export function GameGrid() {
       gameList = gameList.filter((g) => g.is_collection_only);
     }
 
+    if (activeAdvancedFilter) {
+      gameList = gameList.filter((g) =>
+        matchesSavedAdvancedFilter(g.appid, activeAdvancedFilter, collections)
+      );
+    }
+
     const STATUS_ORDER: Record<string, number> = {
       playing: 0, completed: 1, beaten: 2, abandoned: 3, none: 4,
     };
@@ -282,7 +295,7 @@ export function GameGrid() {
     });
 
     return gameList;
-  }, [games, activeCategory, collections, familyApps, searchQuery, sortBy, sortAsc, filters, statuses, allGameTags, hltbData, achievementSummaries, details, reviews, duplicateAppIds, delistedAppIds]);
+  }, [games, activeCategory, collections, familyApps, searchQuery, sortBy, sortAsc, filters, activeAdvancedFilter, statuses, allGameTags, hltbData, achievementSummaries, details, reviews, duplicateAppIds, delistedAppIds]);
 
   const orderedIds = useMemo(() => filteredGames.map((g) => g.appid), [filteredGames]);
 
