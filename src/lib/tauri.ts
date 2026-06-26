@@ -5,6 +5,7 @@ import type {
   OwnedGame,
   GameDetails,
   BackupInfo,
+  DepressurizerProfileImport,
   AchievementSummary,
   SamBridgeProbe,
   SamAchievementSchemaItem,
@@ -84,6 +85,12 @@ export async function createManualBackup(
     steamId3,
     description,
   });
+}
+
+export async function importDepressurizerProfile(
+  path: string
+): Promise<DepressurizerProfileImport> {
+  return invoke<DepressurizerProfileImport>("import_depressurizer_profile", { path });
 }
 
 export async function fetchLibrary(

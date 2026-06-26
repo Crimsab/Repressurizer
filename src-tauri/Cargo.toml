@@ -36,6 +36,7 @@ chrono = "0.4"
 dirs = "6"
 rusty-leveldb = "4.0.1"
 libloading = "0.8"
+roxmltree = "0.20"
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Diagnostics_ToolHelp"] }
 
 [target.'cfg(windows)'.dependencies]

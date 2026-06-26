@@ -15,6 +15,7 @@ interface CategoryState {
   _saved: SteamCollection[]; // snapshot at last save/load
 
   setCollections: (collections: SteamCollection[]) => void;
+  applyImportedCollections: (collections: SteamCollection[]) => void;
   setActiveCategory: (key: string | null) => void;
   toggleCategorySelection: (key: string) => void;
   clearCategorySelection: () => void;
@@ -76,6 +77,14 @@ export const useCategoryStore = create<CategoryState>((set, get) => ({
       _saved: structuredClone(collections),
       selectedCategoryKeys: [],
     }),
+
+  applyImportedCollections: (collections) =>
+    set((state) => ({
+      ...pushHistory(state),
+      collections,
+      activeCategory: "all",
+      selectedCategoryKeys: [],
+    })),
 
   setActiveCategory: (key) =>
     set({ activeCategory: key, selectedCategoryKeys: [] }),

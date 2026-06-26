@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import type { ClipboardEvent } from "react";
-import { save } from "@tauri-apps/plugin-dialog";
+import { open as openDialog, save } from "@tauri-apps/plugin-dialog";
 import { writeTextFile } from "@tauri-apps/plugin-fs";
 import { check, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
@@ -23,7 +23,18 @@ import { useFailedGamesStore, getIgnoredGameName, MAX_FAIL_RUNS } from "../../st
 import { useHltbStore } from "../../stores/hltbStore";
 import { useHltbIgnoredStore, getHltbIgnoredGameName, HLTB_MAX_FAILS } from "../../stores/hltbIgnoredStore";
 
-import { listBackups, restoreBackup, deleteBackup, createManualBackup, loadCollections, getCacheInfo, exportDiagnostics, fetchFamilyLibrary } from "../../lib/tauri";
+import {
+  listBackups,
+  restoreBackup,
+  deleteBackup,
+  createManualBackup,
+  loadCollections,
+  getCacheInfo,
+  exportDiagnostics,
+  fetchFamilyLibrary,
+  importDepressurizerProfile,
+  saveAppData,
+} from "../../lib/tauri";
 import type { CacheInfo, FamilyLibraryResult } from "../../lib/tauri";
 import {
   clearSteamFamilyToken,
@@ -32,7 +43,14 @@ import {
   saveSteamFamilyToken,
   type SteamFamilyTokenCache,
 } from "../../lib/steamFamilyToken";
-import type { AutomationPublishLogEntry, BackupInfo } from "../../lib/types";
+import type {
+  AppSettings,
+  AutomationPublishLogEntry,
+  BackupInfo,
+  DepressurizerProfileImport,
+  OwnedGame,
+  SteamCollection,
+} from "../../lib/types";
 import {
   X,
   Key,
@@ -66,6 +84,7 @@ import {
   MagnifyingGlass,
   Trophy,
   Wrench,
+  UploadSimple,
 } from "@phosphor-icons/react";
 import { ACCENT_PRESETS, applyAccentColor, applyTheme } from "../../stores/settingsStore";
 import { getLocaleDisplayName, getLocaleFlag, normalizeLocale, SUPPORTED_LOCALES, useT } from "../../lib/i18n";
@@ -121,6 +140,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
     s.collections.filter((c) => c.is_dynamic).length
   );
   const setCollections = useCategoryStore((s) => s.setCollections);
+  const applyImportedCollections = useCategoryStore((s) => s.applyImportedCollections);
 
   const [apiKey, setApiKey] = useState(settings.apiKey);
   const [backups, setBackups] = useState<BackupInfo[]>([]);
@@ -135,6 +155,9 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
   const [automationLogSort, setAutomationLogSort] = useState<AutomationLogSort>("desc");
   const [cacheInfo, setCacheInfo] = useState<CacheInfo | null>(null);
   const [diagnosticsExporting, setDiagnosticsExporting] = useState(false);
+  const [importingDepressurizer, setImportingDepressurizer] = useState(false);
+  const [lastDepressurizerImport, setLastDepressurizerImport] =
+    useState<DepressurizerProfileImport | null>(null);
   const [checkingUpdates, setCheckingUpdates] = useState(false);
   const [installingUpdate, setInstallingUpdate] = useState(false);
   const [publishingAutomation, setPublishingAutomation] = useState(false);
@@ -278,6 +301,53 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
       setMessage(t("settings.diagnostics.failed", { error: String(e) }));
     } finally {
       setDiagnosticsExporting(false);
+    }
+  };
+
+  const handleImportDepressurizerProfile = async () => {
+    setImportingDepressurizer(true);
+    setMessage("");
+    try {
+      const selected = await openDialog({
+        multiple: false,
+        filters: [
+          { name: "Depressurizer Profile", extensions: ["profile", "xml"] },
+          { name: "All files", extensions: ["*"] },
+        ],
+      });
+      if (!selected || Array.isArray(selected)) return;
+
+      const imported = await importDepressurizerProfile(selected);
+      const mergedCollections = mergeImportedCollections(
+        useCategoryStore.getState().collections,
+        imported.collections
+      );
+      applyImportedCollections(mergedCollections);
+
+      const importedGames = depressurizerGamesToOwnedGames(imported);
+      if (importedGames.length > 0) mergeGames(importedGames);
+
+      await saveAppData("depressurizer-profile-import.json", JSON.stringify(imported)).catch(() => {});
+
+      const patch: Partial<AppSettings> = {};
+      if (!settings.steamId64 && imported.steamId64) patch.steamId64 = imported.steamId64;
+      if (!settings.steamId3 && imported.steamId3) patch.steamId3 = imported.steamId3;
+      if (!settings.apiKey && imported.steamWebApiKey) {
+        patch.apiKey = imported.steamWebApiKey;
+        setApiKey(imported.steamWebApiKey);
+      }
+      if (Object.keys(patch).length > 0) settings.setSettings(patch);
+
+      setLastDepressurizerImport(imported);
+      setMessage(
+        `Imported ${imported.stats.categories} categories, ${imported.stats.steamGames} Steam games, ` +
+          `${imported.stats.filters} filters and ${imported.stats.autoCats} AutoCats from Depressurizer.`
+      );
+      setTimeout(() => setMessage(""), 5000);
+    } catch (e) {
+      setMessage(`Depressurizer import failed: ${String(e)}`);
+    } finally {
+      setImportingDepressurizer(false);
     }
   };
 
@@ -1149,11 +1219,27 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
               {/* Maintenance */}
               {isSectionVisible("maintenance") && (
               <div className="space-y-3">
-                <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("settings.maintenance")}</h3>
-                <div className="grid gap-3 md:grid-cols-2">
-                  <button
-                    onClick={handleExportDiagnostics}
-                    disabled={diagnosticsExporting}
+	                <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("settings.maintenance")}</h3>
+	                <div className="grid gap-3 md:grid-cols-2">
+	                  <button
+	                    onClick={handleImportDepressurizerProfile}
+	                    disabled={importingDepressurizer}
+	                    className="btn-press flex items-start gap-3 rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3 text-left transition-colors hover:border-repressurizer-border disabled:opacity-50"
+	                  >
+	                    <UploadSimple size={16} weight="duotone" className="mt-0.5 text-repressurizer-accent" />
+	                    <span>
+	                      <span className="block text-sm text-repressurizer-text">
+	                        {importingDepressurizer ? "Importing Depressurizer profile" : "Import Depressurizer profile"}
+	                      </span>
+	                      <span className="mt-0.5 block text-xs leading-relaxed text-repressurizer-text-faint">
+	                        Merge categories, favorites, hidden games, filters and AutoCat metadata from a .profile file.
+	                      </span>
+	                    </span>
+	                  </button>
+
+	                  <button
+	                    onClick={handleExportDiagnostics}
+	                    disabled={diagnosticsExporting}
                     className="btn-press flex items-start gap-3 rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3 text-left transition-colors hover:border-repressurizer-border disabled:opacity-50"
                   >
                     <Bug size={16} weight="duotone" className="mt-0.5 text-repressurizer-accent" />
@@ -1182,12 +1268,27 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                         className="btn-press mt-3 w-full rounded-lg bg-repressurizer-accent px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-repressurizer-accent-hover disabled:opacity-50"
                       >
                         {installingUpdate ? t("settings.updates.installing") : t("settings.updates.install", { version: availableUpdate.version })}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-              )}
+	                      </button>
+	                    )}
+	                  </div>
+	                  {lastDepressurizerImport && (
+	                    <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3 md:col-span-2">
+	                      <p className="text-xs font-medium text-repressurizer-text">
+	                        Last Depressurizer import: {lastDepressurizerImport.stats.categories} categories,{" "}
+	                        {lastDepressurizerImport.stats.steamGames} Steam games,{" "}
+	                        {lastDepressurizerImport.stats.nonSteamGames} non-Steam games,{" "}
+	                        {lastDepressurizerImport.stats.supportedAutoCats}/{lastDepressurizerImport.stats.autoCats} AutoCats currently executable.
+	                      </p>
+	                      {lastDepressurizerImport.stats.nonSteamGames > 0 && (
+	                        <p className="mt-1 text-xs leading-relaxed text-repressurizer-text-faint">
+	                          Non-Steam shortcut entries were preserved in the import metadata and will become active when shortcut support lands.
+	                        </p>
+	                      )}
+	                    </div>
+	                  )}
+	                </div>
+	              </div>
+	              )}
 
               {/* Automation export */}
               {isSectionVisible("automation") && (
@@ -1562,6 +1663,65 @@ function SettingsNavButton({
       )}
     </button>
   );
+}
+
+function mergeImportedCollections(
+  current: SteamCollection[],
+  imported: SteamCollection[]
+): SteamCollection[] {
+  const next = structuredClone(current);
+  const byKey = new Map(next.map((collection, index) => [collection.key, index]));
+  const byName = new Map(
+    next
+      .map((collection, index) => [collection.name.trim().toLowerCase(), index] as const)
+      .filter(([, index]) => !next[index].is_dynamic)
+  );
+
+  for (const incoming of imported) {
+    const normalizedName = incoming.name.trim().toLowerCase();
+    const targetIndex =
+      byKey.get(incoming.key) ??
+      (isSpecialCollectionKey(incoming.key) ? undefined : byName.get(normalizedName));
+
+    if (targetIndex == null) {
+      byKey.set(incoming.key, next.length);
+      byName.set(normalizedName, next.length);
+      next.push(structuredClone(incoming));
+      continue;
+    }
+
+    const target = next[targetIndex];
+    const added = new Set([...(target.added ?? []), ...(incoming.added ?? [])]);
+    const removed = new Set([...(target.removed ?? [])]);
+    for (const appId of incoming.removed ?? []) {
+      if (!added.has(appId)) removed.add(appId);
+    }
+    next[targetIndex] = {
+      ...target,
+      added: [...added],
+      removed: [...removed],
+      is_deleted: false,
+    };
+  }
+
+  return next;
+}
+
+function isSpecialCollectionKey(key: string): boolean {
+  return key === "user-collections.hidden" || key === "user-collections.favorite";
+}
+
+function depressurizerGamesToOwnedGames(imported: DepressurizerProfileImport): OwnedGame[] {
+  return imported.games
+    .filter((game) => !game.nonSteam && game.appid > 0)
+    .map((game) => ({
+      appid: game.appid,
+      name: game.name?.trim() || `App ${game.appid}`,
+      playtime_forever: Math.max(0, Math.round((game.hoursPlayed ?? 0) * 60)),
+      img_icon_url: null,
+      rtime_last_played: game.lastPlayed ?? 0,
+      is_collection_only: true,
+    }));
 }
 
 function AppearanceTab({ isSectionVisible }: { isSectionVisible: (id: string) => boolean }) {

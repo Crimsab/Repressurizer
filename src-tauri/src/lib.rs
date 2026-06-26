@@ -9,6 +9,7 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use steam::api;
 use steam::collections;
+use steam::depressurizer_profile;
 use steam::detector;
 use steam::sam;
 use tauri::{Emitter, Manager};
@@ -916,6 +917,7 @@ pub fn run() {
             collections::restore_backup,
             collections::delete_backup,
             collections::create_manual_backup,
+            depressurizer_profile::import_depressurizer_profile,
             api::fetch_library,
             api::fetch_steam_app_list,
             api::fetch_game_details,

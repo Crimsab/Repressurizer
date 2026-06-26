@@ -21,6 +21,80 @@ export interface SteamCollection {
   is_dynamic: boolean;
 }
 
+export interface DepressurizerProfileImport {
+  sourcePath: string | null;
+  steamId64: string | null;
+  steamId3: string | null;
+  steamWebApiKey: string | null;
+  settings: DepressurizerProfileSettings;
+  games: DepressurizerImportedGame[];
+  collections: SteamCollection[];
+  filters: DepressurizerImportedFilter[];
+  autoCats: DepressurizerImportedAutoCat[];
+  ignoredAppIds: number[];
+  stats: DepressurizerImportStats;
+}
+
+export interface DepressurizerProfileSettings {
+  autoUpdate: boolean;
+  autoImport: boolean;
+  localUpdate: boolean;
+  webUpdate: boolean;
+  exportDiscard: boolean;
+  autoIgnore: boolean;
+  includeUnknown: boolean;
+  bypassIgnoreOnImport: boolean;
+  overwriteNames: boolean;
+  includeShortcuts: boolean;
+}
+
+export interface DepressurizerImportedGame {
+  appid: number;
+  name: string | null;
+  hidden: boolean;
+  hoursPlayed: number;
+  lastPlayed: number | null;
+  executable: string | null;
+  source: string | null;
+  categories: string[];
+  nonSteam: boolean;
+}
+
+export interface DepressurizerImportedFilter {
+  name: string;
+  allow: string[];
+  require: string[];
+  exclude: string[];
+  game: number;
+  modState: number;
+  software: number;
+  uncategorized: number;
+  hidden: number;
+  vr: number;
+}
+
+export interface DepressurizerImportedAutoCat {
+  name: string;
+  typeId: string;
+  normalizedType: string;
+  prefix: string | null;
+  filter: string | null;
+  supported: boolean;
+  rawConfig: unknown;
+}
+
+export interface DepressurizerImportStats {
+  totalGames: number;
+  steamGames: number;
+  nonSteamGames: number;
+  hiddenGames: number;
+  favoriteGames: number;
+  categories: number;
+  filters: number;
+  autoCats: number;
+  supportedAutoCats: number;
+}
+
 export interface BackupInfo {
   filename: string;
   timestamp: string;
