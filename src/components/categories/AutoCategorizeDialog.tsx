@@ -10,6 +10,10 @@ import {
 import { useBackgroundFetchStore } from "../../stores/backgroundFetchStore";
 import { useHltbStore } from "../../stores/hltbStore";
 import {
+  applyAutoCategorizeAssignments,
+  withExpectedAutoCategories,
+} from "../../lib/autoCategorizeApply";
+import {
   runHoursCategorizer,
   runGenreCategorizer,
   runTagsCategorizer,
@@ -175,7 +179,8 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
   const t = useT();
   const games = useGameStore((s) => s.games);
   const details = useGameStore((s) => s.details);
-  const { addGamesToCategory, addCategory, collections } = useCategoryStore();
+  const collections = useCategoryStore((s) => s.collections);
+  const applyImportedCollections = useCategoryStore((s) => s.applyImportedCollections);
   const apiKey = useSettingsStore((s) => s.apiKey);
   const steamPath = useSettingsStore((s) => s.steamPath);
   const steamId3 = useSettingsStore((s) => s.steamId3);
@@ -497,7 +502,12 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
   const runCategorizer = useCallback(async () => {
     setRunError("");
     try {
-      const res = await runCategorizerConfig(type, currentConfig());
+      const config = currentConfig();
+      const res = withExpectedAutoCategories(
+        await runCategorizerConfig(type, config),
+        type,
+        config
+      );
 
       setResult(res);
       persist.set({ lastResult: res });
@@ -533,7 +543,11 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
       const categorizedIds = new Set<number>();
 
       for (const preset of presets) {
-        const presetResult = await runCategorizerConfig(preset.type, preset.config);
+        const presetResult = withExpectedAutoCategories(
+          await runCategorizerConfig(preset.type, preset.config),
+          preset.type,
+          preset.config
+        );
         for (const [category, ids] of Object.entries(presetResult.assignments)) {
           const bucket = assignmentSets.get(category) ?? new Set<number>();
           for (const id of ids) {
@@ -576,20 +590,9 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
       }
     }
 
-    for (const [catName, appIds] of Object.entries(result.assignments)) {
-      const existing = collections.find((c) => c.name === catName && !c.is_dynamic);
-      if (existing) {
-        addGamesToCategory(existing.key, appIds);
-      } else {
-        addCategory(catName);
-        setTimeout(() => {
-          const created = useCategoryStore
-            .getState()
-            .collections.find((c) => c.name === catName && !c.is_dynamic);
-          if (created) addGamesToCategory(created.key, appIds);
-        }, 0);
-      }
-    }
+    applyImportedCollections(
+      applyAutoCategorizeAssignments(collections, result.assignments)
+    );
 
     gotoStep("done");
   };
