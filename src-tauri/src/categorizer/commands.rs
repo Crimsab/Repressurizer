@@ -1,5 +1,5 @@
-use super::{genre, tags, hours, year, score};
 use super::CategorizeResult;
+use super::{genre, hours, metadata, score, tags, year};
 use crate::steam::api::{GameDetails, OwnedGame};
 use score::GameScore;
 
@@ -59,4 +59,36 @@ pub fn run_score_categorizer(
     };
 
     score::categorize_by_score(&game_scores, &cfg)
+}
+
+#[tauri::command]
+pub fn run_devpub_categorizer(
+    game_details: Vec<GameDetails>,
+    config: metadata::DevPubConfig,
+) -> CategorizeResult {
+    metadata::categorize_by_devpub(&game_details, &config)
+}
+
+#[tauri::command]
+pub fn run_flags_categorizer(
+    game_details: Vec<GameDetails>,
+    config: metadata::FlagsConfig,
+) -> CategorizeResult {
+    metadata::categorize_by_flags(&game_details, &config)
+}
+
+#[tauri::command]
+pub fn run_platform_categorizer(
+    game_details: Vec<GameDetails>,
+    config: metadata::PlatformConfig,
+) -> CategorizeResult {
+    metadata::categorize_by_platform(&game_details, &config)
+}
+
+#[tauri::command]
+pub fn run_name_categorizer(
+    games: Vec<OwnedGame>,
+    config: metadata::NameConfig,
+) -> CategorizeResult {
+    metadata::categorize_by_name(&games, &config)
 }

@@ -4,10 +4,24 @@ import type {
   GenreConfig,
   TagsConfig,
   YearConfig,
+  DevPubConfig,
+  FlagsConfig,
+  PlatformConfig,
+  NameConfig,
   CategorizeResult,
 } from "../lib/tauri";
 
-export type CategorizerType = "hours" | "genre" | "tags" | "year" | "score" | "hltb";
+export type CategorizerType =
+  | "hours"
+  | "genre"
+  | "tags"
+  | "year"
+  | "score"
+  | "hltb"
+  | "devpub"
+  | "flags"
+  | "platform"
+  | "name";
 export type PersistStep = "choose" | "configure" | "preview" | "done";
 
 interface AutoCategorizeState {
@@ -17,6 +31,10 @@ interface AutoCategorizeState {
   genreConfig: GenreConfig;
   tagsConfig: TagsConfig;
   yearConfig: YearConfig;
+  devPubConfig: DevPubConfig;
+  flagsConfig: FlagsConfig;
+  platformConfig: PlatformConfig;
+  nameConfig: NameConfig;
   lastResult: CategorizeResult | null;
   set: (patch: Partial<Omit<AutoCategorizeState, "set">>) => void;
 }
@@ -52,6 +70,34 @@ const DEFAULT_YEAR_CONFIG: YearConfig = {
   unknown_text: "Unknown Year",
 };
 
+const DEFAULT_DEVPUB_CONFIG: DevPubConfig = {
+  prefix: "(Studio) ",
+  include_developers: true,
+  include_publishers: true,
+  selected: [],
+  min_games: undefined,
+};
+
+const DEFAULT_FLAGS_CONFIG: FlagsConfig = {
+  prefix: "(Flag) ",
+  max_flags: undefined,
+  included_flags: [],
+};
+
+const DEFAULT_PLATFORM_CONFIG: PlatformConfig = {
+  prefix: "(Platform) ",
+  include_windows: true,
+  include_mac: true,
+  include_linux: true,
+};
+
+const DEFAULT_NAME_CONFIG: NameConfig = {
+  prefix: "(Name) ",
+  skip_leading_the: true,
+  group_numbers: true,
+  group_other: true,
+};
+
 const defaults: Omit<AutoCategorizeState, "set"> = {
   lastType: "hours",
   lastStep: "choose",
@@ -59,6 +105,10 @@ const defaults: Omit<AutoCategorizeState, "set"> = {
   genreConfig: DEFAULT_GENRE_CONFIG,
   tagsConfig: DEFAULT_TAGS_CONFIG,
   yearConfig: DEFAULT_YEAR_CONFIG,
+  devPubConfig: DEFAULT_DEVPUB_CONFIG,
+  flagsConfig: DEFAULT_FLAGS_CONFIG,
+  platformConfig: DEFAULT_PLATFORM_CONFIG,
+  nameConfig: DEFAULT_NAME_CONFIG,
   lastResult: null,
 };
 

@@ -5,6 +5,7 @@ pub mod tags;
 pub mod hours;
 pub mod year;
 pub mod score;
+pub mod metadata;
 pub mod commands;
 
 use serde::{Deserialize, Serialize};

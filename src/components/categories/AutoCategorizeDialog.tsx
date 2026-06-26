@@ -11,12 +11,20 @@ import {
   runTagsCategorizer,
   runYearCategorizer,
   runScoreCategorizer,
+  runDevPubCategorizer,
+  runFlagsCategorizer,
+  runPlatformCategorizer,
+  runNameCategorizer,
   createManualBackup,
   type CategorizeResult,
   type HoursConfig,
   type GenreConfig,
   type TagsConfig,
   type YearConfig,
+  type DevPubConfig,
+  type FlagsConfig,
+  type PlatformConfig,
+  type NameConfig,
   type YearGrouping,
 } from "../../lib/tauri";
 import type { OwnedGame } from "../../lib/types";
@@ -38,6 +46,10 @@ import {
   Trash,
   FolderSimplePlus,
   Timer,
+  Buildings,
+  Flag,
+  Desktop,
+  TextAa,
 } from "@phosphor-icons/react";
 import { useT, type TranslationKey } from "../../lib/i18n";
 
@@ -45,13 +57,25 @@ import { useT, type TranslationKey } from "../../lib/i18n";
 // Types
 // ============================================================
 
-type CategorizerType = "hours" | "genre" | "tags" | "year" | "score" | "hltb";
+type CategorizerType =
+  | "hours"
+  | "genre"
+  | "tags"
+  | "year"
+  | "score"
+  | "hltb"
+  | "devpub"
+  | "flags"
+  | "platform"
+  | "name";
 type Step = "choose" | "configure" | "fetch" | "preview" | "done";
 
 const CATEGORIZERS: {
   value: CategorizerType;
-  labelKey: TranslationKey;
-  descriptionKey: TranslationKey;
+  labelKey?: TranslationKey;
+  descriptionKey?: TranslationKey;
+  label?: string;
+  description?: string;
   needsDetails: boolean;
   needsHltb: boolean;
   icon: typeof Clock;
@@ -62,6 +86,10 @@ const CATEGORIZERS: {
   { value: "year", labelKey: "auto.byYear", descriptionKey: "auto.byYear.desc", needsDetails: true, needsHltb: false, icon: Calendar },
   { value: "score", labelKey: "auto.byScore", descriptionKey: "auto.byScore.desc", needsDetails: true, needsHltb: false, icon: Star },
   { value: "hltb", labelKey: "auto.byHltb", descriptionKey: "auto.byHltb.desc", needsDetails: false, needsHltb: true, icon: Timer },
+  { value: "devpub", label: "Developer / Publisher", description: "Create categories from Steam developer and publisher metadata.", needsDetails: true, needsHltb: false, icon: Buildings },
+  { value: "flags", label: "Store flags", description: "Create categories from Steam feature flags such as Single-player or Steam Cloud.", needsDetails: true, needsHltb: false, icon: Flag },
+  { value: "platform", label: "Platform support", description: "Create Windows, macOS and Linux support categories.", needsDetails: true, needsHltb: false, icon: Desktop },
+  { value: "name", label: "Name", description: "Create alphabet buckets from game titles.", needsDetails: false, needsHltb: false, icon: TextAa },
 ];
 
 const DEFAULT_HLTB_CONFIG: HoursConfig = {
@@ -146,6 +174,10 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
   const [genreConfig, setGenreConfig] = useState<GenreConfig>(persist.genreConfig);
   const [tagsConfig, setTagsConfig] = useState<TagsConfig>(persist.tagsConfig);
   const [yearConfig, setYearConfig] = useState<YearConfig>(persist.yearConfig);
+  const [devPubConfig, setDevPubConfig] = useState<DevPubConfig>(persist.devPubConfig);
+  const [flagsConfig, setFlagsConfig] = useState<FlagsConfig>(persist.flagsConfig);
+  const [platformConfig, setPlatformConfig] = useState<PlatformConfig>(persist.platformConfig);
+  const [nameConfig, setNameConfig] = useState<NameConfig>(persist.nameConfig);
   const [hltbConfig, setHltbConfig] = useState<HoursConfig>(DEFAULT_HLTB_CONFIG);
 
   // Whether we're waiting for a details fetch to complete before running categorizer
@@ -183,7 +215,16 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
 
   // ---- Step: configure → run ----
   const handleConfigure = async () => {
-    persist.set({ hoursConfig, genreConfig, tagsConfig, yearConfig });
+    persist.set({
+      hoursConfig,
+      genreConfig,
+      tagsConfig,
+      yearConfig,
+      devPubConfig,
+      flagsConfig,
+      platformConfig,
+      nameConfig,
+    });
 
     // HLTB categorizer: no fetch needed, runs directly
     if (type === "hltb") {
@@ -248,6 +289,28 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
           ...yearConfig,
           prefix: yearConfig.prefix || undefined,
         });
+      } else if (type === "devpub") {
+        res = await runDevPubCategorizer(allDetails, {
+          ...devPubConfig,
+          prefix: devPubConfig.prefix || undefined,
+          min_games: devPubConfig.min_games || undefined,
+        });
+      } else if (type === "flags") {
+        res = await runFlagsCategorizer(allDetails, {
+          ...flagsConfig,
+          prefix: flagsConfig.prefix || undefined,
+          max_flags: flagsConfig.max_flags || undefined,
+        });
+      } else if (type === "platform") {
+        res = await runPlatformCategorizer(allDetails, {
+          ...platformConfig,
+          prefix: platformConfig.prefix || undefined,
+        });
+      } else if (type === "name") {
+        res = await runNameCategorizer(allGames, {
+          ...nameConfig,
+          prefix: nameConfig.prefix || undefined,
+        });
       } else if (type === "hltb") {
         res = runHltbCategorizerJs(allGames, hltbData, {
           ...hltbConfig,
@@ -264,7 +327,22 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
       setRunError(t("auto.categorizationFailed", { error: String(e) }));
       gotoStep("configure");
     }
-  }, [type, games, details, hltbData, hoursConfig, genreConfig, tagsConfig, yearConfig, hltbConfig, t]);
+  }, [
+    type,
+    games,
+    details,
+    hltbData,
+    hoursConfig,
+    genreConfig,
+    tagsConfig,
+    yearConfig,
+    devPubConfig,
+    flagsConfig,
+    platformConfig,
+    nameConfig,
+    hltbConfig,
+    t,
+  ]);
 
   // ---- Step: apply ----
   const handleApply = async () => {
@@ -326,6 +404,10 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
               genreConfig={genreConfig} setGenreConfig={setGenreConfig}
               tagsConfig={tagsConfig} setTagsConfig={setTagsConfig}
               yearConfig={yearConfig} setYearConfig={setYearConfig}
+              devPubConfig={devPubConfig} setDevPubConfig={setDevPubConfig}
+              flagsConfig={flagsConfig} setFlagsConfig={setFlagsConfig}
+              platformConfig={platformConfig} setPlatformConfig={setPlatformConfig}
+              nameConfig={nameConfig} setNameConfig={setNameConfig}
               hltbConfig={hltbConfig} setHltbConfig={setHltbConfig}
               error={runError}
               onBack={() => gotoStep("choose")}
@@ -479,6 +561,8 @@ function ChooseStep({ onChoose }: { onChoose: (t: CategorizerType) => void }) {
       <p className="mb-3 text-sm text-repressurizer-text-muted">{t("auto.choose.desc")}</p>
       {CATEGORIZERS.map((c) => {
         const Icon = c.icon;
+        const label = c.labelKey ? t(c.labelKey) : c.label ?? c.value;
+        const description = c.descriptionKey ? t(c.descriptionKey) : c.description ?? "";
         return (
           <button
             key={c.value}
@@ -487,8 +571,8 @@ function ChooseStep({ onChoose }: { onChoose: (t: CategorizerType) => void }) {
           >
             <Icon size={20} weight="duotone" className="shrink-0 text-repressurizer-accent" />
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-white">{t(c.labelKey)}</p>
-              <p className="text-xs text-repressurizer-text-faint mt-0.5">{t(c.descriptionKey)}</p>
+              <p className="text-sm font-medium text-white">{label}</p>
+              <p className="text-xs text-repressurizer-text-faint mt-0.5">{description}</p>
             </div>
             {c.needsDetails && (
               <span className="shrink-0 rounded-md bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-500">
@@ -515,6 +599,8 @@ function ChooseStep({ onChoose }: { onChoose: (t: CategorizerType) => void }) {
 function ConfigureStep({
   type, hoursConfig, setHoursConfig, genreConfig, setGenreConfig,
   tagsConfig, setTagsConfig, yearConfig, setYearConfig,
+  devPubConfig, setDevPubConfig, flagsConfig, setFlagsConfig,
+  platformConfig, setPlatformConfig, nameConfig, setNameConfig,
   hltbConfig, setHltbConfig, error, onBack, onNext,
 }: {
   type: CategorizerType;
@@ -522,6 +608,10 @@ function ConfigureStep({
   genreConfig: GenreConfig; setGenreConfig: (c: GenreConfig) => void;
   tagsConfig: TagsConfig; setTagsConfig: (c: TagsConfig) => void;
   yearConfig: YearConfig; setYearConfig: (c: YearConfig) => void;
+  devPubConfig: DevPubConfig; setDevPubConfig: (c: DevPubConfig) => void;
+  flagsConfig: FlagsConfig; setFlagsConfig: (c: FlagsConfig) => void;
+  platformConfig: PlatformConfig; setPlatformConfig: (c: PlatformConfig) => void;
+  nameConfig: NameConfig; setNameConfig: (c: NameConfig) => void;
   hltbConfig: HoursConfig; setHltbConfig: (c: HoursConfig) => void;
   error: string;
   onBack: () => void;
@@ -542,6 +632,10 @@ function ConfigureStep({
       {type === "tags" && <TagsConfigForm config={tagsConfig} onChange={setTagsConfig} />}
       {type === "year" && <YearConfigForm config={yearConfig} onChange={setYearConfig} />}
       {type === "hltb" && <HoursConfigForm config={hltbConfig} onChange={setHltbConfig} label={t("auto.hltbBuckets")} />}
+      {type === "devpub" && <DevPubConfigForm config={devPubConfig} onChange={setDevPubConfig} />}
+      {type === "flags" && <FlagsConfigForm config={flagsConfig} onChange={setFlagsConfig} />}
+      {type === "platform" && <PlatformConfigForm config={platformConfig} onChange={setPlatformConfig} />}
+      {type === "name" && <NameConfigForm config={nameConfig} onChange={setNameConfig} />}
       {type === "score" && (
         <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg p-4 text-sm text-repressurizer-text-muted">
           <p className="font-medium text-repressurizer-text mb-2">{t("auto.metacriticBuckets")}</p>
@@ -727,6 +821,160 @@ function YearConfigForm({ config, onChange }: { config: YearConfig; onChange: (c
         <span className="text-sm text-repressurizer-text">{t("auto.includeUnknownYear")}</span>
       </label>
     </div>
+  );
+}
+
+function DevPubConfigForm({ config, onChange }: { config: DevPubConfig; onChange: (c: DevPubConfig) => void }) {
+  const [newName, setNewName] = useState("");
+  return (
+    <div className="space-y-4">
+      <PrefixInput value={config.prefix ?? ""} onChange={(v) => onChange({ ...config, prefix: v })} />
+      <div className="grid gap-2 sm:grid-cols-2">
+        <CheckboxRow
+          label="Developers"
+          checked={config.include_developers}
+          onChange={(checked) => onChange({ ...config, include_developers: checked })}
+        />
+        <CheckboxRow
+          label="Publishers"
+          checked={config.include_publishers}
+          onChange={(checked) => onChange({ ...config, include_publishers: checked })}
+        />
+      </div>
+      <div>
+        <label className="mb-1.5 block text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">
+          Minimum games
+        </label>
+        <input
+          type="number"
+          min={1}
+          value={config.min_games ?? ""}
+          onChange={(e) => onChange({ ...config, min_games: e.target.value ? parseInt(e.target.value) : undefined })}
+          placeholder="No minimum"
+          className="w-36 rounded-lg border border-repressurizer-border bg-repressurizer-bg px-3 py-2 text-sm text-repressurizer-text focus:border-repressurizer-accent focus:outline-none font-mono"
+        />
+      </div>
+      <TagListInput
+        label="Only include these studios"
+        items={config.selected}
+        newItem={newName}
+        setNewItem={setNewName}
+        onAdd={() => {
+          if (newName.trim()) {
+            onChange({ ...config, selected: [...config.selected, newName.trim()] });
+            setNewName("");
+          }
+        }}
+        onRemove={(value) => onChange({ ...config, selected: config.selected.filter((item) => item !== value) })}
+      />
+    </div>
+  );
+}
+
+function FlagsConfigForm({ config, onChange }: { config: FlagsConfig; onChange: (c: FlagsConfig) => void }) {
+  const [newFlag, setNewFlag] = useState("");
+  return (
+    <div className="space-y-4">
+      <PrefixInput value={config.prefix ?? ""} onChange={(v) => onChange({ ...config, prefix: v })} />
+      <div>
+        <label className="mb-1.5 block text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">
+          Max flags per game
+        </label>
+        <input
+          type="number"
+          min={1}
+          value={config.max_flags ?? ""}
+          onChange={(e) => onChange({ ...config, max_flags: e.target.value ? parseInt(e.target.value) : undefined })}
+          placeholder="Unlimited"
+          className="w-36 rounded-lg border border-repressurizer-border bg-repressurizer-bg px-3 py-2 text-sm text-repressurizer-text focus:border-repressurizer-accent focus:outline-none font-mono"
+        />
+      </div>
+      <TagListInput
+        label="Only include these flags"
+        items={config.included_flags}
+        newItem={newFlag}
+        setNewItem={setNewFlag}
+        onAdd={() => {
+          if (newFlag.trim()) {
+            onChange({ ...config, included_flags: [...config.included_flags, newFlag.trim()] });
+            setNewFlag("");
+          }
+        }}
+        onRemove={(value) => onChange({ ...config, included_flags: config.included_flags.filter((item) => item !== value) })}
+      />
+    </div>
+  );
+}
+
+function PlatformConfigForm({ config, onChange }: { config: PlatformConfig; onChange: (c: PlatformConfig) => void }) {
+  return (
+    <div className="space-y-4">
+      <PrefixInput value={config.prefix ?? ""} onChange={(v) => onChange({ ...config, prefix: v })} />
+      <div className="grid gap-2 sm:grid-cols-3">
+        <CheckboxRow
+          label="Windows"
+          checked={config.include_windows}
+          onChange={(checked) => onChange({ ...config, include_windows: checked })}
+        />
+        <CheckboxRow
+          label="macOS"
+          checked={config.include_mac}
+          onChange={(checked) => onChange({ ...config, include_mac: checked })}
+        />
+        <CheckboxRow
+          label="Linux"
+          checked={config.include_linux}
+          onChange={(checked) => onChange({ ...config, include_linux: checked })}
+        />
+      </div>
+    </div>
+  );
+}
+
+function NameConfigForm({ config, onChange }: { config: NameConfig; onChange: (c: NameConfig) => void }) {
+  return (
+    <div className="space-y-4">
+      <PrefixInput value={config.prefix ?? ""} onChange={(v) => onChange({ ...config, prefix: v })} />
+      <div className="grid gap-2">
+        <CheckboxRow
+          label="Ignore leading “The”"
+          checked={config.skip_leading_the}
+          onChange={(checked) => onChange({ ...config, skip_leading_the: checked })}
+        />
+        <CheckboxRow
+          label="Group titles starting with numbers as #"
+          checked={config.group_numbers}
+          onChange={(checked) => onChange({ ...config, group_numbers: checked })}
+        />
+        <CheckboxRow
+          label="Group symbols and non-Latin initials as Other"
+          checked={config.group_other}
+          onChange={(checked) => onChange({ ...config, group_other: checked })}
+        />
+      </div>
+    </div>
+  );
+}
+
+function CheckboxRow({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-3 py-2 text-sm text-repressurizer-text transition-colors hover:border-repressurizer-border">
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="h-4 w-4 rounded border-repressurizer-border bg-repressurizer-bg accent-repressurizer-accent"
+      />
+      <span>{label}</span>
+    </label>
   );
 }
 

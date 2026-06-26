@@ -284,6 +284,34 @@ export interface YearConfig {
   unknown_text?: string;
 }
 
+export interface DevPubConfig {
+  prefix?: string;
+  include_developers: boolean;
+  include_publishers: boolean;
+  selected: string[];
+  min_games?: number;
+}
+
+export interface FlagsConfig {
+  prefix?: string;
+  max_flags?: number;
+  included_flags: string[];
+}
+
+export interface PlatformConfig {
+  prefix?: string;
+  include_windows: boolean;
+  include_mac: boolean;
+  include_linux: boolean;
+}
+
+export interface NameConfig {
+  prefix?: string;
+  skip_leading_the: boolean;
+  group_numbers: boolean;
+  group_other: boolean;
+}
+
 export async function runHoursCategorizer(
   games: OwnedGame[],
   config: HoursConfig
@@ -310,6 +338,34 @@ export async function runYearCategorizer(
   config: YearConfig
 ): Promise<CategorizeResult> {
   return invoke<CategorizeResult>("run_year_categorizer", { gameDetails, config });
+}
+
+export async function runDevPubCategorizer(
+  gameDetails: GameDetails[],
+  config: DevPubConfig
+): Promise<CategorizeResult> {
+  return invoke<CategorizeResult>("run_devpub_categorizer", { gameDetails, config });
+}
+
+export async function runFlagsCategorizer(
+  gameDetails: GameDetails[],
+  config: FlagsConfig
+): Promise<CategorizeResult> {
+  return invoke<CategorizeResult>("run_flags_categorizer", { gameDetails, config });
+}
+
+export async function runPlatformCategorizer(
+  gameDetails: GameDetails[],
+  config: PlatformConfig
+): Promise<CategorizeResult> {
+  return invoke<CategorizeResult>("run_platform_categorizer", { gameDetails, config });
+}
+
+export async function runNameCategorizer(
+  games: OwnedGame[],
+  config: NameConfig
+): Promise<CategorizeResult> {
+  return invoke<CategorizeResult>("run_name_categorizer", { games, config });
 }
 
 export async function loadDetailsCache(): Promise<string | null> {
