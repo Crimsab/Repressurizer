@@ -60,7 +60,7 @@ interface AutoCategorizeState {
   set: (patch: Partial<Omit<AutoCategorizeState, "set">>) => void;
 }
 
-const DEFAULT_HOURS_CONFIG: HoursConfig = {
+export const DEFAULT_HOURS_CONFIG: HoursConfig = {
   prefix: "",
   rules: [
     { name: "Unplayed", min_hours: 0, max_hours: 0.01 },
@@ -72,26 +72,26 @@ const DEFAULT_HOURS_CONFIG: HoursConfig = {
   ],
 };
 
-const DEFAULT_GENRE_CONFIG: GenreConfig = {
+export const DEFAULT_GENRE_CONFIG: GenreConfig = {
   prefix: "",
   max_categories: undefined,
   ignored_genres: ["Free to Play"],
 };
 
-const DEFAULT_TAGS_CONFIG: TagsConfig = {
+export const DEFAULT_TAGS_CONFIG: TagsConfig = {
   prefix: "",
   max_tags: 3,
   included_tags: [],
 };
 
-const DEFAULT_YEAR_CONFIG: YearConfig = {
+export const DEFAULT_YEAR_CONFIG: YearConfig = {
   prefix: "",
   grouping: "None",
   include_unknown: false,
   unknown_text: "Unknown Year",
 };
 
-const DEFAULT_DEVPUB_CONFIG: DevPubConfig = {
+export const DEFAULT_DEVPUB_CONFIG: DevPubConfig = {
   prefix: "(Studio) ",
   include_developers: true,
   include_publishers: true,
@@ -99,20 +99,20 @@ const DEFAULT_DEVPUB_CONFIG: DevPubConfig = {
   min_games: undefined,
 };
 
-const DEFAULT_FLAGS_CONFIG: FlagsConfig = {
+export const DEFAULT_FLAGS_CONFIG: FlagsConfig = {
   prefix: "(Flag) ",
   max_flags: undefined,
   included_flags: [],
 };
 
-const DEFAULT_PLATFORM_CONFIG: PlatformConfig = {
+export const DEFAULT_PLATFORM_CONFIG: PlatformConfig = {
   prefix: "(Platform) ",
   include_windows: true,
   include_mac: true,
   include_linux: true,
 };
 
-const DEFAULT_NAME_CONFIG: NameConfig = {
+export const DEFAULT_NAME_CONFIG: NameConfig = {
   prefix: "(Name) ",
   skip_leading_the: true,
   group_numbers: true,

@@ -324,7 +324,16 @@ fn parse_auto_cats(profile: Node<'_, '_>) -> Vec<DepressurizerImportedAutoCat> {
                         .or_else(|| child_text(auto_cat_node, "filter"));
                     let supported = matches!(
                         normalized_type.as_str(),
-                        "genre" | "tags" | "year" | "score" | "hltb" | "hours"
+                        "genre"
+                            | "tags"
+                            | "year"
+                            | "score"
+                            | "hltb"
+                            | "hours"
+                            | "devpub"
+                            | "flags"
+                            | "platform"
+                            | "name"
                     );
 
                     DepressurizerImportedAutoCat {
@@ -613,9 +622,9 @@ mod tests {
         assert_eq!(imported.auto_cats[0].normalized_type, "genre");
         assert!(imported.auto_cats[0].supported);
         assert_eq!(imported.auto_cats[1].normalized_type, "devpub");
-        assert!(!imported.auto_cats[1].supported);
+        assert!(imported.auto_cats[1].supported);
         assert_eq!(imported.stats.non_steam_games, 1);
-        assert_eq!(imported.stats.supported_auto_cats, 1);
+        assert_eq!(imported.stats.supported_auto_cats, 2);
     }
 
     #[test]
