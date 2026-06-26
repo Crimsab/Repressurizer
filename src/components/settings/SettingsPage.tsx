@@ -31,6 +31,11 @@ import {
   type AutoCategorizePresetConfig,
   type CategorizerType,
 } from "../../stores/autoCategorizeStore";
+import {
+  useAdvancedFilterStore,
+  type AdvancedSpecialState,
+  type SavedAdvancedFilter,
+} from "../../stores/advancedFilterStore";
 import { familyAppsToOwnedGames } from "../../lib/familyLibrary";
 import { isSteamAppIndexStale } from "../../lib/steamAppIndex";
 import { useFailedGamesStore, getIgnoredGameName, MAX_FAIL_RUNS } from "../../stores/failedGamesStore";
@@ -77,6 +82,7 @@ import type {
   AutomationPublishLogEntry,
   BackupInfo,
   DepressurizerImportedAutoCat,
+  DepressurizerImportedFilter,
   DepressurizerProfileImport,
   OwnedGame,
   SteamCollection,
@@ -361,6 +367,11 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
 
       const importedPresets = depressurizerAutoCatsToPresets(imported);
       const savedPresets = mergeAutoCategorizePresets(importedPresets);
+      const importedAdvancedFilters = depressurizerFiltersToSavedAdvancedFilters(
+        imported.filters,
+        mergedCollections
+      );
+      const savedAdvancedFilters = mergeSavedAdvancedFilters(importedAdvancedFilters);
 
       await saveAppData("depressurizer-profile-import.json", JSON.stringify(imported)).catch(() => {});
 
@@ -376,7 +387,8 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
       setLastDepressurizerImport(imported);
       setMessage(
         `Imported ${imported.stats.categories} categories, ${imported.stats.steamGames} Steam games, ` +
-          `${imported.stats.filters} filters, ${imported.stats.autoCats} AutoCats and ${savedPresets} saved AutoCat presets from Depressurizer.`
+          `${imported.stats.filters} filters, ${imported.stats.autoCats} AutoCats, ` +
+          `${savedPresets} saved AutoCat presets and ${savedAdvancedFilters} saved advanced filters from Depressurizer.`
       );
       setTimeout(() => setMessage(""), 5000);
     } catch (e) {
@@ -2107,6 +2119,102 @@ function rawStringList(value: unknown): string[] {
 
 function normalizeRawKey(key: string): string {
   return key.replace(/[^a-z0-9]/gi, "").toLowerCase();
+}
+
+function depressurizerFiltersToSavedAdvancedFilters(
+  filters: DepressurizerImportedFilter[],
+  collections: SteamCollection[]
+): SavedAdvancedFilter[] {
+  const now = Date.now();
+  const categoryKeysByName = categoryKeyMap(collections);
+
+  return filters
+    .map((filter, index) => {
+      const saved: SavedAdvancedFilter = {
+        id: `dep-filter-${now}-${index}-${hashName(filter.name)}`,
+        name: filter.name.trim() || "Depressurizer filter",
+        allowCategoryKeys: depressurizerCategoryNamesToKeys(filter.allow, categoryKeysByName),
+        requireCategoryKeys: depressurizerCategoryNamesToKeys(filter.require, categoryKeysByName),
+        excludeCategoryKeys: depressurizerCategoryNamesToKeys(filter.exclude, categoryKeysByName),
+        hidden: depressurizerSpecialState(filter.hidden),
+        uncategorized: depressurizerSpecialState(filter.uncategorized),
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      const hasCompatibleCriteria =
+        saved.allowCategoryKeys.length > 0 ||
+        saved.requireCategoryKeys.length > 0 ||
+        saved.excludeCategoryKeys.length > 0 ||
+        saved.hidden !== "any" ||
+        saved.uncategorized !== "any";
+
+      return hasCompatibleCriteria ? saved : null;
+    })
+    .filter((filter): filter is SavedAdvancedFilter => filter !== null);
+}
+
+function mergeSavedAdvancedFilters(importedFilters: SavedAdvancedFilter[]): number {
+  if (importedFilters.length === 0) return 0;
+  const advancedFilterStore = useAdvancedFilterStore.getState();
+  const existingKeys = new Set(
+    advancedFilterStore.filters.map((filter) => savedAdvancedFilterKey(filter))
+  );
+  const next = [...advancedFilterStore.filters];
+  let saved = 0;
+
+  for (const filter of importedFilters) {
+    const key = savedAdvancedFilterKey(filter);
+    if (existingKeys.has(key)) continue;
+    existingKeys.add(key);
+    next.push(filter);
+    saved++;
+  }
+
+  if (saved > 0) advancedFilterStore.setFilters(next);
+  return saved;
+}
+
+function savedAdvancedFilterKey(filter: SavedAdvancedFilter): string {
+  return [
+    filter.name.trim().toLowerCase(),
+    [...filter.allowCategoryKeys].sort().join(","),
+    [...filter.requireCategoryKeys].sort().join(","),
+    [...filter.excludeCategoryKeys].sort().join(","),
+    filter.hidden,
+    filter.uncategorized,
+  ].join(":");
+}
+
+function categoryKeyMap(collections: SteamCollection[]): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const collection of collections) {
+    if (collection.is_dynamic || isSpecialCollectionKey(collection.key)) continue;
+    map.set(normalizeCategoryName(collection.name), collection.key);
+  }
+  return map;
+}
+
+function depressurizerCategoryNamesToKeys(
+  names: string[],
+  categoryKeysByName: Map<string, string>
+): string[] {
+  const keys = new Set<string>();
+  for (const name of names) {
+    const key = categoryKeysByName.get(normalizeCategoryName(name));
+    if (key) keys.add(key);
+  }
+  return [...keys].sort();
+}
+
+function depressurizerSpecialState(value: number): AdvancedSpecialState {
+  if (value === 1) return "require";
+  if (value === 2) return "exclude";
+  return "any";
+}
+
+function normalizeCategoryName(name: string): string {
+  return name.trim().toLowerCase();
 }
 
 function shortcutsToOwnedGames(shortcuts: SteamShortcut[]): OwnedGame[] {
