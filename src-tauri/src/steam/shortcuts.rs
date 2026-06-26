@@ -288,11 +288,17 @@ fn update_shortcuts_tree(root: &mut BinaryVdfRoot, index: &ShortcutCollectionInd
         let Some(appid) = vdf_i32_field(fields, "appid").map(|value| (value as u32) as u64) else {
             continue;
         };
+        let hidden = index.hidden_appids.contains(&appid);
         let Some(tags) = index.tags_by_appid.get(&appid) else {
+            if hidden {
+                set_tags_field(fields, &[]);
+                set_hidden_field(fields, true);
+                updated += 1;
+            }
             continue;
         };
         set_tags_field(fields, tags);
-        set_hidden_field(fields, index.hidden_appids.contains(&appid));
+        set_hidden_field(fields, hidden);
         updated += 1;
     }
     updated
@@ -461,6 +467,7 @@ impl BinaryVdfReader<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
 
     #[test]
     fn parses_binary_shortcuts_with_tags() {
@@ -520,6 +527,70 @@ mod tests {
         assert_eq!(shortcuts[0].tags, vec!["Deck", "favorite"]);
     }
 
+    #[test]
+    fn saves_shortcuts_file_from_steam_directory_fixture() {
+        let steam_id3 = "12345";
+        let steam_path = temp_steam_dir("shortcuts-save");
+        let shortcuts_dir = steam_path.join("userdata").join(steam_id3).join("config");
+        fs::create_dir_all(&shortcuts_dir).unwrap();
+
+        let tagged_appid = (-1_234_567_i32 as u32) as u64;
+        let hidden_only_appid = (-7_654_321_i32 as u32) as u64;
+        let mut data = Vec::new();
+        start_object(&mut data, "shortcuts");
+        shortcut_entry(&mut data, "0", -1_234_567, "My Non-Steam Game", 0, &["Old"]);
+        shortcut_entry(
+            &mut data,
+            "1",
+            -7_654_321,
+            "Hidden Tool",
+            0,
+            &["Old Hidden Tag"],
+        );
+        end_object(&mut data);
+        fs::write(shortcuts_dir.join("shortcuts.vdf"), data).unwrap();
+
+        let before = load_shortcuts(
+            steam_path.to_string_lossy().to_string(),
+            steam_id3.to_string(),
+        )
+        .unwrap();
+        assert_eq!(before.len(), 2);
+        assert_eq!(before[0].tags, vec!["Old"]);
+
+        let updated = save_shortcuts(
+            steam_path.to_string_lossy().to_string(),
+            steam_id3.to_string(),
+            vec![
+                collection("deck", "Deck", vec![tagged_appid]),
+                collection("favorite", "Favorites", vec![tagged_appid]),
+                collection("hidden", "Hidden", vec![tagged_appid, hidden_only_appid]),
+            ],
+        )
+        .unwrap();
+
+        assert_eq!(updated, 2);
+        assert!(shortcuts_dir.read_dir().unwrap().any(|entry| entry
+            .unwrap()
+            .file_name()
+            .to_string_lossy()
+            .starts_with("shortcuts.backup-")));
+
+        let after = load_shortcuts(
+            steam_path.to_string_lossy().to_string(),
+            steam_id3.to_string(),
+        )
+        .unwrap();
+        assert_eq!(after[0].appname, "My Non-Steam Game");
+        assert!(after[0].hidden);
+        assert_eq!(after[0].tags, vec!["Deck", "favorite"]);
+        assert_eq!(after[1].appname, "Hidden Tool");
+        assert!(after[1].hidden);
+        assert!(after[1].tags.is_empty());
+
+        fs::remove_dir_all(steam_path).unwrap();
+    }
+
     fn collection(id: &str, name: &str, added: Vec<u64>) -> SteamCollection {
         SteamCollection {
             id: id.to_string(),
@@ -556,5 +627,37 @@ mod tests {
         data.extend_from_slice(key.as_bytes());
         data.push(0);
         data.extend_from_slice(&value.to_le_bytes());
+    }
+
+    fn shortcut_entry(
+        data: &mut Vec<u8>,
+        index: &str,
+        appid: i32,
+        appname: &str,
+        hidden: i32,
+        tags: &[&str],
+    ) {
+        start_object(data, index);
+        write_i32(data, "appid", appid);
+        write_string(data, "appname", appname);
+        write_string(data, "Exe", "\"C:\\Games\\game.exe\"");
+        write_i32(data, "IsHidden", hidden);
+        start_object(data, "tags");
+        for (index, tag) in tags.iter().enumerate() {
+            write_string(data, &index.to_string(), tag);
+        }
+        end_object(data);
+        end_object(data);
+    }
+
+    fn temp_steam_dir(name: &str) -> PathBuf {
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        std::env::temp_dir().join(format!(
+            "repressurizer-{name}-{}-{unique}",
+            std::process::id()
+        ))
     }
 }

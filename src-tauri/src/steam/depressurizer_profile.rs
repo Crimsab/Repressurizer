@@ -531,6 +531,7 @@ fn node_to_json(node: Node<'_, '_>) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::{fs, path::PathBuf};
 
     #[test]
     fn imports_games_categories_filters_and_autocats() {
@@ -634,5 +635,115 @@ mod tests {
         let imported = parse_depressurizer_profile_xml(xml, None).unwrap();
         assert_eq!(imported.steam_id64.as_deref(), Some("76561197960265729"));
         assert_eq!(imported.steam_id3.as_deref(), Some("1"));
+    }
+
+    #[test]
+    fn imports_profile_file_with_filters_and_supported_autocat_types() {
+        let profile_path = temp_profile_path("depressurizer-fixture.profile");
+        let xml = r#"
+            <profile>
+              <account_id>12345</account_id>
+              <auto_update>false</auto_update>
+              <include_shortcuts>true</include_shortcuts>
+              <games>
+                <game>
+                  <id>620</id>
+                  <name>Portal 2</name>
+                  <categories>
+                    <category>Puzzle</category>
+                    <category>Favorites</category>
+                  </categories>
+                </game>
+                <game>
+                  <id>400</id>
+                  <name>Portal</name>
+                  <hidden>true</hidden>
+                  <categories>
+                    <category>Puzzle</category>
+                  </categories>
+                </game>
+              </games>
+              <Filters>
+                <Filter>
+                  <Name>Puzzle visible</Name>
+                  <Allow>Puzzle</Allow>
+                  <Hidden>0</Hidden>
+                  <Uncategorized>1</Uncategorized>
+                </Filter>
+              </Filters>
+              <autocats>
+                <AutoCatLanguage>
+                  <Name>By Language</Name>
+                  <Prefix>Lang: </Prefix>
+                </AutoCatLanguage>
+                <AutoCatPlatform>
+                  <Name>By Platform</Name>
+                </AutoCatPlatform>
+                <AutoCatCurator>
+                  <Name>Unsupported Curator</Name>
+                </AutoCatCurator>
+              </autocats>
+            </profile>
+        "#;
+        fs::write(&profile_path, xml).unwrap();
+
+        let imported =
+            import_depressurizer_profile(profile_path.to_string_lossy().to_string()).unwrap();
+
+        assert_eq!(
+            imported.source_path.as_deref(),
+            Some(profile_path.to_string_lossy().as_ref())
+        );
+        assert_eq!(imported.steam_id3.as_deref(), Some("12345"));
+        assert!(!imported.settings.auto_update);
+        assert!(imported.settings.include_shortcuts);
+        assert_eq!(imported.games.len(), 2);
+
+        let puzzle = imported
+            .collections
+            .iter()
+            .find(|collection| collection.name == "Puzzle")
+            .expect("Puzzle category");
+        assert_eq!(puzzle.added, vec![400, 620]);
+        let hidden = imported
+            .collections
+            .iter()
+            .find(|collection| collection.key == "user-collections.hidden")
+            .expect("Hidden collection");
+        assert_eq!(hidden.added, vec![400]);
+        let favorite = imported
+            .collections
+            .iter()
+            .find(|collection| collection.key == "user-collections.favorite")
+            .expect("Favorites collection");
+        assert_eq!(favorite.added, vec![620]);
+
+        assert_eq!(imported.filters[0].name, "Puzzle visible");
+        assert_eq!(imported.filters[0].allow, vec!["Puzzle"]);
+        assert_eq!(imported.filters[0].hidden, 0);
+        assert_eq!(imported.filters[0].uncategorized, 1);
+
+        assert_eq!(
+            imported
+                .auto_cats
+                .iter()
+                .map(|auto_cat| (auto_cat.normalized_type.as_str(), auto_cat.supported))
+                .collect::<Vec<_>>(),
+            vec![("language", true), ("platform", true), ("curator", false)]
+        );
+        assert_eq!(imported.stats.supported_auto_cats, 2);
+
+        fs::remove_file(profile_path).unwrap();
+    }
+
+    fn temp_profile_path(filename: &str) -> PathBuf {
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        std::env::temp_dir().join(format!(
+            "repressurizer-{}-{unique}-{filename}",
+            std::process::id()
+        ))
     }
 }

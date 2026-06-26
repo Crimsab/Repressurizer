@@ -40,7 +40,10 @@ pub fn load_local_license_library(
         .join("packageinfo.vdf");
 
     if !license_path.exists() {
-        return Err(format!("licensecache not found at {}", license_path.display()));
+        return Err(format!(
+            "licensecache not found at {}",
+            license_path.display()
+        ));
     }
     if !package_path.exists() {
         return Err(format!(
@@ -49,13 +52,16 @@ pub fn load_local_license_library(
         ));
     }
 
-    let licenses = parse_licensecache(&fs::read(&license_path).map_err(|error| {
-        format!(
-            "Failed to read licensecache {}: {}",
-            license_path.display(),
-            error
-        )
-    })?, account_id)?;
+    let licenses = parse_licensecache(
+        &fs::read(&license_path).map_err(|error| {
+            format!(
+                "Failed to read licensecache {}: {}",
+                license_path.display(),
+                error
+            )
+        })?,
+        account_id,
+    )?;
     let packages = parse_packageinfo(&fs::read(&package_path).map_err(|error| {
         format!(
             "Failed to read packageinfo.vdf {}: {}",
@@ -93,7 +99,9 @@ pub fn parse_licensecache(data: &[u8], account_id: i32) -> Result<Vec<u32>, Stri
 fn decrypt_licensecache(account_id: i32, data: &[u8]) -> Vec<u8> {
     let mut random = SteamRandomStream::new();
     random.set_seed(account_id);
-    data.iter().map(|byte| byte ^ random.random_char()).collect()
+    data.iter()
+        .map(|byte| byte ^ random.random_char())
+        .collect()
 }
 
 fn parse_license_list_protobuf(data: &[u8]) -> Result<Vec<u32>, String> {
@@ -402,6 +410,7 @@ impl SteamRandomStream {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::{fs, path::PathBuf};
 
     #[test]
     fn parses_licensecache_package_ids_from_encrypted_protobuf() {
@@ -420,6 +429,49 @@ mod tests {
         let packages = parse_packageinfo(&data).unwrap();
 
         assert_eq!(packages.get(&42).cloned().unwrap(), vec![10, 20]);
+    }
+
+    #[test]
+    fn loads_local_license_library_from_steam_directory_fixture() {
+        let steam_id3 = "12345";
+        let steam_path = temp_steam_dir("local-license");
+        let config_dir = steam_path.join("userdata").join(steam_id3).join("config");
+        let appcache_dir = steam_path.join("appcache");
+        fs::create_dir_all(&config_dir).unwrap();
+        fs::create_dir_all(&appcache_dir).unwrap();
+
+        let mut license_plaintext = Vec::new();
+        write_license(&mut license_plaintext, 42);
+        license_plaintext.extend_from_slice(&[0, 0, 0, 0]);
+        let encrypted_license = decrypt_licensecache(12345, &license_plaintext);
+        fs::write(config_dir.join("licensecache"), encrypted_license).unwrap();
+        fs::write(
+            appcache_dir.join("packageinfo.vdf"),
+            packageinfo_fixture(42, &[10, 20]),
+        )
+        .unwrap();
+
+        let apps = load_local_license_library(
+            steam_path.to_string_lossy().to_string(),
+            steam_id3.to_string(),
+        )
+        .unwrap();
+
+        assert_eq!(
+            apps,
+            vec![
+                LocalLicenseApp {
+                    appid: 10,
+                    package_id: 42,
+                },
+                LocalLicenseApp {
+                    appid: 20,
+                    package_id: 42,
+                },
+            ]
+        );
+
+        fs::remove_dir_all(steam_path).unwrap();
     }
 
     fn write_license(data: &mut Vec<u8>, package_id: u32) {
@@ -477,5 +529,16 @@ mod tests {
         data.extend_from_slice(key.as_bytes());
         data.push(0);
         data.extend_from_slice(&value.to_le_bytes());
+    }
+
+    fn temp_steam_dir(name: &str) -> PathBuf {
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        std::env::temp_dir().join(format!(
+            "repressurizer-{name}-{}-{unique}",
+            std::process::id()
+        ))
     }
 }

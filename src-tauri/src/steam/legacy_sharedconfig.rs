@@ -201,6 +201,7 @@ fn tokenize(data: &str) -> Result<Vec<String>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::{fs, path::PathBuf};
 
     #[test]
     fn parses_sharedconfig_apps_tags_and_hidden() {
@@ -238,5 +239,81 @@ mod tests {
         assert!(games[0].hidden);
         assert_eq!(games[0].last_played, 1_700_000_000);
         assert_eq!(games[0].tags, vec!["Action", "Backlog"]);
+    }
+
+    #[test]
+    fn loads_sharedconfig_from_steam_directory_fixture() {
+        let steam_id3 = "12345";
+        let steam_path = temp_steam_dir("sharedconfig");
+        let sharedconfig_dir = steam_path
+            .join("userdata")
+            .join(steam_id3)
+            .join("7")
+            .join("remote");
+        fs::create_dir_all(&sharedconfig_dir).unwrap();
+        fs::write(
+            sharedconfig_dir.join("sharedconfig.vdf"),
+            r#"
+            "UserRoamingConfigStore"
+            {
+              "Software"
+              {
+                "Valve"
+                {
+                  "Steam"
+                  {
+                    "apps"
+                    {
+                      "620"
+                      {
+                        "hidden" "0"
+                        "LastPlayed" "1701000000"
+                        "tags"
+                        {
+                          "0" "Puzzle"
+                          "1" "Co-op"
+                        }
+                      }
+                      "400"
+                      {
+                        "hidden" "1"
+                        "lastplayed" "1700000000"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+            "#,
+        )
+        .unwrap();
+
+        let games = load_legacy_sharedconfig(
+            steam_path.to_string_lossy().to_string(),
+            steam_id3.to_string(),
+        )
+        .unwrap();
+
+        assert_eq!(games.len(), 2);
+        assert_eq!(games[0].appid, 400);
+        assert!(games[0].hidden);
+        assert_eq!(games[0].last_played, 1_700_000_000);
+        assert_eq!(games[1].appid, 620);
+        assert!(!games[1].hidden);
+        assert_eq!(games[1].last_played, 1_701_000_000);
+        assert_eq!(games[1].tags, vec!["Puzzle", "Co-op"]);
+
+        fs::remove_dir_all(steam_path).unwrap();
+    }
+
+    fn temp_steam_dir(name: &str) -> PathBuf {
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        std::env::temp_dir().join(format!(
+            "repressurizer-{name}-{}-{unique}",
+            std::process::id()
+        ))
     }
 }
