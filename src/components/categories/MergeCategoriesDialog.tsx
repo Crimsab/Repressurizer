@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useCategoryStore } from "../../stores/categoryStore";
 import { useT } from "../../lib/i18n";
 import { X, ArrowsMerge } from "@phosphor-icons/react";
+import { SelectMenu } from "../ui/SelectMenu";
 
 interface MergeCategoriesDialogProps {
   selectedKeys: string[];
@@ -94,24 +95,17 @@ export function MergeCategoriesDialog({ selectedKeys, onClose }: MergeCategories
         </div>
 
         {mode === "existing" ? (
-          <label className="block mb-4">
-            <span className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint">{t("merge.targetLabel")}</span>
-            <select
+          <div className="mb-4">
+            <SelectMenu
+              label={t("merge.targetLabel")}
               value={targetKey}
-              onChange={(e) => setTargetKey(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-repressurizer-border bg-repressurizer-bg px-3 py-2 text-sm text-repressurizer-text focus:border-repressurizer-accent focus:outline-none"
-            >
-              {selectedKeys.map((k) => {
+              onChange={setTargetKey}
+              options={selectedKeys.flatMap((k) => {
                 const c = userCats.find((x) => x.key === k);
-                if (!c) return null;
-                return (
-                  <option key={k} value={k}>
-                    {c.name} ({c.added.length})
-                  </option>
-                );
+                return c ? [{ value: k, label: `${c.name} (${c.added.length})` }] : [];
               })}
-            </select>
-          </label>
+            />
+          </div>
         ) : (
           <label className="block mb-4">
             <span className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint">{t("merge.newNameLabel")}</span>

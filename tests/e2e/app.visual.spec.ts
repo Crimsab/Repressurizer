@@ -215,23 +215,28 @@ test("SAM backup buttons show the in-app backup viewer and restore a selected sn
   await expect(backupViewer.getByText("mock-after.json")).toBeVisible();
   await expect(backupViewer.getByText("mock-lock-after.json")).toBeVisible();
 
-  await backupViewer.getByLabel("Action").selectOption("lock");
+  await backupViewer.getByRole("button", { name: /^Action:/ }).click();
+  await page.getByRole("option", { name: "Lock", exact: true }).click();
   await expect(backupViewer.getByText("mock-lock-after.json")).toBeVisible();
   await expect(backupViewer.getByText("mock-before.json")).toBeHidden();
   await expect(backupViewer.locator("[data-sam-backup-count]")).toContainText("1 of 3 shown");
 
-  await backupViewer.getByLabel("Action").selectOption("all");
-  await backupViewer.getByLabel("Phase").selectOption("before");
+  await backupViewer.getByRole("button", { name: /^Action:/ }).click();
+  await page.getByRole("option", { name: "All actions", exact: true }).click();
+  await backupViewer.getByRole("button", { name: /^Phase:/ }).click();
+  await page.getByRole("option", { name: "Before", exact: true }).click();
   await expect(backupViewer.getByText("mock-before.json")).toBeVisible();
   await expect(backupViewer.getByText("mock-after.json")).toBeHidden();
 
-  await backupViewer.getByLabel("Phase").selectOption("all");
+  await backupViewer.getByRole("button", { name: /^Phase:/ }).click();
+  await page.getByRole("option", { name: "All phases", exact: true }).click();
   await backupViewer.getByPlaceholder("Search date, action, filename...").fill("mock-after");
   await expect(backupViewer.getByText("mock-after.json")).toBeVisible();
   await expect(backupViewer.getByText("mock-before.json")).toBeHidden();
 
   await backupViewer.getByPlaceholder("Search date, action, filename...").fill("");
-  await backupViewer.getByLabel("Sort").selectOption("oldest");
+  await backupViewer.getByRole("button", { name: /^Sort:/ }).click();
+  await page.getByRole("option", { name: "Oldest", exact: true }).click();
   await expect(backupViewer.locator("[data-sam-backup-row]").first()).toContainText("mock-lock-after.json");
   const screenshotPath = testInfo.outputPath("sam-backup-viewer-filters.png");
   await page.screenshot({ path: screenshotPath, fullPage: true });
@@ -588,7 +593,8 @@ test("opens organized settings tabs, automation logs, and Steam controls without
 
   await settingsDialog.getByRole("button", { name: "View logs" }).click();
   await expect(settingsDialog.getByRole("heading", { name: "Automation export logs" })).toBeVisible();
-  await expect(settingsDialog.getByRole("combobox").first()).toBeVisible();
+  await expect(settingsDialog.getByText("All results")).toBeVisible();
+  await expect(settingsDialog.getByText("Newest first")).toBeVisible();
   await expect(settingsDialog.getByText("HTTP 200", { exact: true })).toBeVisible();
   await expect(settingsDialog.getByText("HTTP 500", { exact: true })).toBeVisible();
 

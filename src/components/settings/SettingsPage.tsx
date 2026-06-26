@@ -130,6 +130,7 @@ import { ACCENT_PRESETS, applyAccentColor, applyTheme } from "../../stores/setti
 import { getLocaleDisplayName, getLocaleFlag, normalizeLocale, SUPPORTED_LOCALES, useT } from "../../lib/i18n";
 import type { AppStartupMode, AppTheme } from "../../lib/types";
 import { automationPublishStatusPatch, publishAutomationSnapshot } from "../../lib/automationPublish";
+import { SelectMenu } from "../ui/SelectMenu";
 
 interface SettingsPageProps {
   onClose: () => void;
@@ -1209,22 +1210,27 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                       <p className="text-sm text-repressurizer-text">{t("settings.defaultCurrency")}</p>
                       <p className="mt-0.5 text-xs text-repressurizer-text-faint">{t("settings.currency.desc")}</p>
                     </div>
-                    <select
+                    <SelectMenu
+                      ariaLabel={t("settings.defaultCurrency")}
                       value={settings.currency ?? "EUR"}
-                      onChange={(e) => settings.setSettings({ currency: e.target.value })}
-                      className="rounded-lg border border-repressurizer-border bg-repressurizer-surface px-3 py-1.5 text-sm text-repressurizer-text transition-colors focus:border-repressurizer-accent focus:outline-none"
-                    >
-                      <option value="EUR">EUR (€)</option>
-                      <option value="USD">USD ($)</option>
-                      <option value="GBP">GBP (£)</option>
-                      <option value="JPY">JPY (¥)</option>
-                      <option value="CAD">CAD (C$)</option>
-                      <option value="AUD">AUD (A$)</option>
-                      <option value="CHF">CHF (Fr)</option>
-                      <option value="BRL">BRL (R$)</option>
-                      <option value="PLN">PLN (zł)</option>
-                      <option value="RUB">RUB (₽)</option>
-                    </select>
+                      onChange={(currency) => settings.setSettings({ currency })}
+                      align="right"
+                      size="sm"
+                      className="w-[132px] shrink-0"
+                      buttonClassName="bg-repressurizer-surface"
+                      options={[
+                        { value: "EUR", label: "EUR (€)" },
+                        { value: "USD", label: "USD ($)" },
+                        { value: "GBP", label: "GBP (£)" },
+                        { value: "JPY", label: "JPY (¥)" },
+                        { value: "CAD", label: "CAD (C$)" },
+                        { value: "AUD", label: "AUD (A$)" },
+                        { value: "CHF", label: "CHF (Fr)" },
+                        { value: "BRL", label: "BRL (R$)" },
+                        { value: "PLN", label: "PLN (zł)" },
+                        { value: "RUB", label: "RUB (₽)" },
+                      ]}
+                    />
                   </div>
                 </div>
               </div>
@@ -2998,38 +3004,30 @@ function AutomationLogsDialog({
         </div>
 
         <div className="flex flex-wrap gap-2 border-b border-repressurizer-border px-4 py-3">
-          <div className="relative">
-            <select
-              value={filter}
-              onChange={(event) => onFilterChange(event.target.value as AutomationLogFilter)}
-              className="h-8 appearance-none rounded-lg border border-repressurizer-border bg-repressurizer-bg pl-3 pr-10 text-xs text-repressurizer-text focus:border-repressurizer-accent focus:outline-none"
-            >
-              <option value="all">{t("settings.automationExport.logs.all")}</option>
-              <option value="success">{t("settings.automationExport.status.success")}</option>
-              <option value="failed">{t("settings.automationExport.status.failed")}</option>
-              <option value="skipped">{t("settings.automationExport.status.skipped")}</option>
-            </select>
-            <CaretDown
-              size={12}
-              weight="bold"
-              className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-repressurizer-text-faint"
-            />
-          </div>
-          <div className="relative">
-            <select
-              value={sort}
-              onChange={(event) => onSortChange(event.target.value as AutomationLogSort)}
-              className="h-8 appearance-none rounded-lg border border-repressurizer-border bg-repressurizer-bg pl-3 pr-10 text-xs text-repressurizer-text focus:border-repressurizer-accent focus:outline-none"
-            >
-              <option value="desc">{t("settings.automationExport.logs.newest")}</option>
-              <option value="asc">{t("settings.automationExport.logs.oldest")}</option>
-            </select>
-            <CaretDown
-              size={12}
-              weight="bold"
-              className="pointer-events-none absolute right-3.5 top-1/2 -translate-y-1/2 text-repressurizer-text-faint"
-            />
-          </div>
+          <SelectMenu<AutomationLogFilter>
+            ariaLabel={t("settings.automationExport.logsTitle")}
+            value={filter}
+            onChange={onFilterChange}
+            size="sm"
+            className="w-40"
+            options={[
+              { value: "all", label: t("settings.automationExport.logs.all") },
+              { value: "success", label: t("settings.automationExport.status.success") },
+              { value: "failed", label: t("settings.automationExport.status.failed") },
+              { value: "skipped", label: t("settings.automationExport.status.skipped") },
+            ]}
+          />
+          <SelectMenu<AutomationLogSort>
+            ariaLabel={t("settings.automationExport.logsTitle")}
+            value={sort}
+            onChange={onSortChange}
+            size="sm"
+            className="w-40"
+            options={[
+              { value: "desc", label: t("settings.automationExport.logs.newest") },
+              { value: "asc", label: t("settings.automationExport.logs.oldest") },
+            ]}
+          />
         </div>
 
         <div className="min-h-0 flex-1 overflow-auto">

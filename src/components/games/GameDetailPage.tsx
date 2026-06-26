@@ -22,6 +22,7 @@ import {
 } from "../../lib/tauri";
 import { extractReleaseYear } from "../../lib/search";
 import { SteamImage } from "./SteamImage";
+import { SelectMenu } from "../ui/SelectMenu";
 import { useHltbStore } from "../../stores/hltbStore";
 import type {
   OwnedGame,
@@ -456,7 +457,7 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
       className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/70 p-4 backdrop-blur-sm"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="flex max-h-[90vh] min-h-0 w-full max-w-4xl flex-col overflow-clip rounded-2xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_24px_64px_rgba(0,0,0,0.6)] animate-fade-in">
+      <div className="flex h-[min(90vh,740px)] min-h-0 w-full max-w-4xl flex-col overflow-clip rounded-2xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_24px_64px_rgba(0,0,0,0.6)] animate-fade-in-stable">
         {/* Header image + overlay */}
         <div className="relative h-48 shrink-0 overflow-hidden bg-repressurizer-bg">
           <SteamImage
@@ -504,10 +505,10 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
         </div>
 
         {/* Tabs */}
-        <div className="flex shrink-0 border-b border-repressurizer-border">
+        <div className="flex h-10 shrink-0 border-b border-repressurizer-border">
           <button
             onClick={() => setTab("info")}
-            className={`px-6 py-2.5 text-sm transition-colors ${
+            className={`flex h-full items-center px-6 text-sm transition-colors ${
               tab === "info"
                 ? "border-b-2 border-repressurizer-accent text-white"
                 : "text-repressurizer-text-muted hover:text-white"
@@ -517,7 +518,7 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
           </button>
           <button
             onClick={() => setTab("achievements")}
-            className={`flex items-center gap-2 px-6 py-2.5 text-sm transition-colors ${
+            className={`flex h-full items-center gap-2 px-6 text-sm transition-colors ${
               tab === "achievements"
                 ? "border-b-2 border-repressurizer-accent text-white"
                 : "text-repressurizer-text-muted hover:text-white"
@@ -535,14 +536,14 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
           <button
             onClick={handleRefreshDetails}
             disabled={refreshingDetails}
-            className="btn-press inline-flex items-center gap-1.5 px-4 py-2.5 text-sm text-repressurizer-text-muted transition-colors hover:text-white disabled:opacity-40"
+            className="btn-press inline-flex h-full items-center gap-1.5 px-4 text-sm text-repressurizer-text-muted transition-colors hover:text-white disabled:opacity-40"
           >
             <ArrowsClockwise size={14} className={refreshingDetails ? "animate-spin" : ""} />
             {t("settings.refresh")}
           </button>
           <button
             onClick={() => openPath(`https://store.steampowered.com/app/${game.appid}`)}
-            className="btn-press inline-flex items-center gap-1.5 px-4 py-2.5 text-sm text-repressurizer-text-muted transition-colors hover:text-white"
+            className="btn-press inline-flex h-full items-center gap-1.5 px-4 text-sm text-repressurizer-text-muted transition-colors hover:text-white"
           >
             <ArrowSquareOut size={14} />
             {t("detail.steamStore")}
@@ -1818,23 +1819,14 @@ function SamBackupSelect({
   onChange: (value: string) => void;
 }) {
   return (
-    <label className="block min-w-0">
-      <span className="mb-1 block text-[10px] font-medium uppercase tracking-wider text-repressurizer-text-faint">
-        {label}
-      </span>
-      <select
-        aria-label={label}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="h-9 w-full rounded-lg border border-repressurizer-border bg-repressurizer-bg px-3 pr-8 text-xs font-medium text-repressurizer-text transition-colors focus:border-repressurizer-accent focus:outline-none"
-      >
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
-    </label>
+    <SelectMenu
+      label={label}
+      value={value}
+      onChange={onChange}
+      options={options}
+      className="block min-w-0"
+      buttonClassName="bg-repressurizer-bg text-xs"
+    />
   );
 }
 

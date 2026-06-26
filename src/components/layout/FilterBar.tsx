@@ -12,6 +12,7 @@ import { useTagsStore } from "../../stores/tagsStore";
 import { useHltbStore } from "../../stores/hltbStore";
 import { Funnel, SlidersHorizontal, X } from "@phosphor-icons/react";
 import { useT, type TranslationKey } from "../../lib/i18n";
+import { SelectMenu } from "../ui/SelectMenu";
 
 const STATUS_FILTER_OPTIONS: GameStatus[] = ["playing", "beaten", "completed", "abandoned"];
 
@@ -409,16 +410,21 @@ function AdvancedFiltersDialog({
                   {collections.map((collection) => (
                     <div key={collection.key} className="flex items-center gap-3 border-b border-repressurizer-border-subtle px-3 py-2 last:border-b-0">
                       <span className="min-w-0 flex-1 truncate text-xs text-repressurizer-text">{collection.name}</span>
-                      <select
+                      <SelectMenu<AdvancedCategoryState>
+                        ariaLabel={`${collection.name} category state`}
                         value={categoryStates[collection.key] ?? "any"}
-                        onChange={(event) => setCategoryState(collection.key, event.target.value as AdvancedCategoryState)}
-                        className="h-8 rounded-lg border border-repressurizer-border bg-repressurizer-surface px-2 text-xs text-repressurizer-text focus:border-repressurizer-accent focus:outline-none"
-                      >
-                        <option value="any">Any</option>
-                        <option value="allow">Allow</option>
-                        <option value="require">Require</option>
-                        <option value="exclude">Exclude</option>
-                      </select>
+                        onChange={(next) => setCategoryState(collection.key, next)}
+                        align="right"
+                        size="sm"
+                        className="w-28 shrink-0"
+                        buttonClassName="bg-repressurizer-surface"
+                        options={[
+                          { value: "any", label: "Any" },
+                          { value: "allow", label: "Allow" },
+                          { value: "require", label: "Require" },
+                          { value: "exclude", label: "Exclude" },
+                        ]}
+                      />
                     </div>
                   ))}
                 </div>
@@ -610,20 +616,19 @@ function StateSelect({
   onChange: (value: AdvancedSpecialState) => void;
 }) {
   return (
-    <label className="block rounded-lg border border-repressurizer-border-subtle bg-repressurizer-surface px-3 py-2">
-      <span className="block text-[10px] uppercase tracking-wider text-repressurizer-text-faint">
-        {label}
-      </span>
-      <select
+    <div className="rounded-lg border border-repressurizer-border-subtle bg-repressurizer-surface px-3 py-2">
+      <SelectMenu<AdvancedSpecialState>
+        label={label}
         value={value}
-        onChange={(event) => onChange(event.target.value as AdvancedSpecialState)}
-        className="mt-1 h-8 w-full rounded-lg border border-repressurizer-border bg-repressurizer-bg px-2 text-xs text-repressurizer-text focus:border-repressurizer-accent focus:outline-none"
-      >
-        <option value="any">Any</option>
-        <option value="require">Require</option>
-        <option value="exclude">Exclude</option>
-      </select>
-    </label>
+        onChange={onChange}
+        size="sm"
+        options={[
+          { value: "any", label: "Any" },
+          { value: "require", label: "Require" },
+          { value: "exclude", label: "Exclude" },
+        ]}
+      />
+    </div>
   );
 }
 
