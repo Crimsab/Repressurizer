@@ -2,7 +2,11 @@ import { useState, useCallback, useEffect } from "react";
 import { useGameStore } from "../../stores/gameStore";
 import { useCategoryStore } from "../../stores/categoryStore";
 import { useSettingsStore } from "../../stores/settingsStore";
-import { useAutoCategorizeStore } from "../../stores/autoCategorizeStore";
+import {
+  useAutoCategorizeStore,
+  type AutoCategorizePreset,
+  type AutoCategorizePresetConfig,
+} from "../../stores/autoCategorizeStore";
 import { useBackgroundFetchStore } from "../../stores/backgroundFetchStore";
 import { useHltbStore } from "../../stores/hltbStore";
 import {
@@ -50,6 +54,9 @@ import {
   Flag,
   Desktop,
   TextAa,
+  FloppyDisk,
+  ArrowUp,
+  ArrowDown,
 } from "@phosphor-icons/react";
 import { useT, type TranslationKey } from "../../lib/i18n";
 
@@ -102,6 +109,16 @@ const DEFAULT_HLTB_CONFIG: HoursConfig = {
     { name: "Very Long (60h+)", min_hours: 60, max_hours: 0 },
   ],
 };
+
+function categorizerLabel(type: CategorizerType, t: ReturnType<typeof useT>): string {
+  const option = CATEGORIZERS.find((item) => item.value === type);
+  if (!option) return type;
+  return option.labelKey ? t(option.labelKey) : option.label ?? type;
+}
+
+function presetId(): string {
+  return `preset-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
 
 // Pure JS HLTB categorizer
 function runHltbCategorizerJs(
@@ -179,6 +196,8 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
   const [platformConfig, setPlatformConfig] = useState<PlatformConfig>(persist.platformConfig);
   const [nameConfig, setNameConfig] = useState<NameConfig>(persist.nameConfig);
   const [hltbConfig, setHltbConfig] = useState<HoursConfig>(DEFAULT_HLTB_CONFIG);
+  const [presetName, setPresetName] = useState("");
+  const [loadedPresetId, setLoadedPresetId] = useState<string | null>(null);
 
   // Whether we're waiting for a details fetch to complete before running categorizer
   const [waitingForFetch, setWaitingForFetch] = useState(() =>
@@ -209,8 +228,83 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
   // ---- Step: choose ----
   const handleChoose = (t: CategorizerType) => {
     setType(t);
+    setPresetName("");
+    setLoadedPresetId(null);
     persist.set({ lastType: t });
     gotoStep("configure");
+  };
+
+  const currentConfig = useCallback((): AutoCategorizePresetConfig => {
+    if (type === "hours") return hoursConfig;
+    if (type === "genre") return genreConfig;
+    if (type === "tags") return tagsConfig;
+    if (type === "year") return yearConfig;
+    if (type === "devpub") return devPubConfig;
+    if (type === "flags") return flagsConfig;
+    if (type === "platform") return platformConfig;
+    if (type === "name") return nameConfig;
+    if (type === "hltb") return hltbConfig;
+    return {};
+  }, [type, hoursConfig, genreConfig, tagsConfig, yearConfig, devPubConfig, flagsConfig, platformConfig, nameConfig, hltbConfig]);
+
+  const applyPresetConfig = (preset: AutoCategorizePreset) => {
+    const config = preset.config as Record<string, unknown>;
+    if (preset.type === "hours") setHoursConfig(config as unknown as HoursConfig);
+    if (preset.type === "genre") setGenreConfig(config as unknown as GenreConfig);
+    if (preset.type === "tags") setTagsConfig(config as unknown as TagsConfig);
+    if (preset.type === "year") setYearConfig(config as unknown as YearConfig);
+    if (preset.type === "devpub") setDevPubConfig(config as unknown as DevPubConfig);
+    if (preset.type === "flags") setFlagsConfig(config as unknown as FlagsConfig);
+    if (preset.type === "platform") setPlatformConfig(config as unknown as PlatformConfig);
+    if (preset.type === "name") setNameConfig(config as unknown as NameConfig);
+    if (preset.type === "hltb") setHltbConfig(config as unknown as HoursConfig);
+  };
+
+  const handleLoadPreset = (preset: AutoCategorizePreset) => {
+    setType(preset.type);
+    applyPresetConfig(preset);
+    setPresetName(preset.name);
+    setLoadedPresetId(preset.id);
+    persist.set({ lastType: preset.type });
+    gotoStep("configure");
+  };
+
+  const handleDeletePreset = (id: string) => {
+    persist.set({ presets: persist.presets.filter((preset) => preset.id !== id) });
+    if (loadedPresetId === id) {
+      setLoadedPresetId(null);
+      setPresetName("");
+    }
+  };
+
+  const handleMovePreset = (id: string, direction: -1 | 1) => {
+    const index = persist.presets.findIndex((preset) => preset.id === id);
+    const target = index + direction;
+    if (index < 0 || target < 0 || target >= persist.presets.length) return;
+    const next = [...persist.presets];
+    [next[index], next[target]] = [next[target], next[index]];
+    persist.set({ presets: next });
+  };
+
+  const handleSavePreset = () => {
+    const now = Date.now();
+    const name = presetName.trim() || categorizerLabel(type, t);
+    const preset: AutoCategorizePreset = {
+      id: loadedPresetId ?? presetId(),
+      name,
+      type,
+      config: currentConfig(),
+      createdAt: persist.presets.find((item) => item.id === loadedPresetId)?.createdAt ?? now,
+      updatedAt: now,
+    };
+    const existing = persist.presets.findIndex((item) => item.id === preset.id);
+    const presets =
+      existing >= 0
+        ? persist.presets.map((item) => (item.id === preset.id ? preset : item))
+        : [...persist.presets, preset];
+    persist.set({ presets });
+    setLoadedPresetId(preset.id);
+    setPresetName(name);
   };
 
   // ---- Step: configure → run ----
@@ -396,7 +490,15 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
 
         {/* Content */}
         <div className="flex-1 overflow-auto p-6">
-          {step === "choose" && <ChooseStep onChoose={handleChoose} />}
+          {step === "choose" && (
+            <ChooseStep
+              presets={persist.presets}
+              onChoose={handleChoose}
+              onLoadPreset={handleLoadPreset}
+              onDeletePreset={handleDeletePreset}
+              onMovePreset={handleMovePreset}
+            />
+          )}
           {step === "configure" && (
             <ConfigureStep
               type={type}
@@ -409,6 +511,10 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
               platformConfig={platformConfig} setPlatformConfig={setPlatformConfig}
               nameConfig={nameConfig} setNameConfig={setNameConfig}
               hltbConfig={hltbConfig} setHltbConfig={setHltbConfig}
+              presetName={presetName}
+              setPresetName={setPresetName}
+              onSavePreset={handleSavePreset}
+              loadedPresetId={loadedPresetId}
               error={runError}
               onBack={() => gotoStep("choose")}
               onNext={handleConfigure}
@@ -483,7 +589,19 @@ function StepBar({ step }: { step: Step }) {
 // Step: Choose
 // ============================================================
 
-function ChooseStep({ onChoose }: { onChoose: (t: CategorizerType) => void }) {
+function ChooseStep({
+  presets,
+  onChoose,
+  onLoadPreset,
+  onDeletePreset,
+  onMovePreset,
+}: {
+  presets: AutoCategorizePreset[];
+  onChoose: (t: CategorizerType) => void;
+  onLoadPreset: (preset: AutoCategorizePreset) => void;
+  onDeletePreset: (id: string) => void;
+  onMovePreset: (id: string, direction: -1 | 1) => void;
+}) {
   const t = useT();
   const gameCount = useGameStore((s) => Object.keys(s.games).length);
   const games = useGameStore((s) => s.games);
@@ -558,6 +676,66 @@ function ChooseStep({ onChoose }: { onChoose: (t: CategorizerType) => void }) {
         )}
       </div>
 
+      {presets.length > 0 && (
+        <div className="mb-4 rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg p-3">
+          <div className="mb-2 flex items-center justify-between gap-3">
+            <p className="text-[11px] font-medium uppercase tracking-wider text-repressurizer-text-faint">
+              Saved AutoCats
+            </p>
+            <span className="font-mono text-[10px] text-repressurizer-text-faint tabular-nums">
+              {presets.length}
+            </span>
+          </div>
+          <div className="space-y-1">
+            {presets.map((preset, index) => (
+              <div
+                key={preset.id}
+                className="flex items-center gap-2 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-surface px-2 py-2"
+              >
+                <button
+                  type="button"
+                  onClick={() => onLoadPreset(preset)}
+                  className="min-w-0 flex-1 text-left"
+                >
+                  <span className="block truncate text-sm font-medium text-repressurizer-text">
+                    {preset.name}
+                  </span>
+                  <span className="mt-0.5 block truncate text-[11px] text-repressurizer-text-faint">
+                    {categorizerLabel(preset.type, t)}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onMovePreset(preset.id, -1)}
+                  disabled={index === 0}
+                  className="btn-press flex h-7 w-7 items-center justify-center rounded-lg text-repressurizer-text-faint hover:bg-repressurizer-surface-hover hover:text-repressurizer-text disabled:opacity-30"
+                  title="Move up"
+                >
+                  <ArrowUp size={13} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onMovePreset(preset.id, 1)}
+                  disabled={index === presets.length - 1}
+                  className="btn-press flex h-7 w-7 items-center justify-center rounded-lg text-repressurizer-text-faint hover:bg-repressurizer-surface-hover hover:text-repressurizer-text disabled:opacity-30"
+                  title="Move down"
+                >
+                  <ArrowDown size={13} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onDeletePreset(preset.id)}
+                  className="btn-press flex h-7 w-7 items-center justify-center rounded-lg text-repressurizer-danger/70 hover:bg-repressurizer-danger/10 hover:text-repressurizer-danger"
+                  title="Delete"
+                >
+                  <Trash size={13} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <p className="mb-3 text-sm text-repressurizer-text-muted">{t("auto.choose.desc")}</p>
       {CATEGORIZERS.map((c) => {
         const Icon = c.icon;
@@ -601,7 +779,8 @@ function ConfigureStep({
   tagsConfig, setTagsConfig, yearConfig, setYearConfig,
   devPubConfig, setDevPubConfig, flagsConfig, setFlagsConfig,
   platformConfig, setPlatformConfig, nameConfig, setNameConfig,
-  hltbConfig, setHltbConfig, error, onBack, onNext,
+  hltbConfig, setHltbConfig, presetName, setPresetName, onSavePreset,
+  loadedPresetId, error, onBack, onNext,
 }: {
   type: CategorizerType;
   hoursConfig: HoursConfig; setHoursConfig: (c: HoursConfig) => void;
@@ -613,6 +792,10 @@ function ConfigureStep({
   platformConfig: PlatformConfig; setPlatformConfig: (c: PlatformConfig) => void;
   nameConfig: NameConfig; setNameConfig: (c: NameConfig) => void;
   hltbConfig: HoursConfig; setHltbConfig: (c: HoursConfig) => void;
+  presetName: string;
+  setPresetName: (name: string) => void;
+  onSavePreset: () => void;
+  loadedPresetId: string | null;
   error: string;
   onBack: () => void;
   onNext: () => void;
@@ -620,6 +803,29 @@ function ConfigureStep({
   const t = useT();
   return (
     <div className="space-y-5">
+      <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3">
+        <label className="mb-1.5 block text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">
+          Saved AutoCat
+        </label>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={presetName}
+            onChange={(e) => setPresetName(e.target.value)}
+            placeholder="Preset name"
+            className="min-w-0 flex-1 rounded-lg border border-repressurizer-border bg-repressurizer-surface px-3 py-2 text-sm text-repressurizer-text placeholder:text-repressurizer-text-faint focus:border-repressurizer-accent focus:outline-none"
+          />
+          <button
+            type="button"
+            onClick={onSavePreset}
+            className="btn-press inline-flex items-center gap-1.5 rounded-lg bg-repressurizer-accent/15 px-3 py-2 text-sm font-medium text-repressurizer-accent transition-colors hover:bg-repressurizer-accent/25"
+          >
+            <FloppyDisk size={14} weight="duotone" />
+            {loadedPresetId ? "Update" : "Save"}
+          </button>
+        </div>
+      </div>
+
       {error && (
         <div className="flex items-center gap-2 rounded-xl border border-repressurizer-danger/20 bg-repressurizer-danger/8 p-3 text-sm text-repressurizer-danger">
           <Warning size={16} weight="fill" />

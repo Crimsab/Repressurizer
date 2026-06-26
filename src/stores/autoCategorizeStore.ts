@@ -24,6 +24,26 @@ export type CategorizerType =
   | "name";
 export type PersistStep = "choose" | "configure" | "preview" | "done";
 
+export type AutoCategorizePresetConfig =
+  | HoursConfig
+  | GenreConfig
+  | TagsConfig
+  | YearConfig
+  | DevPubConfig
+  | FlagsConfig
+  | PlatformConfig
+  | NameConfig
+  | Record<string, never>;
+
+export interface AutoCategorizePreset {
+  id: string;
+  name: string;
+  type: CategorizerType;
+  config: AutoCategorizePresetConfig;
+  createdAt: number;
+  updatedAt: number;
+}
+
 interface AutoCategorizeState {
   lastType: CategorizerType;
   lastStep: PersistStep;
@@ -35,6 +55,7 @@ interface AutoCategorizeState {
   flagsConfig: FlagsConfig;
   platformConfig: PlatformConfig;
   nameConfig: NameConfig;
+  presets: AutoCategorizePreset[];
   lastResult: CategorizeResult | null;
   set: (patch: Partial<Omit<AutoCategorizeState, "set">>) => void;
 }
@@ -109,6 +130,7 @@ const defaults: Omit<AutoCategorizeState, "set"> = {
   flagsConfig: DEFAULT_FLAGS_CONFIG,
   platformConfig: DEFAULT_PLATFORM_CONFIG,
   nameConfig: DEFAULT_NAME_CONFIG,
+  presets: [],
   lastResult: null,
 };
 
