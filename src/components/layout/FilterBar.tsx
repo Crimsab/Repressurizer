@@ -231,8 +231,10 @@ function AdvancedFiltersDialog({
   onClose: () => void;
 }) {
   const t = useT();
-  const collections = useCategoryStore((s) =>
-    s.collections.filter((collection) => !collection.is_dynamic && !isSpecialCollection(collection))
+  const allCollections = useCategoryStore((s) => s.collections);
+  const collections = useMemo(
+    () => allCollections.filter((collection) => !collection.is_dynamic && !isSpecialCollection(collection)),
+    [allCollections]
   );
   const savedFilters = useAdvancedFilterStore((s) => s.filters);
   const activeFilterId = useAdvancedFilterStore((s) => s.activeFilterId);
