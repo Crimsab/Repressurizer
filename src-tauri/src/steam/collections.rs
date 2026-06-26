@@ -525,6 +525,13 @@ pub fn save_collections(
     steam_id3: String,
     collections: Vec<SteamCollection>,
 ) -> Result<(), String> {
+    if super::sam::is_steam_running() {
+        return Err(
+            "Steam appears to be running. Close Steam before saving collections to avoid corrupting the library cache."
+                .to_string(),
+        );
+    }
+
     let path = get_collections_path(&steam_path, &steam_id3);
     let dir = path.parent().ok_or("Invalid path")?;
     fs::create_dir_all(dir)

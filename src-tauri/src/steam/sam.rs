@@ -1930,12 +1930,12 @@ fn steam_client_candidates(steam_root: &Path) -> Vec<PathBuf> {
 }
 
 #[cfg(windows)]
-fn is_steam_running() -> bool {
+pub(crate) fn is_steam_running() -> bool {
     windows_process::is_steam_running()
 }
 
 #[cfg(not(windows))]
-fn is_steam_running() -> bool {
+pub(crate) fn is_steam_running() -> bool {
     Command::new("pgrep")
         .args(["-x", "steam"])
         .status()
