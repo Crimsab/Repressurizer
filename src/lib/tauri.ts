@@ -107,6 +107,20 @@ export async function loadShortcuts(
   return invoke<SteamShortcut[]>("load_shortcuts", { steamPath, steamId3 });
 }
 
+export interface LegacySharedConfigGame {
+  appid: number;
+  hidden: boolean;
+  lastPlayed: number;
+  tags: string[];
+}
+
+export async function loadLegacySharedConfig(
+  steamPath: string,
+  steamId3: string
+): Promise<LegacySharedConfigGame[]> {
+  return invoke<LegacySharedConfigGame[]>("load_legacy_sharedconfig", { steamPath, steamId3 });
+}
+
 export async function importDepressurizerProfile(
   path: string
 ): Promise<DepressurizerProfileImport> {

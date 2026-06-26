@@ -33,10 +33,11 @@ import {
   exportDiagnostics,
   fetchFamilyLibrary,
   importDepressurizerProfile,
+  loadLegacySharedConfig,
   loadShortcuts,
   saveAppData,
 } from "../../lib/tauri";
-import type { CacheInfo, FamilyLibraryResult, SteamShortcut } from "../../lib/tauri";
+import type { CacheInfo, FamilyLibraryResult, LegacySharedConfigGame, SteamShortcut } from "../../lib/tauri";
 import {
   clearSteamFamilyToken,
   extractStoreWebApiToken,
@@ -158,6 +159,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
   const [diagnosticsExporting, setDiagnosticsExporting] = useState(false);
   const [importingDepressurizer, setImportingDepressurizer] = useState(false);
   const [importingShortcuts, setImportingShortcuts] = useState(false);
+  const [importingLegacyConfig, setImportingLegacyConfig] = useState(false);
   const [lastDepressurizerImport, setLastDepressurizerImport] =
     useState<DepressurizerProfileImport | null>(null);
   const [checkingUpdates, setCheckingUpdates] = useState(false);
@@ -382,6 +384,38 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
       setMessage(`Shortcut import failed: ${String(e)}`);
     } finally {
       setImportingShortcuts(false);
+    }
+  };
+
+  const handleImportLegacySharedConfig = async () => {
+    setImportingLegacyConfig(true);
+    setMessage("");
+    try {
+      if (!settings.steamPath || !settings.steamId3) {
+        setMessage("Steam path and user are required before importing legacy sharedconfig.");
+        return;
+      }
+      const legacyGames = await loadLegacySharedConfig(settings.steamPath, settings.steamId3);
+      if (legacyGames.length === 0) {
+        setMessage("No legacy sharedconfig categories found for this Steam user.");
+        return;
+      }
+
+      mergeGames(legacySharedConfigToOwnedGames(legacyGames));
+      const mergedCollections = mergeImportedCollections(
+        useCategoryStore.getState().collections,
+        legacySharedConfigToCollections(legacyGames)
+      );
+      applyImportedCollections(mergedCollections);
+
+      setMessage(
+        `Imported ${legacyGames.length} legacy sharedconfig entries and ${new Set(legacyGames.flatMap((game) => game.tags)).size} legacy tags.`
+      );
+      setTimeout(() => setMessage(""), 5000);
+    } catch (e) {
+      setMessage(`Legacy sharedconfig import failed: ${String(e)}`);
+    } finally {
+      setImportingLegacyConfig(false);
     }
   };
 
@@ -1288,6 +1322,22 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
 	                  </button>
 
 	                  <button
+	                    onClick={handleImportLegacySharedConfig}
+	                    disabled={importingLegacyConfig}
+	                    className="btn-press flex items-start gap-3 rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3 text-left transition-colors hover:border-repressurizer-border disabled:opacity-50"
+	                  >
+	                    <ClockCounterClockwise size={16} weight="duotone" className="mt-0.5 text-repressurizer-accent" />
+	                    <span>
+	                      <span className="block text-sm text-repressurizer-text">
+	                        {importingLegacyConfig ? "Importing legacy sharedconfig" : "Import legacy sharedconfig"}
+	                      </span>
+	                      <span className="mt-0.5 block text-xs leading-relaxed text-repressurizer-text-faint">
+	                        Merge old Steam sharedconfig.vdf tags and hidden state into modern collections.
+	                      </span>
+	                    </span>
+	                  </button>
+
+	                  <button
 	                    onClick={handleExportDiagnostics}
 	                    disabled={diagnosticsExporting}
                     className="btn-press flex items-start gap-3 rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3 text-left transition-colors hover:border-repressurizer-border disabled:opacity-50"
@@ -1819,6 +1869,63 @@ function shortcutsToCollections(shortcuts: SteamShortcut[]): SteamCollection[] {
 
   for (const [name, ids] of [...tagMap.entries()].sort(([a], [b]) => a.localeCompare(b))) {
     const id = `uc-shortcut-${hashName(name)}-${slugName(name)}`;
+    collections.push({
+      id,
+      key: `user-collections.${id}`,
+      name,
+      added: [...ids],
+      removed: [],
+      timestamp,
+      is_deleted: false,
+      is_dynamic: false,
+    });
+  }
+
+  return collections;
+}
+
+function legacySharedConfigToOwnedGames(games: LegacySharedConfigGame[]): OwnedGame[] {
+  return games.map((game) => ({
+    appid: game.appid,
+    name: `App ${game.appid}`,
+    playtime_forever: 0,
+    img_icon_url: null,
+    rtime_last_played: game.lastPlayed ?? 0,
+    is_collection_only: true,
+  }));
+}
+
+function legacySharedConfigToCollections(games: LegacySharedConfigGame[]): SteamCollection[] {
+  const timestamp = Math.floor(Date.now() / 1000);
+  const hidden = new Set<number>();
+  const tagMap = new Map<string, Set<number>>();
+
+  for (const game of games) {
+    if (game.hidden) hidden.add(game.appid);
+    for (const tag of game.tags) {
+      const name = tag.trim();
+      if (!name) continue;
+      const ids = tagMap.get(name) ?? new Set<number>();
+      ids.add(game.appid);
+      tagMap.set(name, ids);
+    }
+  }
+
+  const collections: SteamCollection[] = [
+    {
+      id: "hidden",
+      key: "user-collections.hidden",
+      name: "Hidden",
+      added: [...hidden],
+      removed: [],
+      timestamp,
+      is_deleted: false,
+      is_dynamic: false,
+    },
+  ];
+
+  for (const [name, ids] of [...tagMap.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+    const id = `uc-legacy-${hashName(name)}-${slugName(name)}`;
     collections.push({
       id,
       key: `user-collections.${id}`,
