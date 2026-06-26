@@ -1,17 +1,10 @@
 # Repressurizer
 
 [![CI](https://github.com/Crimsab/Repressurizer/actions/workflows/ci.yml/badge.svg)](https://github.com/Crimsab/Repressurizer/actions/workflows/ci.yml)
-[![Release](https://github.com/Crimsab/Repressurizer/actions/workflows/release.yml/badge.svg)](https://github.com/Crimsab/Repressurizer/actions/workflows/release.yml)
 [![Latest release](https://img.shields.io/github/v/release/Crimsab/Repressurizer?sort=semver)](https://github.com/Crimsab/Repressurizer/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/Crimsab/Repressurizer/total)](https://github.com/Crimsab/Repressurizer/releases)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Built with Tauri](https://img.shields.io/badge/Tauri-Rust%20%2B%20React-24c8db)](https://tauri.app/)
-[![Localization status](https://img.shields.io/badge/i18n-status-16a34a)](docs/localization.md#localization-status)
-[![npm package](https://img.shields.io/npm/v/@crimsab/repressurizer-integration?label=npm)](https://www.npmjs.com/package/@crimsab/repressurizer-integration)
-[![npm downloads](https://img.shields.io/npm/dw/@crimsab/repressurizer-integration?label=npm%20downloads)](https://www.npmjs.com/package/@crimsab/repressurizer-integration)
-[![crates.io](https://img.shields.io/crates/v/repressurizer-integration?label=crates.io)](https://crates.io/crates/repressurizer-integration)
-[![crate downloads](https://img.shields.io/crates/d/repressurizer-integration?label=crate%20downloads)](https://crates.io/crates/repressurizer-integration)
-[![docs.rs](https://img.shields.io/docsrs/repressurizer-integration?label=docs.rs)](https://docs.rs/repressurizer-integration)
 
 Repressurizer is a modern desktop Steam library manager for editing Steam collections, organizing backlogs, and deciding what to play next.
 
