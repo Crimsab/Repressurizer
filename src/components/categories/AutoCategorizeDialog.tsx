@@ -116,6 +116,10 @@ function categorizerLabel(type: CategorizerType, t: ReturnType<typeof useT>): st
   return option.labelKey ? t(option.labelKey) : option.label ?? type;
 }
 
+function categorizerNeedsDetails(type: CategorizerType): boolean {
+  return CATEGORIZERS.find((item) => item.value === type)?.needsDetails ?? false;
+}
+
 function presetId(): string {
   return `preset-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -203,6 +207,7 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
   const [waitingForFetch, setWaitingForFetch] = useState(() =>
     useBackgroundFetchStore.getState().detailsRunning
   );
+  const [pendingPresetRun, setPendingPresetRun] = useState<AutoCategorizePreset[] | null>(null);
 
   const [fetchError, setFetchError] = useState("");
   const [result, setResult] = useState<CategorizeResult | null>(persist.lastResult);
@@ -218,6 +223,14 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [detailsRunning, waitingForFetch]);
+
+  useEffect(() => {
+    if (!pendingPresetRun || detailsRunning) return;
+    const queue = pendingPresetRun;
+    setPendingPresetRun(null);
+    runPresetSequence(queue);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detailsRunning, pendingPresetRun]);
 
   // Helper to sync step to store (skip "fetch")
   const gotoStep = (s: Step) => {
@@ -307,6 +320,38 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
     setPresetName(name);
   };
 
+  const handleRunPresets = async () => {
+    const presets = [...persist.presets];
+    if (presets.length === 0) return;
+
+    setRunError("");
+    setFetchError("");
+    setWaitingForFetch(false);
+
+    if (presets.some((preset) => categorizerNeedsDetails(preset.type))) {
+      const allIds = Object.keys(games).map(Number);
+      const missing = allIds.filter((id) => !details[id]);
+
+      if (missing.length > 0) {
+        if (!apiKey) {
+          setFetchError(t("auto.detailsRequired"));
+          setStep("fetch");
+          return;
+        }
+
+        setStep("fetch");
+        setPendingPresetRun(presets);
+
+        if (!detailsRunning) {
+          startDetailsFetch(missing);
+        }
+        return;
+      }
+    }
+
+    await runPresetSequence(presets);
+  };
+
   // ---- Step: configure → run ----
   const handleConfigure = async () => {
     persist.set({
@@ -356,63 +401,86 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
     await runCategorizer();
   };
 
+  const runCategorizerConfig = useCallback(async (
+    runType: CategorizerType,
+    config: AutoCategorizePresetConfig
+  ): Promise<CategorizeResult> => {
+    const allGames = Object.values(games);
+    const allDetails = Object.values(details);
+
+    if (runType === "hours") {
+      const cfg = config as HoursConfig;
+      return runHoursCategorizer(allGames, {
+        ...cfg,
+        prefix: cfg.prefix || undefined,
+      });
+    }
+    if (runType === "genre") {
+      const cfg = config as GenreConfig;
+      return runGenreCategorizer(allDetails, {
+        ...cfg,
+        prefix: cfg.prefix || undefined,
+      });
+    }
+    if (runType === "tags") {
+      const cfg = config as TagsConfig;
+      return runTagsCategorizer(allDetails, {
+        ...cfg,
+        prefix: cfg.prefix || undefined,
+      });
+    }
+    if (runType === "year") {
+      const cfg = config as YearConfig;
+      return runYearCategorizer(allDetails, {
+        ...cfg,
+        prefix: cfg.prefix || undefined,
+      });
+    }
+    if (runType === "devpub") {
+      const cfg = config as DevPubConfig;
+      return runDevPubCategorizer(allDetails, {
+        ...cfg,
+        prefix: cfg.prefix || undefined,
+        min_games: cfg.min_games || undefined,
+      });
+    }
+    if (runType === "flags") {
+      const cfg = config as FlagsConfig;
+      return runFlagsCategorizer(allDetails, {
+        ...cfg,
+        prefix: cfg.prefix || undefined,
+        max_flags: cfg.max_flags || undefined,
+      });
+    }
+    if (runType === "platform") {
+      const cfg = config as PlatformConfig;
+      return runPlatformCategorizer(allDetails, {
+        ...cfg,
+        prefix: cfg.prefix || undefined,
+      });
+    }
+    if (runType === "name") {
+      const cfg = config as NameConfig;
+      return runNameCategorizer(allGames, {
+        ...cfg,
+        prefix: cfg.prefix || undefined,
+      });
+    }
+    if (runType === "hltb") {
+      const cfg = config as HoursConfig;
+      return runHltbCategorizerJs(allGames, hltbData, {
+        ...cfg,
+        prefix: cfg.prefix || undefined,
+      });
+    }
+
+    return runScoreCategorizer(allDetails, true);
+  }, [games, details, hltbData]);
+
   const runCategorizer = useCallback(async () => {
     setRunError("");
     try {
-      const allGames = Object.values(games);
-      const allDetails = Object.values(details);
-      let res: CategorizeResult;
-
-      if (type === "hours") {
-        res = await runHoursCategorizer(allGames, {
-          ...hoursConfig,
-          prefix: hoursConfig.prefix || undefined,
-        });
-      } else if (type === "genre") {
-        res = await runGenreCategorizer(allDetails, {
-          ...genreConfig,
-          prefix: genreConfig.prefix || undefined,
-        });
-      } else if (type === "tags") {
-        res = await runTagsCategorizer(allDetails, {
-          ...tagsConfig,
-          prefix: tagsConfig.prefix || undefined,
-        });
-      } else if (type === "year") {
-        res = await runYearCategorizer(allDetails, {
-          ...yearConfig,
-          prefix: yearConfig.prefix || undefined,
-        });
-      } else if (type === "devpub") {
-        res = await runDevPubCategorizer(allDetails, {
-          ...devPubConfig,
-          prefix: devPubConfig.prefix || undefined,
-          min_games: devPubConfig.min_games || undefined,
-        });
-      } else if (type === "flags") {
-        res = await runFlagsCategorizer(allDetails, {
-          ...flagsConfig,
-          prefix: flagsConfig.prefix || undefined,
-          max_flags: flagsConfig.max_flags || undefined,
-        });
-      } else if (type === "platform") {
-        res = await runPlatformCategorizer(allDetails, {
-          ...platformConfig,
-          prefix: platformConfig.prefix || undefined,
-        });
-      } else if (type === "name") {
-        res = await runNameCategorizer(allGames, {
-          ...nameConfig,
-          prefix: nameConfig.prefix || undefined,
-        });
-      } else if (type === "hltb") {
-        res = runHltbCategorizerJs(allGames, hltbData, {
-          ...hltbConfig,
-          prefix: hltbConfig.prefix || undefined,
-        });
-      } else {
-        res = await runScoreCategorizer(allDetails, true);
-      }
+      const res = await runCategorizerConfig(type, currentConfig());
 
       setResult(res);
       persist.set({ lastResult: res });
@@ -435,8 +503,48 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
     platformConfig,
     nameConfig,
     hltbConfig,
+    currentConfig,
+    runCategorizerConfig,
     t,
   ]);
+
+  const runPresetSequence = useCallback(async (presets: AutoCategorizePreset[]) => {
+    setRunError("");
+    try {
+      const assignmentSets = new Map<string, Set<number>>();
+      const categorizedIds = new Set<number>();
+
+      for (const preset of presets) {
+        const presetResult = await runCategorizerConfig(preset.type, preset.config);
+        for (const [category, ids] of Object.entries(presetResult.assignments)) {
+          const bucket = assignmentSets.get(category) ?? new Set<number>();
+          for (const id of ids) {
+            bucket.add(id);
+            categorizedIds.add(id);
+          }
+          assignmentSets.set(category, bucket);
+        }
+      }
+
+      const assignments = Object.fromEntries(
+        [...assignmentSets.entries()]
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([category, ids]) => [category, [...ids].sort((a, b) => a - b)])
+      );
+      const res: CategorizeResult = {
+        assignments,
+        games_processed: Object.keys(games).length,
+        games_categorized: categorizedIds.size,
+      };
+
+      setResult(res);
+      persist.set({ lastResult: res });
+      gotoStep("preview");
+    } catch (e) {
+      setRunError(t("auto.categorizationFailed", { error: String(e) }));
+      gotoStep("choose");
+    }
+  }, [games, runCategorizerConfig, t]);
 
   // ---- Step: apply ----
   const handleApply = async () => {
@@ -494,6 +602,7 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
             <ChooseStep
               presets={persist.presets}
               onChoose={handleChoose}
+              onRunPresets={handleRunPresets}
               onLoadPreset={handleLoadPreset}
               onDeletePreset={handleDeletePreset}
               onMovePreset={handleMovePreset}
@@ -525,7 +634,7 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
               progress={detailsFetched}
               total={detailsTotal}
               error={fetchError}
-              waiting={waitingForFetch}
+              waiting={waitingForFetch || pendingPresetRun !== null}
             />
           )}
           {step === "preview" && result && (
@@ -592,12 +701,14 @@ function StepBar({ step }: { step: Step }) {
 function ChooseStep({
   presets,
   onChoose,
+  onRunPresets,
   onLoadPreset,
   onDeletePreset,
   onMovePreset,
 }: {
   presets: AutoCategorizePreset[];
   onChoose: (t: CategorizerType) => void;
+  onRunPresets: () => void;
   onLoadPreset: (preset: AutoCategorizePreset) => void;
   onDeletePreset: (id: string) => void;
   onMovePreset: (id: string, direction: -1 | 1) => void;
@@ -682,9 +793,17 @@ function ChooseStep({
             <p className="text-[11px] font-medium uppercase tracking-wider text-repressurizer-text-faint">
               Saved AutoCats
             </p>
-            <span className="font-mono text-[10px] text-repressurizer-text-faint tabular-nums">
-              {presets.length}
-            </span>
+            <button
+              type="button"
+              onClick={onRunPresets}
+              className="btn-press inline-flex items-center gap-1.5 rounded-lg bg-repressurizer-accent/15 px-2.5 py-1 text-[11px] font-medium text-repressurizer-accent transition-colors hover:bg-repressurizer-accent/25"
+            >
+              <Playlist size={12} weight="duotone" />
+              Run all
+              <span className="font-mono text-[10px] tabular-nums text-repressurizer-accent/70">
+                {presets.length}
+              </span>
+            </button>
           </div>
           <div className="space-y-1">
             {presets.map((preset, index) => (
