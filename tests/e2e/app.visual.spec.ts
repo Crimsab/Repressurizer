@@ -575,8 +575,10 @@ test("opens organized settings tabs, automation logs, and Steam controls without
 
   await expect(page.getByText("DemoUser (123456)")).toBeVisible();
   await expectNoHorizontalOverflow(page);
-  const box = await settingsDialog.boundingBox();
-  expect(box?.width).toBeGreaterThan(900);
+  const settingsPanel = settingsDialog.locator(":scope > div").first();
+  const initialPanelBox = await settingsPanel.boundingBox();
+  expect(initialPanelBox?.width).toBeGreaterThan(900);
+  expect(initialPanelBox?.height).toBeGreaterThan(700);
 
   const settingsTopPath = testInfo.outputPath("settings-top.png");
   await page.screenshot({ path: settingsTopPath, fullPage: true });
@@ -585,6 +587,8 @@ test("opens organized settings tabs, automation logs, and Steam controls without
   await settingsDialog.getByRole("button", { name: "Steam", exact: true }).click();
   await expect(settingsDialog.getByRole("heading", { name: "Steam Family" })).toBeVisible();
   await expect(settingsDialog.getByText("Steam Web API Key", { exact: true })).toBeVisible();
+  const steamPanelBox = await settingsPanel.boundingBox();
+  expect(Math.abs((steamPanelBox?.height ?? 0) - (initialPanelBox?.height ?? 0))).toBeLessThanOrEqual(1);
   const apiKeyInput = settingsDialog.locator('input[type="password"]').last();
   const apiSaveButton = settingsDialog.getByRole("button", { name: "Save", exact: true });
   await expect(apiSaveButton).toBeVisible();
@@ -616,6 +620,8 @@ test("opens organized settings tabs, automation logs, and Steam controls without
   await expect(settingsDialog.getByRole("heading", { name: "Maintenance" })).toBeVisible();
   await expect(settingsDialog.getByRole("button", { name: "Export diagnostics" })).toBeVisible();
   await expect(settingsDialog.getByRole("button", { name: "Check for updates" })).toBeVisible();
+  const dataPanelBox = await settingsPanel.boundingBox();
+  expect(Math.abs((dataPanelBox?.height ?? 0) - (initialPanelBox?.height ?? 0))).toBeLessThanOrEqual(1);
 
   const dataPath = testInfo.outputPath("settings-data.png");
   await page.screenshot({ path: dataPath, fullPage: true });
@@ -630,6 +636,8 @@ test("opens organized settings tabs, automation logs, and Steam controls without
   await expect(settingsDialog.getByRole("switch", { name: "Show empty lists" })).toBeVisible();
   await expect(settingsDialog.getByRole("button", { name: /Open in tray/ })).toBeVisible();
   await expect(settingsDialog.getByRole("button", { name: /Open window/ })).toBeVisible();
+  const appearancePanelBox = await settingsPanel.boundingBox();
+  expect(Math.abs((appearancePanelBox?.height ?? 0) - (initialPanelBox?.height ?? 0))).toBeLessThanOrEqual(1);
 
   const appearancePath = testInfo.outputPath("settings-appearance-tray.png");
   await page.screenshot({ path: appearancePath, fullPage: true });

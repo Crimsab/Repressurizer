@@ -914,7 +914,10 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
     >
       <div
         className="relative flex flex-col rounded-2xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_24px_64px_rgba(0,0,0,0.6)] animate-fade-in"
-        style={{ width: "min(1040px, calc(100vw - 32px))", maxHeight: "calc(100vh - 48px)" }}
+        style={{
+          width: "min(1040px, calc(100vw - 32px))",
+          height: "min(760px, calc(100dvh - 48px))",
+        }}
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-repressurizer-border px-6 py-4">
