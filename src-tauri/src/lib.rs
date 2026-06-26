@@ -943,6 +943,7 @@ pub fn run() {
             commands::run_score_categorizer,
             commands::run_devpub_categorizer,
             commands::run_flags_categorizer,
+            commands::run_language_categorizer,
             commands::run_platform_categorizer,
             commands::run_name_categorizer,
             load_details_cache,

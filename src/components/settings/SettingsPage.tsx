@@ -22,6 +22,7 @@ import {
   DEFAULT_FLAGS_CONFIG,
   DEFAULT_GENRE_CONFIG,
   DEFAULT_HOURS_CONFIG,
+  DEFAULT_LANGUAGE_CONFIG,
   DEFAULT_NAME_CONFIG,
   DEFAULT_PLATFORM_CONFIG,
   DEFAULT_TAGS_CONFIG,
@@ -63,6 +64,7 @@ import type {
   FlagsConfig,
   GenreConfig,
   HoursConfig,
+  LanguageConfig,
   LegacySharedConfigGame,
   NameConfig,
   PlatformConfig,
@@ -1934,6 +1936,7 @@ function depressurizerAutoCatType(normalizedType: string): CategorizerType | nul
     normalizedType === "hltb" ||
     normalizedType === "devpub" ||
     normalizedType === "flags" ||
+    normalizedType === "language" ||
     normalizedType === "platform" ||
     normalizedType === "name"
   ) {
@@ -2003,6 +2006,15 @@ function depressurizerAutoCatConfig(
       prefix,
       max_flags: rawNumberField(autoCat.rawConfig, ["maxFlags", "maxCategories"]) ?? DEFAULT_FLAGS_CONFIG.max_flags,
       included_flags: rawStringListField(autoCat.rawConfig, ["includedFlags", "flags"]).filter(Boolean),
+    };
+    return config;
+  }
+  if (type === "language") {
+    const config: LanguageConfig = {
+      ...DEFAULT_LANGUAGE_CONFIG,
+      prefix,
+      max_languages: rawNumberField(autoCat.rawConfig, ["maxLanguages", "maxCategories"]) ?? DEFAULT_LANGUAGE_CONFIG.max_languages,
+      included_languages: rawStringListField(autoCat.rawConfig, ["includedLanguages", "languages"]).filter(Boolean),
     };
     return config;
   }

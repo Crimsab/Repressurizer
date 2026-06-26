@@ -17,6 +17,7 @@ import {
   runScoreCategorizer,
   runDevPubCategorizer,
   runFlagsCategorizer,
+  runLanguageCategorizer,
   runPlatformCategorizer,
   runNameCategorizer,
   createManualBackup,
@@ -27,6 +28,7 @@ import {
   type YearConfig,
   type DevPubConfig,
   type FlagsConfig,
+  type LanguageConfig,
   type PlatformConfig,
   type NameConfig,
   type YearGrouping,
@@ -52,6 +54,7 @@ import {
   Timer,
   Buildings,
   Flag,
+  Globe,
   Desktop,
   TextAa,
   FloppyDisk,
@@ -73,6 +76,7 @@ type CategorizerType =
   | "hltb"
   | "devpub"
   | "flags"
+  | "language"
   | "platform"
   | "name";
 type Step = "choose" | "configure" | "fetch" | "preview" | "done";
@@ -95,6 +99,7 @@ const CATEGORIZERS: {
   { value: "hltb", labelKey: "auto.byHltb", descriptionKey: "auto.byHltb.desc", needsDetails: false, needsHltb: true, icon: Timer },
   { value: "devpub", label: "Developer / Publisher", description: "Create categories from Steam developer and publisher metadata.", needsDetails: true, needsHltb: false, icon: Buildings },
   { value: "flags", label: "Store flags", description: "Create categories from Steam feature flags such as Single-player or Steam Cloud.", needsDetails: true, needsHltb: false, icon: Flag },
+  { value: "language", label: "Language support", description: "Create categories from Steam supported language metadata.", needsDetails: true, needsHltb: false, icon: Globe },
   { value: "platform", label: "Platform support", description: "Create Windows, macOS and Linux support categories.", needsDetails: true, needsHltb: false, icon: Desktop },
   { value: "name", label: "Name", description: "Create alphabet buckets from game titles.", needsDetails: false, needsHltb: false, icon: TextAa },
 ];
@@ -197,6 +202,7 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
   const [yearConfig, setYearConfig] = useState<YearConfig>(persist.yearConfig);
   const [devPubConfig, setDevPubConfig] = useState<DevPubConfig>(persist.devPubConfig);
   const [flagsConfig, setFlagsConfig] = useState<FlagsConfig>(persist.flagsConfig);
+  const [languageConfig, setLanguageConfig] = useState<LanguageConfig>(persist.languageConfig);
   const [platformConfig, setPlatformConfig] = useState<PlatformConfig>(persist.platformConfig);
   const [nameConfig, setNameConfig] = useState<NameConfig>(persist.nameConfig);
   const [hltbConfig, setHltbConfig] = useState<HoursConfig>(DEFAULT_HLTB_CONFIG);
@@ -254,11 +260,12 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
     if (type === "year") return yearConfig;
     if (type === "devpub") return devPubConfig;
     if (type === "flags") return flagsConfig;
+    if (type === "language") return languageConfig;
     if (type === "platform") return platformConfig;
     if (type === "name") return nameConfig;
     if (type === "hltb") return hltbConfig;
     return {};
-  }, [type, hoursConfig, genreConfig, tagsConfig, yearConfig, devPubConfig, flagsConfig, platformConfig, nameConfig, hltbConfig]);
+  }, [type, hoursConfig, genreConfig, tagsConfig, yearConfig, devPubConfig, flagsConfig, languageConfig, platformConfig, nameConfig, hltbConfig]);
 
   const applyPresetConfig = (preset: AutoCategorizePreset) => {
     const config = preset.config as Record<string, unknown>;
@@ -268,6 +275,7 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
     if (preset.type === "year") setYearConfig(config as unknown as YearConfig);
     if (preset.type === "devpub") setDevPubConfig(config as unknown as DevPubConfig);
     if (preset.type === "flags") setFlagsConfig(config as unknown as FlagsConfig);
+    if (preset.type === "language") setLanguageConfig(config as unknown as LanguageConfig);
     if (preset.type === "platform") setPlatformConfig(config as unknown as PlatformConfig);
     if (preset.type === "name") setNameConfig(config as unknown as NameConfig);
     if (preset.type === "hltb") setHltbConfig(config as unknown as HoursConfig);
@@ -361,6 +369,7 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
       yearConfig,
       devPubConfig,
       flagsConfig,
+      languageConfig,
       platformConfig,
       nameConfig,
     });
@@ -452,6 +461,14 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
         max_flags: cfg.max_flags || undefined,
       });
     }
+    if (runType === "language") {
+      const cfg = config as LanguageConfig;
+      return runLanguageCategorizer(allDetails, {
+        ...cfg,
+        prefix: cfg.prefix || undefined,
+        max_languages: cfg.max_languages || undefined,
+      });
+    }
     if (runType === "platform") {
       const cfg = config as PlatformConfig;
       return runPlatformCategorizer(allDetails, {
@@ -500,6 +517,7 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
     yearConfig,
     devPubConfig,
     flagsConfig,
+    languageConfig,
     platformConfig,
     nameConfig,
     hltbConfig,
@@ -617,6 +635,7 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
               yearConfig={yearConfig} setYearConfig={setYearConfig}
               devPubConfig={devPubConfig} setDevPubConfig={setDevPubConfig}
               flagsConfig={flagsConfig} setFlagsConfig={setFlagsConfig}
+              languageConfig={languageConfig} setLanguageConfig={setLanguageConfig}
               platformConfig={platformConfig} setPlatformConfig={setPlatformConfig}
               nameConfig={nameConfig} setNameConfig={setNameConfig}
               hltbConfig={hltbConfig} setHltbConfig={setHltbConfig}
@@ -897,6 +916,7 @@ function ConfigureStep({
   type, hoursConfig, setHoursConfig, genreConfig, setGenreConfig,
   tagsConfig, setTagsConfig, yearConfig, setYearConfig,
   devPubConfig, setDevPubConfig, flagsConfig, setFlagsConfig,
+  languageConfig, setLanguageConfig,
   platformConfig, setPlatformConfig, nameConfig, setNameConfig,
   hltbConfig, setHltbConfig, presetName, setPresetName, onSavePreset,
   loadedPresetId, error, onBack, onNext,
@@ -908,6 +928,7 @@ function ConfigureStep({
   yearConfig: YearConfig; setYearConfig: (c: YearConfig) => void;
   devPubConfig: DevPubConfig; setDevPubConfig: (c: DevPubConfig) => void;
   flagsConfig: FlagsConfig; setFlagsConfig: (c: FlagsConfig) => void;
+  languageConfig: LanguageConfig; setLanguageConfig: (c: LanguageConfig) => void;
   platformConfig: PlatformConfig; setPlatformConfig: (c: PlatformConfig) => void;
   nameConfig: NameConfig; setNameConfig: (c: NameConfig) => void;
   hltbConfig: HoursConfig; setHltbConfig: (c: HoursConfig) => void;
@@ -959,6 +980,7 @@ function ConfigureStep({
       {type === "hltb" && <HoursConfigForm config={hltbConfig} onChange={setHltbConfig} label={t("auto.hltbBuckets")} />}
       {type === "devpub" && <DevPubConfigForm config={devPubConfig} onChange={setDevPubConfig} />}
       {type === "flags" && <FlagsConfigForm config={flagsConfig} onChange={setFlagsConfig} />}
+      {type === "language" && <LanguageConfigForm config={languageConfig} onChange={setLanguageConfig} />}
       {type === "platform" && <PlatformConfigForm config={platformConfig} onChange={setPlatformConfig} />}
       {type === "name" && <NameConfigForm config={nameConfig} onChange={setNameConfig} />}
       {type === "score" && (
@@ -1226,6 +1248,41 @@ function FlagsConfigForm({ config, onChange }: { config: FlagsConfig; onChange: 
           }
         }}
         onRemove={(value) => onChange({ ...config, included_flags: config.included_flags.filter((item) => item !== value) })}
+      />
+    </div>
+  );
+}
+
+function LanguageConfigForm({ config, onChange }: { config: LanguageConfig; onChange: (c: LanguageConfig) => void }) {
+  const [newLanguage, setNewLanguage] = useState("");
+  return (
+    <div className="space-y-4">
+      <PrefixInput value={config.prefix ?? ""} onChange={(v) => onChange({ ...config, prefix: v })} />
+      <div>
+        <label className="mb-1.5 block text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">
+          Max languages per game
+        </label>
+        <input
+          type="number"
+          min={1}
+          value={config.max_languages ?? ""}
+          onChange={(e) => onChange({ ...config, max_languages: e.target.value ? parseInt(e.target.value) : undefined })}
+          placeholder="Unlimited"
+          className="w-36 rounded-lg border border-repressurizer-border bg-repressurizer-bg px-3 py-2 text-sm text-repressurizer-text focus:border-repressurizer-accent focus:outline-none font-mono"
+        />
+      </div>
+      <TagListInput
+        label="Only include these languages"
+        items={config.included_languages}
+        newItem={newLanguage}
+        setNewItem={setNewLanguage}
+        onAdd={() => {
+          if (newLanguage.trim()) {
+            onChange({ ...config, included_languages: [...config.included_languages, newLanguage.trim()] });
+            setNewLanguage("");
+          }
+        }}
+        onRemove={(value) => onChange({ ...config, included_languages: config.included_languages.filter((item) => item !== value) })}
       />
     </div>
   );

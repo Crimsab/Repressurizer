@@ -118,6 +118,8 @@ pub struct GameDetails {
     pub metacritic_score: Option<u32>,
     pub developers: Vec<String>,
     pub publishers: Vec<String>,
+    #[serde(default)]
+    pub supported_languages: Vec<String>,
     pub platforms: PlatformSupport,
     pub header_image: Option<String>,
     #[serde(default)]
@@ -154,6 +156,7 @@ struct StoreAppData {
     metacritic: Option<StoreMetacritic>,
     developers: Option<Vec<String>>,
     publishers: Option<Vec<String>>,
+    supported_languages: Option<String>,
     platforms: Option<StorePlatforms>,
     header_image: Option<String>,
     capsule_image: Option<String>,
@@ -411,6 +414,11 @@ fn parse_game_details_response(app_id: u64, text: &str) -> Result<GameDetails, S
         metacritic_score: data.metacritic.as_ref().and_then(|m| m.score),
         developers: data.developers.clone().unwrap_or_default(),
         publishers: data.publishers.clone().unwrap_or_default(),
+        supported_languages: data
+            .supported_languages
+            .as_deref()
+            .map(parse_supported_languages)
+            .unwrap_or_default(),
         platforms: data
             .platforms
             .as_ref()
@@ -436,6 +444,50 @@ fn parse_game_details_response(app_id: u64, text: &str) -> Result<GameDetails, S
             .and_then(|p| p.currency.clone()),
         is_free: data.is_free.unwrap_or(false),
     })
+}
+
+fn parse_supported_languages(raw: &str) -> Vec<String> {
+    let with_breaks = raw
+        .replace("<br>", ",")
+        .replace("<br/>", ",")
+        .replace("<br />", ",");
+    let mut text = String::new();
+    let mut in_tag = false;
+    for ch in with_breaks.chars() {
+        match ch {
+            '<' => in_tag = true,
+            '>' => in_tag = false,
+            _ if !in_tag => text.push(ch),
+            _ => {}
+        }
+    }
+
+    text = text
+        .replace("&amp;", "&")
+        .replace("&quot;", "\"")
+        .replace("&#039;", "'")
+        .replace("&apos;", "'")
+        .replace("&nbsp;", " ");
+
+    text.split(',')
+        .filter_map(|part| {
+            let cleaned = part
+                .replace('*', "")
+                .trim()
+                .trim_matches('-')
+                .trim()
+                .to_string();
+            if cleaned.is_empty()
+                || cleaned
+                    .to_ascii_lowercase()
+                    .contains("languages with full audio support")
+            {
+                None
+            } else {
+                Some(cleaned)
+            }
+        })
+        .collect()
 }
 
 #[tauri::command]
@@ -1440,6 +1492,7 @@ mod tests {
               "metacritic": {"score": 87},
               "developers": ["PopCap Games"],
               "publishers": ["PopCap Games"],
+              "supported_languages": "English<strong>*</strong>, French, Italian<br><strong>*languages with full audio support</strong>",
               "platforms": {"windows": true, "mac": true, "linux": false},
               "header_image": "https://cdn.akamai.steamstatic.com/steam/apps/3590/header.jpg",
               "capsule_image": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/3590/capsule_231x87.jpg",
@@ -1453,6 +1506,10 @@ mod tests {
         assert_eq!(details.name, "Plants vs. Zombies GOTY Edition");
         assert_eq!(details.genres, vec!["Strategy"]);
         assert_eq!(details.metacritic_score, Some(87));
+        assert_eq!(
+            details.supported_languages,
+            vec!["English", "French", "Italian"]
+        );
         assert!(details.platforms.windows);
         assert!(details.header_image.unwrap().contains("/3590/header.jpg"));
         assert!(

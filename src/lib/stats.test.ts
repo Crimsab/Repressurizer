@@ -22,6 +22,7 @@ function details(appId: number, name: string, price: number): GameDetails {
     metacritic_score: null,
     developers: [],
     publishers: [],
+    supported_languages: [],
     platforms: { windows: true, mac: false, linux: false },
     header_image: null,
     capsule_image: null,

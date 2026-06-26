@@ -36,6 +36,7 @@ function details(appId: number): GameDetails {
     metacritic_score: 97,
     developers: ["ZA/UM"],
     publishers: ["ZA/UM"],
+    supported_languages: [],
     platforms: { windows: true, mac: true, linux: false },
     header_image: null,
     capsule_image: null,

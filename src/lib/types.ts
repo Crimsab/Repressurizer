@@ -121,6 +121,7 @@ export interface GameDetails {
   metacritic_score: number | null;
   developers: string[];
   publishers: string[];
+  supported_languages: string[];
   platforms: PlatformSupport;
   header_image: string | null;
   capsule_image: string | null;

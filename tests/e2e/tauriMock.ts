@@ -340,6 +340,7 @@ export async function installTauriMock(page: Page) {
               metacritic_score: appId === 12100 ? 93 : null,
               developers: ["Demo Studio"],
               publishers: ["Demo Publisher"],
+              supported_languages: ["English"],
               platforms: { windows: true, mac: false, linux: false },
               header_image: hashedImages[appId]?.header ?? `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appId}/header.jpg`,
               capsule_image: hashedImages[appId]?.capsule ?? `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appId}/capsule_231x87.jpg`,

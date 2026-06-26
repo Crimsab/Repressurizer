@@ -332,6 +332,7 @@ fn parse_auto_cats(profile: Node<'_, '_>) -> Vec<DepressurizerImportedAutoCat> {
                             | "hours"
                             | "devpub"
                             | "flags"
+                            | "language"
                             | "platform"
                             | "name"
                     );

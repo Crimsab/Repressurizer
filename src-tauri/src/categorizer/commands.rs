@@ -78,6 +78,14 @@ pub fn run_flags_categorizer(
 }
 
 #[tauri::command]
+pub fn run_language_categorizer(
+    game_details: Vec<GameDetails>,
+    config: metadata::LanguageConfig,
+) -> CategorizeResult {
+    metadata::categorize_by_language(&game_details, &config)
+}
+
+#[tauri::command]
 pub fn run_platform_categorizer(
     game_details: Vec<GameDetails>,
     config: metadata::PlatformConfig,

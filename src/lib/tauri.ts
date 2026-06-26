@@ -332,6 +332,12 @@ export interface FlagsConfig {
   included_flags: string[];
 }
 
+export interface LanguageConfig {
+  prefix?: string;
+  max_languages?: number;
+  included_languages: string[];
+}
+
 export interface PlatformConfig {
   prefix?: string;
   include_windows: boolean;
@@ -386,6 +392,13 @@ export async function runFlagsCategorizer(
   config: FlagsConfig
 ): Promise<CategorizeResult> {
   return invoke<CategorizeResult>("run_flags_categorizer", { gameDetails, config });
+}
+
+export async function runLanguageCategorizer(
+  gameDetails: GameDetails[],
+  config: LanguageConfig
+): Promise<CategorizeResult> {
+  return invoke<CategorizeResult>("run_language_categorizer", { gameDetails, config });
 }
 
 export async function runPlatformCategorizer(

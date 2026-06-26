@@ -24,6 +24,14 @@ pub struct FlagsConfig {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct LanguageConfig {
+    pub prefix: Option<String>,
+    pub max_languages: Option<usize>,
+    #[serde(default)]
+    pub included_languages: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct PlatformConfig {
     pub prefix: Option<String>,
     #[serde(default = "default_true")]
@@ -102,6 +110,43 @@ pub fn categorize_by_flags(games: &[GameDetails], config: &FlagsConfig) -> Categ
             }
             assignments
                 .entry(category_name(config.prefix.as_deref(), flag))
+                .or_default()
+                .push(game.app_id);
+            added += 1;
+        }
+        if added > 0 {
+            games_categorized += 1;
+        }
+    }
+
+    CategorizeResult {
+        games_processed: games.len() as u64,
+        games_categorized,
+        assignments,
+    }
+}
+
+pub fn categorize_by_language(
+    games: &[GameDetails],
+    config: &LanguageConfig,
+) -> CategorizeResult {
+    let included = normalized_filter(&config.included_languages);
+    let mut assignments: HashMap<String, Vec<u64>> = HashMap::new();
+    let mut games_categorized = 0u64;
+
+    for game in games {
+        let mut added = 0usize;
+        for language in &game.supported_languages {
+            if !included.is_empty() && !included.contains(&language.to_ascii_lowercase()) {
+                continue;
+            }
+            if let Some(max) = config.max_languages {
+                if added >= max {
+                    break;
+                }
+            }
+            assignments
+                .entry(category_name(config.prefix.as_deref(), language))
                 .or_default()
                 .push(game.app_id);
             added += 1;
@@ -266,6 +311,7 @@ mod tests {
             metacritic_score: None,
             developers: vec!["Valve".to_string()],
             publishers: vec!["Valve".to_string(), "Sierra".to_string()],
+            supported_languages: vec!["English".to_string(), "French".to_string()],
             platforms: PlatformSupport {
                 windows: true,
                 mac: app_id == 10,
@@ -310,6 +356,17 @@ mod tests {
         );
         assert_eq!(flags.assignments["Single-player"], vec![10]);
         assert!(!flags.assignments.contains_key("Steam Cloud"));
+
+        let languages = categorize_by_language(
+            &[details(10)],
+            &LanguageConfig {
+                prefix: Some("(Lang) ".to_string()),
+                max_languages: Some(1),
+                included_languages: Vec::new(),
+            },
+        );
+        assert_eq!(languages.assignments["(Lang) English"], vec![10]);
+        assert!(!languages.assignments.contains_key("(Lang) French"));
 
         let platforms = categorize_by_platform(
             &[details(10)],

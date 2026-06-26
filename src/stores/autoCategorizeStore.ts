@@ -6,6 +6,7 @@ import type {
   YearConfig,
   DevPubConfig,
   FlagsConfig,
+  LanguageConfig,
   PlatformConfig,
   NameConfig,
   CategorizeResult,
@@ -20,6 +21,7 @@ export type CategorizerType =
   | "hltb"
   | "devpub"
   | "flags"
+  | "language"
   | "platform"
   | "name";
 export type PersistStep = "choose" | "configure" | "preview" | "done";
@@ -31,6 +33,7 @@ export type AutoCategorizePresetConfig =
   | YearConfig
   | DevPubConfig
   | FlagsConfig
+  | LanguageConfig
   | PlatformConfig
   | NameConfig
   | Record<string, never>;
@@ -53,6 +56,7 @@ interface AutoCategorizeState {
   yearConfig: YearConfig;
   devPubConfig: DevPubConfig;
   flagsConfig: FlagsConfig;
+  languageConfig: LanguageConfig;
   platformConfig: PlatformConfig;
   nameConfig: NameConfig;
   presets: AutoCategorizePreset[];
@@ -105,6 +109,12 @@ export const DEFAULT_FLAGS_CONFIG: FlagsConfig = {
   included_flags: [],
 };
 
+export const DEFAULT_LANGUAGE_CONFIG: LanguageConfig = {
+  prefix: "(Language) ",
+  max_languages: undefined,
+  included_languages: [],
+};
+
 export const DEFAULT_PLATFORM_CONFIG: PlatformConfig = {
   prefix: "(Platform) ",
   include_windows: true,
@@ -128,6 +138,7 @@ const defaults: Omit<AutoCategorizeState, "set"> = {
   yearConfig: DEFAULT_YEAR_CONFIG,
   devPubConfig: DEFAULT_DEVPUB_CONFIG,
   flagsConfig: DEFAULT_FLAGS_CONFIG,
+  languageConfig: DEFAULT_LANGUAGE_CONFIG,
   platformConfig: DEFAULT_PLATFORM_CONFIG,
   nameConfig: DEFAULT_NAME_CONFIG,
   presets: [],

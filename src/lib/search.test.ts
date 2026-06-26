@@ -19,6 +19,7 @@ const details: GameDetails = {
   metacritic_score: 92,
   developers: ["Square Enix"],
   publishers: ["Square Enix"],
+  supported_languages: [],
   platforms: { windows: true, mac: false, linux: false },
   header_image: null,
   capsule_image: null,
