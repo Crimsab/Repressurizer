@@ -33,9 +33,10 @@ import {
   exportDiagnostics,
   fetchFamilyLibrary,
   importDepressurizerProfile,
+  loadShortcuts,
   saveAppData,
 } from "../../lib/tauri";
-import type { CacheInfo, FamilyLibraryResult } from "../../lib/tauri";
+import type { CacheInfo, FamilyLibraryResult, SteamShortcut } from "../../lib/tauri";
 import {
   clearSteamFamilyToken,
   extractStoreWebApiToken,
@@ -156,6 +157,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
   const [cacheInfo, setCacheInfo] = useState<CacheInfo | null>(null);
   const [diagnosticsExporting, setDiagnosticsExporting] = useState(false);
   const [importingDepressurizer, setImportingDepressurizer] = useState(false);
+  const [importingShortcuts, setImportingShortcuts] = useState(false);
   const [lastDepressurizerImport, setLastDepressurizerImport] =
     useState<DepressurizerProfileImport | null>(null);
   const [checkingUpdates, setCheckingUpdates] = useState(false);
@@ -348,6 +350,38 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
       setMessage(`Depressurizer import failed: ${String(e)}`);
     } finally {
       setImportingDepressurizer(false);
+    }
+  };
+
+  const handleImportShortcuts = async () => {
+    setImportingShortcuts(true);
+    setMessage("");
+    try {
+      if (!settings.steamPath || !settings.steamId3) {
+        setMessage("Steam path and user are required before importing shortcuts.");
+        return;
+      }
+      const shortcuts = await loadShortcuts(settings.steamPath, settings.steamId3);
+      if (shortcuts.length === 0) {
+        setMessage("No non-Steam shortcuts found for this Steam user.");
+        return;
+      }
+
+      mergeGames(shortcutsToOwnedGames(shortcuts));
+      const mergedCollections = mergeImportedCollections(
+        useCategoryStore.getState().collections,
+        shortcutsToCollections(shortcuts)
+      );
+      applyImportedCollections(mergedCollections);
+
+      setMessage(
+        `Imported ${shortcuts.length} non-Steam shortcuts and ${new Set(shortcuts.flatMap((shortcut) => shortcut.tags)).size} shortcut tags.`
+      );
+      setTimeout(() => setMessage(""), 5000);
+    } catch (e) {
+      setMessage(`Shortcut import failed: ${String(e)}`);
+    } finally {
+      setImportingShortcuts(false);
     }
   };
 
@@ -1238,6 +1272,22 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
 	                  </button>
 
 	                  <button
+	                    onClick={handleImportShortcuts}
+	                    disabled={importingShortcuts}
+	                    className="btn-press flex items-start gap-3 rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3 text-left transition-colors hover:border-repressurizer-border disabled:opacity-50"
+	                  >
+	                    <Stack size={16} weight="duotone" className="mt-0.5 text-repressurizer-accent" />
+	                    <span>
+	                      <span className="block text-sm text-repressurizer-text">
+	                        {importingShortcuts ? "Importing non-Steam shortcuts" : "Import non-Steam shortcuts"}
+	                      </span>
+	                      <span className="mt-0.5 block text-xs leading-relaxed text-repressurizer-text-faint">
+	                        Load shortcuts.vdf entries as local games and merge their Steam shortcut tags into collections.
+	                      </span>
+	                    </span>
+	                  </button>
+
+	                  <button
 	                    onClick={handleExportDiagnostics}
 	                    disabled={diagnosticsExporting}
                     className="btn-press flex items-start gap-3 rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3 text-left transition-colors hover:border-repressurizer-border disabled:opacity-50"
@@ -1722,6 +1772,84 @@ function depressurizerGamesToOwnedGames(imported: DepressurizerProfileImport): O
       rtime_last_played: game.lastPlayed ?? 0,
       is_collection_only: true,
     }));
+}
+
+function shortcutsToOwnedGames(shortcuts: SteamShortcut[]): OwnedGame[] {
+  return shortcuts
+    .filter((shortcut) => shortcut.appid > 0)
+    .map((shortcut) => ({
+      appid: shortcut.appid,
+      name: shortcut.appname?.trim() || `Shortcut ${shortcut.appid}`,
+      playtime_forever: 0,
+      img_icon_url: null,
+      rtime_last_played: shortcut.lastPlayTime ?? 0,
+      is_collection_only: true,
+    }));
+}
+
+function shortcutsToCollections(shortcuts: SteamShortcut[]): SteamCollection[] {
+  const timestamp = Math.floor(Date.now() / 1000);
+  const hidden = new Set<number>();
+  const tagMap = new Map<string, Set<number>>();
+
+  for (const shortcut of shortcuts) {
+    if (shortcut.appid <= 0) continue;
+    if (shortcut.hidden) hidden.add(shortcut.appid);
+    for (const tag of shortcut.tags) {
+      const name = tag.trim();
+      if (!name) continue;
+      const ids = tagMap.get(name) ?? new Set<number>();
+      ids.add(shortcut.appid);
+      tagMap.set(name, ids);
+    }
+  }
+
+  const collections: SteamCollection[] = [
+    {
+      id: "hidden",
+      key: "user-collections.hidden",
+      name: "Hidden",
+      added: [...hidden],
+      removed: [],
+      timestamp,
+      is_deleted: false,
+      is_dynamic: false,
+    },
+  ];
+
+  for (const [name, ids] of [...tagMap.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+    const id = `uc-shortcut-${hashName(name)}-${slugName(name)}`;
+    collections.push({
+      id,
+      key: `user-collections.${id}`,
+      name,
+      added: [...ids],
+      removed: [],
+      timestamp,
+      is_deleted: false,
+      is_dynamic: false,
+    });
+  }
+
+  return collections;
+}
+
+function slugName(name: string): string {
+  const slug = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48);
+  return slug || "tag";
+}
+
+function hashName(name: string): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < name.length; i++) {
+    hash ^= name.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
 }
 
 function AppearanceTab({ isSectionVisible }: { isSectionVisible: (id: string) => boolean }) {

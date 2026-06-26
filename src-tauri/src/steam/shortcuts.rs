@@ -1,0 +1,276 @@
+use serde::Serialize;
+use std::fs;
+use std::path::PathBuf;
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct SteamShortcut {
+    pub appid: u64,
+    pub appname: String,
+    pub exe: String,
+    pub start_dir: String,
+    pub icon: String,
+    pub shortcut_path: String,
+    pub launch_options: String,
+    pub hidden: bool,
+    pub last_play_time: u64,
+    pub tags: Vec<String>,
+}
+
+#[tauri::command]
+pub fn load_shortcuts(steam_path: String, steam_id3: String) -> Result<Vec<SteamShortcut>, String> {
+    let path = shortcuts_path(&steam_path, &steam_id3);
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+    let data = fs::read(&path).map_err(|error| {
+        format!(
+            "Failed to read shortcuts file {}: {}",
+            path.display(),
+            error
+        )
+    })?;
+    parse_shortcuts_vdf(&data)
+}
+
+fn shortcuts_path(steam_path: &str, steam_id3: &str) -> PathBuf {
+    PathBuf::from(steam_path)
+        .join("userdata")
+        .join(steam_id3)
+        .join("config")
+        .join("shortcuts.vdf")
+}
+
+pub fn parse_shortcuts_vdf(data: &[u8]) -> Result<Vec<SteamShortcut>, String> {
+    let mut reader = BinaryVdfReader { data, pos: 0 };
+    let root_type = reader.read_u8()?;
+    if root_type != 0 {
+        return Err("shortcuts.vdf does not start with a root object".to_string());
+    }
+    let root_name = reader.read_cstring()?;
+    if root_name != "shortcuts" {
+        return Err(format!(
+            "Unexpected shortcuts.vdf root object: {}",
+            root_name
+        ));
+    }
+
+    let mut shortcuts = Vec::new();
+    loop {
+        let value_type = reader.read_u8()?;
+        if value_type == 8 {
+            break;
+        }
+        if value_type != 0 {
+            return Err(format!("Unexpected shortcut entry type: {}", value_type));
+        }
+        let _index = reader.read_cstring()?;
+        shortcuts.push(read_shortcut_object(&mut reader)?);
+    }
+
+    Ok(shortcuts)
+}
+
+fn read_shortcut_object(reader: &mut BinaryVdfReader<'_>) -> Result<SteamShortcut, String> {
+    let mut appid = 0_u64;
+    let mut appname = String::new();
+    let mut exe = String::new();
+    let mut start_dir = String::new();
+    let mut icon = String::new();
+    let mut shortcut_path = String::new();
+    let mut launch_options = String::new();
+    let mut hidden = false;
+    let mut last_play_time = 0_u64;
+    let mut tags = Vec::new();
+
+    loop {
+        let value_type = reader.read_u8()?;
+        if value_type == 8 {
+            break;
+        }
+        let key = reader.read_cstring()?;
+        match value_type {
+            0 if key == "tags" => {
+                tags = read_tags_object(reader)?;
+            }
+            0 => {
+                reader.skip_object()?;
+            }
+            1 => {
+                let value = reader.read_cstring()?;
+                match key.as_str() {
+                    "appname" => appname = value,
+                    "Exe" => exe = value,
+                    "StartDir" => start_dir = value,
+                    "icon" => icon = value,
+                    "ShortcutPath" => shortcut_path = value,
+                    "LaunchOptions" => launch_options = value,
+                    _ => {}
+                }
+            }
+            2 => {
+                let value = reader.read_i32()? as u32 as u64;
+                match key.as_str() {
+                    "appid" => appid = value,
+                    "IsHidden" => hidden = value != 0,
+                    "LastPlayTime" => last_play_time = value,
+                    _ => {}
+                }
+            }
+            other => return Err(format!("Unsupported shortcuts.vdf value type: {}", other)),
+        }
+    }
+
+    Ok(SteamShortcut {
+        appid,
+        appname,
+        exe,
+        start_dir,
+        icon,
+        shortcut_path,
+        launch_options,
+        hidden,
+        last_play_time,
+        tags,
+    })
+}
+
+fn read_tags_object(reader: &mut BinaryVdfReader<'_>) -> Result<Vec<String>, String> {
+    let mut tags = Vec::new();
+    loop {
+        let value_type = reader.read_u8()?;
+        if value_type == 8 {
+            break;
+        }
+        let _key = reader.read_cstring()?;
+        match value_type {
+            1 => {
+                let value = reader.read_cstring()?;
+                if !value.trim().is_empty() {
+                    tags.push(value);
+                }
+            }
+            0 => reader.skip_object()?,
+            2 => {
+                let _ = reader.read_i32()?;
+            }
+            other => return Err(format!("Unsupported shortcuts tag value type: {}", other)),
+        }
+    }
+    Ok(tags)
+}
+
+struct BinaryVdfReader<'a> {
+    data: &'a [u8],
+    pos: usize,
+}
+
+impl BinaryVdfReader<'_> {
+    fn read_u8(&mut self) -> Result<u8, String> {
+        let value = *self
+            .data
+            .get(self.pos)
+            .ok_or("Unexpected end of shortcuts.vdf".to_string())?;
+        self.pos += 1;
+        Ok(value)
+    }
+
+    fn read_i32(&mut self) -> Result<i32, String> {
+        let end = self.pos + 4;
+        let bytes = self
+            .data
+            .get(self.pos..end)
+            .ok_or("Unexpected end of shortcuts.vdf int".to_string())?;
+        self.pos = end;
+        Ok(i32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
+    }
+
+    fn read_cstring(&mut self) -> Result<String, String> {
+        let start = self.pos;
+        while self.pos < self.data.len() && self.data[self.pos] != 0 {
+            self.pos += 1;
+        }
+        if self.pos >= self.data.len() {
+            return Err("Unterminated shortcuts.vdf string".to_string());
+        }
+        let value = String::from_utf8_lossy(&self.data[start..self.pos]).to_string();
+        self.pos += 1;
+        Ok(value)
+    }
+
+    fn skip_object(&mut self) -> Result<(), String> {
+        loop {
+            let value_type = self.read_u8()?;
+            if value_type == 8 {
+                return Ok(());
+            }
+            let _key = self.read_cstring()?;
+            match value_type {
+                0 => self.skip_object()?,
+                1 => {
+                    let _ = self.read_cstring()?;
+                }
+                2 => {
+                    let _ = self.read_i32()?;
+                }
+                other => return Err(format!("Unsupported shortcuts.vdf value type: {}", other)),
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_binary_shortcuts_with_tags() {
+        let mut data = Vec::new();
+        start_object(&mut data, "shortcuts");
+        start_object(&mut data, "0");
+        write_i32(&mut data, "appid", -1_234_567);
+        write_string(&mut data, "appname", "My Non-Steam Game");
+        write_string(&mut data, "Exe", "\"C:\\Games\\game.exe\"");
+        write_string(&mut data, "StartDir", "\"C:\\Games\"");
+        write_i32(&mut data, "IsHidden", 1);
+        write_i32(&mut data, "LastPlayTime", 1_700_000_000);
+        start_object(&mut data, "tags");
+        write_string(&mut data, "0", "Deck");
+        write_string(&mut data, "1", "Co-op");
+        end_object(&mut data);
+        end_object(&mut data);
+        end_object(&mut data);
+
+        let shortcuts = parse_shortcuts_vdf(&data).unwrap();
+        assert_eq!(shortcuts.len(), 1);
+        assert_eq!(shortcuts[0].appid, (-1_234_567_i32 as u32) as u64);
+        assert_eq!(shortcuts[0].appname, "My Non-Steam Game");
+        assert!(shortcuts[0].hidden);
+        assert_eq!(shortcuts[0].tags, vec!["Deck", "Co-op"]);
+    }
+
+    fn start_object(data: &mut Vec<u8>, name: &str) {
+        data.push(0);
+        data.extend_from_slice(name.as_bytes());
+        data.push(0);
+    }
+
+    fn end_object(data: &mut Vec<u8>) {
+        data.push(8);
+    }
+
+    fn write_string(data: &mut Vec<u8>, key: &str, value: &str) {
+        data.push(1);
+        data.extend_from_slice(key.as_bytes());
+        data.push(0);
+        data.extend_from_slice(value.as_bytes());
+        data.push(0);
+    }
+
+    fn write_i32(data: &mut Vec<u8>, key: &str, value: i32) {
+        data.push(2);
+        data.extend_from_slice(key.as_bytes());
+        data.push(0);
+        data.extend_from_slice(&value.to_le_bytes());
+    }
+}

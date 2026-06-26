@@ -929,6 +929,7 @@ pub fn run() {
             sam::list_sam_backups,
             sam::sam_backup_dir,
             sam::open_sam_backup_dir,
+            steam::shortcuts::load_shortcuts,
             api::fetch_wishlist,
             api::fetch_family_library,
             api::resolve_vanity_url,

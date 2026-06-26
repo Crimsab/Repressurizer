@@ -87,6 +87,26 @@ export async function createManualBackup(
   });
 }
 
+export interface SteamShortcut {
+  appid: number;
+  appname: string;
+  exe: string;
+  startDir: string;
+  icon: string;
+  shortcutPath: string;
+  launchOptions: string;
+  hidden: boolean;
+  lastPlayTime: number;
+  tags: string[];
+}
+
+export async function loadShortcuts(
+  steamPath: string,
+  steamId3: string
+): Promise<SteamShortcut[]> {
+  return invoke<SteamShortcut[]>("load_shortcuts", { steamPath, steamId3 });
+}
+
 export async function importDepressurizerProfile(
   path: string
 ): Promise<DepressurizerProfileImport> {
