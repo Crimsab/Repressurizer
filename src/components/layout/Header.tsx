@@ -8,7 +8,7 @@ import { useSettingsStore } from "../../stores/settingsStore";
 import { useFailedGamesStore } from "../../stores/failedGamesStore";
 import { useToastStore } from "../../stores/toastStore";
 import { useExportUiStore } from "../../stores/exportUiStore";
-import { saveCollections } from "../../lib/tauri";
+import { saveCollections, saveShortcuts } from "../../lib/tauri";
 import { buildSavePreview, type SavePreview } from "../../lib/savePreview";
 import { hasAdvancedFilters } from "../../lib/search";
 import { useT, type TranslationKey } from "../../lib/i18n";
@@ -158,6 +158,14 @@ export function Header() {
     setSaving(true);
     try {
       await saveCollections(steamPath, steamId3, collections);
+      try {
+        const shortcutUpdates = await saveShortcuts(steamPath, steamId3, collections);
+        if (shortcutUpdates > 0) {
+          toast.getState().info(`Updated ${shortcutUpdates} non-Steam shortcuts.`);
+        }
+      } catch (shortcutError) {
+        toast.getState().warning(`Collections saved, but shortcuts.vdf update failed: ${String(shortcutError)}`);
+      }
       markClean();
       setShowSavePreview(false);
       toast.getState().success(t("toast.saveSuccess"));

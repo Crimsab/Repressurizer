@@ -1,4 +1,7 @@
+use super::collections::SteamCollection;
+use chrono::Utc;
 use serde::Serialize;
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fs;
 use std::path::PathBuf;
 
@@ -31,6 +34,62 @@ pub fn load_shortcuts(steam_path: String, steam_id3: String) -> Result<Vec<Steam
         )
     })?;
     parse_shortcuts_vdf(&data)
+}
+
+#[tauri::command]
+pub fn save_shortcuts(
+    steam_path: String,
+    steam_id3: String,
+    collections: Vec<SteamCollection>,
+) -> Result<usize, String> {
+    if super::sam::is_steam_running() {
+        return Err(
+            "Steam appears to be running. Close Steam before saving shortcuts.vdf.".to_string(),
+        );
+    }
+
+    let path = shortcuts_path(&steam_path, &steam_id3);
+    if !path.exists() {
+        return Ok(0);
+    }
+
+    let data = fs::read(&path).map_err(|error| {
+        format!(
+            "Failed to read shortcuts file {}: {}",
+            path.display(),
+            error
+        )
+    })?;
+    let mut root = parse_shortcuts_tree(&data)?;
+    let index = shortcut_collection_index(&collections);
+    let updated = update_shortcuts_tree(&mut root, &index);
+
+    if updated == 0 {
+        return Ok(0);
+    }
+
+    let timestamp = Utc::now().format("%Y%m%d_%H%M%S");
+    let backup = path.with_file_name(format!("shortcuts.backup-{timestamp}.vdf"));
+    let _ = fs::copy(&path, backup);
+
+    let output = write_shortcuts_tree(&root);
+    let tmp_path = path.with_extension("tmp");
+    fs::write(&tmp_path, output).map_err(|error| {
+        format!(
+            "Failed to write shortcuts temp file {}: {}",
+            tmp_path.display(),
+            error
+        )
+    })?;
+    fs::rename(&tmp_path, &path).map_err(|error| {
+        format!(
+            "Failed to replace shortcuts file {}: {}",
+            path.display(),
+            error
+        )
+    })?;
+
+    Ok(updated)
 }
 
 fn shortcuts_path(steam_path: &str, steam_id3: &str) -> PathBuf {
@@ -112,7 +171,7 @@ fn read_shortcut_object(reader: &mut BinaryVdfReader<'_>) -> Result<SteamShortcu
                 let value = reader.read_i32()? as u32 as u64;
                 match key.as_str() {
                     "appid" => appid = value,
-                    "IsHidden" => hidden = value != 0,
+                    "IsHidden" | "hidden" => hidden = value != 0,
                     "LastPlayTime" => last_play_time = value,
                     _ => {}
                 }
@@ -133,6 +192,186 @@ fn read_shortcut_object(reader: &mut BinaryVdfReader<'_>) -> Result<SteamShortcu
         last_play_time,
         tags,
     })
+}
+
+#[derive(Debug, Clone, PartialEq)]
+enum BinaryVdfValue {
+    Object(Vec<(String, BinaryVdfValue)>),
+    String(String),
+    I32(i32),
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct BinaryVdfRoot {
+    name: String,
+    fields: Vec<(String, BinaryVdfValue)>,
+}
+
+struct ShortcutCollectionIndex {
+    tags_by_appid: HashMap<u64, Vec<String>>,
+    hidden_appids: HashSet<u64>,
+}
+
+fn shortcut_collection_index(collections: &[SteamCollection]) -> ShortcutCollectionIndex {
+    let mut tags_by_appid: HashMap<u64, BTreeSet<String>> = HashMap::new();
+    let mut hidden_appids = HashSet::new();
+
+    for collection in collections
+        .iter()
+        .filter(|collection| !collection.is_dynamic)
+    {
+        let is_hidden = collection.key == "user-collections.hidden" || collection.id == "hidden";
+        let is_favorite =
+            collection.key == "user-collections.favorite" || collection.id == "favorite";
+        for appid in &collection.added {
+            if is_hidden {
+                hidden_appids.insert(*appid);
+                continue;
+            }
+            let tag = if is_favorite {
+                "favorite".to_string()
+            } else {
+                collection.name.trim().to_string()
+            };
+            if !tag.is_empty() {
+                tags_by_appid.entry(*appid).or_default().insert(tag);
+            }
+        }
+    }
+
+    ShortcutCollectionIndex {
+        tags_by_appid: tags_by_appid
+            .into_iter()
+            .map(|(appid, tags)| (appid, tags.into_iter().collect()))
+            .collect(),
+        hidden_appids,
+    }
+}
+
+fn parse_shortcuts_tree(data: &[u8]) -> Result<BinaryVdfRoot, String> {
+    let mut reader = BinaryVdfReader { data, pos: 0 };
+    let root_type = reader.read_u8()?;
+    if root_type != 0 {
+        return Err("shortcuts.vdf does not start with a root object".to_string());
+    }
+    let name = reader.read_cstring()?;
+    let fields = read_vdf_fields(&mut reader)?;
+    Ok(BinaryVdfRoot { name, fields })
+}
+
+fn read_vdf_fields(
+    reader: &mut BinaryVdfReader<'_>,
+) -> Result<Vec<(String, BinaryVdfValue)>, String> {
+    let mut fields = Vec::new();
+    loop {
+        let value_type = reader.read_u8()?;
+        if value_type == 8 {
+            return Ok(fields);
+        }
+        let key = reader.read_cstring()?;
+        let value = match value_type {
+            0 => BinaryVdfValue::Object(read_vdf_fields(reader)?),
+            1 => BinaryVdfValue::String(reader.read_cstring()?),
+            2 => BinaryVdfValue::I32(reader.read_i32()?),
+            other => return Err(format!("Unsupported shortcuts.vdf value type: {}", other)),
+        };
+        fields.push((key, value));
+    }
+}
+
+fn update_shortcuts_tree(root: &mut BinaryVdfRoot, index: &ShortcutCollectionIndex) -> usize {
+    let mut updated = 0usize;
+    for (_, value) in &mut root.fields {
+        let BinaryVdfValue::Object(fields) = value else {
+            continue;
+        };
+        let Some(appid) = vdf_i32_field(fields, "appid").map(|value| (value as u32) as u64) else {
+            continue;
+        };
+        let Some(tags) = index.tags_by_appid.get(&appid) else {
+            continue;
+        };
+        set_tags_field(fields, tags);
+        set_hidden_field(fields, index.hidden_appids.contains(&appid));
+        updated += 1;
+    }
+    updated
+}
+
+fn vdf_i32_field(fields: &[(String, BinaryVdfValue)], key: &str) -> Option<i32> {
+    fields.iter().find_map(|(field_key, value)| {
+        if field_key == key {
+            match value {
+                BinaryVdfValue::I32(value) => Some(*value),
+                _ => None,
+            }
+        } else {
+            None
+        }
+    })
+}
+
+fn set_hidden_field(fields: &mut Vec<(String, BinaryVdfValue)>, hidden: bool) {
+    let value = BinaryVdfValue::I32(if hidden { 1 } else { 0 });
+    if let Some((_, current)) = fields
+        .iter_mut()
+        .find(|(key, _)| key == "IsHidden" || key == "hidden")
+    {
+        *current = value;
+        return;
+    }
+    fields.push(("IsHidden".to_string(), value));
+}
+
+fn set_tags_field(fields: &mut Vec<(String, BinaryVdfValue)>, tags: &[String]) {
+    let value = BinaryVdfValue::Object(
+        tags.iter()
+            .enumerate()
+            .map(|(index, tag)| (index.to_string(), BinaryVdfValue::String(tag.clone())))
+            .collect(),
+    );
+
+    if let Some((_, current)) = fields.iter_mut().find(|(key, _)| key == "tags") {
+        *current = value;
+        return;
+    }
+    fields.push(("tags".to_string(), value));
+}
+
+fn write_shortcuts_tree(root: &BinaryVdfRoot) -> Vec<u8> {
+    let mut data = Vec::new();
+    data.push(0);
+    write_cstring(&mut data, &root.name);
+    write_vdf_fields(&mut data, &root.fields);
+    data
+}
+
+fn write_vdf_fields(data: &mut Vec<u8>, fields: &[(String, BinaryVdfValue)]) {
+    for (key, value) in fields {
+        match value {
+            BinaryVdfValue::Object(fields) => {
+                data.push(0);
+                write_cstring(data, key);
+                write_vdf_fields(data, fields);
+            }
+            BinaryVdfValue::String(value) => {
+                data.push(1);
+                write_cstring(data, key);
+                write_cstring(data, value);
+            }
+            BinaryVdfValue::I32(value) => {
+                data.push(2);
+                write_cstring(data, key);
+                data.extend_from_slice(&value.to_le_bytes());
+            }
+        }
+    }
+    data.push(8);
+}
+
+fn write_cstring(data: &mut Vec<u8>, value: &str) {
+    data.extend_from_slice(value.as_bytes());
+    data.push(0);
 }
 
 fn read_tags_object(reader: &mut BinaryVdfReader<'_>) -> Result<Vec<String>, String> {
@@ -247,6 +486,51 @@ mod tests {
         assert_eq!(shortcuts[0].appname, "My Non-Steam Game");
         assert!(shortcuts[0].hidden);
         assert_eq!(shortcuts[0].tags, vec!["Deck", "Co-op"]);
+    }
+
+    #[test]
+    fn updates_shortcut_tags_and_hidden_while_preserving_other_fields() {
+        let mut data = Vec::new();
+        start_object(&mut data, "shortcuts");
+        start_object(&mut data, "0");
+        write_i32(&mut data, "appid", -1_234_567);
+        write_string(&mut data, "appname", "My Non-Steam Game");
+        write_string(&mut data, "Exe", "\"C:\\Games\\game.exe\"");
+        write_i32(&mut data, "IsHidden", 0);
+        start_object(&mut data, "tags");
+        write_string(&mut data, "0", "Old");
+        end_object(&mut data);
+        end_object(&mut data);
+        end_object(&mut data);
+
+        let mut root = parse_shortcuts_tree(&data).unwrap();
+        let appid = (-1_234_567_i32 as u32) as u64;
+        let index = shortcut_collection_index(&[
+            collection("deck", "Deck", vec![appid]),
+            collection("favorite", "Favorites", vec![appid]),
+            collection("hidden", "Hidden", vec![appid]),
+        ]);
+
+        assert_eq!(update_shortcuts_tree(&mut root, &index), 1);
+        let output = write_shortcuts_tree(&root);
+        let shortcuts = parse_shortcuts_vdf(&output).unwrap();
+
+        assert_eq!(shortcuts[0].appname, "My Non-Steam Game");
+        assert!(shortcuts[0].hidden);
+        assert_eq!(shortcuts[0].tags, vec!["Deck", "favorite"]);
+    }
+
+    fn collection(id: &str, name: &str, added: Vec<u64>) -> SteamCollection {
+        SteamCollection {
+            id: id.to_string(),
+            key: format!("user-collections.{id}"),
+            name: name.to_string(),
+            added,
+            removed: Vec::new(),
+            timestamp: 0,
+            is_deleted: false,
+            is_dynamic: false,
+        }
     }
 
     fn start_object(data: &mut Vec<u8>, name: &str) {

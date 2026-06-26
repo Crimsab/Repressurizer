@@ -930,6 +930,7 @@ pub fn run() {
             sam::sam_backup_dir,
             sam::open_sam_backup_dir,
             steam::shortcuts::load_shortcuts,
+            steam::shortcuts::save_shortcuts,
             steam::legacy_sharedconfig::load_legacy_sharedconfig,
             steam::local_library::load_local_license_library,
             api::fetch_wishlist,

@@ -107,6 +107,14 @@ export async function loadShortcuts(
   return invoke<SteamShortcut[]>("load_shortcuts", { steamPath, steamId3 });
 }
 
+export async function saveShortcuts(
+  steamPath: string,
+  steamId3: string,
+  collections: SteamCollection[]
+): Promise<number> {
+  return invoke<number>("save_shortcuts", { steamPath, steamId3, collections });
+}
+
 export interface LegacySharedConfigGame {
   appid: number;
   hidden: boolean;
