@@ -54,6 +54,7 @@ import {
   fetchFamilyLibrary,
   importDepressurizerProfile,
   loadLegacySharedConfig,
+  loadLocalLicenseLibrary,
   loadShortcuts,
   saveAppData,
 } from "../../lib/tauri";
@@ -66,6 +67,7 @@ import type {
   HoursConfig,
   LanguageConfig,
   LegacySharedConfigGame,
+  LocalLicenseApp,
   NameConfig,
   PlatformConfig,
   SteamShortcut,
@@ -196,6 +198,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
   const [importingDepressurizer, setImportingDepressurizer] = useState(false);
   const [importingShortcuts, setImportingShortcuts] = useState(false);
   const [importingLegacyConfig, setImportingLegacyConfig] = useState(false);
+  const [importingLocalLibrary, setImportingLocalLibrary] = useState(false);
   const [lastDepressurizerImport, setLastDepressurizerImport] =
     useState<DepressurizerProfileImport | null>(null);
   const [checkingUpdates, setCheckingUpdates] = useState(false);
@@ -461,6 +464,34 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
       setMessage(`Legacy sharedconfig import failed: ${String(e)}`);
     } finally {
       setImportingLegacyConfig(false);
+    }
+  };
+
+  const handleImportLocalLicenseLibrary = async () => {
+    setImportingLocalLibrary(true);
+    setMessage("");
+    try {
+      if (!settings.steamPath || !settings.steamId3) {
+        setMessage("Steam path and user are required before importing the local license library.");
+        return;
+      }
+
+      await useSteamAppIndexStore.getState().hydrate();
+      const localApps = await loadLocalLicenseLibrary(settings.steamPath, settings.steamId3);
+      if (localApps.length === 0) {
+        setMessage("No local license library apps found for this Steam user.");
+        return;
+      }
+
+      mergeGames(localLicenseAppsToOwnedGames(localApps));
+      setMessage(
+        `Imported ${localApps.length} local license library apps from licensecache/packageinfo.`
+      );
+      setTimeout(() => setMessage(""), 5000);
+    } catch (e) {
+      setMessage(`Local license library import failed: ${String(e)}`);
+    } finally {
+      setImportingLocalLibrary(false);
     }
   };
 
@@ -1383,6 +1414,22 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
 	                  </button>
 
 	                  <button
+	                    onClick={handleImportLocalLicenseLibrary}
+	                    disabled={importingLocalLibrary}
+	                    className="btn-press flex items-start gap-3 rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3 text-left transition-colors hover:border-repressurizer-border disabled:opacity-50"
+	                  >
+	                    <Database size={16} weight="duotone" className="mt-0.5 text-repressurizer-accent" />
+	                    <span>
+	                      <span className="block text-sm text-repressurizer-text">
+	                        {importingLocalLibrary ? "Importing local license library" : "Import local license library"}
+	                      </span>
+	                      <span className="mt-0.5 block text-xs leading-relaxed text-repressurizer-text-faint">
+	                        Load installed Steam licensecache and packageinfo.vdf ownership data without the Web API.
+	                      </span>
+	                    </span>
+	                  </button>
+
+	                  <button
 	                    onClick={handleExportDiagnostics}
 	                    disabled={diagnosticsExporting}
                     className="btn-press flex items-start gap-3 rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3 text-left transition-colors hover:border-repressurizer-border disabled:opacity-50"
@@ -2296,6 +2343,18 @@ function legacySharedConfigToOwnedGames(games: LegacySharedConfigGame[]): OwnedG
     playtime_forever: 0,
     img_icon_url: null,
     rtime_last_played: game.lastPlayed ?? 0,
+    is_collection_only: true,
+  }));
+}
+
+function localLicenseAppsToOwnedGames(apps: LocalLicenseApp[]): OwnedGame[] {
+  const steamIndex = useSteamAppIndexStore.getState();
+  return apps.map((app) => ({
+    appid: app.appid,
+    name: steamIndex.resolveName(app.appid) ?? `App ${app.appid}`,
+    playtime_forever: 0,
+    img_icon_url: null,
+    rtime_last_played: 0,
     is_collection_only: true,
   }));
 }

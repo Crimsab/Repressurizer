@@ -121,6 +121,18 @@ export async function loadLegacySharedConfig(
   return invoke<LegacySharedConfigGame[]>("load_legacy_sharedconfig", { steamPath, steamId3 });
 }
 
+export interface LocalLicenseApp {
+  appid: number;
+  packageId: number;
+}
+
+export async function loadLocalLicenseLibrary(
+  steamPath: string,
+  steamId3: string
+): Promise<LocalLicenseApp[]> {
+  return invoke<LocalLicenseApp[]>("load_local_license_library", { steamPath, steamId3 });
+}
+
 export async function importDepressurizerProfile(
   path: string
 ): Promise<DepressurizerProfileImport> {
