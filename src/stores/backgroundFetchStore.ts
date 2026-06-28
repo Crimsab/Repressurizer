@@ -1,13 +1,14 @@
 import { create } from "zustand";
-import { fetchGameDetails, fetchHltb, fetchAchievementsSummary, currencyToCountryCode } from "../lib/tauri";
+import { fetchGameDetails, fetchHltb, fetchAchievementsSummary, fetchSteamReviewSummary, currencyToCountryCode } from "../lib/tauri";
 import { useGameStore } from "./gameStore";
 import { useHltbStore } from "./hltbStore";
 import { useAchievementsStore } from "./achievementsStore";
+import { useSteamRatingsStore } from "./steamRatingsStore";
 import { useFailedGamesStore } from "./failedGamesStore";
 import { useHltbIgnoredStore } from "./hltbIgnoredStore";
 import { useSettingsStore } from "./settingsStore";
 import { extractReleaseYear } from "../lib/search";
-import type { GameDetails } from "../lib/types";
+import type { GameDetails, SteamReviewSummary } from "../lib/types";
 
 // ── Config ────────────────────────────────────────────────────────────────────
 const DETAILS_BASE_DELAY_MS = 1200;    // base delay between Steam requests (~1 req/sec)
@@ -20,6 +21,7 @@ const DETAILS_SLOWDOWN_THRESHOLD_MS = 3_000; // when to show "slowing down" indi
 
 // HLTB: concurrency controlled by settings (default 3), 500ms between batches
 const HLTB_BATCH_DELAY_MS = 500;
+const RATINGS_BASE_DELAY_MS = 1200;
 
 /** True when the error is a permanent "game not on Steam" failure (not a network issue) */
 function isPermanentError(e: unknown): boolean {
@@ -36,6 +38,8 @@ let _hltbRunning = false;
 let _hltbAbort = false;
 let _achievementsRunning = false;
 let _achievementsAbort = false;
+let _ratingsRunning = false;
+let _ratingsAbort = false;
 // Adaptive per-request extra delay (only grows for unexpected failures)
 let _extraDelayMs = 0;
 
@@ -65,12 +69,21 @@ interface BackgroundFetchState {
   achievementsCurrentName: string;
   achievementsRecentNames: string[];
 
+  // Steam ratings
+  ratingsRunning: boolean;
+  ratingsFetched: number;
+  ratingsTotal: number;
+  ratingsCurrentName: string;
+  ratingsRecentNames: string[];
+
   startDetailsFetch: (missingIds: number[]) => void;
   stopDetailsFetch: () => void;
   startHltbFetch: (items: Array<{ appId: number; name: string }>) => void;
   stopHltbFetch: () => void;
   startAchievementsFetch: (items: Array<{ appId: number; name: string }>) => void;
   stopAchievementsFetch: () => void;
+  startRatingsFetch: (items: Array<{ appId: number; name: string }>) => void;
+  stopRatingsFetch: () => void;
 }
 
 let _setState: (partial: Partial<BackgroundFetchState>) => void = () => {};
@@ -101,6 +114,12 @@ export const useBackgroundFetchStore = create<BackgroundFetchState>((set, get) =
     achievementsTotal: 0,
     achievementsCurrentName: "",
     achievementsRecentNames: [],
+
+    ratingsRunning: false,
+    ratingsFetched: 0,
+    ratingsTotal: 0,
+    ratingsCurrentName: "",
+    ratingsRecentNames: [],
 
     startDetailsFetch: (missingIds) => {
       if (_detailsRunning || missingIds.length === 0) return;
@@ -184,6 +203,26 @@ export const useBackgroundFetchStore = create<BackgroundFetchState>((set, get) =
       _achievementsRunning = false;
       set({ achievementsRunning: false, achievementsCurrentName: "" });
     },
+
+    startRatingsFetch: (items) => {
+      if (_ratingsRunning || items.length === 0) return;
+      _ratingsRunning = true;
+      _ratingsAbort = false;
+      set({
+        ratingsRunning: true,
+        ratingsFetched: 0,
+        ratingsTotal: items.length,
+        ratingsCurrentName: "",
+        ratingsRecentNames: [],
+      });
+      _runRatingsLoop(items);
+    },
+
+    stopRatingsFetch: () => {
+      _ratingsAbort = true;
+      _ratingsRunning = false;
+      set({ ratingsRunning: false, ratingsCurrentName: "" });
+    },
   };
 });
 
@@ -193,7 +232,7 @@ function sleep(ms: number) {
   return new Promise<void>((r) => setTimeout(r, ms));
 }
 
-function addToRecent(key: "detailsRecentNames" | "hltbRecentNames" | "achievementsRecentNames", label: string) {
+function addToRecent(key: "detailsRecentNames" | "hltbRecentNames" | "achievementsRecentNames" | "ratingsRecentNames", label: string) {
   const prev = _getState()[key];
   _setState({ [key]: [label, ...prev].slice(0, MAX_RECENT) } as Partial<BackgroundFetchState>);
 }
@@ -445,4 +484,50 @@ async function _runAchievementsLoop(items: Array<{ appId: number; name: string }
   console.log(`[Achievements] Done: ${fetched} processed`);
   _achievementsRunning = false;
   _setState({ achievementsRunning: false, achievementsCurrentName: "", achievementsFetched: items.length });
+}
+
+// ── Steam ratings loop (sequential to avoid hammering Steam Store) ─────────────
+
+async function _runRatingsLoop(items: Array<{ appId: number; name: string }>) {
+  console.log(`[Ratings] Starting fetch for ${items.length} games`);
+  const buffer: SteamReviewSummary[] = [];
+  let fetched = 0;
+
+  for (let i = 0; i < items.length; i++) {
+    if (_ratingsAbort) break;
+
+    const { appId, name } = items[i];
+    _setState({ ratingsCurrentName: name });
+
+    try {
+      const summary = await fetchSteamReviewSummary(appId);
+      buffer.push(summary);
+      const label = summary.total_reviews > 0
+        ? `${name} · ${summary.review_score_desc || `${summary.positive_percentage ?? 0}%`}`
+        : `${name} · no reviews`;
+      addToRecent("ratingsRecentNames", `✓ ${label}`);
+      console.log(`[Ratings] ✓ ${name} (${appId})`);
+    } catch (e) {
+      addToRecent("ratingsRecentNames", `✗ ${name}`);
+      console.warn(`[Ratings] ✗ ${name} (${appId}): ${e}`);
+    }
+
+    fetched++;
+    _setState({ ratingsFetched: fetched });
+
+    if (buffer.length >= 25 || i === items.length - 1) {
+      if (buffer.length > 0) {
+        useSteamRatingsStore.getState().setBulkRatings([...buffer]);
+        buffer.length = 0;
+      }
+    }
+
+    if (!_ratingsAbort && i < items.length - 1) {
+      await sleep(RATINGS_BASE_DELAY_MS);
+    }
+  }
+
+  console.log(`[Ratings] Done: ${fetched} processed`);
+  _ratingsRunning = false;
+  _setState({ ratingsRunning: false, ratingsCurrentName: "", ratingsFetched: fetched });
 }

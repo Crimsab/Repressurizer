@@ -4,6 +4,7 @@ import type {
   SteamCollection,
   OwnedGame,
   GameDetails,
+  SteamReviewSummary,
   BackupInfo,
   DepressurizerProfileImport,
   AchievementSummary,
@@ -178,6 +179,10 @@ export async function fetchGameDetails(
   countryCode?: string
 ): Promise<GameDetails> {
   return invoke<GameDetails>("fetch_game_details", { appId, countryCode: countryCode ?? null });
+}
+
+export async function fetchSteamReviewSummary(appId: number): Promise<SteamReviewSummary> {
+  return invoke<SteamReviewSummary>("fetch_steam_review_summary", { appId });
 }
 
 export function getHeaderImageUrl(appId: number): string {
@@ -370,6 +375,11 @@ export interface NameConfig {
   skip_leading_the: boolean;
   group_numbers: boolean;
   group_other: boolean;
+}
+
+export interface SteamRatingConfig {
+  prefix?: string;
+  use_wilson_score?: boolean;
 }
 
 export async function runHoursCategorizer(

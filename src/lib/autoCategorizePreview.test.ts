@@ -80,4 +80,24 @@ describe("sortAutoCategorizePreviewEntries", () => {
       "(Name) Other",
     ]);
   });
+
+  it("sorts Steam review buckets in Depressurizer order", () => {
+    const entries = sortAutoCategorizePreviewEntries(
+      {
+        "Score: Mixed": [1],
+        "Score: Overwhelmingly Positive": [1, 2],
+        "Score: Very Negative": [3],
+        "Score: Positive": [4],
+      },
+      "natural",
+      { type: "rating", config: { prefix: "Score: " } }
+    );
+
+    expect(entries.map(([name]) => name)).toEqual([
+      "Score: Overwhelmingly Positive",
+      "Score: Positive",
+      "Score: Mixed",
+      "Score: Very Negative",
+    ]);
+  });
 });

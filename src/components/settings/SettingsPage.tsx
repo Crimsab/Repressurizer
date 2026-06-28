@@ -25,6 +25,7 @@ import {
   DEFAULT_LANGUAGE_CONFIG,
   DEFAULT_NAME_CONFIG,
   DEFAULT_PLATFORM_CONFIG,
+  DEFAULT_STEAM_RATING_CONFIG,
   DEFAULT_TAGS_CONFIG,
   DEFAULT_YEAR_CONFIG,
   useAutoCategorizeStore,
@@ -70,6 +71,7 @@ import type {
   LocalLicenseApp,
   NameConfig,
   PlatformConfig,
+  SteamRatingConfig,
   SteamShortcut,
   TagsConfig,
   YearGrouping,
@@ -1989,6 +1991,7 @@ function depressurizerAutoCatType(normalizedType: string): CategorizerType | nul
     normalizedType === "tags" ||
     normalizedType === "year" ||
     normalizedType === "score" ||
+    normalizedType === "rating" ||
     normalizedType === "hltb" ||
     normalizedType === "devpub" ||
     normalizedType === "flags" ||
@@ -2041,6 +2044,14 @@ function depressurizerAutoCatConfig(
   }
   if (type === "score") {
     return {};
+  }
+  if (type === "rating") {
+    const config: SteamRatingConfig = {
+      ...DEFAULT_STEAM_RATING_CONFIG,
+      prefix,
+      use_wilson_score: rawBoolField(autoCat.rawConfig, ["useWilsonScore", "UseWilsonScore"]) ?? DEFAULT_STEAM_RATING_CONFIG.use_wilson_score,
+    };
+    return config;
   }
   if (type === "hltb") {
     return cloneHoursConfig(DEFAULT_HLTB_IMPORT_CONFIG, prefix);

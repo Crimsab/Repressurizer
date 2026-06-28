@@ -21,6 +21,7 @@ import { useToastStore } from "./stores/toastStore";
 import { useFamilyStore } from "./stores/familyStore";
 import { usePlayHistoryStore } from "./stores/playHistoryStore";
 import { useSteamAppIndexStore } from "./stores/steamAppIndexStore";
+import { useSteamRatingsStore } from "./stores/steamRatingsStore";
 import { fetchLibrary, loadCollections, createManualBackup, fetchPlayerSummary, hideMainWindow, quitApp, getStartupContext } from "./lib/tauri";
 import { mergeCollectionOnlyGames } from "./lib/libraryMerge";
 import {
@@ -149,6 +150,7 @@ function AppContent() {
   const hydrateFamily = useFamilyStore((s) => s.hydrate);
   const hydratePlayHistory = usePlayHistoryStore((s) => s.hydrate);
   const hydrateSteamAppIndex = useSteamAppIndexStore((s) => s.hydrate);
+  const hydrateSteamRatings = useSteamRatingsStore((s) => s.hydrateCache);
   const hydrateSettingsFromDisk = useSettingsStore((s) => s.hydrateFromDisk);
   const setCollections = useCategoryStore((s) => s.setCollections);
   const [reloading, setReloading] = useState(false);
@@ -487,6 +489,7 @@ function AppContent() {
     hydrateFamily();
     hydratePlayHistory();
     hydrateSteamAppIndex();
+    hydrateSteamRatings();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [interactiveStartupReady]);
 

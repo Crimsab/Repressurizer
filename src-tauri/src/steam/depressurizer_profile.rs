@@ -328,6 +328,7 @@ fn parse_auto_cats(profile: Node<'_, '_>) -> Vec<DepressurizerImportedAutoCat> {
                             | "tags"
                             | "year"
                             | "score"
+                            | "rating"
                             | "hltb"
                             | "hours"
                             | "devpub"
@@ -466,7 +467,7 @@ fn normalize_auto_cat_type(type_id: &str) -> &str {
         "AutoCatFlags" => "flags",
         "AutoCatTags" => "tags",
         "AutoCatYear" => "year",
-        "AutoCatUserScore" => "score",
+        "AutoCatUserScore" => "rating",
         "AutoCatHltb" => "hltb",
         "AutoCatManual" => "manual",
         "AutoCatDevPub" => "devpub",

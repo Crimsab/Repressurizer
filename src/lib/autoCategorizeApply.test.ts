@@ -100,6 +100,17 @@ describe("expectedAutoCategoryNames", () => {
       "Mixed",
       "Poor",
     ]);
+    expect(expectedAutoCategoryNames("rating", { prefix: "Steam: " })).toEqual([
+      "Steam: Overwhelmingly Positive",
+      "Steam: Very Positive",
+      "Steam: Positive",
+      "Steam: Mostly Positive",
+      "Steam: Mixed",
+      "Steam: Mostly Negative",
+      "Steam: Overwhelmingly Negative",
+      "Steam: Very Negative",
+      "Steam: Negative",
+    ]);
     expect(
       expectedAutoCategoryNames("platform", {
         prefix: "(Platform) ",

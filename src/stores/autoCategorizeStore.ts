@@ -9,6 +9,7 @@ import type {
   LanguageConfig,
   PlatformConfig,
   NameConfig,
+  SteamRatingConfig,
   CategorizeResult,
 } from "../lib/tauri";
 
@@ -18,6 +19,7 @@ export type CategorizerType =
   | "tags"
   | "year"
   | "score"
+  | "rating"
   | "hltb"
   | "devpub"
   | "flags"
@@ -36,6 +38,7 @@ export type AutoCategorizePresetConfig =
   | LanguageConfig
   | PlatformConfig
   | NameConfig
+  | SteamRatingConfig
   | Record<string, never>;
 
 export interface AutoCategorizePreset {
@@ -59,6 +62,7 @@ interface AutoCategorizeState {
   languageConfig: LanguageConfig;
   platformConfig: PlatformConfig;
   nameConfig: NameConfig;
+  ratingConfig: SteamRatingConfig;
   presets: AutoCategorizePreset[];
   lastResult: CategorizeResult | null;
   set: (patch: Partial<Omit<AutoCategorizeState, "set">>) => void;
@@ -129,6 +133,11 @@ export const DEFAULT_NAME_CONFIG: NameConfig = {
   group_other: true,
 };
 
+export const DEFAULT_STEAM_RATING_CONFIG: SteamRatingConfig = {
+  prefix: "",
+  use_wilson_score: false,
+};
+
 const defaults: Omit<AutoCategorizeState, "set"> = {
   lastType: "hours",
   lastStep: "choose",
@@ -141,6 +150,7 @@ const defaults: Omit<AutoCategorizeState, "set"> = {
   languageConfig: DEFAULT_LANGUAGE_CONFIG,
   platformConfig: DEFAULT_PLATFORM_CONFIG,
   nameConfig: DEFAULT_NAME_CONFIG,
+  ratingConfig: DEFAULT_STEAM_RATING_CONFIG,
   presets: [],
   lastResult: null,
 };

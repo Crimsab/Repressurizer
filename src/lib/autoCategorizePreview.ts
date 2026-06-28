@@ -4,8 +4,10 @@ import type {
   FlagsConfig,
   PlatformConfig,
   NameConfig,
+  SteamRatingConfig,
 } from "./tauri";
 import type { AutoCategorizeApplyType } from "./autoCategorizeApply";
+import { expectedSteamRatingCategoryNames } from "./steamRatings";
 
 export type PreviewSortMode = "count" | "name" | "natural";
 
@@ -68,6 +70,12 @@ function naturalRank(name: string, context: PreviewSortContext): { rank: number;
   if (context.type === "score") {
     const scoreOrder = ["Must-Play", "Great", "Good", "Mixed", "Poor"];
     const index = scoreOrder.indexOf(name);
+    return { rank: index >= 0 ? index : Number.MAX_SAFE_INTEGER, label: name };
+  }
+
+  if (context.type === "rating") {
+    const ratingOrder = expectedSteamRatingCategoryNames(context.config as SteamRatingConfig);
+    const index = ratingOrder.indexOf(name);
     return { rank: index >= 0 ? index : Number.MAX_SAFE_INTEGER, label: name };
   }
 

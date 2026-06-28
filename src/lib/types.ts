@@ -131,6 +131,17 @@ export interface GameDetails {
   is_free: boolean;
 }
 
+export interface SteamReviewSummary {
+  app_id: number;
+  review_score: number;
+  review_score_desc: string;
+  total_positive: number;
+  total_negative: number;
+  total_reviews: number;
+  positive_percentage: number | null;
+  fetched_at: number;
+}
+
 export interface PlatformSupport {
   windows: boolean;
   mac: boolean;

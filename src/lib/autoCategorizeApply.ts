@@ -5,8 +5,10 @@ import type {
   LanguageConfig,
   PlatformConfig,
   TagsConfig,
+  SteamRatingConfig,
 } from "./tauri";
 import type { SteamCollection } from "./types";
+import { expectedSteamRatingCategoryNames } from "./steamRatings";
 
 export type AutoCategorizeApplyType =
   | "hours"
@@ -14,6 +16,7 @@ export type AutoCategorizeApplyType =
   | "tags"
   | "year"
   | "score"
+  | "rating"
   | "hltb"
   | "devpub"
   | "flags"
@@ -100,6 +103,10 @@ export function expectedAutoCategoryNames(
 
   if (type === "score") {
     return ["Must-Play", "Great", "Good", "Mixed", "Poor"];
+  }
+
+  if (type === "rating") {
+    return expectedSteamRatingCategoryNames(config as SteamRatingConfig);
   }
 
   if (type === "platform") {
