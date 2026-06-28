@@ -1,6 +1,6 @@
 [package]
 name = "repressurizer"
-version = "0.4.0"
+version = "0.4.1"
 description = "Steam Library Manager"
 authors = ["you"]
 edition = "2021"
@@ -37,7 +37,7 @@ dirs = "6"
 rusty-leveldb = "4.0.1"
 libloading = "0.8"
 roxmltree = "0.20"
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Diagnostics_ToolHelp"] }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Storage_FileSystem", "Win32_System_Diagnostics_ToolHelp"] }
 
 [target.'cfg(windows)'.dependencies]
 webview2-com = "0.38.2"
