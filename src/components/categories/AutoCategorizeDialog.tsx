@@ -4,11 +4,13 @@ import { useCategoryStore } from "../../stores/categoryStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import {
   useAutoCategorizeStore,
+  DEFAULT_STEAM_RATING_CONFIG,
   type AutoCategorizePreset,
   type AutoCategorizePresetConfig,
 } from "../../stores/autoCategorizeStore";
 import { useBackgroundFetchStore } from "../../stores/backgroundFetchStore";
 import { useHltbStore } from "../../stores/hltbStore";
+import { useSteamRatingsStore } from "../../stores/steamRatingsStore";
 import {
   applyAutoCategorizeAssignments,
   withExpectedAutoCategories,
@@ -18,6 +20,11 @@ import {
   type PreviewSortContext,
   type PreviewSortMode,
 } from "../../lib/autoCategorizePreview";
+import {
+  categorizeBySteamRating,
+  steamRatingIdsNeedingFetch,
+  STEAM_RATING_RULES,
+} from "../../lib/steamRatings";
 import {
   runHoursCategorizer,
   runGenreCategorizer,
@@ -40,6 +47,7 @@ import {
   type LanguageConfig,
   type PlatformConfig,
   type NameConfig,
+  type SteamRatingConfig,
   type YearGrouping,
 } from "../../lib/tauri";
 import type { GameDetails, OwnedGame } from "../../lib/types";
@@ -82,6 +90,7 @@ type CategorizerType =
   | "tags"
   | "year"
   | "score"
+  | "rating"
   | "hltb"
   | "devpub"
   | "flags"
@@ -92,25 +101,25 @@ type Step = "choose" | "configure" | "fetch" | "preview" | "done";
 
 const CATEGORIZERS: {
   value: CategorizerType;
-  labelKey?: TranslationKey;
-  descriptionKey?: TranslationKey;
-  label?: string;
-  description?: string;
+  labelKey: TranslationKey;
+  descriptionKey: TranslationKey;
   needsDetails: boolean;
   needsHltb: boolean;
+  needsRatings: boolean;
   icon: typeof Clock;
 }[] = [
-  { value: "hours", labelKey: "auto.byPlaytime", descriptionKey: "auto.byPlaytime.desc", needsDetails: false, needsHltb: false, icon: Clock },
-  { value: "genre", labelKey: "auto.byGenre", descriptionKey: "auto.byGenre.desc", needsDetails: true, needsHltb: false, icon: Tag },
-  { value: "tags", labelKey: "auto.byTags", descriptionKey: "auto.byTags.desc", needsDetails: true, needsHltb: false, icon: Playlist },
-  { value: "year", labelKey: "auto.byYear", descriptionKey: "auto.byYear.desc", needsDetails: true, needsHltb: false, icon: Calendar },
-  { value: "score", labelKey: "auto.byScore", descriptionKey: "auto.byScore.desc", needsDetails: true, needsHltb: false, icon: Star },
-  { value: "hltb", labelKey: "auto.byHltb", descriptionKey: "auto.byHltb.desc", needsDetails: false, needsHltb: true, icon: Timer },
-  { value: "devpub", label: "Developer / Publisher", description: "Create categories from Steam developer and publisher metadata.", needsDetails: true, needsHltb: false, icon: Buildings },
-  { value: "flags", label: "Store flags", description: "Create categories from Steam feature flags such as Single-player or Steam Cloud.", needsDetails: true, needsHltb: false, icon: Flag },
-  { value: "language", label: "Language support", description: "Create categories from Steam supported language metadata.", needsDetails: true, needsHltb: false, icon: Globe },
-  { value: "platform", label: "Platform support", description: "Create Windows, macOS and Linux support categories.", needsDetails: true, needsHltb: false, icon: Desktop },
-  { value: "name", label: "Name", description: "Create alphabet buckets from game titles.", needsDetails: false, needsHltb: false, icon: TextAa },
+  { value: "name", labelKey: "auto.byName", descriptionKey: "auto.byName.desc", needsDetails: false, needsHltb: false, needsRatings: false, icon: TextAa },
+  { value: "genre", labelKey: "auto.byGenre", descriptionKey: "auto.byGenre.desc", needsDetails: true, needsHltb: false, needsRatings: false, icon: Tag },
+  { value: "year", labelKey: "auto.byYear", descriptionKey: "auto.byYear.desc", needsDetails: true, needsHltb: false, needsRatings: false, icon: Calendar },
+  { value: "rating", labelKey: "auto.byRating", descriptionKey: "auto.byRating.desc", needsDetails: false, needsHltb: false, needsRatings: true, icon: Star },
+  { value: "score", labelKey: "auto.byScore", descriptionKey: "auto.byScore.desc", needsDetails: true, needsHltb: false, needsRatings: false, icon: Star },
+  { value: "tags", labelKey: "auto.byTags", descriptionKey: "auto.byTags.desc", needsDetails: true, needsHltb: false, needsRatings: false, icon: Playlist },
+  { value: "flags", labelKey: "auto.byFlags", descriptionKey: "auto.byFlags.desc", needsDetails: true, needsHltb: false, needsRatings: false, icon: Flag },
+  { value: "hltb", labelKey: "auto.byHltb", descriptionKey: "auto.byHltb.desc", needsDetails: false, needsHltb: true, needsRatings: false, icon: Timer },
+  { value: "hours", labelKey: "auto.byPlaytime", descriptionKey: "auto.byPlaytime.desc", needsDetails: false, needsHltb: false, needsRatings: false, icon: Clock },
+  { value: "platform", labelKey: "auto.byPlatform", descriptionKey: "auto.byPlatform.desc", needsDetails: true, needsHltb: false, needsRatings: false, icon: Desktop },
+  { value: "devpub", labelKey: "auto.byDevPub", descriptionKey: "auto.byDevPub.desc", needsDetails: true, needsHltb: false, needsRatings: false, icon: Buildings },
+  { value: "language", labelKey: "auto.byLanguage", descriptionKey: "auto.byLanguage.desc", needsDetails: true, needsHltb: false, needsRatings: false, icon: Globe },
 ];
 
 const DEFAULT_HLTB_CONFIG: HoursConfig = {
@@ -127,11 +136,15 @@ const DEFAULT_HLTB_CONFIG: HoursConfig = {
 function categorizerLabel(type: CategorizerType, t: ReturnType<typeof useT>): string {
   const option = CATEGORIZERS.find((item) => item.value === type);
   if (!option) return type;
-  return option.labelKey ? t(option.labelKey) : option.label ?? type;
+  return t(option.labelKey);
 }
 
 function categorizerNeedsDetails(type: CategorizerType): boolean {
   return CATEGORIZERS.find((item) => item.value === type)?.needsDetails ?? false;
+}
+
+function categorizerNeedsRatings(type: CategorizerType): boolean {
+  return CATEGORIZERS.find((item) => item.value === type)?.needsRatings ?? false;
 }
 
 function presetId(): string {
@@ -274,6 +287,7 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
   const t = useT();
   const games = useGameStore((s) => s.games);
   const details = useGameStore((s) => s.details);
+  const ratings = useSteamRatingsStore((s) => s.ratings);
   const collections = useCategoryStore((s) => s.collections);
   const applyImportedCollections = useCategoryStore((s) => s.applyImportedCollections);
   const apiKey = useSettingsStore((s) => s.apiKey);
@@ -287,7 +301,10 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
   const detailsRunning = useBackgroundFetchStore((s) => s.detailsRunning);
   const detailsFetched = useBackgroundFetchStore((s) => s.detailsFetched);
   const detailsTotal = useBackgroundFetchStore((s) => s.detailsTotal);
-  const { startDetailsFetch } = useBackgroundFetchStore.getState();
+  const ratingsRunning = useBackgroundFetchStore((s) => s.ratingsRunning);
+  const ratingsFetched = useBackgroundFetchStore((s) => s.ratingsFetched);
+  const ratingsTotal = useBackgroundFetchStore((s) => s.ratingsTotal);
+  const { startDetailsFetch, startRatingsFetch } = useBackgroundFetchStore.getState();
 
   // Local step — "fetch" isn't persisted; "done" resets to "choose" on reopen
   const [step, setStep] = useState<Step>(() => {
@@ -305,14 +322,24 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
   const [languageConfig, setLanguageConfig] = useState<LanguageConfig>(persist.languageConfig);
   const [platformConfig, setPlatformConfig] = useState<PlatformConfig>(persist.platformConfig);
   const [nameConfig, setNameConfig] = useState<NameConfig>(persist.nameConfig);
+  const [ratingConfig, setRatingConfig] = useState<SteamRatingConfig>(
+    persist.ratingConfig ?? DEFAULT_STEAM_RATING_CONFIG
+  );
   const [hltbConfig, setHltbConfig] = useState<HoursConfig>(DEFAULT_HLTB_CONFIG);
   const [presetName, setPresetName] = useState("");
   const [loadedPresetId, setLoadedPresetId] = useState<string | null>(null);
 
   // Whether we're waiting for a details fetch to complete before running categorizer
-  const [waitingForFetch, setWaitingForFetch] = useState(() =>
-    useBackgroundFetchStore.getState().detailsRunning
-  );
+  const [waitingForFetch, setWaitingForFetch] = useState(() => {
+    const background = useBackgroundFetchStore.getState();
+    return background.detailsRunning || background.ratingsRunning;
+  });
+  const [fetchKind, setFetchKind] = useState<"details" | "ratings" | null>(() => {
+    const background = useBackgroundFetchStore.getState();
+    if (background.ratingsRunning) return "ratings";
+    if (background.detailsRunning) return "details";
+    return null;
+  });
   const [pendingPresetRun, setPendingPresetRun] = useState<AutoCategorizePreset[] | null>(null);
 
   const [fetchError, setFetchError] = useState("");
@@ -323,22 +350,27 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
   const categorizer = CATEGORIZERS.find((c) => c.value === type)!;
   const metadata = useMemo(() => buildAutoCatMetadata(Object.values(details)), [details]);
 
-  // When background details fetch completes and we were waiting → run categorizer
+  // When a background fetch completes and we were waiting: run categorizer.
   useEffect(() => {
-    if (waitingForFetch && !detailsRunning) {
+    const activeFetchDone =
+      (fetchKind === "details" && !detailsRunning) ||
+      (fetchKind === "ratings" && !ratingsRunning);
+    if (waitingForFetch && activeFetchDone) {
       setWaitingForFetch(false);
+      setFetchKind(null);
       runCategorizer();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [detailsRunning, waitingForFetch]);
+  }, [detailsRunning, ratingsRunning, waitingForFetch, fetchKind]);
 
   useEffect(() => {
-    if (!pendingPresetRun || detailsRunning) return;
+    if (!pendingPresetRun || detailsRunning || ratingsRunning) return;
     const queue = pendingPresetRun;
+    if (startMissingPresetFetch(queue)) return;
     setPendingPresetRun(null);
     runPresetSequence(queue);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [detailsRunning, pendingPresetRun]);
+  }, [detailsRunning, ratingsRunning, pendingPresetRun, details, ratings]);
 
   // Helper to sync step to store (skip "fetch")
   const gotoStep = (s: Step) => {
@@ -365,9 +397,10 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
     if (type === "language") return languageConfig;
     if (type === "platform") return platformConfig;
     if (type === "name") return nameConfig;
+    if (type === "rating") return ratingConfig;
     if (type === "hltb") return hltbConfig;
     return {};
-  }, [type, hoursConfig, genreConfig, tagsConfig, yearConfig, devPubConfig, flagsConfig, languageConfig, platformConfig, nameConfig, hltbConfig]);
+  }, [type, hoursConfig, genreConfig, tagsConfig, yearConfig, devPubConfig, flagsConfig, languageConfig, platformConfig, nameConfig, ratingConfig, hltbConfig]);
 
   const applyPresetConfig = (preset: AutoCategorizePreset) => {
     const config = preset.config as Record<string, unknown>;
@@ -380,6 +413,7 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
     if (preset.type === "language") setLanguageConfig(config as unknown as LanguageConfig);
     if (preset.type === "platform") setPlatformConfig(config as unknown as PlatformConfig);
     if (preset.type === "name") setNameConfig(config as unknown as NameConfig);
+    if (preset.type === "rating") setRatingConfig(config as unknown as SteamRatingConfig);
     if (preset.type === "hltb") setHltbConfig(config as unknown as HoursConfig);
   };
 
@@ -408,6 +442,62 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
     [next[index], next[target]] = [next[target], next[index]];
     persist.set({ presets: next });
   };
+
+  const fetchItemsForIds = useCallback((ids: number[]) => (
+    ids.map((id) => ({ appId: id, name: games[id]?.name ?? `#${id}` }))
+  ), [games]);
+
+  const startMissingPresetFetch = useCallback((presets: AutoCategorizePreset[]): boolean => {
+    const missingDetails = [
+      ...new Set(
+        presets
+          .filter((preset) => categorizerNeedsDetails(preset.type))
+          .flatMap((preset) => detailIdsNeedingFetchForType(preset.type, games, details))
+      ),
+    ];
+
+    if (missingDetails.length > 0) {
+      if (!apiKey) {
+        setFetchError(t("auto.detailsRequired"));
+        setFetchKind("details");
+        setStep("fetch");
+        return true;
+      }
+
+      setFetchError("");
+      setStep("fetch");
+      setFetchKind("details");
+      setPendingPresetRun(presets);
+      if (!detailsRunning) startDetailsFetch(missingDetails);
+      return true;
+    }
+
+    const missingRatings = presets.some((preset) => categorizerNeedsRatings(preset.type))
+      ? steamRatingIdsNeedingFetch(games, ratings)
+      : [];
+
+    if (missingRatings.length > 0) {
+      setFetchError("");
+      setStep("fetch");
+      setFetchKind("ratings");
+      setPendingPresetRun(presets);
+      if (!ratingsRunning) startRatingsFetch(fetchItemsForIds(missingRatings));
+      return true;
+    }
+
+    return false;
+  }, [
+    apiKey,
+    details,
+    detailsRunning,
+    fetchItemsForIds,
+    games,
+    ratings,
+    ratingsRunning,
+    startDetailsFetch,
+    startRatingsFetch,
+    t,
+  ]);
 
   const handleSavePreset = () => {
     const now = Date.now();
@@ -438,31 +528,7 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
     setFetchError("");
     setWaitingForFetch(false);
 
-    if (presets.some((preset) => categorizerNeedsDetails(preset.type))) {
-      const missing = [
-        ...new Set(
-          presets.flatMap((preset) =>
-            detailIdsNeedingFetchForType(preset.type, games, details)
-          )
-        ),
-      ];
-
-      if (missing.length > 0) {
-        if (!apiKey) {
-          setFetchError(t("auto.detailsRequired"));
-          setStep("fetch");
-          return;
-        }
-
-        setStep("fetch");
-        setPendingPresetRun(presets);
-
-        if (!detailsRunning) {
-          startDetailsFetch(missing);
-        }
-        return;
-      }
-    }
+    if (startMissingPresetFetch(presets)) return;
 
     await runPresetSequence(presets);
   };
@@ -479,6 +545,7 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
       languageConfig,
       platformConfig,
       nameConfig,
+      ratingConfig,
     });
 
     // HLTB categorizer: no fetch needed, runs directly
@@ -487,18 +554,38 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
       return;
     }
 
+    if (type === "rating") {
+      const missing = steamRatingIdsNeedingFetch(games, ratings);
+      if (missing.length > 0) {
+        setFetchError("");
+        setStep("fetch");
+        setFetchKind("ratings");
+
+        if (ratingsRunning) {
+          setWaitingForFetch(true);
+          return;
+        }
+
+        startRatingsFetch(fetchItemsForIds(missing));
+        setWaitingForFetch(true);
+        return;
+      }
+    }
+
     if (categorizer.needsDetails) {
       const missing = detailIdsNeedingFetchForType(type, games, details);
 
       if (missing.length > 0) {
         if (!apiKey) {
           setFetchError(t("auto.detailsRequired"));
+          setFetchKind("details");
           setStep("fetch");
           return;
         }
 
         setFetchError("");
         setStep("fetch");
+        setFetchKind("details");
 
         // If already running from background fetch, just wait for it
         if (detailsRunning) {
@@ -596,9 +683,16 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
         prefix: cfg.prefix || undefined,
       });
     }
+    if (runType === "rating") {
+      const cfg = config as SteamRatingConfig;
+      return categorizeBySteamRating(allGames, ratings, {
+        ...cfg,
+        prefix: cfg.prefix || undefined,
+      });
+    }
 
     return runScoreCategorizer(allDetails, true);
-  }, [games, details, hltbData]);
+  }, [games, details, hltbData, ratings]);
 
   const runCategorizer = useCallback(async () => {
     setRunError("");
@@ -632,6 +726,7 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
     languageConfig,
     platformConfig,
     nameConfig,
+    ratingConfig,
     hltbConfig,
     currentConfig,
     runCategorizerConfig,
@@ -687,7 +782,7 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
 
     if (steamPath && steamId3) {
       try {
-        await createManualBackup(steamPath, steamId3, "Pre-auto-categorize");
+        await createManualBackup(steamPath, steamId3, t("auto.backupName"));
       } catch {
         // backup failure is non-fatal
       }
@@ -744,6 +839,7 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
               languageConfig={languageConfig} setLanguageConfig={setLanguageConfig}
               platformConfig={platformConfig} setPlatformConfig={setPlatformConfig}
               nameConfig={nameConfig} setNameConfig={setNameConfig}
+              ratingConfig={ratingConfig} setRatingConfig={setRatingConfig}
               hltbConfig={hltbConfig} setHltbConfig={setHltbConfig}
               metadata={metadata}
               presetName={presetName}
@@ -757,10 +853,11 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
           )}
           {step === "fetch" && (
             <FetchStep
-              progress={detailsFetched}
-              total={detailsTotal}
+              progress={fetchKind === "ratings" ? ratingsFetched : detailsFetched}
+              total={fetchKind === "ratings" ? ratingsTotal : detailsTotal}
               error={fetchError}
               waiting={waitingForFetch || pendingPresetRun !== null}
+              message={fetchKind === "ratings" ? t("auto.fetchingRatings") : t("auto.fetchingDetails")}
             />
           )}
           {step === "preview" && result && (
@@ -844,9 +941,14 @@ function ChooseStep({
   const gameCount = useGameStore((s) => Object.keys(s.games).length);
   const games = useGameStore((s) => s.games);
   const details = useGameStore((s) => s.details);
-  const cachedCount = Object.keys(details).length;
-  const hltbCount = Object.keys(useHltbStore((s) => s.data)).length;
+  const ratings = useSteamRatingsStore((s) => s.ratings);
+  const hltbData = useHltbStore((s) => s.data);
+  const gameIds = useMemo(() => Object.keys(games).map(Number), [games]);
+  const cachedCount = gameIds.filter((id) => !!details[id]).length;
+  const hltbCount = gameIds.filter((id) => !!hltbData[id]).length;
   const missingCount = gameCount - cachedCount;
+  const missingRatings = steamRatingIdsNeedingFetch(games, ratings);
+  const ratingCount = gameCount - missingRatings.length;
   const detailsRunning = useBackgroundFetchStore((s) => s.detailsRunning);
   const detailsFetched = useBackgroundFetchStore((s) => s.detailsFetched);
   const detailsTotal = useBackgroundFetchStore((s) => s.detailsTotal);
@@ -854,71 +956,61 @@ function ChooseStep({
   const hltbRunning = useBackgroundFetchStore((s) => s.hltbRunning);
   const hltbFetched = useBackgroundFetchStore((s) => s.hltbFetched);
   const hltbTotal = useBackgroundFetchStore((s) => s.hltbTotal);
+  const ratingsRunning = useBackgroundFetchStore((s) => s.ratingsRunning);
+  const ratingsFetched = useBackgroundFetchStore((s) => s.ratingsFetched);
+  const ratingsTotal = useBackgroundFetchStore((s) => s.ratingsTotal);
+  const startRatingsFetch = useBackgroundFetchStore((s) => s.startRatingsFetch);
 
   const handleFetchDetails = () => {
-    const allIds = Object.keys(games).map(Number);
-    const missing = allIds.filter((id) => !details[id]);
+    const missing = gameIds.filter((id) => !details[id]);
     if (missing.length > 0) startDetailsFetch(missing);
+  };
+
+  const handleFetchRatings = () => {
+    if (missingRatings.length > 0) {
+      startRatingsFetch(missingRatings.map((id) => ({ appId: id, name: games[id]?.name ?? `#${id}` })));
+    }
   };
 
   return (
     <div className="space-y-2">
-      {/* Details cache status */}
-      <div className="mb-2 flex items-center gap-3 rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-2.5">
-        <div className="flex-1 text-xs text-repressurizer-text-muted">
-          <span className="text-repressurizer-text-faint">{t("auto.cacheStatus", { cached: cachedCount, total: gameCount })}</span>
-        </div>
-        {detailsRunning ? (
-          <span className="inline-flex items-center gap-1.5 rounded-md bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-500">
-            <Spinner size={9} className="animate-spin" />
-            {detailsFetched}/{detailsTotal}
-          </span>
-        ) : missingCount > 0 ? (
-          <div className="flex items-center gap-1.5">
-            <span className="rounded-md bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-500">
-              {t("auto.needFetching", { count: missingCount })}
-            </span>
-            <button
-              onClick={handleFetchDetails}
-              className="rounded-md bg-repressurizer-accent/15 px-2 py-0.5 text-[10px] font-medium text-repressurizer-accent hover:bg-repressurizer-accent/25 transition-colors"
-            >
-              {t("auto.fetchNow")}
-            </button>
-          </div>
-        ) : (
-          <span className="rounded-md bg-repressurizer-accent/10 px-2 py-0.5 text-[10px] font-medium text-repressurizer-accent">
-            ✓ {t("auto.allCached")}
-          </span>
-        )}
-      </div>
-
-      {/* HLTB cache status */}
-      <div className="mb-4 flex items-center gap-3 rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-2.5">
-        <div className="flex-1 text-xs text-repressurizer-text-muted">
-          <span className="font-mono text-repressurizer-text tabular-nums">{hltbCount}</span>
-          <span className="text-repressurizer-text-faint"> {t("auto.hltbCached", { count: hltbCount })}</span>
-        </div>
-        {hltbRunning ? (
-          <span className="inline-flex items-center gap-1.5 rounded-md bg-sky-500/10 px-2 py-0.5 text-[10px] font-medium text-sky-400">
-            <Spinner size={9} className="animate-spin" />
-            {hltbFetched}/{hltbTotal}
-          </span>
-        ) : hltbCount > 0 ? (
-          <span className="rounded-md bg-repressurizer-accent/10 px-2 py-0.5 text-[10px] font-medium text-repressurizer-accent">
-            {t("auto.hltbCached", { count: hltbCount })}
-          </span>
-        ) : (
-          <span className="rounded-md bg-repressurizer-surface-hover px-2 py-0.5 text-[10px] font-medium text-repressurizer-text-faint">
-            {t("common.none")}
-          </span>
-        )}
+      <div className="mb-3 grid gap-2 sm:grid-cols-3">
+        <CacheStatusCard
+          label={t("auto.cache.details")}
+          cached={cachedCount}
+          total={gameCount}
+          running={detailsRunning}
+          progress={detailsFetched}
+          progressTotal={detailsTotal}
+          missing={missingCount}
+          onFetch={handleFetchDetails}
+        />
+        <CacheStatusCard
+          label={t("auto.cache.ratings")}
+          cached={ratingCount}
+          total={gameCount}
+          running={ratingsRunning}
+          progress={ratingsFetched}
+          progressTotal={ratingsTotal}
+          missing={missingRatings.length}
+          onFetch={handleFetchRatings}
+        />
+        <CacheStatusCard
+          label={t("auto.cache.hltb")}
+          cached={hltbCount}
+          total={gameCount}
+          running={hltbRunning}
+          progress={hltbFetched}
+          progressTotal={hltbTotal}
+          missing={Math.max(0, gameCount - hltbCount)}
+        />
       </div>
 
       {presets.length > 0 && (
         <div className="mb-4 rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg p-3">
           <div className="mb-2 flex items-center justify-between gap-3">
             <p className="text-[11px] font-medium uppercase tracking-wider text-repressurizer-text-faint">
-              Saved AutoCats
+              {t("auto.presets.saved")}
             </p>
             <button
               type="button"
@@ -926,7 +1018,7 @@ function ChooseStep({
               className="btn-press inline-flex items-center gap-1.5 rounded-lg bg-repressurizer-accent/15 px-2.5 py-1 text-[11px] font-medium text-repressurizer-accent transition-colors hover:bg-repressurizer-accent/25"
             >
               <Playlist size={12} weight="duotone" />
-              Run all
+              {t("auto.presets.runAll")}
               <span className="font-mono text-[10px] tabular-nums text-repressurizer-accent/70">
                 {presets.length}
               </span>
@@ -955,7 +1047,8 @@ function ChooseStep({
                   onClick={() => onMovePreset(preset.id, -1)}
                   disabled={index === 0}
                   className="btn-press flex h-7 w-7 items-center justify-center rounded-lg text-repressurizer-text-faint hover:bg-repressurizer-surface-hover hover:text-repressurizer-text disabled:opacity-30"
-                  title="Move up"
+                  title={t("auto.moveUp")}
+                  aria-label={t("auto.moveUp")}
                 >
                   <ArrowUp size={13} />
                 </button>
@@ -964,7 +1057,8 @@ function ChooseStep({
                   onClick={() => onMovePreset(preset.id, 1)}
                   disabled={index === presets.length - 1}
                   className="btn-press flex h-7 w-7 items-center justify-center rounded-lg text-repressurizer-text-faint hover:bg-repressurizer-surface-hover hover:text-repressurizer-text disabled:opacity-30"
-                  title="Move down"
+                  title={t("auto.moveDown")}
+                  aria-label={t("auto.moveDown")}
                 >
                   <ArrowDown size={13} />
                 </button>
@@ -972,7 +1066,8 @@ function ChooseStep({
                   type="button"
                   onClick={() => onDeletePreset(preset.id)}
                   className="btn-press flex h-7 w-7 items-center justify-center rounded-lg text-repressurizer-danger/70 hover:bg-repressurizer-danger/10 hover:text-repressurizer-danger"
-                  title="Delete"
+                  title={t("auto.delete")}
+                  aria-label={t("auto.delete")}
                 >
                   <Trash size={13} />
                 </button>
@@ -982,21 +1077,21 @@ function ChooseStep({
         </div>
       )}
 
-      <p className="mb-3 text-sm text-repressurizer-text-muted">{t("auto.choose.desc")}</p>
+      <p className="mb-2 text-sm text-repressurizer-text-muted">{t("auto.choose.desc")}</p>
       {CATEGORIZERS.map((c) => {
         const Icon = c.icon;
-        const label = c.labelKey ? t(c.labelKey) : c.label ?? c.value;
-        const description = c.descriptionKey ? t(c.descriptionKey) : c.description ?? "";
+        const label = t(c.labelKey);
+        const description = t(c.descriptionKey);
         return (
           <button
             key={c.value}
             onClick={() => onChoose(c.value)}
-            className="btn-press flex w-full items-center gap-3 rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3.5 text-left transition-colors hover:border-repressurizer-accent hover:bg-repressurizer-accent/5"
+            className="btn-press flex w-full items-center gap-3 rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-3.5 py-2.5 text-left transition-colors hover:border-repressurizer-accent hover:bg-repressurizer-accent/5"
           >
-            <Icon size={20} weight="duotone" className="shrink-0 text-repressurizer-accent" />
+            <Icon size={18} weight="duotone" className="shrink-0 text-repressurizer-accent" />
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-white">{label}</p>
-              <p className="text-xs text-repressurizer-text-faint mt-0.5">{description}</p>
+              <p className="mt-0.5 truncate text-xs text-repressurizer-text-faint">{description}</p>
             </div>
             {c.needsDetails && (
               <span className="shrink-0 rounded-md bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-500">
@@ -1005,13 +1100,71 @@ function ChooseStep({
             )}
             {c.needsHltb && (
               <span className="shrink-0 rounded-md bg-sky-500/10 px-2 py-0.5 text-[10px] font-medium text-sky-400">
-                HLTB
+                {t("auto.needsHltb")}
+              </span>
+            )}
+            {c.needsRatings && (
+              <span className="shrink-0 rounded-md bg-sky-500/10 px-2 py-0.5 text-[10px] font-medium text-sky-400">
+                {t("auto.needsRatings")}
               </span>
             )}
             <ArrowRight size={16} className="shrink-0 text-repressurizer-text-faint" />
           </button>
         );
       })}
+    </div>
+  );
+}
+
+function CacheStatusCard({
+  label,
+  cached,
+  total,
+  running,
+  progress,
+  progressTotal,
+  missing,
+  onFetch,
+}: {
+  label: string;
+  cached: number;
+  total: number;
+  running: boolean;
+  progress: number;
+  progressTotal: number;
+  missing: number;
+  onFetch?: () => void;
+}) {
+  const t = useT();
+  const isComplete = total > 0 && missing === 0;
+  return (
+    <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-3 py-2">
+      <div className="flex items-center justify-between gap-2">
+        <p className="truncate text-[11px] font-medium text-repressurizer-text-faint">
+          {label}
+        </p>
+        {running ? (
+          <span className="inline-flex shrink-0 items-center gap-1 rounded-md bg-sky-500/10 px-1.5 py-0.5 text-[10px] font-medium text-sky-400">
+            <Spinner size={9} className="animate-spin" />
+            {progress}/{progressTotal}
+          </span>
+        ) : isComplete ? (
+          <span className="shrink-0 rounded-md bg-repressurizer-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-repressurizer-accent">
+            {t("auto.allCached")}
+          </span>
+        ) : onFetch && missing > 0 ? (
+          <button
+            type="button"
+            onClick={onFetch}
+            className="btn-press shrink-0 rounded-md bg-repressurizer-accent/15 px-1.5 py-0.5 text-[10px] font-medium text-repressurizer-accent transition-colors hover:bg-repressurizer-accent/25"
+          >
+            {t("auto.fetchNow")}
+          </button>
+        ) : null}
+      </div>
+      <p className="mt-1 font-mono text-sm font-medium tabular-nums text-repressurizer-text">
+        {cached} / {total}
+      </p>
     </div>
   );
 }
@@ -1026,6 +1179,7 @@ function ConfigureStep({
   devPubConfig, setDevPubConfig, flagsConfig, setFlagsConfig,
   languageConfig, setLanguageConfig,
   platformConfig, setPlatformConfig, nameConfig, setNameConfig,
+  ratingConfig, setRatingConfig,
   hltbConfig, setHltbConfig, metadata, presetName, setPresetName, onSavePreset,
   loadedPresetId, error, onBack, onNext,
 }: {
@@ -1039,6 +1193,7 @@ function ConfigureStep({
   languageConfig: LanguageConfig; setLanguageConfig: (c: LanguageConfig) => void;
   platformConfig: PlatformConfig; setPlatformConfig: (c: PlatformConfig) => void;
   nameConfig: NameConfig; setNameConfig: (c: NameConfig) => void;
+  ratingConfig: SteamRatingConfig; setRatingConfig: (c: SteamRatingConfig) => void;
   hltbConfig: HoursConfig; setHltbConfig: (c: HoursConfig) => void;
   metadata: AutoCatMetadata;
   presetName: string;
@@ -1054,14 +1209,14 @@ function ConfigureStep({
     <div className="space-y-5">
       <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3">
         <label className="mb-1.5 block text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">
-          Saved AutoCat
+          {t("auto.preset.saved")}
         </label>
         <div className="flex gap-2">
           <input
             type="text"
             value={presetName}
             onChange={(e) => setPresetName(e.target.value)}
-            placeholder="Preset name"
+            placeholder={t("auto.presetName")}
             className="min-w-0 flex-1 rounded-lg border border-repressurizer-border bg-repressurizer-surface px-3 py-2 text-sm text-repressurizer-text placeholder:text-repressurizer-text-faint focus:border-repressurizer-accent focus:outline-none"
           />
           <button
@@ -1070,7 +1225,7 @@ function ConfigureStep({
             className="btn-press inline-flex items-center gap-1.5 rounded-lg bg-repressurizer-accent/15 px-3 py-2 text-sm font-medium text-repressurizer-accent transition-colors hover:bg-repressurizer-accent/25"
           >
             <FloppyDisk size={14} weight="duotone" />
-            {loadedPresetId ? "Update" : "Save"}
+            {loadedPresetId ? t("auto.update") : t("auto.save")}
           </button>
         </div>
       </div>
@@ -1092,6 +1247,7 @@ function ConfigureStep({
       {type === "language" && <LanguageConfigForm config={languageConfig} onChange={setLanguageConfig} suggestions={metadata.languageValues} metadata={metadata} />}
       {type === "platform" && <PlatformConfigForm config={platformConfig} onChange={setPlatformConfig} />}
       {type === "name" && <NameConfigForm config={nameConfig} onChange={setNameConfig} />}
+      {type === "rating" && <SteamRatingConfigForm config={ratingConfig} onChange={setRatingConfig} />}
       {type === "score" && (
         <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg p-4 text-sm text-repressurizer-text-muted">
           <p className="font-medium text-repressurizer-text mb-2">{t("auto.metacriticBuckets")}</p>
@@ -1155,7 +1311,7 @@ function HoursConfigForm({ config, onChange, label }: { config: HoursConfig; onC
     );
     onChange({ ...config, rules });
   };
-  const addRule = () => onChange({ ...config, rules: [...config.rules, { name: "New bucket", min_hours: 0, max_hours: 0 }] });
+  const addRule = () => onChange({ ...config, rules: [...config.rules, { name: t("auto.newBucket"), min_hours: 0, max_hours: 0 }] });
   const removeRule = (i: number) => onChange({ ...config, rules: config.rules.filter((_, idx) => idx !== i) });
 
   return (
@@ -1172,8 +1328,8 @@ function HoursConfigForm({ config, onChange, label }: { config: HoursConfig; onC
           {config.rules.map((rule, i) => (
             <div key={i} className="flex gap-2">
               <input value={rule.name} onChange={(e) => updateRule(i, "name", e.target.value)} className="flex-1 rounded-lg border border-repressurizer-border bg-repressurizer-bg px-3 py-1.5 text-sm text-repressurizer-text focus:border-repressurizer-accent focus:outline-none" placeholder={t("auto.name")} />
-              <input type="number" value={rule.min_hours} onChange={(e) => updateRule(i, "min_hours", e.target.value)} className="w-20 rounded-lg border border-repressurizer-border bg-repressurizer-bg px-3 py-1.5 text-sm text-repressurizer-text focus:border-repressurizer-accent focus:outline-none font-mono" placeholder="min" />
-              <input type="number" value={rule.max_hours} onChange={(e) => updateRule(i, "max_hours", e.target.value)} className="w-20 rounded-lg border border-repressurizer-border bg-repressurizer-bg px-3 py-1.5 text-sm text-repressurizer-text focus:border-repressurizer-accent focus:outline-none font-mono" placeholder="max (0=∞)" />
+              <input type="number" value={rule.min_hours} onChange={(e) => updateRule(i, "min_hours", e.target.value)} className="w-20 rounded-lg border border-repressurizer-border bg-repressurizer-bg px-3 py-1.5 text-sm text-repressurizer-text focus:border-repressurizer-accent focus:outline-none font-mono" placeholder={t("auto.min")} />
+              <input type="number" value={rule.max_hours} onChange={(e) => updateRule(i, "max_hours", e.target.value)} className="w-24 rounded-lg border border-repressurizer-border bg-repressurizer-bg px-3 py-1.5 text-sm text-repressurizer-text focus:border-repressurizer-accent focus:outline-none font-mono" placeholder={t("auto.maxOpenPlaceholder")} />
               <button onClick={() => removeRule(i)} className="btn-press flex items-center justify-center w-8 h-8 rounded-lg text-repressurizer-danger/60 hover:text-repressurizer-danger hover:bg-repressurizer-danger/10">
                 <Trash size={14} />
               </button>
@@ -1309,44 +1465,45 @@ function DevPubConfigForm({
   suggestions: string[];
   metadata: AutoCatMetadata;
 }) {
+  const t = useT();
   const [newName, setNewName] = useState("");
   return (
     <div className="space-y-4">
       <PrefixInput value={config.prefix ?? ""} onChange={(v) => onChange({ ...config, prefix: v })} />
       <div className="grid gap-2 sm:grid-cols-2">
         <CheckboxRow
-          label="Developers"
+          label={t("auto.developers")}
           checked={config.include_developers}
           onChange={(checked) => onChange({ ...config, include_developers: checked })}
         />
         <CheckboxRow
-          label="Publishers"
+          label={t("auto.publishers")}
           checked={config.include_publishers}
           onChange={(checked) => onChange({ ...config, include_publishers: checked })}
         />
       </div>
       <div>
         <label className="mb-1.5 block text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">
-          Minimum games
+          {t("auto.minimumGames")}
         </label>
         <input
           type="number"
           min={1}
           value={config.min_games ?? ""}
           onChange={(e) => onChange({ ...config, min_games: e.target.value ? parseInt(e.target.value) : undefined })}
-          placeholder="No minimum"
+          placeholder={t("auto.noMinimum")}
           className="w-36 rounded-lg border border-repressurizer-border bg-repressurizer-bg px-3 py-2 text-sm text-repressurizer-text focus:border-repressurizer-accent focus:outline-none font-mono"
         />
       </div>
       <TagListInput
-        label="Only include these studios"
+        label={t("auto.includeStudios")}
         items={config.selected}
         newItem={newName}
         setNewItem={setNewName}
         onAddItem={(value) => onChange({ ...config, selected: [...config.selected, value] })}
         onRemove={(value) => onChange({ ...config, selected: config.selected.filter((item) => item !== value) })}
         suggestions={suggestions}
-        status={<MetadataStatus label="Studios" valueCount={suggestions.length} gameCount={metadata.gamesWithStudios} totalDetails={metadata.totalDetails} />}
+        status={<MetadataStatus label={t("auto.studios")} valueCount={suggestions.length} gameCount={metadata.gamesWithStudios} totalDetails={metadata.totalDetails} />}
       />
     </div>
   );
@@ -1363,32 +1520,33 @@ function FlagsConfigForm({
   suggestions: string[];
   metadata: AutoCatMetadata;
 }) {
+  const t = useT();
   const [newFlag, setNewFlag] = useState("");
   return (
     <div className="space-y-4">
       <PrefixInput value={config.prefix ?? ""} onChange={(v) => onChange({ ...config, prefix: v })} />
       <div>
         <label className="mb-1.5 block text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">
-          Max flags per game
+          {t("auto.maxFlags")}
         </label>
         <input
           type="number"
           min={1}
           value={config.max_flags ?? ""}
           onChange={(e) => onChange({ ...config, max_flags: e.target.value ? parseInt(e.target.value) : undefined })}
-          placeholder="Unlimited"
+          placeholder={t("auto.unlimited")}
           className="w-36 rounded-lg border border-repressurizer-border bg-repressurizer-bg px-3 py-2 text-sm text-repressurizer-text focus:border-repressurizer-accent focus:outline-none font-mono"
         />
       </div>
       <TagListInput
-        label="Only include these flags"
+        label={t("auto.includeFlags")}
         items={config.included_flags}
         newItem={newFlag}
         setNewItem={setNewFlag}
         onAddItem={(value) => onChange({ ...config, included_flags: [...config.included_flags, value] })}
         onRemove={(value) => onChange({ ...config, included_flags: config.included_flags.filter((item) => item !== value) })}
         suggestions={suggestions}
-        status={<MetadataStatus label="Flags" valueCount={suggestions.length} gameCount={metadata.gamesWithFlags} totalDetails={metadata.totalDetails} />}
+        status={<MetadataStatus label={t("auto.flags")} valueCount={suggestions.length} gameCount={metadata.gamesWithFlags} totalDetails={metadata.totalDetails} />}
       />
     </div>
   );
@@ -1405,54 +1563,56 @@ function LanguageConfigForm({
   suggestions: string[];
   metadata: AutoCatMetadata;
 }) {
+  const t = useT();
   const [newLanguage, setNewLanguage] = useState("");
   return (
     <div className="space-y-4">
       <PrefixInput value={config.prefix ?? ""} onChange={(v) => onChange({ ...config, prefix: v })} />
       <div>
         <label className="mb-1.5 block text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">
-          Max languages per game
+          {t("auto.maxLanguages")}
         </label>
         <input
           type="number"
           min={1}
           value={config.max_languages ?? ""}
           onChange={(e) => onChange({ ...config, max_languages: e.target.value ? parseInt(e.target.value) : undefined })}
-          placeholder="Unlimited"
+          placeholder={t("auto.unlimited")}
           className="w-36 rounded-lg border border-repressurizer-border bg-repressurizer-bg px-3 py-2 text-sm text-repressurizer-text focus:border-repressurizer-accent focus:outline-none font-mono"
         />
       </div>
       <TagListInput
-        label="Only include these languages"
+        label={t("auto.includeLanguages")}
         items={config.included_languages}
         newItem={newLanguage}
         setNewItem={setNewLanguage}
         onAddItem={(value) => onChange({ ...config, included_languages: [...config.included_languages, value] })}
         onRemove={(value) => onChange({ ...config, included_languages: config.included_languages.filter((item) => item !== value) })}
         suggestions={suggestions}
-        status={<MetadataStatus label="Languages" valueCount={suggestions.length} gameCount={metadata.gamesWithLanguages} totalDetails={metadata.totalDetails} />}
+        status={<MetadataStatus label={t("auto.languages")} valueCount={suggestions.length} gameCount={metadata.gamesWithLanguages} totalDetails={metadata.totalDetails} />}
       />
     </div>
   );
 }
 
 function PlatformConfigForm({ config, onChange }: { config: PlatformConfig; onChange: (c: PlatformConfig) => void }) {
+  const t = useT();
   return (
     <div className="space-y-4">
       <PrefixInput value={config.prefix ?? ""} onChange={(v) => onChange({ ...config, prefix: v })} />
       <div className="grid gap-2 sm:grid-cols-3">
         <CheckboxRow
-          label="Windows"
+          label={t("auto.platform.windows")}
           checked={config.include_windows}
           onChange={(checked) => onChange({ ...config, include_windows: checked })}
         />
         <CheckboxRow
-          label="macOS"
+          label={t("auto.platform.mac")}
           checked={config.include_mac}
           onChange={(checked) => onChange({ ...config, include_mac: checked })}
         />
         <CheckboxRow
-          label="Linux"
+          label={t("auto.platform.linux")}
           checked={config.include_linux}
           onChange={(checked) => onChange({ ...config, include_linux: checked })}
         />
@@ -1462,26 +1622,65 @@ function PlatformConfigForm({ config, onChange }: { config: PlatformConfig; onCh
 }
 
 function NameConfigForm({ config, onChange }: { config: NameConfig; onChange: (c: NameConfig) => void }) {
+  const t = useT();
   return (
     <div className="space-y-4">
       <PrefixInput value={config.prefix ?? ""} onChange={(v) => onChange({ ...config, prefix: v })} />
       <div className="grid gap-2">
         <CheckboxRow
-          label="Ignore leading “The”"
+          label={t("auto.ignoreLeadingThe")}
           checked={config.skip_leading_the}
           onChange={(checked) => onChange({ ...config, skip_leading_the: checked })}
         />
         <CheckboxRow
-          label="Group titles starting with numbers as #"
+          label={t("auto.groupNumbers")}
           checked={config.group_numbers}
           onChange={(checked) => onChange({ ...config, group_numbers: checked })}
         />
         <CheckboxRow
-          label="Group symbols and non-Latin initials as Other"
+          label={t("auto.groupOther")}
           checked={config.group_other}
           onChange={(checked) => onChange({ ...config, group_other: checked })}
         />
       </div>
+    </div>
+  );
+}
+
+function SteamRatingConfigForm({
+  config,
+  onChange,
+}: {
+  config: SteamRatingConfig;
+  onChange: (c: SteamRatingConfig) => void;
+}) {
+  const t = useT();
+  return (
+    <div className="space-y-4">
+      <PrefixInput value={config.prefix ?? ""} onChange={(v) => onChange({ ...config, prefix: v })} />
+      <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg p-4 text-sm text-repressurizer-text-muted">
+        <p className="mb-2 font-medium text-repressurizer-text">{t("auto.steamRatingBuckets")}</p>
+        <div className="space-y-1.5 text-xs">
+          {STEAM_RATING_RULES.map((rule) => {
+            const reviews = t("auto.reviewsPlus", { count: rule.min_reviews });
+            return (
+              <div key={rule.name} className="flex justify-between gap-4">
+                <span className="text-repressurizer-text">{rule.name}</span>
+                <span className="text-right font-mono text-repressurizer-accent">
+                  {rule.min_score}-{rule.max_score}% · {reviews}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+        <p className="mt-3 text-repressurizer-text-faint">{t("auto.steamRatingSkipped")}</p>
+      </div>
+      <CheckboxRow
+        label={t("auto.useWilsonScore")}
+        checked={config.use_wilson_score ?? false}
+        onChange={(checked) => onChange({ ...config, use_wilson_score: checked })}
+      />
+      <p className="text-xs text-repressurizer-text-faint">{t("auto.useWilsonScore.desc")}</p>
     </div>
   );
 }
@@ -1642,8 +1841,8 @@ function TagListInput({
 // Step: Fetch
 // ============================================================
 
-function FetchStep({ progress, total, error, waiting }: {
-  progress: number; total: number; error: string; waiting: boolean;
+function FetchStep({ progress, total, error, waiting, message }: {
+  progress: number; total: number; error: string; waiting: boolean; message: string;
 }) {
   const t = useT();
   const percent = total > 0 ? Math.round((progress / total) * 100) : 0;
@@ -1670,7 +1869,7 @@ function FetchStep({ progress, total, error, waiting }: {
 
   return (
     <div className="space-y-4 py-4">
-      <p className="text-sm text-repressurizer-text-muted">{t("auto.fetchingDetails")}</p>
+      <p className="text-sm text-repressurizer-text-muted">{message}</p>
       <div className="h-2 w-full overflow-hidden rounded-full bg-repressurizer-bg">
         <div
           className="h-full rounded-full bg-repressurizer-accent transition-all"
@@ -1678,7 +1877,7 @@ function FetchStep({ progress, total, error, waiting }: {
         />
       </div>
       <p className="text-xs text-repressurizer-text-faint tabular-nums">
-        {progress} / {total} games ({percent}%)
+        {t("auto.fetchProgress", { progress, total, percent })}
       </p>
       <p className="text-xs text-repressurizer-text-faint">{t("auto.fetchingBackground")}</p>
     </div>
