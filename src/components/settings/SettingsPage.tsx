@@ -119,6 +119,12 @@ import { getLocaleDisplayName, getLocaleFlag, normalizeLocale, SUPPORTED_LOCALES
 import type { AppStartupMode, AppTheme } from "../../lib/types";
 import { automationPublishStatusPatch, publishAutomationSnapshot } from "../../lib/automationPublish";
 import { SelectMenu } from "../ui/SelectMenu";
+import {
+  normalizeSettingsSearchText,
+  rankSettingsSearchSections,
+  type RankedSettingsSearchSection,
+  type SettingsSearchSection,
+} from "../../lib/settingsSearch";
 
 interface SettingsPageProps {
   onClose: () => void;
@@ -800,8 +806,8 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
   const familyIncludeNonGames = settings.includeSteamFamilyNonGames ?? false;
   const steamAppIndexCount = Object.keys(steamAppIndex.apps).length;
   const steamAppIndexStale = isSteamAppIndexStale(steamAppIndex);
-  const settingsSearchText = settingsSearch.trim().toLowerCase();
-  const settingsSections = useMemo(
+  const settingsSearchText = normalizeSettingsSearchText(settingsSearch);
+  const settingsSections = useMemo<SettingsSearchSection<SettingsTab>[]>(
     () => [
       {
         id: "overview",
@@ -981,11 +987,8 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
     ],
     [t]
   );
-  const matchedSettingsSections = useMemo(() => {
-    if (!settingsSearchText) return settingsSections;
-    return settingsSections.filter((section) =>
-      `${section.label} ${section.keywords.join(" ")}`.toLowerCase().includes(settingsSearchText)
-    );
+  const matchedSettingsSections = useMemo<RankedSettingsSearchSection<SettingsTab>[]>(() => {
+    return rankSettingsSearchSections(settingsSearchText, settingsSections);
   }, [settingsSearchText, settingsSections]);
   const visibleSectionIds = useMemo(
     () => new Set(matchedSettingsSections.map((section) => section.id)),

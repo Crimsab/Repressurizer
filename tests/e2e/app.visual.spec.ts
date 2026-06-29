@@ -200,7 +200,7 @@ test("settings search finds local-only visibility and generated changelog", asyn
   const search = settingsDialog.getByPlaceholder("Search settings, tokens, HLTB, tray, exports...");
 
   await expect(search).toHaveAttribute("type", "text");
-  await search.fill("local");
+  await search.fill("lcoal");
   await expect(settingsDialog.getByRole("button", { name: "Visibility" })).toBeVisible();
   await settingsDialog.getByRole("button", { name: "Visibility" }).click();
   await expect(settingsDialog.getByText("Hide local-only games")).toBeVisible();
