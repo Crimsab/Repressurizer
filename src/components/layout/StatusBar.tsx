@@ -146,8 +146,12 @@ export function StatusBar() {
   const ratingsRunning = useBackgroundFetchStore((s) => s.ratingsRunning);
   const ratingsFetched = useBackgroundFetchStore((s) => s.ratingsFetched);
   const ratingsTotal = useBackgroundFetchStore((s) => s.ratingsTotal);
+  const ratingsSucceeded = useBackgroundFetchStore((s) => s.ratingsSucceeded);
+  const ratingsFailed = useBackgroundFetchStore((s) => s.ratingsFailed);
   const ratingsCurrentName = useBackgroundFetchStore((s) => s.ratingsCurrentName);
   const ratingsRecentNames = useBackgroundFetchStore((s) => s.ratingsRecentNames);
+  const ratingsCoolingDown = useBackgroundFetchStore((s) => s.ratingsCoolingDown);
+  const ratingsCooldownSecs = useBackgroundFetchStore((s) => s.ratingsCooldownSecs);
   const stopRatingsFetch = useBackgroundFetchStore((s) => s.stopRatingsFetch);
 
   const collections = useCategoryStore((s) => s.collections);
@@ -370,8 +374,12 @@ export function StatusBar() {
             onClick={(e) => { e.stopPropagation(); setShowDetailsPopover(false); setShowHltbPopover(false); setShowAchievementsPopover(false); setShowRatingsPopover((v) => !v); }}
             className="inline-flex items-center gap-1.5 text-violet-400 hover:text-violet-300 transition-colors"
           >
-            <Spinner size={9} className="animate-spin shrink-0" />
-            <span>{t("fetch.ratings")} {ratingsFetched}/{ratingsTotal}</span>
+            <Spinner size={9} className={ratingsCoolingDown ? "shrink-0" : "animate-spin shrink-0"} />
+            <span>
+              {ratingsCoolingDown
+                ? t("statusbar.slowing", { seconds: ratingsCooldownSecs })
+                : `${t("fetch.ratings")} ${ratingsFetched}/${ratingsTotal}`}
+            </span>
           </button>
           {showRatingsPopover && (
             <FetchPopover
@@ -379,8 +387,12 @@ export function StatusBar() {
               color="violet"
               fetched={ratingsFetched}
               total={ratingsTotal}
+              succeeded={ratingsSucceeded}
+              failed={ratingsFailed}
               currentName={ratingsCurrentName}
               recentNames={ratingsRecentNames}
+              coolingDown={ratingsCoolingDown}
+              cooldownSecs={ratingsCooldownSecs}
               onStop={stopRatingsFetch}
               onClose={() => setShowRatingsPopover(false)}
             />

@@ -5,7 +5,7 @@ export const STEAM_RATING_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 export const STEAM_RATING_RULES: SteamRatingRule[] = [
   { name: "Overwhelmingly Positive", min_score: 95, max_score: 100, min_reviews: 500, max_reviews: 0 },
-  { name: "Very Positive", min_score: 85, max_score: 100, min_reviews: 50, max_reviews: 0 },
+  { name: "Very Positive", min_score: 80, max_score: 100, min_reviews: 50, max_reviews: 0 },
   { name: "Positive", min_score: 80, max_score: 100, min_reviews: 1, max_reviews: 0 },
   { name: "Mostly Positive", min_score: 70, max_score: 79, min_reviews: 1, max_reviews: 0 },
   { name: "Mixed", min_score: 40, max_score: 69, min_reviews: 1, max_reviews: 0 },
@@ -55,6 +55,14 @@ export function steamRatingIdsNeedingFetch(
   return Object.keys(games)
     .map(Number)
     .filter((id) => !isSteamRatingFresh(ratings[id], now));
+}
+
+export function isSteamReviewRateLimitedError(error: unknown): boolean {
+  const message = String(error);
+  return (
+    /\bHTTP\s+(403|429)\b/i.test(message) ||
+    /\b(rate[- ]?limit(?:ed)?|too many requests)\b/i.test(message)
+  );
 }
 
 export function categorizeBySteamRating(

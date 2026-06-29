@@ -8,7 +8,7 @@ import { useFailedGamesStore } from "./failedGamesStore";
 import { useHltbIgnoredStore } from "./hltbIgnoredStore";
 import { useSettingsStore } from "./settingsStore";
 import { extractReleaseYear } from "../lib/search";
-import { isSteamRatingFresh } from "../lib/steamRatings";
+import { isSteamRatingFresh, isSteamReviewRateLimitedError } from "../lib/steamRatings";
 import type { GameDetails } from "../lib/types";
 
 // ── Config ────────────────────────────────────────────────────────────────────
@@ -23,6 +23,7 @@ const DETAILS_SLOWDOWN_THRESHOLD_MS = 3_000; // when to show "slowing down" indi
 // HLTB: concurrency controlled by settings (default 3), 500ms between batches
 const HLTB_BATCH_DELAY_MS = 500;
 const RATINGS_BASE_DELAY_MS = 1200;
+const RATINGS_RATE_LIMIT_COOLDOWN_MS = 5 * 60 * 1000;
 
 /** True when the error is a permanent "game not on Steam" failure (not a network issue) */
 function isPermanentError(e: unknown): boolean {
@@ -74,8 +75,12 @@ interface BackgroundFetchState {
   ratingsRunning: boolean;
   ratingsFetched: number;
   ratingsTotal: number;
+  ratingsSucceeded: number;
+  ratingsFailed: number;
   ratingsCurrentName: string;
   ratingsRecentNames: string[];
+  ratingsCoolingDown: boolean;
+  ratingsCooldownSecs: number;
 
   startDetailsFetch: (missingIds: number[]) => void;
   stopDetailsFetch: () => void;
@@ -119,8 +124,12 @@ export const useBackgroundFetchStore = create<BackgroundFetchState>((set, get) =
     ratingsRunning: false,
     ratingsFetched: 0,
     ratingsTotal: 0,
+    ratingsSucceeded: 0,
+    ratingsFailed: 0,
     ratingsCurrentName: "",
     ratingsRecentNames: [],
+    ratingsCoolingDown: false,
+    ratingsCooldownSecs: 0,
 
     startDetailsFetch: (missingIds) => {
       if (_detailsRunning || missingIds.length === 0) return;
@@ -216,8 +225,12 @@ export const useBackgroundFetchStore = create<BackgroundFetchState>((set, get) =
         ratingsRunning: true,
         ratingsFetched: 0,
         ratingsTotal: filtered.length,
+        ratingsSucceeded: 0,
+        ratingsFailed: 0,
         ratingsCurrentName: "",
         ratingsRecentNames: [],
+        ratingsCoolingDown: false,
+        ratingsCooldownSecs: 0,
       });
       _runRatingsLoop(filtered);
     },
@@ -225,7 +238,7 @@ export const useBackgroundFetchStore = create<BackgroundFetchState>((set, get) =
     stopRatingsFetch: () => {
       _ratingsAbort = true;
       _ratingsRunning = false;
-      set({ ratingsRunning: false, ratingsCurrentName: "" });
+      set({ ratingsRunning: false, ratingsCurrentName: "", ratingsCoolingDown: false, ratingsCooldownSecs: 0 });
     },
   };
 });
@@ -495,6 +508,8 @@ async function _runAchievementsLoop(items: Array<{ appId: number; name: string }
 async function _runRatingsLoop(items: Array<{ appId: number; name: string }>) {
   console.log(`[Ratings] Starting fetch for ${items.length} games`);
   let fetched = 0;
+  let succeeded = 0;
+  let failed = 0;
 
   for (let i = 0; i < items.length; i++) {
     if (_ratingsAbort) break;
@@ -502,18 +517,51 @@ async function _runRatingsLoop(items: Array<{ appId: number; name: string }>) {
     const { appId, name } = items[i];
     _setState({ ratingsCurrentName: name });
 
-    try {
-      const summary = await fetchSteamReviewSummary(appId);
-      useSteamRatingsStore.getState().setRating(appId, summary);
-      const label = summary.total_reviews > 0
-        ? `${name} · ${summary.review_score_desc || `${summary.positive_percentage ?? 0}%`}`
-        : `${name} · no reviews`;
-      addToRecent("ratingsRecentNames", `✓ ${label}`);
-      console.log(`[Ratings] ✓ ${name} (${appId})`);
-    } catch (e) {
-      addToRecent("ratingsRecentNames", `✗ ${name}`);
-      console.warn(`[Ratings] ✗ ${name} (${appId}): ${e}`);
+    let processed = false;
+    let rateLimitRetries = 0;
+
+    while (!_ratingsAbort && !processed) {
+      try {
+        const summary = await fetchSteamReviewSummary(appId);
+        useSteamRatingsStore.getState().setRating(appId, summary);
+        const label = summary.total_reviews > 0
+          ? `${name} · ${summary.review_score_desc || `${summary.positive_percentage ?? 0}%`}`
+          : `${name} · no reviews`;
+        addToRecent("ratingsRecentNames", `✓ ${label}`);
+        console.log(`[Ratings] ✓ ${name} (${appId})`);
+        succeeded++;
+        processed = true;
+      } catch (e) {
+        if (isSteamReviewRateLimitedError(e)) {
+          console.warn(`[Ratings] rate-limited while fetching ${name} (${appId}): ${e}`);
+          rateLimitRetries++;
+          addToRecent(
+            "ratingsRecentNames",
+            rateLimitRetries === 1
+              ? "⏳ Steam rate limit; waiting 5m"
+              : `⏳ Steam still rate-limited; waiting 5m (${rateLimitRetries})`
+          );
+          const shouldContinue = await waitRatingsCooldown(RATINGS_RATE_LIMIT_COOLDOWN_MS);
+          if (!shouldContinue) break;
+          _setState({ ratingsCurrentName: `[retry] ${name}` });
+          continue;
+        }
+
+        failed++;
+        _setState({ ratingsFailed: failed });
+        addToRecent("ratingsRecentNames", `✗ ${name}`);
+        console.warn(`[Ratings] ✗ ${name} (${appId}): ${e}`);
+        processed = true;
+      }
     }
+
+    if (!processed) break;
+
+    if (succeeded > _getState().ratingsSucceeded) {
+      _setState({ ratingsSucceeded: succeeded });
+    }
+
+    if (_ratingsAbort && failed > 0) break;
 
     fetched++;
     _setState({ ratingsFetched: fetched });
@@ -525,5 +573,32 @@ async function _runRatingsLoop(items: Array<{ appId: number; name: string }>) {
 
   console.log(`[Ratings] Done: ${fetched} processed`);
   _ratingsRunning = false;
-  _setState({ ratingsRunning: false, ratingsCurrentName: "", ratingsFetched: fetched });
+  _setState({
+    ratingsRunning: false,
+    ratingsCurrentName: "",
+    ratingsFetched: fetched,
+    ratingsSucceeded: succeeded,
+    ratingsFailed: failed,
+    ratingsCoolingDown: false,
+    ratingsCooldownSecs: 0,
+  });
+}
+
+async function waitRatingsCooldown(totalMs: number): Promise<boolean> {
+  const deadline = Date.now() + totalMs;
+  _setState({
+    ratingsCoolingDown: true,
+    ratingsCooldownSecs: Math.ceil(totalMs / 1000),
+  });
+
+  while (!_ratingsAbort) {
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) break;
+
+    _setState({ ratingsCooldownSecs: Math.ceil(remainingMs / 1000) });
+    await sleep(Math.min(1000, remainingMs));
+  }
+
+  _setState({ ratingsCoolingDown: false, ratingsCooldownSecs: 0 });
+  return !_ratingsAbort;
 }

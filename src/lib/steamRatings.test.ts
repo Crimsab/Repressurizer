@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   categorizeBySteamRating,
   isSteamRatingFresh,
+  isSteamReviewRateLimitedError,
   scoreForRating,
   steamRatingIdsNeedingFetch,
   wilsonLowerBoundPercentage,
@@ -121,5 +122,14 @@ describe("steam rating cache freshness", () => {
       },
       now
     )).toEqual([2, 3]);
+  });
+});
+
+describe("Steam review rate-limit detection", () => {
+  it("detects Steam Store throttle responses", () => {
+    expect(isSteamReviewRateLimitedError("Steam reviews returned HTTP 403 for app 10")).toBe(true);
+    expect(isSteamReviewRateLimitedError("Steam reviews returned HTTP 429 for app 10")).toBe(true);
+    expect(isSteamReviewRateLimitedError("Too many requests")).toBe(true);
+    expect(isSteamReviewRateLimitedError("Failed to parse Steam reviews response")).toBe(false);
   });
 });

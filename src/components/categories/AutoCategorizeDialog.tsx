@@ -306,11 +306,14 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
   const ratingsRunning = useBackgroundFetchStore((s) => s.ratingsRunning);
   const ratingsFetched = useBackgroundFetchStore((s) => s.ratingsFetched);
   const ratingsTotal = useBackgroundFetchStore((s) => s.ratingsTotal);
+  const ratingsCoolingDown = useBackgroundFetchStore((s) => s.ratingsCoolingDown);
+  const ratingsCooldownSecs = useBackgroundFetchStore((s) => s.ratingsCooldownSecs);
   const { startDetailsFetch, startRatingsFetch } = useBackgroundFetchStore.getState();
 
   // Local step — "fetch" isn't persisted; "done" resets to "choose" on reopen
   const [step, setStep] = useState<Step>(() => {
     if (useBackgroundFetchStore.getState().detailsRunning) return "fetch";
+    if (useBackgroundFetchStore.getState().ratingsRunning) return "fetch";
     if (persist.lastStep === "done") return "choose";
     return persist.lastStep;
   });
@@ -871,6 +874,8 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
               total={fetchKind === "ratings" ? ratingsTotal : detailsTotal}
               error={fetchError}
               waiting={waitingForFetch || pendingPresetRun !== null}
+              coolingDown={fetchKind === "ratings" ? ratingsCoolingDown : false}
+              cooldownSecs={fetchKind === "ratings" ? ratingsCooldownSecs : 0}
               message={fetchKind === "ratings" ? t("auto.fetchingRatings") : t("auto.fetchingDetails")}
             />
           )}
@@ -2042,8 +2047,14 @@ function TagListInput({
 // Step: Fetch
 // ============================================================
 
-function FetchStep({ progress, total, error, waiting, message }: {
-  progress: number; total: number; error: string; waiting: boolean; message: string;
+function FetchStep({ progress, total, error, waiting, coolingDown, cooldownSecs, message }: {
+  progress: number;
+  total: number;
+  error: string;
+  waiting: boolean;
+  coolingDown: boolean;
+  cooldownSecs: number;
+  message: string;
 }) {
   const t = useT();
   const percent = total > 0 ? Math.round((progress / total) * 100) : 0;
@@ -2071,6 +2082,12 @@ function FetchStep({ progress, total, error, waiting, message }: {
   return (
     <div className="space-y-4 py-4">
       <p className="text-sm text-repressurizer-text-muted">{message}</p>
+      {coolingDown && (
+        <div className="flex items-center gap-2 rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-400">
+          <Spinner size={12} className="animate-spin shrink-0" />
+          <span>{t("fetch.slowingDown", { seconds: cooldownSecs })}</span>
+        </div>
+      )}
       <div className="h-2 w-full overflow-hidden rounded-full bg-repressurizer-bg">
         <div
           className="h-full rounded-full bg-repressurizer-accent transition-all"
