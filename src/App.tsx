@@ -44,6 +44,11 @@ import { WarningCircle, ArrowCounterClockwise, GameController, CloudArrowDown, X
 const SetupWizard = lazy(() => import("./components/setup/SetupWizard").then((m) => ({ default: m.SetupWizard })));
 const OnboardingTour = lazy(() => import("./components/ui/OnboardingTour").then((m) => ({ default: m.OnboardingTour })));
 
+const DEFAULT_LIBRARY_REFRESH_INTERVAL_MINUTES = 30;
+const DEFAULT_UPDATE_CHECK_INTERVAL_HOURS = 12;
+const MIN_LIBRARY_REFRESH_INTERVAL_MINUTES = 5;
+const MIN_UPDATE_CHECK_INTERVAL_HOURS = 1;
+
 class ErrorBoundary extends Component<
   { children: ReactNode },
   { error: Error | null }
@@ -158,6 +163,11 @@ function AppContent() {
   const [availableUpdate, setAvailableUpdate] = useState<Update | null>(null);
   const [installingUpdate, setInstallingUpdate] = useState(false);
   const toast = useToastStore;
+  const checkingUpdatesRef = useRef(false);
+  const availableUpdateRef = useRef<Update | null>(null);
+  const installingUpdateRef = useRef(false);
+  const checkForUpdatesRef = useRef<(notify?: boolean) => Promise<void>>(async () => {});
+  const installUpdateRef = useRef<() => Promise<void>>(async () => {});
   const reloadLibraryRef = useRef<(notify?: boolean, startupBackup?: boolean) => Promise<void>>(async () => {});
   const publishAutomationRef = useRef<(notify?: boolean, force?: boolean) => Promise<void>>(async () => {});
 
@@ -188,6 +198,43 @@ function AppContent() {
       enabled: true,
       requestPermissionOnDemand: userInitiated,
     });
+  };
+
+  checkForUpdatesRef.current = async (notify = false) => {
+    if (checkingUpdatesRef.current) {
+      if (notify) toast.getState().info(t("settings.updates.checking"));
+      return;
+    }
+    if (availableUpdateRef.current) {
+      if (notify) {
+        const message = t("settings.updates.available", { version: availableUpdateRef.current.version });
+        toast.getState().info(message);
+        await sendWorkflowNotification(message, true);
+      }
+      return;
+    }
+
+    checkingUpdatesRef.current = true;
+    try {
+      const update = await check();
+      availableUpdateRef.current = update;
+      setAvailableUpdate(update);
+      if (notify) {
+        const message = update
+          ? t("settings.updates.available", { version: update.version })
+          : t("settings.updates.current");
+        toast.getState()[update ? "info" : "success"](message);
+        await sendWorkflowNotification(message, true);
+      }
+    } catch (e) {
+      if (notify) {
+        const message = t("settings.updates.checkFailed", { error: String(e) });
+        toast.getState().error(message);
+        await sendWorkflowNotification(message, true, true);
+      }
+    } finally {
+      checkingUpdatesRef.current = false;
+    }
   };
 
   // Apply saved accent color and theme on startup
@@ -308,6 +355,7 @@ function AppContent() {
     setReloading(true);
     setReloadError("");
     try {
+      const previousGameIds = new Set(Object.keys(useGameStore.getState().games).map(Number));
       const [games, collections] = await Promise.all([
         fetchLibrary(currentSettings.apiKey, currentSettings.steamId64),
         loadCollections(currentSettings.steamPath, currentSettings.steamId3),
@@ -317,10 +365,15 @@ function AppContent() {
       const cachedDetails = useGameStore.getState().details;
       const appIndex = useSteamAppIndexStore.getState().data;
       const mergedGames = mergeCollectionOnlyGames([...games, ...familyGames], collections, cachedDetails, appIndex);
+      const newGameCount =
+        previousGameIds.size > 0
+          ? mergedGames.filter((game) => !previousGameIds.has(game.appid)).length
+          : 0;
       console.log("Reloaded:", mergedGames.length, "games,", collections.length, "collections");
       await appLog.info("Steam library refreshed", {
         games: mergedGames.length,
         collections: collections.length,
+        newGames: newGameCount,
       });
       setGames(mergedGames);
       usePlayHistoryStore.getState().observeLibrary(mergedGames);
@@ -354,6 +407,11 @@ function AppContent() {
 
       if (notify) toast.getState().success("Steam library refreshed.");
       if (notify) await sendWorkflowNotification("Steam library refreshed.", true);
+      if (!notify && newGameCount > 0 && currentSettings.autoRefreshLibraryEnabled) {
+        const message = t("settings.libraryAutoRefresh.found", { count: newGameCount });
+        toast.getState().info(message);
+        await sendWorkflowNotification(message, true);
+      }
     } catch (e) {
       console.error("Reload error:", e);
       await appLog.error("Steam library refresh failed", { error: String(e) });
@@ -427,6 +485,16 @@ function AppContent() {
       void publishAutomationRef.current(true, true).catch(() => {});
     });
 
+    register("repressurizer-update-action-requested", () => {
+      void (async () => {
+        if (availableUpdateRef.current) {
+          await installUpdateRef.current();
+          return;
+        }
+        await checkForUpdatesRef.current(true);
+      })().catch(() => {});
+    });
+
     register<{ level: "success" | "error" | "warning" | "info"; message: string }>(
       "repressurizer-tray-message",
       ({ payload }) => {
@@ -449,28 +517,47 @@ function AppContent() {
   }, []);
 
   useEffect(() => {
-    if (startupContext === null || quietTrayStartup || !settings.setupComplete || settings.checkUpdatesOnStartup === false) return;
-    const timer = window.setTimeout(() => {
-      check()
-        .then((update) => {
-          if (update) setAvailableUpdate(update);
-        })
-        .catch(() => {});
-    }, 7000);
-    return () => window.clearTimeout(timer);
-  }, [startupContext, quietTrayStartup, settings.setupComplete, settings.checkUpdatesOnStartup]);
+    if (startupContext === null || !settings.setupComplete || settings.checkUpdatesOnStartup === false) return;
+    const intervalHours = Math.max(
+      MIN_UPDATE_CHECK_INTERVAL_HOURS,
+      settings.updateAutoCheckIntervalHours || DEFAULT_UPDATE_CHECK_INTERVAL_HOURS
+    );
+    const runCheck = () => void checkForUpdatesRef.current(false);
+    const timer = window.setTimeout(runCheck, 7000);
+    const interval = window.setInterval(runCheck, intervalHours * 60 * 60 * 1000);
+    return () => {
+      window.clearTimeout(timer);
+      window.clearInterval(interval);
+    };
+  }, [startupContext, settings.setupComplete, settings.checkUpdatesOnStartup, settings.updateAutoCheckIntervalHours]);
+
+  useEffect(() => {
+    if (!settings.setupComplete || settings.autoRefreshLibraryEnabled !== true) return;
+    const intervalMinutes = Math.max(
+      MIN_LIBRARY_REFRESH_INTERVAL_MINUTES,
+      settings.libraryAutoRefreshIntervalMinutes || DEFAULT_LIBRARY_REFRESH_INTERVAL_MINUTES
+    );
+    const interval = window.setInterval(() => {
+      void reloadLibraryRef.current(false).catch(() => {});
+    }, intervalMinutes * 60 * 1000);
+    return () => window.clearInterval(interval);
+  }, [settings.setupComplete, settings.autoRefreshLibraryEnabled, settings.libraryAutoRefreshIntervalMinutes]);
 
   const installUpdate = async () => {
-    if (!availableUpdate) return;
+    const update = availableUpdateRef.current;
+    if (!update || installingUpdateRef.current) return;
+    installingUpdateRef.current = true;
     setInstallingUpdate(true);
     try {
-      await availableUpdate.downloadAndInstall();
+      await update.downloadAndInstall();
       await relaunch();
     } catch (e) {
       toast.getState().error(t("settings.updates.installFailed", { error: String(e) }));
+      installingUpdateRef.current = false;
       setInstallingUpdate(false);
     }
   };
+  installUpdateRef.current = installUpdate;
 
   // Load cached data from Rust file cache on startup
   useEffect(() => {
@@ -574,7 +661,10 @@ function AppContent() {
             version={availableUpdate.version}
             installing={installingUpdate}
             onInstall={installUpdate}
-            onDismiss={() => setAvailableUpdate(null)}
+            onDismiss={() => {
+              availableUpdateRef.current = null;
+              setAvailableUpdate(null);
+            }}
           />
         )}
         <StatusBar />

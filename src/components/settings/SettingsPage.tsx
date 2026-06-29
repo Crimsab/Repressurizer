@@ -122,6 +122,7 @@ import {
   BellRinging,
   Bug,
   CloudArrowDown,
+  GameController,
   UsersThree,
   MagnifyingGlass,
   Trophy,
@@ -150,6 +151,9 @@ type SettingsTab =
   | "about";
 type AutomationLogFilter = "all" | "success" | "failed" | "skipped";
 type AutomationLogSort = "desc" | "asc";
+
+const LIBRARY_REFRESH_INTERVAL_OPTIONS = [15, 30, 60, 180, 360] as const;
+const UPDATE_CHECK_INTERVAL_OPTIONS = [6, 12, 24, 72, 168] as const;
 
 interface SettingsTabItem {
   id: SettingsTab;
@@ -206,6 +210,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
     useState<DepressurizerProfileImport | null>(null);
   const [checkingUpdates, setCheckingUpdates] = useState(false);
   const [installingUpdate, setInstallingUpdate] = useState(false);
+  const [updateMessage, setUpdateMessage] = useState<{ text: string; tone: "success" | "error" } | null>(null);
   const [publishingAutomation, setPublishingAutomation] = useState(false);
   const [availableUpdate, setAvailableUpdate] = useState<Update | null>(null);
   const [familyAccessToken, setFamilyAccessToken] = useState("");
@@ -227,6 +232,12 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
     if (tab === "backups") loadBackups();
     if (tab === "data") getCacheInfo().then(setCacheInfo).catch(() => {});
   }, [tab]);
+
+  useEffect(() => {
+    if (!updateMessage) return;
+    const timer = window.setTimeout(() => setUpdateMessage(null), 5000);
+    return () => window.clearTimeout(timer);
+  }, [updateMessage]);
 
   useEffect(() => {
     let cancelled = false;
@@ -501,13 +512,19 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
   const handleCheckUpdates = async () => {
     setCheckingUpdates(true);
     setAvailableUpdate(null);
-    setMessage("");
+    setUpdateMessage(null);
     try {
       const update = await check();
       setAvailableUpdate(update);
-      setMessage(update ? t("settings.updates.available", { version: update.version }) : t("settings.updates.current"));
+      setUpdateMessage({
+        text: update ? t("settings.updates.available", { version: update.version }) : t("settings.updates.current"),
+        tone: "success",
+      });
     } catch (e) {
-      setMessage(t("settings.updates.checkFailed", { error: String(e) }));
+      setUpdateMessage({
+        text: t("settings.updates.checkFailed", { error: String(e) }),
+        tone: "error",
+      });
     } finally {
       setCheckingUpdates(false);
     }
@@ -558,12 +575,15 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
   const handleInstallUpdate = async () => {
     if (!availableUpdate) return;
     setInstallingUpdate(true);
-    setMessage("");
+    setUpdateMessage(null);
     try {
       await availableUpdate.downloadAndInstall();
       await relaunch();
     } catch (e) {
-      setMessage(t("settings.updates.installFailed", { error: String(e) }));
+      setUpdateMessage({
+        text: t("settings.updates.installFailed", { error: String(e) }),
+        tone: "error",
+      });
       setInstallingUpdate(false);
     }
   };
@@ -602,21 +622,29 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
       return;
     }
     setFamilyAccessToken(token);
-    const cache = await saveSteamFamilyToken(token, false);
-    if (cache) {
-      applyFamilyTokenCache(cache);
-      setMessage(t("settings.family.tokenSaved"));
-      setTimeout(() => setMessage(""), 2000);
+    try {
+      const cache = await saveSteamFamilyToken(token, false);
+      if (cache) {
+        applyFamilyTokenCache(cache);
+        setMessage(t("settings.family.tokenSaved"));
+        setTimeout(() => setMessage(""), 2000);
+      }
+    } catch (e) {
+      setMessage(String(e));
     }
   };
 
   const handleClearFamilyToken = async () => {
-    await clearSteamFamilyToken();
-    setFamilyAccessToken("");
-    setFamilyTokenSavedAt(null);
-    setFamilyTokenValidatedAt(null);
-    setMessage(t("settings.family.tokenCleared"));
-    setTimeout(() => setMessage(""), 2000);
+    try {
+      await clearSteamFamilyToken();
+      setFamilyAccessToken("");
+      setFamilyTokenSavedAt(null);
+      setFamilyTokenValidatedAt(null);
+      setMessage(t("settings.family.tokenCleared"));
+      setTimeout(() => setMessage(""), 2000);
+    } catch (e) {
+      setMessage(String(e));
+    }
   };
 
   const handleProbeFamily = async () => {
@@ -627,10 +655,6 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
     if (accessToken && accessToken !== familyAccessToken) {
       setFamilyAccessToken(accessToken);
     }
-    if (accessToken) {
-      const cache = await saveSteamFamilyToken(accessToken, false);
-      if (cache) applyFamilyTokenCache(cache);
-    }
     const startedAt = performance.now();
     console.groupCollapsed("[Repressurizer] Steam Family probe");
     console.info("Starting Steam Family probe", {
@@ -640,6 +664,11 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
       steamId64: redactTail(settings.steamId64),
     });
     try {
+      if (accessToken) {
+        const cache = await saveSteamFamilyToken(accessToken, false);
+        if (cache) applyFamilyTokenCache(cache);
+      }
+
       const result = await fetchFamilyLibrary(
         settings.apiKey,
         accessToken || undefined,
@@ -763,7 +792,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
         id: "maintenance",
         tab: "data" as const,
         label: t("settings.maintenance"),
-        keywords: [t("settings.diagnostics.export"), t("settings.updates.check"), "diagnostics update maintenance"],
+        keywords: [t("settings.diagnostics.export"), "diagnostics maintenance import"],
       },
       {
         id: "automation",
@@ -775,6 +804,12 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
           t("settings.automationExport.token"),
           "automation export snapshot publish endpoint webhook game vault http hltb",
         ],
+      },
+      {
+        id: "updates",
+        tab: "about" as const,
+        label: t("settings.updates.section"),
+        keywords: [t("settings.updates.check"), t("settings.updates.autoCheck"), "about version update install"],
       },
       {
         id: "reset",
@@ -819,16 +854,25 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
         keywords: [t("appearance.sidebarWidth"), "sidebar width layout"],
       },
       {
-        id: "tray",
-        tab: "appearance" as const,
-        label: t("settings.systemTray"),
+        id: "background",
+        tab: "general" as const,
+        label: t("settings.background"),
         keywords: [
-          t("settings.systemTray"),
+          t("settings.background"),
           t("settings.startOnLogin"),
           t("settings.desktopNotifications"),
           t("settings.minimizeToTray"),
-          t("settings.updates.autoCheck"),
-          "tray close background startup autostart login boot window",
+          t("settings.systemTray"),
+          "tray close background startup autostart login boot window notifications",
+        ],
+      },
+      {
+        id: "libraryRefresh",
+        tab: "steam" as const,
+        label: t("settings.libraryAutoRefresh"),
+        keywords: [
+          t("settings.libraryAutoRefresh"),
+          "steam library refresh games polling new games interval",
         ],
       },
       {
@@ -1047,6 +1091,9 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                 </div>
               </div>
               )}
+
+              <BackgroundSettingsSection isSectionVisible={isSectionVisible} />
+              <SteamLibraryRefreshSection isSectionVisible={isSectionVisible} />
 
               {/* Steam Family */}
               {isSectionVisible("family") && (
@@ -1443,37 +1490,15 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
 	                  <button
 	                    onClick={handleExportDiagnostics}
 	                    disabled={diagnosticsExporting}
-                    className="btn-press flex items-start gap-3 rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3 text-left transition-colors hover:border-repressurizer-border disabled:opacity-50"
-                  >
-                    <Bug size={16} weight="duotone" className="mt-0.5 text-repressurizer-accent" />
-                    <span>
-                      <span className="block text-sm text-repressurizer-text">{diagnosticsExporting ? t("settings.diagnostics.exporting") : t("settings.diagnostics.export")}</span>
-                      <span className="mt-0.5 block text-xs leading-relaxed text-repressurizer-text-faint">{t("settings.diagnostics.desc")}</span>
-                    </span>
-                  </button>
+	                    className="btn-press flex items-start gap-3 rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3 text-left transition-colors hover:border-repressurizer-border disabled:opacity-50"
+	                  >
+	                    <Bug size={16} weight="duotone" className="mt-0.5 text-repressurizer-accent" />
+	                    <span>
+	                      <span className="block text-sm text-repressurizer-text">{diagnosticsExporting ? t("settings.diagnostics.exporting") : t("settings.diagnostics.export")}</span>
+	                      <span className="mt-0.5 block text-xs leading-relaxed text-repressurizer-text-faint">{t("settings.diagnostics.desc")}</span>
+	                    </span>
+	                  </button>
 
-                  <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3">
-                    <button
-                      onClick={handleCheckUpdates}
-                      disabled={checkingUpdates || installingUpdate}
-                      className="btn-press flex w-full items-start gap-3 text-left transition-colors disabled:opacity-50"
-                    >
-                      <CloudArrowDown size={16} weight="duotone" className="mt-0.5 text-repressurizer-accent" />
-                      <span>
-                        <span className="block text-sm text-repressurizer-text">{checkingUpdates ? t("settings.updates.checking") : t("settings.updates.check")}</span>
-                        <span className="mt-0.5 block text-xs leading-relaxed text-repressurizer-text-faint">{t("settings.updates.desc")}</span>
-                      </span>
-                    </button>
-                    {availableUpdate && (
-                      <button
-                        onClick={handleInstallUpdate}
-                        disabled={installingUpdate}
-                        className="btn-press mt-3 w-full rounded-lg bg-repressurizer-accent px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-repressurizer-accent-hover disabled:opacity-50"
-                      >
-                        {installingUpdate ? t("settings.updates.installing") : t("settings.updates.install", { version: availableUpdate.version })}
-	                      </button>
-	                    )}
-	                  </div>
 	                  {lastDepressurizerImport && (
 	                    <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3 md:col-span-2">
 	                      <p className="text-xs font-medium text-repressurizer-text">
@@ -1597,29 +1622,123 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
               </div>
               )}
 
-              {/* Reset */}
-              {isSectionVisible("reset") && (
-                <>
-                  <div className="border-t border-repressurizer-border pt-5">
+              {/* Updates */}
+              {isSectionVisible("updates") && (
+                <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3">
+                  <p className="font-medium text-repressurizer-text">Repressurizer v{__APP_VERSION__}</p>
+                  <button
+                    onClick={handleCheckUpdates}
+                    disabled={checkingUpdates || installingUpdate}
+                    className="btn-press mt-3 flex w-full items-start gap-3 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-surface/50 px-3 py-2.5 text-left transition-colors hover:border-repressurizer-border disabled:opacity-50"
+                  >
+                    <CloudArrowDown size={16} weight="duotone" className="mt-0.5 text-repressurizer-accent" />
+                    <span>
+                      <span className="block text-sm text-repressurizer-text">{checkingUpdates ? t("settings.updates.checking") : t("settings.updates.check")}</span>
+                      <span className="mt-0.5 block text-xs leading-relaxed text-repressurizer-text-faint">{t("settings.updates.desc")}</span>
+                    </span>
+                  </button>
+                  {availableUpdate && (
                     <button
-                      onClick={handleReset}
-                      className="btn-press inline-flex items-center gap-1.5 rounded-lg border border-repressurizer-danger/30 px-4 py-2 text-sm text-repressurizer-danger transition-colors hover:bg-repressurizer-danger/10"
+                      onClick={handleInstallUpdate}
+                      disabled={installingUpdate}
+                      className="btn-press mt-3 w-full rounded-lg bg-repressurizer-accent px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-repressurizer-accent-hover disabled:opacity-50"
                     >
-                      <ArrowCounterClockwise size={14} />
-                      {t("settings.reset")}
+                      {installingUpdate ? t("settings.updates.installing") : t("settings.updates.install", { version: availableUpdate.version })}
                     </button>
-                    <p className="mt-1.5 text-xs text-repressurizer-text-faint">
-                      {t("settings.reset.desc")}
+                  )}
+                  {updateMessage && (
+                    <div
+                      className={`mt-3 flex items-center gap-2 rounded-lg border px-3 py-2 text-xs ${
+                        updateMessage.tone === "error"
+                          ? "border-repressurizer-danger/20 bg-repressurizer-danger/8 text-repressurizer-danger"
+                          : "border-repressurizer-success/20 bg-repressurizer-success/8 text-repressurizer-success"
+                      }`}
+                    >
+                      {updateMessage.tone === "error"
+                        ? <Warning size={14} weight="fill" />
+                        : <CheckCircle size={14} weight="fill" />}
+                      {updateMessage.text}
+                    </div>
+                  )}
+                  <div className="mt-3 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-surface/40 px-3 py-2.5">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0">
+                        <p className="text-sm text-repressurizer-text">{t("settings.updates.autoCheck")}</p>
+                        <p className="mt-0.5 text-xs leading-relaxed text-repressurizer-text-faint">
+                          {t("settings.updates.autoCheck.desc", { hours: settings.updateAutoCheckIntervalHours || 12 })}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={settings.checkUpdatesOnStartup ?? true}
+                        onClick={() => settings.setSettings({ checkUpdatesOnStartup: !(settings.checkUpdatesOnStartup ?? true) })}
+                        className={`relative mt-0.5 inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-colors ${
+                          settings.checkUpdatesOnStartup ?? true
+                            ? "border-repressurizer-accent bg-repressurizer-accent/20"
+                            : "border-repressurizer-border bg-repressurizer-surface"
+                        }`}
+                      >
+                        <span
+                          className={`inline-block h-4 w-4 rounded-full transition-transform ${
+                            settings.checkUpdatesOnStartup ?? true
+                              ? "translate-x-[22px] bg-repressurizer-accent"
+                              : "translate-x-[3px] bg-repressurizer-text-muted"
+                          }`}
+                        />
+                      </button>
+                    </div>
+                    <div className="mt-3 flex items-center justify-between gap-3 border-t border-repressurizer-border-subtle pt-3">
+                      <span className="text-xs text-repressurizer-text-muted">{t("settings.updates.autoCheck.interval")}</span>
+                      <SelectMenu
+                        ariaLabel={t("settings.updates.autoCheck.interval")}
+                        value={String(settings.updateAutoCheckIntervalHours || 12)}
+                        onChange={(value) => settings.setSettings({ updateAutoCheckIntervalHours: Number(value) })}
+                        align="right"
+                        size="sm"
+                        className="w-[140px] shrink-0"
+                        buttonClassName="bg-repressurizer-bg"
+                        options={UPDATE_CHECK_INTERVAL_OPTIONS.map((hours) => ({
+                          value: String(hours),
+                          label: t("settings.interval.hours", { count: hours }),
+                        }))}
+                      />
+                    </div>
+                  </div>
+                  <div className="mt-4 border-t border-repressurizer-border-subtle pt-4">
+                    <p className="text-xs font-medium text-repressurizer-text-muted">{t("settings.credits.title")}</p>
+                    <p className="mt-1 text-xs leading-relaxed text-repressurizer-text-faint">
+                      {t("settings.credits.body")}{" "}
+                      <button
+                        type="button"
+                        onClick={() => void open("https://github.com/Crimsab")}
+                        className="text-repressurizer-accent underline-offset-2 transition-colors hover:underline"
+                      >
+                        @Crimsab
+                      </button>
+                      .
+                    </p>
+                    <p className="mt-1 text-xs leading-relaxed text-repressurizer-text-faint">
+                      {t("settings.credits.thanks")}
                     </p>
                   </div>
+                </div>
+              )}
 
-                  {/* About */}
-                  <div className="border-t border-repressurizer-border pt-5 text-xs text-repressurizer-text-muted">
-                    <p className="font-medium text-repressurizer-text">Repressurizer v{__APP_VERSION__}</p>
-                    <p className="mt-1 text-repressurizer-text-faint">{t("settings.about")}</p>
-                    <p className="text-repressurizer-text-faint">{t("settings.dynamicNote")}</p>
-                  </div>
-                </>
+              {/* Reset */}
+              {isSectionVisible("reset") && (
+                <div className="pt-2">
+                  <button
+                    onClick={handleReset}
+                    className="btn-press inline-flex items-center gap-1.5 rounded-lg border border-repressurizer-danger/30 px-4 py-2 text-sm text-repressurizer-danger transition-colors hover:bg-repressurizer-danger/10"
+                  >
+                    <ArrowCounterClockwise size={14} />
+                    {t("settings.reset")}
+                  </button>
+                  <p className="mt-1.5 text-xs text-repressurizer-text-faint">
+                    {t("settings.reset.desc")}
+                  </p>
+                </div>
               )}
             </div>
           )}
@@ -2443,42 +2562,18 @@ function hashName(name: string): string {
   return (hash >>> 0).toString(16).padStart(8, "0");
 }
 
-function AppearanceTab({ isSectionVisible }: { isSectionVisible: (id: string) => boolean }) {
+function BackgroundSettingsSection({ isSectionVisible }: { isSectionVisible: (id: string) => boolean }) {
   const {
-    accentColor,
-    recentAccentColors,
-    showSmartLists,
-    showEmptyLists,
-    showNowPlaying,
-    showFilterBar,
-    showDetailHltb,
-    showDetailMetacritic,
-    showDetailPrice,
-    sidebarWidth,
-    theme,
-    language,
     minimizeToTray,
     startOnLogin,
     startOnLoginMode,
     desktopNotifications,
-    checkUpdatesOnStartup,
     setSettings,
   } = useSettingsStore();
   const t = useT();
-  const [customHex, setCustomHex] = useState(accentColor);
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [previewAccent, setPreviewAccent] = useState(accentColor);
-  const pickerRef = useRef<HTMLDivElement>(null);
-  const previewFrameRef = useRef<number | null>(null);
-  const activeAccent = /^#[0-9a-fA-F]{6}$/.test(previewAccent) ? previewAccent : "#10b981";
   const [autostartRegistered, setAutostartRegistered] = useState<boolean | null>(null);
   const [autostartBusy, setAutostartBusy] = useState(false);
   const [autostartError, setAutostartError] = useState("");
-
-  useEffect(() => {
-    setPreviewAccent(accentColor);
-    setCustomHex(accentColor);
-  }, [accentColor]);
 
   useEffect(() => {
     let cancelled = false;
@@ -2497,6 +2592,206 @@ function AppearanceTab({ isSectionVisible }: { isSectionVisible: (id: string) =>
       cancelled = true;
     };
   }, []);
+
+  const handleStartOnLoginChange = async (enabled: boolean) => {
+    setAutostartBusy(true);
+    setAutostartError("");
+    try {
+      if (enabled) {
+        await enableAutostart();
+      } else {
+        await disableAutostart();
+      }
+      const registered = await isAutostartEnabled();
+      setAutostartRegistered(registered);
+      setSettings({ startOnLogin: registered });
+      if (enabled && !registered) {
+        setAutostartError(t("settings.startOnLogin.notRegistered"));
+      }
+    } catch (error) {
+      setAutostartError(t("settings.startOnLogin.failed", { error: String(error) }));
+    } finally {
+      setAutostartBusy(false);
+    }
+  };
+
+  if (!isSectionVisible("background")) return null;
+
+  return (
+    <div className="space-y-3">
+      <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("settings.background")}</h3>
+      <ToggleRow
+        icon={<Tray size={15} weight="duotone" />}
+        label={autostartBusy ? t("settings.startOnLogin.checking") : t("settings.startOnLogin")}
+        description={t("settings.startOnLogin.desc")}
+        checked={startOnLogin ?? false}
+        onChange={handleStartOnLoginChange}
+      />
+      {(startOnLogin || autostartRegistered) && (
+        <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3">
+          <div className="mb-3 flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm text-repressurizer-text">{t("settings.startOnLoginMode")}</p>
+              <p className="mt-0.5 text-xs leading-relaxed text-repressurizer-text-faint">
+                {autostartRegistered === true
+                  ? t("settings.startOnLogin.registered")
+                  : t("settings.startOnLogin.notRegistered")}
+              </p>
+            </div>
+            {autostartError && (
+              <p className="max-w-[280px] text-right text-xs leading-relaxed text-repressurizer-danger">
+                {autostartError}
+              </p>
+            )}
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {([
+              {
+                value: "tray" as const,
+                label: t("settings.startOnLoginMode.tray"),
+                description: t("settings.startOnLoginMode.tray.desc"),
+                icon: <Tray size={15} weight="duotone" />,
+              },
+              {
+                value: "window" as const,
+                label: t("settings.startOnLoginMode.window"),
+                description: t("settings.startOnLoginMode.window.desc"),
+                icon: <Monitor size={15} weight="duotone" />,
+              },
+            ] satisfies Array<{ value: AppStartupMode; label: string; description: string; icon: React.ReactNode }>).map((option) => {
+              const selected = (startOnLoginMode ?? "tray") === option.value;
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setSettings({ startOnLoginMode: option.value })}
+                  className={`btn-press flex items-start gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors ${
+                    selected
+                      ? "border-repressurizer-accent bg-repressurizer-accent/10 text-repressurizer-accent"
+                      : "border-repressurizer-border-subtle bg-repressurizer-surface/40 text-repressurizer-text-muted hover:border-repressurizer-border hover:text-repressurizer-text"
+                  }`}
+                >
+                  <span className={`mt-0.5 shrink-0 ${selected ? "text-repressurizer-accent" : "text-repressurizer-text-faint"}`}>{option.icon}</span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-medium">{option.label}</span>
+                    <span className="mt-0.5 block text-xs leading-relaxed text-repressurizer-text-faint">
+                      {option.description}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      <ToggleRow
+        icon={<BellRinging size={15} weight="duotone" />}
+        label={t("settings.desktopNotifications")}
+        description={t("settings.desktopNotifications.desc")}
+        checked={desktopNotifications ?? true}
+        onChange={(v) => setSettings({ desktopNotifications: v })}
+      />
+      <ToggleRow
+        icon={<Tray size={15} weight="duotone" />}
+        label={t("settings.minimizeToTray")}
+        description={t("settings.minimizeToTray.desc")}
+        checked={minimizeToTray ?? false}
+        onChange={(v) => setSettings({ minimizeToTray: v })}
+      />
+    </div>
+  );
+}
+
+function SteamLibraryRefreshSection({ isSectionVisible }: { isSectionVisible: (id: string) => boolean }) {
+  const settings = useSettingsStore();
+  const t = useT();
+  const intervalMinutes = settings.libraryAutoRefreshIntervalMinutes || 30;
+
+  if (!isSectionVisible("libraryRefresh")) return null;
+
+  return (
+    <div className="space-y-3">
+      <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("settings.libraryAutoRefresh")}</h3>
+      <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex min-w-0 gap-3">
+            <GameController size={15} weight="duotone" className="mt-0.5 shrink-0 text-repressurizer-accent" />
+            <div className="min-w-0">
+              <p className="text-sm text-repressurizer-text">{t("settings.libraryAutoRefresh")}</p>
+              <p className="mt-0.5 text-xs leading-relaxed text-repressurizer-text-faint">
+                {t("settings.libraryAutoRefresh.desc", { minutes: intervalMinutes })}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={settings.autoRefreshLibraryEnabled ?? false}
+            onClick={() => settings.setSettings({ autoRefreshLibraryEnabled: !(settings.autoRefreshLibraryEnabled ?? false) })}
+            className={`relative mt-0.5 inline-flex h-6 w-11 shrink-0 items-center rounded-full border transition-colors ${
+              settings.autoRefreshLibraryEnabled
+                ? "border-repressurizer-accent bg-repressurizer-accent/20"
+                : "border-repressurizer-border bg-repressurizer-surface"
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 rounded-full transition-transform ${
+                settings.autoRefreshLibraryEnabled
+                  ? "translate-x-[22px] bg-repressurizer-accent"
+                  : "translate-x-[3px] bg-repressurizer-text-muted"
+              }`}
+            />
+          </button>
+        </div>
+        <div className="mt-3 flex items-center justify-between gap-3 border-t border-repressurizer-border-subtle pt-3">
+          <span className="text-xs text-repressurizer-text-muted">{t("settings.libraryAutoRefresh.interval")}</span>
+          <SelectMenu
+            ariaLabel={t("settings.libraryAutoRefresh.interval")}
+            value={String(intervalMinutes)}
+            onChange={(value) => settings.setSettings({ libraryAutoRefreshIntervalMinutes: Number(value) })}
+            align="right"
+            size="sm"
+            className="w-[140px] shrink-0"
+            buttonClassName="bg-repressurizer-surface"
+            options={LIBRARY_REFRESH_INTERVAL_OPTIONS.map((minutes) => ({
+              value: String(minutes),
+              label: t("settings.interval.minutes", { count: minutes }),
+            }))}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AppearanceTab({ isSectionVisible }: { isSectionVisible: (id: string) => boolean }) {
+  const {
+    accentColor,
+    recentAccentColors,
+    showSmartLists,
+    showEmptyLists,
+    showNowPlaying,
+    showFilterBar,
+    showDetailHltb,
+    showDetailMetacritic,
+    showDetailPrice,
+    sidebarWidth,
+    theme,
+    language,
+    setSettings,
+  } = useSettingsStore();
+  const t = useT();
+  const [customHex, setCustomHex] = useState(accentColor);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [previewAccent, setPreviewAccent] = useState(accentColor);
+  const pickerRef = useRef<HTMLDivElement>(null);
+  const previewFrameRef = useRef<number | null>(null);
+  const activeAccent = /^#[0-9a-fA-F]{6}$/.test(previewAccent) ? previewAccent : "#10b981";
+
+  useEffect(() => {
+    setPreviewAccent(accentColor);
+    setCustomHex(accentColor);
+  }, [accentColor]);
 
   useEffect(() => {
     return () => {
@@ -2564,32 +2859,6 @@ function AppearanceTab({ isSectionVisible }: { isSectionVisible: (id: string) =>
     applyAccentColor("");
     setCustomHex("");
     setPreviewAccent("");
-  };
-
-  const handleStartOnLoginChange = async (enabled: boolean) => {
-    setAutostartBusy(true);
-    setAutostartError("");
-    try {
-      if (enabled) {
-        await enableAutostart();
-      } else {
-        await disableAutostart();
-      }
-      const registered = await isAutostartEnabled();
-      setAutostartRegistered(registered);
-      setSettings({ startOnLogin: registered });
-      if (enabled && !registered) {
-        setAutostartError(t("settings.startOnLogin.notRegistered"));
-      }
-    } catch (error) {
-      setAutostartError(t("settings.startOnLogin.failed", { error: String(error) }));
-    } finally {
-      setAutostartBusy(false);
-    }
-  };
-
-  const handleStartupModeChange = (mode: AppStartupMode) => {
-    setSettings({ startOnLoginMode: mode });
   };
 
   return (
@@ -2841,97 +3110,6 @@ function AppearanceTab({ isSectionVisible }: { isSectionVisible: (id: string) =>
       </div>
       )}
 
-      {/* System tray */}
-      {isSectionVisible("tray") && (
-      <div className="space-y-3">
-        <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("settings.systemTray")}</h3>
-        <ToggleRow
-          icon={<Tray size={15} weight="duotone" />}
-          label={autostartBusy ? t("settings.startOnLogin.checking") : t("settings.startOnLogin")}
-          description={t("settings.startOnLogin.desc")}
-          checked={startOnLogin ?? false}
-          onChange={handleStartOnLoginChange}
-        />
-        {(startOnLogin || autostartRegistered) && (
-          <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3">
-            <div className="mb-3 flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-sm text-repressurizer-text">{t("settings.startOnLoginMode")}</p>
-                <p className="mt-0.5 text-xs leading-relaxed text-repressurizer-text-faint">
-                  {autostartRegistered === true
-                    ? t("settings.startOnLogin.registered")
-                    : t("settings.startOnLogin.notRegistered")}
-                </p>
-              </div>
-              {autostartError && (
-                <p className="max-w-[280px] text-right text-xs leading-relaxed text-repressurizer-danger">
-                  {autostartError}
-                </p>
-              )}
-            </div>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {([
-                {
-                  value: "tray" as const,
-                  label: t("settings.startOnLoginMode.tray"),
-                  description: t("settings.startOnLoginMode.tray.desc"),
-                  icon: <Tray size={15} weight="duotone" />,
-                },
-                {
-                  value: "window" as const,
-                  label: t("settings.startOnLoginMode.window"),
-                  description: t("settings.startOnLoginMode.window.desc"),
-                  icon: <Monitor size={15} weight="duotone" />,
-                },
-              ] satisfies Array<{ value: AppStartupMode; label: string; description: string; icon: React.ReactNode }>).map((option) => {
-                const selected = (startOnLoginMode ?? "tray") === option.value;
-                return (
-                  <button
-                    key={option.value}
-                    type="button"
-                    onClick={() => handleStartupModeChange(option.value)}
-                    className={`btn-press flex items-start gap-3 rounded-lg border px-3 py-2.5 text-left transition-colors ${
-                      selected
-                        ? "border-repressurizer-accent bg-repressurizer-accent/10 text-repressurizer-accent"
-                        : "border-repressurizer-border-subtle bg-repressurizer-surface/40 text-repressurizer-text-muted hover:border-repressurizer-border hover:text-repressurizer-text"
-                    }`}
-                  >
-                    <span className={`mt-0.5 shrink-0 ${selected ? "text-repressurizer-accent" : "text-repressurizer-text-faint"}`}>{option.icon}</span>
-                    <span className="min-w-0">
-                      <span className="block text-sm font-medium">{option.label}</span>
-                      <span className="mt-0.5 block text-xs leading-relaxed text-repressurizer-text-faint">
-                        {option.description}
-                      </span>
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-        <ToggleRow
-          icon={<BellRinging size={15} weight="duotone" />}
-          label={t("settings.desktopNotifications")}
-          description={t("settings.desktopNotifications.desc")}
-          checked={desktopNotifications ?? true}
-          onChange={(v) => setSettings({ desktopNotifications: v })}
-        />
-        <ToggleRow
-          icon={<Tray size={15} weight="duotone" />}
-          label={t("settings.minimizeToTray")}
-          description={t("settings.minimizeToTray.desc")}
-          checked={minimizeToTray ?? false}
-          onChange={(v) => setSettings({ minimizeToTray: v })}
-        />
-        <ToggleRow
-          icon={<CloudArrowDown size={15} weight="duotone" />}
-          label={t("settings.updates.autoCheck")}
-          description={t("settings.updates.autoCheck.desc")}
-          checked={checkUpdatesOnStartup ?? true}
-          onChange={(v) => setSettings({ checkUpdatesOnStartup: v })}
-        />
-      </div>
-      )}
     </div>
   );
 }

@@ -324,6 +324,9 @@ export interface AppSettings {
   startOnLoginMode: AppStartupMode;
   desktopNotifications: boolean;
   checkUpdatesOnStartup: boolean;
+  updateAutoCheckIntervalHours: number;
+  autoRefreshLibraryEnabled: boolean;
+  libraryAutoRefreshIntervalMinutes: number;
   // Automation export
   automationPublishEnabled: boolean;
   automationPublishUrl: string;
