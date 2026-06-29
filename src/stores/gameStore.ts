@@ -4,7 +4,7 @@ import type { OwnedGame, GameDetails } from "../lib/types";
 import type { GameStatus } from "./statusStore";
 import { displayNameFromDetails, isPlaceholderGameName } from "../lib/libraryMerge";
 import { useSteamAppIndexStore } from "./steamAppIndexStore";
-import { sanitizeGameDetailsPrices } from "../lib/prices";
+import { mergeDetailsPriceCache, sanitizeGameDetailsPrices } from "../lib/prices";
 
 export const DETAILS_CACHE_SCHEMA_VERSION = 2;
 
@@ -26,14 +26,19 @@ function normalizeDetailsForCache(details: GameDetails): GameDetails {
       mac: !!cleanDetails.platforms?.mac,
       linux: !!cleanDetails.platforms?.linux,
     },
+    price_cache:
+      cleanDetails.price_cache && typeof cleanDetails.price_cache === "object"
+        ? cleanDetails.price_cache
+        : undefined,
   };
 }
 
-function markDetailsCacheFresh(details: GameDetails): GameDetails {
+function markDetailsCacheFresh(details: GameDetails, previous?: GameDetails): GameDetails {
+  const fetchedAt = Date.now();
   return {
-    ...normalizeDetailsForCache(details),
+    ...mergeDetailsPriceCache(normalizeDetailsForCache(details), previous, fetchedAt),
     cache_schema: DETAILS_CACHE_SCHEMA_VERSION,
-    fetched_at: Date.now(),
+    fetched_at: fetchedAt,
   };
 }
 
@@ -227,7 +232,7 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   setDetails: (appId, details) =>
     set((state) => {
-      const cleanDetails = markDetailsCacheFresh(details);
+      const cleanDetails = markDetailsCacheFresh(details, state.details[appId]);
       const next = { ...state.details, [appId]: cleanDetails };
       const games = { ...state.games };
       const game = games[appId];
@@ -243,7 +248,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       const next = { ...state.details };
       const games = { ...state.games };
       for (const rawDetails of details) {
-        const d = markDetailsCacheFresh(rawDetails);
+        const d = markDetailsCacheFresh(rawDetails, next[rawDetails.app_id]);
         next[d.app_id] = d;
         const game = games[d.app_id];
         if (game && (game.is_collection_only || isPlaceholderGameName(d.app_id, game.name))) {

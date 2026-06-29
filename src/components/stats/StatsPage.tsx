@@ -48,7 +48,7 @@ export function StatsPage({ onClose }: StatsPageProps) {
   const currency = useSettingsStore((s) => s.currency) ?? "EUR";
   const achievementSummaries = useAchievementsStore((s) => s.summaries);
 
-  const stats = useMemo(() => computeStats(games, collections, details), [games, collections, details]);
+  const stats = useMemo(() => computeStats(games, collections, details, currency), [games, collections, details, currency]);
 
   // Achievement global stats
   const achievementStats = useMemo(() => {

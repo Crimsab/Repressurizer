@@ -18,6 +18,7 @@ import { Spinner, MagnifyingGlass, FolderOpen, Clock, UsersThree } from "@phosph
 import { extractReleaseYear, parseSearchQuery, matchesFilter, hasAdvancedFilters } from "../../lib/search";
 import { possibleDuplicateAppIds } from "../../lib/gameIdentity";
 import { scoreForRating } from "../../lib/steamRatings";
+import { priceSnapshotForCurrency } from "../../lib/prices";
 
 const loadGameDetailPage = () => import("./GameDetailPage").then((m) => ({ default: m.GameDetailPage }));
 const loadContextMenu = () => import("./ContextMenu").then((m) => ({ default: m.ContextMenu }));
@@ -34,10 +35,14 @@ function releaseDateSortValue(date: string | null | undefined): number {
   return year == null ? -1 : Date.UTC(year, 0, 1);
 }
 
-function priceSortValue(detail: ReturnType<typeof useGameStore.getState>["details"][number] | undefined): number {
-  if (!detail) return -1;
-  if (detail.is_free) return 0;
-  return detail.price_final ?? detail.price_initial ?? -1;
+function priceSortValue(
+  detail: ReturnType<typeof useGameStore.getState>["details"][number] | undefined,
+  currency: string
+): number {
+  const price = priceSnapshotForCurrency(detail, currency);
+  if (!price) return -1;
+  if (price.is_free) return 0;
+  return price.price_final ?? price.price_initial ?? -1;
 }
 
 interface ContextMenuState {
@@ -66,6 +71,7 @@ export function GameGrid() {
   const steamRatings = useSteamRatingsStore((s) => s.ratings);
   const familyApps = useFamilyStore((s) => s.apps);
   const hideCollectionOnlyGames = useSettingsStore((s) => s.hideCollectionOnlyGames);
+  const currency = useSettingsStore((s) => s.currency);
   const failedGames = useFailedGamesStore((s) => s.fails);
   const savedAdvancedFilters = useAdvancedFilterStore((s) => s.filters);
   const activeAdvancedFilterId = useAdvancedFilterStore((s) => s.activeFilterId);
@@ -323,7 +329,7 @@ export function GameGrid() {
           cmp = releaseDateSortValue(details[a.appid]?.release_date) - releaseDateSortValue(details[b.appid]?.release_date);
           break;
         case "price":
-          cmp = priceSortValue(details[a.appid]) - priceSortValue(details[b.appid]);
+          cmp = priceSortValue(details[a.appid], currency) - priceSortValue(details[b.appid], currency);
           break;
         case "userRating":
           cmp = (reviews[a.appid]?.rating ?? -1) - (reviews[b.appid]?.rating ?? -1);
@@ -339,7 +345,7 @@ export function GameGrid() {
     });
 
     return gameList;
-  }, [games, activeCategory, collections, familyApps, searchQuery, sortBy, sortAsc, filters, activeAdvancedFilter, statuses, allGameTags, hltbData, achievementSummaries, details, reviews, steamRatings, hideCollectionOnlyGames, duplicateAppIds, delistedAppIds]);
+  }, [games, activeCategory, collections, familyApps, searchQuery, sortBy, sortAsc, filters, activeAdvancedFilter, statuses, allGameTags, hltbData, achievementSummaries, details, reviews, steamRatings, hideCollectionOnlyGames, currency, duplicateAppIds, delistedAppIds]);
 
   const orderedIds = useMemo(() => filteredGames.map((g) => g.appid), [filteredGames]);
 

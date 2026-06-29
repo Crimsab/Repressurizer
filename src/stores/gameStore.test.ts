@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const VIEW_MODE_STORAGE_KEY = "repressurizer-library-view-mode";
 
-function makeDetails(appId = 10) {
+function makeDetails(appId = 10, currency = "EUR", price = 999) {
   return {
     app_id: appId,
     name: `Game ${appId}`,
@@ -16,9 +16,9 @@ function makeDetails(appId = 10) {
     platforms: { windows: true, mac: false, linux: false },
     header_image: null,
     capsule_image: null,
-    price_initial: 1999,
-    price_final: 999,
-    price_currency: "EUR",
+    price_initial: price,
+    price_final: price,
+    price_currency: currency,
     is_free: false,
   };
 }
@@ -143,5 +143,20 @@ describe("gameStore details cache metadata", () => {
     expect(isDetailsCacheCurrent(legacyDetail)).toBe(false);
     expect(detailsCacheNeedsRefresh(legacyDetail)).toBe(true);
     expect(detailsCacheNeedsRefresh(undefined)).toBe(true);
+  });
+
+  it("keeps price snapshots for multiple currencies on the same details record", async () => {
+    vi.stubGlobal("localStorage", createStorage());
+    vi.resetModules();
+
+    const { useGameStore } = await import("./gameStore");
+
+    useGameStore.getState().setDetails(10, makeDetails(10, "EUR", 99));
+    useGameStore.getState().setDetails(10, makeDetails(10, "INR", 2600));
+
+    const detail = useGameStore.getState().details[10];
+    expect(detail?.price_currency).toBe("INR");
+    expect(detail?.price_cache?.EUR?.price_final).toBe(99);
+    expect(detail?.price_cache?.INR?.price_final).toBe(2600);
   });
 });

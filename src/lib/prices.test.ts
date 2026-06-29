@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { detailsPriceMatchesCurrency, detailsPriceNeedsCurrencyRefresh } from "./prices";
+import {
+  detailsPriceMatchesCurrency,
+  detailsPriceNeedsCurrencyRefresh,
+  detailsWithPriceForCurrency,
+} from "./prices";
 import type { GameDetails } from "./types";
 
 function details(currency: string | null, final: number | null = 99): GameDetails {
@@ -28,6 +32,25 @@ describe("details price currency matching", () => {
     expect(detailsPriceMatchesCurrency(details("EUR"), "EUR")).toBe(true);
     expect(detailsPriceMatchesCurrency(details("INR"), "EUR")).toBe(false);
     expect(detailsPriceNeedsCurrencyRefresh(details("INR"), "EUR")).toBe(true);
+  });
+
+  it("uses a matching cached price snapshot even when top-level price is another currency", () => {
+    const cached = {
+      ...details("INR", 2600),
+      price_cache: {
+        EUR: {
+          price_initial: 199,
+          price_final: 99,
+          price_currency: "EUR",
+          price_country_code: "IT",
+          is_free: false,
+        },
+      },
+    };
+
+    expect(detailsPriceMatchesCurrency(cached, "EUR")).toBe(true);
+    expect(detailsPriceNeedsCurrencyRefresh(cached, "EUR")).toBe(false);
+    expect(detailsWithPriceForCurrency(cached, "EUR")?.price_final).toBe(99);
   });
 
   it("does not force refresh for free or unknown-price details", () => {

@@ -6,6 +6,7 @@ import { fetchWishlist, fetchGameDetails, currencyToCountryCode } from "../../li
 import { X, BookmarkSimple, ArrowsClockwise, SortAscending, Export } from "@phosphor-icons/react";
 import { SteamImage } from "../games/SteamImage";
 import { useT } from "../../lib/i18n";
+import { priceSnapshotForCurrency } from "../../lib/prices";
 import type { GameDetails } from "../../lib/types";
 
 interface WishlistPageProps {
@@ -121,23 +122,23 @@ export function WishlistPage({ onClose }: WishlistPageProps) {
     }
     if (onSaleOnly) {
       list = list.filter((item) => {
-        const d = details[item.appid];
-        return d?.price_initial != null && d.price_final != null && d.price_initial > d.price_final;
+        const price = priceSnapshotForCurrency(details[item.appid], currency);
+        return price?.price_initial != null && price.price_final != null && price.price_initial > price.price_final;
       });
     }
     list.sort((a, b) => {
       if (sortBy === "priority") return a.priority - b.priority;
       if (sortBy === "date") return b.date_added - a.date_added;
       if (sortBy === "price") {
-        const pa = details[a.appid]?.price_final ?? Number.POSITIVE_INFINITY;
-        const pb = details[b.appid]?.price_final ?? Number.POSITIVE_INFINITY;
+        const pa = priceSnapshotForCurrency(details[a.appid], currency)?.price_final ?? Number.POSITIVE_INFINITY;
+        const pb = priceSnapshotForCurrency(details[b.appid], currency)?.price_final ?? Number.POSITIVE_INFINITY;
         return pa - pb;
       }
       if (sortBy === "discount") {
         const discount = (appid: number) => {
-          const d = details[appid];
-          if (!d?.price_initial || d.price_final == null || d.price_initial <= d.price_final) return 0;
-          return (d.price_initial - d.price_final) / d.price_initial;
+          const price = priceSnapshotForCurrency(details[appid], currency);
+          if (!price?.price_initial || price.price_final == null || price.price_initial <= price.price_final) return 0;
+          return (price.price_initial - price.price_final) / price.price_initial;
         };
         return discount(b.appid) - discount(a.appid);
       }
@@ -149,7 +150,7 @@ export function WishlistPage({ onClose }: WishlistPageProps) {
       return 0;
     });
     return list;
-  }, [items, sortBy, search, details, onSaleOnly]);
+  }, [items, sortBy, search, details, onSaleOnly, currency]);
 
   return (
     <div
@@ -311,7 +312,7 @@ export function WishlistPage({ onClose }: WishlistPageProps) {
                     </div>
 
                     {/* Added date */}
-                    {d && <WishlistPrice details={d} />}
+                    {d && <WishlistPrice details={d} currency={currency} />}
                     {item.date_added > 0 && (
                       <span className="shrink-0 text-[11px] text-repressurizer-text-faint">
                         {timeAgo(item.date_added, t)}
@@ -328,14 +329,16 @@ export function WishlistPage({ onClose }: WishlistPageProps) {
   );
 }
 
-function WishlistPrice({ details }: { details: GameDetails }) {
+function WishlistPrice({ details, currency }: { details: GameDetails; currency: string }) {
   const t = useT();
-  if (details.is_free) {
+  const price = priceSnapshotForCurrency(details, currency);
+  if (!price) return null;
+  if (price.is_free) {
     return <span className="shrink-0 text-[11px] font-mono text-repressurizer-text-muted">{t("detail.freeToPlay")}</span>;
   }
-  const final = details.price_final ?? details.price_initial;
+  const final = price.price_final ?? price.price_initial;
   if (final == null) return null;
-  const initial = details.price_initial;
+  const initial = price.price_initial;
   const discounted = initial != null && initial > final;
   const discountPercent = discounted ? Math.round(((initial - final) / initial) * 100) : 0;
   return (
@@ -346,7 +349,7 @@ function WishlistPrice({ details }: { details: GameDetails }) {
         </span>
       )}
       <span className="font-mono text-[11px] tabular-nums text-repressurizer-text-muted">
-        {`${(final / 100).toFixed(2)} ${details.price_currency ?? ""}`.trim()}
+        {`${(final / 100).toFixed(2)} ${price.price_currency ?? ""}`.trim()}
       </span>
     </div>
   );

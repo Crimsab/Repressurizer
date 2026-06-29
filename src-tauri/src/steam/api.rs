@@ -133,6 +133,8 @@ pub struct GameDetails {
     #[serde(default)]
     pub price_currency: Option<String>,
     #[serde(default)]
+    pub price_country_code: Option<String>,
+    #[serde(default)]
     pub is_free: bool,
 }
 
@@ -512,10 +514,14 @@ async fn fetch_game_details_with_country(
         .await
         .map_err(|e| format!("Failed to read response: {}", e))?;
 
-    parse_game_details_response(app_id, &text)
+    parse_game_details_response(app_id, &text, country_code)
 }
 
-fn parse_game_details_response(app_id: u64, text: &str) -> Result<GameDetails, String> {
+fn parse_game_details_response(
+    app_id: u64,
+    text: &str,
+    country_code: Option<&str>,
+) -> Result<GameDetails, String> {
     let parsed: HashMap<String, StoreAppResponse> =
         serde_json::from_str(text).map_err(|e| format!("Failed to parse store response: {}", e))?;
 
@@ -574,6 +580,7 @@ fn parse_game_details_response(app_id: u64, text: &str) -> Result<GameDetails, S
             .price_overview
             .as_ref()
             .and_then(|p| p.currency.clone()),
+        price_country_code: country_code.map(|cc| cc.to_ascii_uppercase()),
         is_free: data.is_free.unwrap_or(false),
     })
 }
@@ -1644,7 +1651,7 @@ mod tests {
           }
         }"#;
 
-        let details = parse_game_details_response(3590, raw).expect("details");
+        let details = parse_game_details_response(3590, raw, Some("it")).expect("details");
 
         assert_eq!(details.name, "Plants vs. Zombies GOTY Edition");
         assert_eq!(details.genres, vec!["Strategy"]);
@@ -1654,6 +1661,7 @@ mod tests {
             vec!["English", "French", "Italian"]
         );
         assert!(details.platforms.windows);
+        assert_eq!(details.price_country_code.as_deref(), Some("IT"));
         assert!(details.header_image.unwrap().contains("/3590/header.jpg"));
         assert!(details
             .capsule_image
@@ -1664,7 +1672,7 @@ mod tests {
     #[test]
     fn treats_store_success_false_as_unavailable() {
         let raw = r#"{"43160":{"success":false}}"#;
-        let error = parse_game_details_response(43160, raw).expect_err("unavailable");
+        let error = parse_game_details_response(43160, raw, Some("it")).expect_err("unavailable");
 
         assert!(error.contains("Store API returned failure"));
     }

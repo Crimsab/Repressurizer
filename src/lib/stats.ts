@@ -1,5 +1,5 @@
 import type { OwnedGame, GameDetails, SteamCollection } from "./types";
-import { isPlausibleSteamPrice } from "./prices";
+import { isPlausibleSteamPrice, priceSnapshotForCurrency } from "./prices";
 
 export interface LibraryStats {
   totalGames: number;
@@ -46,7 +46,8 @@ const PLAYTIME_BUCKETS = [
 export function computeStats(
   games: Record<number, OwnedGame>,
   collections: SteamCollection[],
-  details: Record<number, GameDetails> = {}
+  details: Record<number, GameDetails> = {},
+  currency = "EUR"
 ): LibraryStats {
   const list = Object.values(games);
   const totalGames = list.length;
@@ -87,11 +88,12 @@ export function computeStats(
   let freeGamesCount = 0;
   let pricedGamesCount = 0;
   for (const d of detailsList) {
-    if (d.is_free) {
+    const price = priceSnapshotForCurrency(d, currency);
+    if (price?.is_free) {
       freeGamesCount++;
-    } else if (isPlausibleSteamPrice(d.price_initial)) {
-      libraryValue += d.price_initial;
-      libraryValueCurrent += isPlausibleSteamPrice(d.price_final) ? d.price_final : d.price_initial;
+    } else if (price && isPlausibleSteamPrice(price.price_initial)) {
+      libraryValue += price.price_initial;
+      libraryValueCurrent += isPlausibleSteamPrice(price.price_final) ? price.price_final : price.price_initial;
       pricedGamesCount++;
     }
   }
@@ -159,15 +161,16 @@ export function computeStats(
   const costPerHourList: { name: string; costPerHour: number; hours: number; price: number }[] = [];
   for (const g of list) {
     const d = details[g.appid];
-    if (!d || d.is_free || !isPlausibleSteamPrice(d.price_initial)) continue;
+    const price = priceSnapshotForCurrency(d, currency);
+    if (!price || price.is_free || !isPlausibleSteamPrice(price.price_initial)) continue;
     const hours = g.playtime_forever / 60;
     if (hours < 1) continue;
-    const priceEur = d.price_initial / 100;
+    const priceValue = price.price_initial / 100;
     costPerHourList.push({
       name: String(g.name ?? ""),
-      costPerHour: Math.round((priceEur / hours) * 100) / 100,
+      costPerHour: Math.round((priceValue / hours) * 100) / 100,
       hours: Math.round(hours * 10) / 10,
-      price: d.price_initial,
+      price: price.price_initial,
     });
   }
   const bestCostPerHour = costPerHourList
@@ -178,12 +181,12 @@ export function computeStats(
   const shameWall = list
     .filter((g) => {
       if (g.playtime_forever > 0) return false;
-      const d = details[g.appid];
-      return d && !d.is_free && isPlausibleSteamPrice(d.price_initial) && d.price_initial > 0;
+      const price = priceSnapshotForCurrency(details[g.appid], currency);
+      return !!price && !price.is_free && isPlausibleSteamPrice(price.price_initial) && price.price_initial > 0;
     })
     .map((g) => ({
       name: String(g.name ?? ""),
-      price: details[g.appid].price_initial!,
+      price: priceSnapshotForCurrency(details[g.appid], currency)!.price_initial!,
     }))
     .sort((a, b) => b.price - a.price)
     .slice(0, 10);

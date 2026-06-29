@@ -322,6 +322,7 @@ mod tests {
             price_initial: None,
             price_final: None,
             price_currency: None,
+            price_country_code: None,
             is_free: false,
         }
     }

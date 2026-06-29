@@ -130,7 +130,18 @@ export interface GameDetails {
   price_initial: number | null;
   price_final: number | null;
   price_currency: string | null;
+  price_country_code?: string | null;
+  price_cache?: Record<string, GamePriceSnapshot>;
   is_free: boolean;
+}
+
+export interface GamePriceSnapshot {
+  price_initial: number | null;
+  price_final: number | null;
+  price_currency: string | null;
+  price_country_code?: string | null;
+  is_free: boolean;
+  fetched_at?: number;
 }
 
 export interface SteamReviewSummary {
