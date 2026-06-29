@@ -619,7 +619,6 @@ test("opens organized settings tabs, automation logs, and Steam controls without
   await expect(settingsDialog.getByRole("button", { name: "Refresh" })).toBeVisible();
   await expect(settingsDialog.getByRole("heading", { name: "Maintenance" })).toBeVisible();
   await expect(settingsDialog.getByRole("button", { name: "Export diagnostics" })).toBeVisible();
-  await expect(settingsDialog.getByRole("button", { name: "Check for updates" })).toBeVisible();
   const dataPanelBox = await settingsPanel.boundingBox();
   expect(Math.abs((dataPanelBox?.height ?? 0) - (initialPanelBox?.height ?? 0))).toBeLessThanOrEqual(1);
 
@@ -627,15 +626,28 @@ test("opens organized settings tabs, automation logs, and Steam controls without
   await page.screenshot({ path: dataPath, fullPage: true });
   await testInfo.attach("settings-data", { path: dataPath, contentType: "image/png" });
 
-  await settingsDialog.getByRole("button", { name: "Appearance", exact: true }).click();
-  await expect(settingsDialog.getByRole("heading", { name: "System Tray" })).toBeVisible();
+  await settingsDialog.getByRole("button", { name: "About", exact: true }).click();
+  await expect(settingsDialog.getByText(/Repressurizer v/)).toBeVisible();
+  await expect(settingsDialog.getByRole("button", { name: "Check for updates" })).toBeVisible();
+  await expect(settingsDialog.getByText("Automatically check for updates")).toBeVisible();
+  await expect(settingsDialog.getByText("Credits")).toBeVisible();
+  const aboutPanelBox = await settingsPanel.boundingBox();
+  expect(Math.abs((aboutPanelBox?.height ?? 0) - (initialPanelBox?.height ?? 0))).toBeLessThanOrEqual(1);
+
+  await settingsDialog.getByRole("button", { name: "General", exact: true }).click();
+  await expect(settingsDialog.getByRole("heading", { name: "Background" })).toBeVisible();
   const startupSwitch = settingsDialog.getByRole("switch", { name: "Start Repressurizer when you sign in" });
   await expect(startupSwitch).toBeVisible();
   await startupSwitch.click();
   await expect(settingsDialog.getByText("Startup behavior")).toBeVisible();
-  await expect(settingsDialog.getByRole("switch", { name: "Show empty lists" })).toBeVisible();
   await expect(settingsDialog.getByRole("button", { name: /Open in tray/ })).toBeVisible();
   await expect(settingsDialog.getByRole("button", { name: /Open window/ })).toBeVisible();
+  const generalPanelBox = await settingsPanel.boundingBox();
+  expect(Math.abs((generalPanelBox?.height ?? 0) - (initialPanelBox?.height ?? 0))).toBeLessThanOrEqual(1);
+
+  await settingsDialog.getByRole("button", { name: "Appearance", exact: true }).click();
+  await expect(settingsDialog.getByRole("switch", { name: "Show empty lists" })).toBeVisible();
+  await expect(settingsDialog.getByRole("heading", { name: "System Tray" })).toBeHidden();
   const appearancePanelBox = await settingsPanel.boundingBox();
   expect(Math.abs((appearancePanelBox?.height ?? 0) - (initialPanelBox?.height ?? 0))).toBeLessThanOrEqual(1);
 
