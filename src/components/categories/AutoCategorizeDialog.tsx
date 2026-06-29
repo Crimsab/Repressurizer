@@ -1236,25 +1236,6 @@ function ChooseStep({
     setCacheNotice(t("auto.cache.ready"));
   };
 
-  const handlePrepareCache = async () => {
-    setCacheNotice("");
-    let started = false;
-
-    if (!detailsRunning && fetchableDetailIds.length > 0) {
-      startDetailsFetch(fetchableDetailIds);
-      started = true;
-    }
-    if (!ratingsRunning) {
-      started = (await handleFetchRatings()) || started;
-    }
-    if (!hltbRunning && fetchableHltbIds.length > 0) {
-      startHltbFetch(fetchItemsForIds(fetchableHltbIds));
-      started = true;
-    }
-
-    setCacheNotice(started ? t("auto.cache.prepareStarted") : t("auto.cache.ready"));
-  };
-
   return (
     <div className="space-y-2">
       <div className="mb-3 grid gap-2 sm:grid-cols-3">
@@ -1300,21 +1281,6 @@ function ChooseStep({
           ].filter(Boolean)}
           onFetch={handleFetchHltb}
         />
-      </div>
-
-      <div className="mb-3 flex flex-col gap-2 rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <p className="text-sm font-medium text-repressurizer-text">{t("auto.cache.prepare")}</p>
-          <p className="mt-0.5 text-xs text-repressurizer-text-faint">{t("auto.cache.prepare.desc")}</p>
-        </div>
-        <button
-          type="button"
-          onClick={handlePrepareCache}
-          className="btn-press inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-repressurizer-accent/15 px-3 py-2 text-sm font-medium text-repressurizer-accent transition-colors hover:bg-repressurizer-accent/25"
-        >
-          <Robot size={14} weight="duotone" />
-          {t("auto.cache.prepare")}
-        </button>
       </div>
 
       {cacheNotice && (
