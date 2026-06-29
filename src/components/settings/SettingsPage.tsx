@@ -17,6 +17,7 @@ import { useFamilyStore } from "../../stores/familyStore";
 import { useAchievementsStore } from "../../stores/achievementsStore";
 import { useWishlistStore } from "../../stores/wishlistStore";
 import { useSteamAppIndexStore } from "../../stores/steamAppIndexStore";
+import { useBackgroundFetchStore } from "../../stores/backgroundFetchStore";
 import {
   useAutoCategorizeStore,
   type AutoCategorizePreset,
@@ -62,6 +63,7 @@ import {
   type SteamFamilyTokenCache,
 } from "../../lib/steamFamilyToken";
 import { depressurizerAutoCatsToPresets } from "../../lib/depressurizerAutoCats";
+import { isPlaceholderGameName } from "../../lib/libraryMerge";
 import type {
   AppSettings,
   AutomationPublishLogEntry,
@@ -353,6 +355,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
       if (!selected || Array.isArray(selected)) return;
 
       const imported = await importDepressurizerProfile(selected);
+      await hydrateSteamAppIndexForNames(settings.apiKey || imported.steamWebApiKey || "");
       const mergedCollections = mergeImportedCollections(
         useCategoryStore.getState().collections,
         imported.collections
@@ -360,7 +363,10 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
       applyImportedCollections(mergedCollections);
 
       const importedGames = depressurizerGamesToOwnedGames(imported);
-      if (importedGames.length > 0) mergeGames(importedGames);
+      if (importedGames.length > 0) {
+        mergeGames(importedGames);
+        fetchDetailsForPlaceholderNames(importedGames);
+      }
 
       const importedPresets = depressurizerAutoCatsToPresets(imported);
       const savedPresets = mergeAutoCategorizePresets(importedPresets);
@@ -441,7 +447,10 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
         return;
       }
 
-      mergeGames(legacySharedConfigToOwnedGames(legacyGames));
+      await hydrateSteamAppIndexForNames(settings.apiKey);
+      const importedGames = legacySharedConfigToOwnedGames(legacyGames);
+      mergeGames(importedGames);
+      fetchDetailsForPlaceholderNames(importedGames);
       const mergedCollections = mergeImportedCollections(
         useCategoryStore.getState().collections,
         legacySharedConfigToCollections(legacyGames)
@@ -468,14 +477,16 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
         return;
       }
 
-      await useSteamAppIndexStore.getState().hydrate();
+      await hydrateSteamAppIndexForNames(settings.apiKey);
       const localApps = await loadLocalLicenseLibrary(settings.steamPath, settings.steamId3);
       if (localApps.length === 0) {
         setMessage("No local license library apps found for this Steam user.");
         return;
       }
 
-      mergeGames(localLicenseAppsToOwnedGames(localApps));
+      const importedGames = localLicenseAppsToOwnedGames(localApps);
+      mergeGames(importedGames);
+      fetchDetailsForPlaceholderNames(importedGames);
       setMessage(
         `Imported ${localApps.length} local license library apps from licensecache/packageinfo.`
       );
@@ -2011,12 +2022,38 @@ function isSpecialCollectionKey(key: string): boolean {
   return key === "user-collections.hidden" || key === "user-collections.favorite";
 }
 
+async function hydrateSteamAppIndexForNames(apiKey: string | null | undefined) {
+  const store = useSteamAppIndexStore.getState();
+  await store.hydrate().catch(() => {});
+  const key = apiKey?.trim();
+  if (!key) return;
+  await store.ensureFresh(key).catch(() => {});
+}
+
+function resolveImportedSteamGameName(appId: number, preferredName?: string | null): string {
+  const preferred = preferredName?.trim();
+  if (preferred && !isPlaceholderGameName(appId, preferred)) return preferred;
+
+  const cachedDetailName = useGameStore.getState().details[appId]?.name?.trim();
+  if (cachedDetailName) return cachedDetailName;
+
+  return useSteamAppIndexStore.getState().resolveName(appId) ?? preferred ?? `App ${appId}`;
+}
+
+function fetchDetailsForPlaceholderNames(games: OwnedGame[]) {
+  const details = useGameStore.getState().details;
+  const ids = games
+    .filter((game) => isPlaceholderGameName(game.appid, game.name) && !details[game.appid])
+    .map((game) => game.appid);
+  if (ids.length > 0) useBackgroundFetchStore.getState().startDetailsFetch(ids);
+}
+
 function depressurizerGamesToOwnedGames(imported: DepressurizerProfileImport): OwnedGame[] {
   return imported.games
     .filter((game) => !game.nonSteam && game.appid > 0)
     .map((game) => ({
       appid: game.appid,
-      name: game.name?.trim() || `App ${game.appid}`,
+      name: resolveImportedSteamGameName(game.appid, game.name),
       playtime_forever: Math.max(0, Math.round((game.hoursPlayed ?? 0) * 60)),
       img_icon_url: null,
       rtime_last_played: game.lastPlayed ?? 0,
@@ -2208,7 +2245,7 @@ function shortcutsToCollections(shortcuts: SteamShortcut[]): SteamCollection[] {
 function legacySharedConfigToOwnedGames(games: LegacySharedConfigGame[]): OwnedGame[] {
   return games.map((game) => ({
     appid: game.appid,
-    name: `App ${game.appid}`,
+    name: resolveImportedSteamGameName(game.appid),
     playtime_forever: 0,
     img_icon_url: null,
     rtime_last_played: game.lastPlayed ?? 0,
@@ -2217,10 +2254,9 @@ function legacySharedConfigToOwnedGames(games: LegacySharedConfigGame[]): OwnedG
 }
 
 function localLicenseAppsToOwnedGames(apps: LocalLicenseApp[]): OwnedGame[] {
-  const steamIndex = useSteamAppIndexStore.getState();
   return apps.map((app) => ({
     appid: app.appid,
-    name: steamIndex.resolveName(app.appid) ?? `App ${app.appid}`,
+    name: resolveImportedSteamGameName(app.appid),
     playtime_forever: 0,
     img_icon_url: null,
     rtime_last_played: 0,

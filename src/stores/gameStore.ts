@@ -73,6 +73,17 @@ function saveViewMode(viewMode: ViewMode) {
   } catch {}
 }
 
+function bestMergedName(appId: number, existingName: string | null | undefined, incomingName: string | null | undefined): string {
+  const existing = String(existingName ?? "").trim();
+  const incoming = String(incomingName ?? "").trim();
+  if (!existing) return incoming;
+  if (!incoming) return existing;
+  if (isPlaceholderGameName(appId, existing) && !isPlaceholderGameName(appId, incoming)) {
+    return incoming;
+  }
+  return existing;
+}
+
 interface GameState {
   games: Record<number, OwnedGame>;
   details: Record<number, GameDetails>;
@@ -148,12 +159,13 @@ export const useGameStore = create<GameState>((set, get) => ({
             ? {
                 ...existing,
                 ...game,
+                name: bestMergedName(game.appid, existing.name, game.name),
                 img_icon_url: game.img_icon_url ?? existing.img_icon_url,
               }
             : {
                 ...game,
                 ...existing,
-                name: existing.name || game.name,
+                name: bestMergedName(game.appid, existing.name, game.name),
                 img_icon_url: existing.img_icon_url ?? game.img_icon_url,
               }
           : game;

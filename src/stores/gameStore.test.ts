@@ -49,3 +49,41 @@ describe("gameStore view mode", () => {
     expect(useGameStore.getState().viewMode).toBe("list");
   });
 });
+
+describe("gameStore game merging", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.resetModules();
+  });
+
+  it("replaces an existing placeholder name when a later source has the real name", async () => {
+    vi.stubGlobal("localStorage", createStorage());
+    vi.resetModules();
+
+    const { useGameStore } = await import("./gameStore");
+
+    useGameStore.getState().setGames([
+      {
+        appid: 1467450,
+        name: "App 1467450",
+        playtime_forever: 0,
+        img_icon_url: null,
+        rtime_last_played: 0,
+        is_collection_only: true,
+      },
+    ]);
+
+    useGameStore.getState().mergeGames([
+      {
+        appid: 1467450,
+        name: "The Chronicles Of Myrtana: Archolos",
+        playtime_forever: 0,
+        img_icon_url: null,
+        rtime_last_played: 0,
+        is_collection_only: true,
+      },
+    ]);
+
+    expect(useGameStore.getState().games[1467450]?.name).toBe("The Chronicles Of Myrtana: Archolos");
+  });
+});
