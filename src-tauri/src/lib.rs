@@ -1179,6 +1179,7 @@ pub fn run() {
             api::fetch_library,
             api::fetch_steam_app_list,
             api::fetch_game_details,
+            api::fetch_game_price_overviews,
             api::fetch_steam_review_summary,
             api::fetch_achievements,
             api::fetch_achievements_summary,

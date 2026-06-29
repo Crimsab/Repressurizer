@@ -1,6 +1,6 @@
 import { create } from "zustand";
-import { fetchGameDetails, fetchHltb, fetchAchievementsSummary, fetchSteamReviewSummary, currencyToCountryCode } from "../lib/tauri";
-import { useGameStore } from "./gameStore";
+import { fetchGameDetails, fetchGamePriceOverviews, fetchHltb, fetchAchievementsSummary, fetchSteamReviewSummary, currencyToCountryCode } from "../lib/tauri";
+import { isDetailsCacheCurrent, useGameStore } from "./gameStore";
 import { useHltbStore } from "./hltbStore";
 import { useAchievementsStore } from "./achievementsStore";
 import { useSteamRatingsStore } from "./steamRatingsStore";
@@ -8,8 +8,9 @@ import { useFailedGamesStore } from "./failedGamesStore";
 import { useHltbIgnoredStore } from "./hltbIgnoredStore";
 import { useSettingsStore } from "./settingsStore";
 import { extractReleaseYear } from "../lib/search";
+import { detailsPriceNeedsCurrencyRefresh } from "../lib/prices";
 import { isSteamRatingFresh, isSteamReviewRateLimitedError } from "../lib/steamRatings";
-import type { GameDetails } from "../lib/types";
+import type { GameDetails, GamePriceOverview } from "../lib/types";
 
 // ── Config ────────────────────────────────────────────────────────────────────
 const DEFAULT_DETAILS_BASE_DELAY_MS = 1200;    // base delay between Steam requests (~1 req/sec)
@@ -164,13 +165,19 @@ export const useBackgroundFetchStore = create<BackgroundFetchState>((set, get) =
       if (_detailsRunning || missingIds.length === 0) return;
       // Filter out games already permanently failed (removed from Steam)
       const { isIgnored } = useFailedGamesStore.getState();
-      const ids = missingIds.filter((id) => !isIgnored(id));
+      const details = useGameStore.getState().details;
+      const currency = useSettingsStore.getState().currency ?? "EUR";
+      const ids = missingIds.filter((id) => {
+        if (isIgnored(id)) return false;
+        const detail = details[id];
+        return !isDetailsCacheCurrent(detail) || detailsPriceNeedsCurrencyRefresh(detail, currency);
+      });
       if (ids.length === 0) {
-        console.log(`[Details] All ${missingIds.length} missing games are already ignored`);
+        console.log(`[Details] All ${missingIds.length} requested games are already cached or ignored`);
         return;
       }
       const skipped = missingIds.length - ids.length;
-      if (skipped > 0) console.log(`[Details] Skipping ${skipped} ignored games, fetching ${ids.length}`);
+      if (skipped > 0) console.log(`[Details] Skipping ${skipped} cached/ignored games, fetching ${ids.length}`);
 
       _detailsRunning = true;
       _detailsAbort = false;
@@ -313,15 +320,56 @@ async function _runDetailsLoop(missingIds: number[]) {
   const retryQueue: number[] = [];
   let fetched = 0;
   let succeeded = 0;
-  const cc = currencyToCountryCode(useSettingsStore.getState().currency ?? "EUR");
+  const currency = useSettingsStore.getState().currency ?? "EUR";
+  const cc = currencyToCountryCode(currency);
+  const currentDetails = useGameStore.getState().details;
+  const priceOnlyIds = missingIds.filter((id) => {
+    const detail = currentDetails[id];
+    return isDetailsCacheCurrent(detail) && detailsPriceNeedsCurrencyRefresh(detail, currency);
+  });
+  const priceOnlyIdSet = new Set(priceOnlyIds);
+  const fullDetailIds = missingIds.filter((id) => !priceOnlyIdSet.has(id));
 
   console.log(`[Details] Starting fetch for ${missingIds.length} games`);
 
+  if (priceOnlyIds.length > 0 && !_detailsAbort) {
+    _setState({ detailsCurrentName: `Price batch (${priceOnlyIds.length})` });
+    try {
+      const prices = await fetchGamePriceOverviews(priceOnlyIds, cc);
+      const pricesById = new Set(prices.map((price) => price.app_id));
+      const unavailablePrices: GamePriceOverview[] = priceOnlyIds
+        .filter((id) => !pricesById.has(id))
+        .map((id) => ({
+          app_id: id,
+          price_initial: null,
+          price_final: null,
+          price_currency: currency,
+          price_country_code: cc?.toUpperCase() ?? null,
+          is_free: false,
+        }));
+
+      useGameStore.getState().setBulkPriceSnapshots([...prices, ...unavailablePrices]);
+      fetched += priceOnlyIds.length;
+      succeeded += priceOnlyIds.length;
+      _setState({ detailsFetched: fetched, detailsSucceeded: succeeded });
+      addToRecent(
+        "detailsRecentNames",
+        `✓ Price batch ${prices.length}/${priceOnlyIds.length}`
+      );
+      console.log(`[Details] ✓ price batch: ${prices.length}/${priceOnlyIds.length} prices refreshed`);
+    } catch (e) {
+      console.warn(`[Details] ✗ price batch (${priceOnlyIds.length}): ${e}`);
+      addToRecent("detailsRecentNames", `⚠ Price batch failed`);
+      onDetailsFail(priceOnlyIds[0] ?? 0);
+      retryQueue.push(...priceOnlyIds);
+    }
+  }
+
   // ---- Pass 1: main pass ----
-  for (let i = 0; i < missingIds.length; i++) {
+  for (let i = 0; i < fullDetailIds.length; i++) {
     if (_detailsAbort) break;
 
-    const id = missingIds[i];
+    const id = fullDetailIds[i];
     const games = useGameStore.getState().games;
     const name = games[id]?.name ?? `#${id}`;
     _setState({ detailsCurrentName: name });
@@ -347,7 +395,7 @@ async function _runDetailsLoop(missingIds: number[]) {
     fetched++;
     _setState({ detailsFetched: fetched, detailsSucceeded: succeeded });
 
-    if (buffer.length >= 25 || i === missingIds.length - 1) {
+    if (buffer.length >= 25 || i === fullDetailIds.length - 1) {
       if (buffer.length > 0) {
         useGameStore.getState().setBulkDetails([...buffer]);
         buffer.length = 0;
@@ -356,13 +404,13 @@ async function _runDetailsLoop(missingIds: number[]) {
 
     if (!ok) {
       // Small delay on failure (just the adaptive portion if any)
-      if (!_detailsAbort && i < missingIds.length - 1 && _extraDelayMs > 0) {
+      if (!_detailsAbort && i < fullDetailIds.length - 1 && _extraDelayMs > 0) {
         await sleep(Math.min(_extraDelayMs, 3000)); // cap wait-on-fail at 3s
       }
       continue;
     }
 
-    if (!_detailsAbort && i < missingIds.length - 1) {
+    if (!_detailsAbort && i < fullDetailIds.length - 1) {
       await sleep(detailsBaseDelayMs() + _extraDelayMs);
     }
   }

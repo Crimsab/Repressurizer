@@ -42,6 +42,24 @@ export function priceSnapshotFromDetails(
   };
 }
 
+export function sanitizeGamePriceSnapshot(
+  snapshot: GamePriceSnapshot,
+  fetchedAt = Date.now()
+): GamePriceSnapshot | null {
+  const initial = isPlausibleSteamPrice(snapshot.price_initial) ? snapshot.price_initial : null;
+  const final = isPlausibleSteamPrice(snapshot.price_final) ? snapshot.price_final : null;
+  const currency = priceCacheKey(snapshot.price_currency) || null;
+  if (!snapshot.is_free && initial == null && final == null && !currency) return null;
+  return {
+    price_initial: initial,
+    price_final: final,
+    price_currency: currency,
+    price_country_code: snapshot.price_country_code ?? null,
+    is_free: !!snapshot.is_free,
+    fetched_at: snapshot.fetched_at ?? fetchedAt,
+  };
+}
+
 export function mergeDetailsPriceCache(
   details: GameDetails,
   previous?: GameDetails,
@@ -56,6 +74,32 @@ export function mergeDetailsPriceCache(
   if (snapshot && key) priceCache[key] = snapshot;
   return {
     ...details,
+    price_cache: Object.keys(priceCache).length > 0 ? priceCache : undefined,
+  };
+}
+
+export function mergePriceSnapshotIntoDetails(
+  details: GameDetails,
+  snapshot: GamePriceSnapshot,
+  fetchedAt = Date.now()
+): GameDetails {
+  const withExistingCache = mergeDetailsPriceCache(details, undefined, details.fetched_at ?? fetchedAt);
+  const cleanSnapshot = sanitizeGamePriceSnapshot(snapshot, fetchedAt);
+  if (!cleanSnapshot) return withExistingCache;
+
+  const key = priceCacheKey(cleanSnapshot.price_currency);
+  const priceCache: Record<string, GamePriceSnapshot> = {
+    ...(withExistingCache.price_cache ?? {}),
+  };
+  if (key) priceCache[key] = cleanSnapshot;
+
+  return {
+    ...withExistingCache,
+    price_initial: cleanSnapshot.price_initial,
+    price_final: cleanSnapshot.price_final,
+    price_currency: cleanSnapshot.price_currency,
+    price_country_code: cleanSnapshot.price_country_code ?? null,
+    is_free: cleanSnapshot.is_free,
     price_cache: Object.keys(priceCache).length > 0 ? priceCache : undefined,
   };
 }

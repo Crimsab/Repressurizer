@@ -14,6 +14,7 @@ import type {
   SamAchievementActionResult,
   SamBackupInfo,
   ProxyProfile,
+  GamePriceOverview,
 } from "./types";
 
 export async function detectSteam(): Promise<SteamInfo> {
@@ -201,6 +202,16 @@ export async function fetchGameDetails(
   countryCode?: string
 ): Promise<GameDetails> {
   return invoke<GameDetails>("fetch_game_details", { appId, countryCode: countryCode ?? null });
+}
+
+export async function fetchGamePriceOverviews(
+  appIds: number[],
+  countryCode?: string
+): Promise<GamePriceOverview[]> {
+  return invoke<GamePriceOverview[]>("fetch_game_price_overviews", {
+    appIds,
+    countryCode: countryCode ?? null,
+  });
 }
 
 export async function fetchSteamReviewSummary(appId: number): Promise<SteamReviewSummary> {

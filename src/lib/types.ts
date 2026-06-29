@@ -144,6 +144,10 @@ export interface GamePriceSnapshot {
   fetched_at?: number;
 }
 
+export interface GamePriceOverview extends GamePriceSnapshot {
+  app_id: number;
+}
+
 export interface SteamReviewSummary {
   app_id: number;
   review_score: number;

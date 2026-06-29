@@ -3,6 +3,7 @@ import {
   detailsPriceMatchesCurrency,
   detailsPriceNeedsCurrencyRefresh,
   detailsWithPriceForCurrency,
+  mergePriceSnapshotIntoDetails,
 } from "./prices";
 import type { GameDetails } from "./types";
 
@@ -56,5 +57,33 @@ describe("details price currency matching", () => {
   it("does not force refresh for free or unknown-price details", () => {
     expect(detailsPriceMatchesCurrency({ ...details("INR"), is_free: true }, "EUR")).toBe(true);
     expect(detailsPriceMatchesCurrency(details(null, null), "EUR")).toBe(true);
+  });
+
+  it("merges regional price snapshots without losing the previous currency", () => {
+    const merged = mergePriceSnapshotIntoDetails(details("INR", 2600), {
+      price_initial: 199,
+      price_final: 99,
+      price_currency: "EUR",
+      price_country_code: "IT",
+      is_free: false,
+    });
+
+    expect(merged.price_final).toBe(99);
+    expect(merged.price_currency).toBe("EUR");
+    expect(merged.price_cache?.INR.price_final).toBe(2600);
+    expect(merged.price_cache?.EUR.price_final).toBe(99);
+  });
+
+  it("treats an explicit unavailable regional price snapshot as cached", () => {
+    const merged = mergePriceSnapshotIntoDetails(details("INR", 2600), {
+      price_initial: null,
+      price_final: null,
+      price_currency: "EUR",
+      price_country_code: "IT",
+      is_free: false,
+    });
+
+    expect(detailsPriceNeedsCurrencyRefresh(merged, "EUR")).toBe(false);
+    expect(detailsWithPriceForCurrency(merged, "INR")?.price_final).toBe(2600);
   });
 });

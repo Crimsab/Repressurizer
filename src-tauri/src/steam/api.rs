@@ -1,5 +1,5 @@
 use serde::{de, Deserialize, Deserializer, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::http_policy::{client_builder_for_scope, HttpProxyScope};
 
@@ -139,6 +139,21 @@ pub struct GameDetails {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GamePriceOverview {
+    pub app_id: u64,
+    #[serde(default)]
+    pub price_initial: Option<u64>,
+    #[serde(default)]
+    pub price_final: Option<u64>,
+    #[serde(default)]
+    pub price_currency: Option<String>,
+    #[serde(default)]
+    pub price_country_code: Option<String>,
+    #[serde(default)]
+    pub is_free: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SteamReviewSummary {
     pub app_id: u64,
     pub review_score: u32,
@@ -161,6 +176,12 @@ pub struct PlatformSupport {
 struct StoreAppResponse {
     success: bool,
     data: Option<StoreAppData>,
+}
+
+#[derive(Debug, Deserialize)]
+struct StorePriceAppResponse {
+    success: bool,
+    data: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -210,6 +231,7 @@ struct StorePriceOverview {
 }
 
 const MAX_PLAUSIBLE_STEAM_PRICE_CENTS: u64 = 500_000;
+const STORE_PRICE_BATCH_SIZE: usize = 250;
 
 fn plausible_price(price: Option<u64>) -> Option<u64> {
     price.filter(|value| *value <= MAX_PLAUSIBLE_STEAM_PRICE_CENTS)
@@ -460,6 +482,76 @@ pub async fn fetch_game_details(
     Err(last_error)
 }
 
+#[tauri::command]
+pub async fn fetch_game_price_overviews(
+    app_ids: Vec<u64>,
+    country_code: Option<String>,
+) -> Result<Vec<GamePriceOverview>, String> {
+    let mut unique_ids = Vec::new();
+    let mut seen = HashSet::new();
+    for id in app_ids {
+        if id > 0 && seen.insert(id) {
+            unique_ids.push(id);
+        }
+    }
+
+    if unique_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let client = client_builder_for_scope(HttpProxyScope::SteamStore)?
+        .user_agent(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0",
+        )
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+
+    let requested_cc = country_code.unwrap_or_default().trim().to_ascii_lowercase();
+    let attempts = price_country_attempts(&requested_cc);
+    let mut prices = Vec::new();
+
+    for chunk in unique_ids.chunks(STORE_PRICE_BATCH_SIZE) {
+        let mut remaining = chunk.to_vec();
+
+        for cc in &attempts {
+            if remaining.is_empty() {
+                break;
+            }
+
+            let fetched =
+                fetch_game_price_overviews_with_country(&client, &remaining, cc.as_deref()).await?;
+            if fetched.is_empty() {
+                continue;
+            }
+
+            let fetched_ids: HashSet<u64> = fetched.iter().map(|price| price.app_id).collect();
+            prices.extend(fetched);
+            remaining.retain(|id| !fetched_ids.contains(id));
+        }
+    }
+
+    Ok(prices)
+}
+
+fn price_country_attempts(requested_cc: &str) -> Vec<Option<String>> {
+    let mut attempts = Vec::new();
+    if requested_cc.is_empty() {
+        attempts.push(None);
+        return attempts;
+    }
+
+    attempts.push(Some(requested_cc.to_string()));
+    if is_euro_country_code(requested_cc) {
+        for fallback in ["it", "fr", "es", "nl", "at", "be", "ie", "pt", "fi"] {
+            if fallback != requested_cc {
+                attempts.push(Some(fallback.to_string()));
+            }
+        }
+    }
+
+    attempts
+}
+
 fn is_euro_country_code(country_code: &str) -> bool {
     matches!(
         country_code,
@@ -483,6 +575,98 @@ fn is_euro_country_code(country_code: &str) -> bool {
             | "si"
             | "sk"
     )
+}
+
+async fn fetch_game_price_overviews_with_country(
+    client: &reqwest::Client,
+    app_ids: &[u64],
+    country_code: Option<&str>,
+) -> Result<Vec<GamePriceOverview>, String> {
+    let appids = app_ids
+        .iter()
+        .map(u64::to_string)
+        .collect::<Vec<_>>()
+        .join(",");
+
+    let mut request = client
+        .get("https://store.steampowered.com/api/appdetails")
+        .query(&[("appids", appids.as_str()), ("filters", "price_overview")]);
+
+    if let Some(cc) = country_code.filter(|cc| !cc.is_empty()) {
+        request = request.query(&[("cc", cc)]);
+    }
+
+    let response = request
+        .send()
+        .await
+        .map_err(|e| format!("HTTP request failed: {}", e))?;
+
+    let status = response.status();
+    let text = response
+        .text()
+        .await
+        .map_err(|e| format!("Failed to read response: {}", e))?;
+
+    if !status.is_success() {
+        return Err(format!(
+            "Steam price batch returned HTTP {}: {}",
+            status.as_u16(),
+            text.chars().take(180).collect::<String>()
+        ));
+    }
+
+    parse_game_price_overviews_response(app_ids, &text, country_code)
+}
+
+fn parse_game_price_overviews_response(
+    app_ids: &[u64],
+    text: &str,
+    country_code: Option<&str>,
+) -> Result<Vec<GamePriceOverview>, String> {
+    let parsed: HashMap<String, StorePriceAppResponse> = serde_json::from_str(text)
+        .map_err(|e| format!("Failed to parse store price response: {}", e))?;
+
+    let mut prices = Vec::new();
+    for app_id in app_ids {
+        let Some(app_data) = parsed.get(&app_id.to_string()) else {
+            continue;
+        };
+        if !app_data.success {
+            continue;
+        }
+
+        let Some(data) = app_data.data.as_ref().and_then(|value| value.as_object()) else {
+            continue;
+        };
+
+        let is_free = data
+            .get("is_free")
+            .and_then(|value| value.as_bool())
+            .unwrap_or(false);
+
+        let price = data
+            .get("price_overview")
+            .and_then(|value| serde_json::from_value::<StorePriceOverview>(value.clone()).ok());
+
+        let initial = price.as_ref().and_then(|p| plausible_price(p.initial));
+        let final_price = price.as_ref().and_then(|p| plausible_price(p.final_price));
+        let currency = price.and_then(|p| p.currency);
+
+        if !is_free && initial.is_none() && final_price.is_none() && currency.is_none() {
+            continue;
+        }
+
+        prices.push(GamePriceOverview {
+            app_id: *app_id,
+            price_initial: initial,
+            price_final: final_price,
+            price_currency: currency,
+            price_country_code: country_code.map(|cc| cc.to_ascii_uppercase()),
+            is_free,
+        });
+    }
+
+    Ok(prices)
 }
 
 async fn fetch_game_details_with_country(
@@ -1675,6 +1859,39 @@ mod tests {
         let error = parse_game_details_response(43160, raw, Some("it")).expect_err("unavailable");
 
         assert!(error.contains("Store API returned failure"));
+    }
+
+    #[test]
+    fn parses_batch_price_overviews_and_skips_empty_data() {
+        let raw = r#"{
+          "508290": {
+            "success": true,
+            "data": {
+              "price_overview": {
+                "currency": "EUR",
+                "initial": 199,
+                "final": 99
+              }
+            }
+          },
+          "730": {
+            "success": true,
+            "data": []
+          },
+          "999999": {
+            "success": false
+          }
+        }"#;
+
+        let prices = parse_game_price_overviews_response(&[508290, 730, 999999], raw, Some("it"))
+            .expect("price batch");
+
+        assert_eq!(prices.len(), 1);
+        assert_eq!(prices[0].app_id, 508290);
+        assert_eq!(prices[0].price_currency.as_deref(), Some("EUR"));
+        assert_eq!(prices[0].price_initial, Some(199));
+        assert_eq!(prices[0].price_final, Some(99));
+        assert_eq!(prices[0].price_country_code.as_deref(), Some("IT"));
     }
 }
 

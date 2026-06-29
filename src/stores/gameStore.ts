@@ -1,10 +1,10 @@
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
-import type { OwnedGame, GameDetails } from "../lib/types";
+import type { OwnedGame, GameDetails, GamePriceOverview } from "../lib/types";
 import type { GameStatus } from "./statusStore";
 import { displayNameFromDetails, isPlaceholderGameName } from "../lib/libraryMerge";
 import { useSteamAppIndexStore } from "./steamAppIndexStore";
-import { mergeDetailsPriceCache, sanitizeGameDetailsPrices } from "../lib/prices";
+import { mergeDetailsPriceCache, mergePriceSnapshotIntoDetails, sanitizeGameDetailsPrices } from "../lib/prices";
 
 export const DETAILS_CACHE_SCHEMA_VERSION = 2;
 
@@ -153,6 +153,7 @@ interface GameState {
   mergeGames: (games: OwnedGame[]) => void;
   setDetails: (appId: number, details: GameDetails) => void;
   setBulkDetails: (details: GameDetails[]) => void;
+  setBulkPriceSnapshots: (prices: GamePriceOverview[]) => void;
   clearDetailsCache: () => void;
   hydrateDetailsCache: () => Promise<void>;
   setLoading: (loading: boolean) => void;
@@ -257,6 +258,31 @@ export const useGameStore = create<GameState>((set, get) => ({
       }
       persistDetailsCache(next);
       return { details: next, games };
+    }),
+
+  setBulkPriceSnapshots: (prices) =>
+    set((state) => {
+      if (prices.length === 0) return state;
+
+      const next = { ...state.details };
+      const fetchedAt = Date.now();
+      let changed = false;
+
+      for (const price of prices) {
+        const existing = next[price.app_id];
+        if (!existing) continue;
+
+        next[price.app_id] = {
+          ...mergePriceSnapshotIntoDetails(existing, price, fetchedAt),
+          cache_schema: existing.cache_schema,
+          fetched_at: existing.fetched_at,
+        };
+        changed = true;
+      }
+
+      if (!changed) return state;
+      persistDetailsCache(next);
+      return { details: next };
     }),
 
   clearDetailsCache: () => {
