@@ -87,7 +87,13 @@ pub(crate) fn app_data_dir() -> Option<PathBuf> {
 }
 
 fn validate_app_data_key(key: &str) -> Result<(), String> {
-    if key.is_empty() || key.starts_with('.') || key.contains("..") {
+    if key.is_empty()
+        || key.starts_with('.')
+        || key.ends_with('.')
+        || key.ends_with(' ')
+        || key.contains("..")
+        || is_windows_reserved_app_data_key(key)
+    {
         return Err("Invalid app data key".to_string());
     }
 
@@ -101,11 +107,42 @@ fn validate_app_data_key(key: &str) -> Result<(), String> {
     Ok(())
 }
 
+fn is_windows_reserved_app_data_key(key: &str) -> bool {
+    let stem = key
+        .split('.')
+        .next()
+        .unwrap_or_default()
+        .to_ascii_uppercase();
+    matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL")
+        || stem
+            .strip_prefix("COM")
+            .and_then(|suffix| suffix.parse::<u8>().ok())
+            .is_some_and(|number| (1..=9).contains(&number))
+        || stem
+            .strip_prefix("LPT")
+            .and_then(|suffix| suffix.parse::<u8>().ok())
+            .is_some_and(|number| (1..=9).contains(&number))
+}
+
 fn app_data_file_path(key: &str) -> Result<PathBuf, String> {
     validate_app_data_key(key)?;
     app_data_dir()
         .map(|dir| dir.join(key))
         .ok_or("Could not resolve Repressurizer app data directory".to_string())
+}
+
+fn should_sync_app_data(key: &str) -> bool {
+    !matches!(
+        key,
+        "steam_apps_index.json"
+            | "steam_ratings_cache.json"
+            | "details_cache.json"
+            | "hltb_cache.json"
+            | "failed_games.json"
+            | "achievements.json"
+            | "friends.json"
+            | "wishlist.json"
+    )
 }
 
 fn settings_file_path() -> Result<PathBuf, String> {
@@ -154,6 +191,19 @@ fn read_settings_json() -> Result<serde_json::Value, String> {
             error
         )
     })
+}
+
+fn read_optional_text_file(path: &Path, description: &str) -> Result<Option<String>, String> {
+    match std::fs::read_to_string(path) {
+        Ok(data) => Ok(Some(data)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(format!(
+            "Failed to read {} {}: {}",
+            description,
+            path.display(),
+            error
+        )),
+    }
 }
 
 fn temporary_file_path(path: &Path) -> Result<PathBuf, String> {
@@ -581,13 +631,13 @@ fn redact_tail(value: &str) -> String {
 #[tauri::command]
 fn load_app_data(_app: tauri::AppHandle, key: String) -> Result<Option<String>, String> {
     let path = app_data_file_path(&key)?;
-    Ok(std::fs::read_to_string(path).ok())
+    read_optional_text_file(&path, "app data file")
 }
 
 #[tauri::command]
 fn save_app_data(_app: tauri::AppHandle, key: String, data: String) -> Result<(), String> {
     let path = app_data_file_path(&key)?;
-    write_text_file_atomic(&path, &data, "app data file", false)
+    write_text_file_atomic(&path, &data, "app data file", should_sync_app_data(&key))
 }
 
 #[tauri::command]
@@ -834,7 +884,13 @@ fn save_wishlist_cache(_app: tauri::AppHandle, data: String) -> Result<(), Strin
 
 fn load_named_cache(name: &str) -> Option<String> {
     let path = app_data_file_path(name).ok()?;
-    std::fs::read_to_string(path).ok()
+    match read_optional_text_file(&path, "cache file") {
+        Ok(data) => data,
+        Err(error) => {
+            log::debug!("{}", error);
+            None
+        }
+    }
 }
 
 fn save_named_cache(name: &str, data: String) -> Result<(), String> {
@@ -894,6 +950,13 @@ pub fn run() {
 
             let show = MenuItem::with_id(app, "show", "Open Repressurizer", true, None::<&str>)?;
             let settings = MenuItem::with_id(app, "settings", "Open Settings", true, None::<&str>)?;
+            let check_updates = MenuItem::with_id(
+                app,
+                "check_updates",
+                "Check / Install Update",
+                true,
+                None::<&str>,
+            )?;
             let refresh = MenuItem::with_id(
                 app,
                 "refresh_library",
@@ -956,6 +1019,7 @@ pub fn run() {
                 &[
                     &show,
                     &settings,
+                    &check_updates,
                     &separator,
                     &refresh,
                     &backup,
@@ -988,6 +1052,9 @@ pub fn run() {
                     "settings" => {
                         show_main_window(app);
                         let _ = app.emit("repressurizer-open-settings-requested", ());
+                    }
+                    "check_updates" => {
+                        let _ = app.emit("repressurizer-update-action-requested", ());
                     }
                     "publish_snapshot" => {
                         automation::trigger_publish_now();
@@ -1158,7 +1225,20 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::validate_app_data_key;
+    use super::{read_optional_text_file, should_sync_app_data, validate_app_data_key};
+
+    fn temp_test_path(prefix: &str) -> std::path::PathBuf {
+        let unique = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        std::env::temp_dir().join(format!(
+            "repressurizer-{}-{}-{}.json",
+            prefix,
+            std::process::id(),
+            unique
+        ))
+    }
 
     #[test]
     fn app_data_key_accepts_existing_storage_names() {
@@ -1195,13 +1275,57 @@ mod tests {
             "settings/backup.json",
             "settings\\backup.json",
             "settings..json",
+            "settings.",
             "settings json",
             "settings:json",
+            "CON",
+            "nul.json",
+            "COM1.txt",
+            "LPT9",
         ] {
             assert!(
                 validate_app_data_key(key).is_err(),
                 "{key} should be invalid"
             );
         }
+    }
+
+    #[test]
+    fn app_data_sync_policy_keeps_user_data_durable_and_skips_regenerable_caches() {
+        for key in [
+            "settings.json",
+            "notes.json",
+            "reviews.json",
+            "steam_family_token.json",
+        ] {
+            assert!(should_sync_app_data(key), "{key} should sync to disk");
+        }
+
+        for key in [
+            "steam_apps_index.json",
+            "steam_ratings_cache.json",
+            "details_cache.json",
+        ] {
+            assert!(!should_sync_app_data(key), "{key} should skip sync");
+        }
+    }
+
+    #[test]
+    fn optional_text_read_distinguishes_missing_files() {
+        let path = temp_test_path("missing");
+        let _ = std::fs::remove_file(&path);
+
+        assert_eq!(read_optional_text_file(&path, "test file").unwrap(), None);
+    }
+
+    #[test]
+    fn optional_text_read_returns_existing_file_contents() {
+        let path = temp_test_path("existing");
+        std::fs::write(&path, "{\"ok\":true}").unwrap();
+
+        let result = read_optional_text_file(&path, "test file").unwrap();
+        let _ = std::fs::remove_file(&path);
+
+        assert_eq!(result.as_deref(), Some("{\"ok\":true}"));
     }
 }
