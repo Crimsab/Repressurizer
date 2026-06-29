@@ -1,9 +1,16 @@
 import { useState } from "react";
-import { useGameStore } from "../../stores/gameStore";
+import { detailsCacheNeedsRefresh, useGameStore } from "../../stores/gameStore";
 import { useCategoryStore } from "../../stores/categoryStore";
 import { useStatusStore, STATUS_META, type GameStatus } from "../../stores/statusStore";
 import { useBackgroundFetchStore } from "../../stores/backgroundFetchStore";
-import { Circle, X, FolderSimplePlus, Spinner, FolderMinus } from "@phosphor-icons/react";
+import { MAX_FAIL_RUNS, useFailedGamesStore } from "../../stores/failedGamesStore";
+import { HLTB_MAX_FAILS, useHltbIgnoredStore } from "../../stores/hltbIgnoredStore";
+import { useHltbStore } from "../../stores/hltbStore";
+import { useSettingsStore } from "../../stores/settingsStore";
+import { useSteamRatingsStore } from "../../stores/steamRatingsStore";
+import { detailsPriceNeedsCurrencyRefresh } from "../../lib/prices";
+import { steamRatingIdsNeedingFetch } from "../../lib/steamRatings";
+import { Circle, X, FolderSimplePlus, Spinner, FolderMinus, Robot } from "@phosphor-icons/react";
 import { useT, type TranslationKey } from "../../lib/i18n";
 
 const STATUS_OPTIONS: { value: GameStatus; labelKey: TranslationKey }[] = [
@@ -113,10 +120,19 @@ function FetchPopover({
 export function StatusBar() {
   const t = useT();
   const gameCount = useGameStore((s) => Object.keys(s.games).length);
+  const games = useGameStore((s) => s.games);
+  const details = useGameStore((s) => s.details);
   const selectedGameIds = useGameStore((s) => s.selectedGameIds);
   const clearSelection = useGameStore((s) => s.clearSelection);
   const categoryCount = useCategoryStore((s) => s.collections.length);
   const dirty = useCategoryStore((s) => s.dirty);
+  const currency = useSettingsStore((s) => s.currency);
+  const hltbData = useHltbStore((s) => s.data);
+  const ignoredDetailFails = useFailedGamesStore((s) => s.fails);
+  const ignoredHltbFails = useHltbIgnoredStore((s) => s.fails);
+  const ratings = useSteamRatingsStore((s) => s.ratings);
+  const ratingsHydrated = useSteamRatingsStore((s) => s.hydrated);
+  const hydrateRatingsCache = useSteamRatingsStore((s) => s.hydrateCache);
 
   const detailsRunning = useBackgroundFetchStore((s) => s.detailsRunning);
   const detailsFetched = useBackgroundFetchStore((s) => s.detailsFetched);
@@ -128,6 +144,7 @@ export function StatusBar() {
   const detailsCoolingDown = useBackgroundFetchStore((s) => s.detailsCoolingDown);
   const detailsCooldownSecs = useBackgroundFetchStore((s) => s.detailsCooldownSecs);
   const stopDetailsFetch = useBackgroundFetchStore((s) => s.stopDetailsFetch);
+  const startDetailsFetch = useBackgroundFetchStore((s) => s.startDetailsFetch);
 
   const hltbRunning = useBackgroundFetchStore((s) => s.hltbRunning);
   const hltbFetched = useBackgroundFetchStore((s) => s.hltbFetched);
@@ -135,6 +152,7 @@ export function StatusBar() {
   const hltbCurrentName = useBackgroundFetchStore((s) => s.hltbCurrentName);
   const hltbRecentNames = useBackgroundFetchStore((s) => s.hltbRecentNames);
   const stopHltbFetch = useBackgroundFetchStore((s) => s.stopHltbFetch);
+  const startHltbFetch = useBackgroundFetchStore((s) => s.startHltbFetch);
 
   const achievementsRunning = useBackgroundFetchStore((s) => s.achievementsRunning);
   const achievementsFetched = useBackgroundFetchStore((s) => s.achievementsFetched);
@@ -153,6 +171,7 @@ export function StatusBar() {
   const ratingsCoolingDown = useBackgroundFetchStore((s) => s.ratingsCoolingDown);
   const ratingsCooldownSecs = useBackgroundFetchStore((s) => s.ratingsCooldownSecs);
   const stopRatingsFetch = useBackgroundFetchStore((s) => s.stopRatingsFetch);
+  const startRatingsFetch = useBackgroundFetchStore((s) => s.startRatingsFetch);
 
   const collections = useCategoryStore((s) => s.collections);
   const activeCategory = useCategoryStore((s) => s.activeCategory);
@@ -173,6 +192,21 @@ export function StatusBar() {
 
   const selectedCount = Object.keys(selectedGameIds).length;
   const selectedIds = Object.keys(selectedGameIds).map(Number);
+  const gameIds = Object.keys(games).map(Number);
+  const fetchableDetailIds = gameIds.filter((id) => {
+    if ((ignoredDetailFails[id] ?? 0) >= MAX_FAIL_RUNS) return false;
+    const detail = details[id];
+    return detailsCacheNeedsRefresh(detail) || detailsPriceNeedsCurrencyRefresh(detail, currency);
+  });
+  const fetchableHltbIds = gameIds.filter(
+    (id) => !hltbData[id] && (ignoredHltbFails[id] ?? 0) < HLTB_MAX_FAILS
+  );
+  const missingRatingIds = ratingsHydrated ? steamRatingIdsNeedingFetch(games, ratings) : [];
+  const cachePreparationMissing =
+    fetchableDetailIds.length + fetchableHltbIds.length + missingRatingIds.length;
+  const cachePreparationRunning = detailsRunning || hltbRunning || ratingsRunning;
+  const showPrepareCache =
+    gameCount > 0 && cachePreparationMissing > 0 && !cachePreparationRunning;
 
   const editableCollections = [...collections]
     .filter((c) => !c.is_dynamic && c.id !== "hidden")
@@ -185,6 +219,26 @@ export function StatusBar() {
 
   const handleBulkStatus = (status: GameStatus) => {
     setBulkStatus(selectedIds, status);
+  };
+
+  const handlePrepareCache = async () => {
+    if (!detailsRunning && fetchableDetailIds.length > 0) {
+      startDetailsFetch(fetchableDetailIds);
+    }
+    if (!hltbRunning && fetchableHltbIds.length > 0) {
+      startHltbFetch(fetchableHltbIds.map((appId) => ({ appId, name: games[appId]?.name ?? `#${appId}` })));
+    }
+    if (!ratingsRunning) {
+      if (!useSteamRatingsStore.getState().hydrated) {
+        await hydrateRatingsCache();
+      }
+      const currentRatings = useSteamRatingsStore.getState().ratings;
+      const missing = steamRatingIdsNeedingFetch(useGameStore.getState().games, currentRatings);
+      if (missing.length > 0) {
+        const currentGames = useGameStore.getState().games;
+        startRatingsFetch(missing.map((appId) => ({ appId, name: currentGames[appId]?.name ?? `#${appId}` })));
+      }
+    }
   };
 
   return (
@@ -282,6 +336,19 @@ export function StatusBar() {
       )}
 
       <span className="flex-1" />
+
+      {showPrepareCache && (
+        <button
+          type="button"
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); void handlePrepareCache(); }}
+          className="inline-flex items-center gap-1.5 rounded-md border border-repressurizer-accent/25 bg-repressurizer-accent/10 px-2 py-0.5 font-sans text-[10px] font-medium text-repressurizer-accent transition-colors hover:bg-repressurizer-accent/18"
+          title={t("auto.cache.prepare.desc")}
+        >
+          <Robot size={11} weight="duotone" />
+          {t("statusbar.prepareCache", { count: cachePreparationMissing })}
+        </button>
+      )}
 
       {/* Background fetch progress — right side, clickable */}
       {detailsRunning && (

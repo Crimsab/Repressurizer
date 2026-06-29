@@ -725,6 +725,7 @@
   "statusbar.removeFrom": "{name} içinden kaldır",
   "statusbar.detailsProgress": "Ayrıntılar {fetched}/{total}",
   "statusbar.slowing": "Yavaşlıyor - {seconds} sn gecikme",
+  "statusbar.prepareCache": "Önbelleği hazırla ({count})",
   "recommend.title": "Sırada ne oynanmalı",
   "recommend.shuffle": "Karıştır",
   "recommend.shuffleTitle": "Önerileri karıştır",

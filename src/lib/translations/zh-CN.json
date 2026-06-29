@@ -725,6 +725,7 @@
   "statusbar.removeFrom": "从“{name}”移除",
   "statusbar.detailsProgress": "详情 {fetched}/{total}",
   "statusbar.slowing": "正在减速——延迟 {seconds} 秒",
+  "statusbar.prepareCache": "准备缓存（{count}）",
   "recommend.title": "接下来玩什么",
   "recommend.shuffle": "随机",
   "recommend.shuffleTitle": "随机推荐",

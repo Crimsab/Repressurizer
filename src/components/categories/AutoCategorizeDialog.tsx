@@ -230,7 +230,7 @@ function detailNeedsFetchForType(type: CategorizerType, detail: GameDetails | un
 
 function detailHasDataForType(type: CategorizerType, detail: GameDetails | undefined): boolean {
   if (!categorizerNeedsDetails(type)) return true;
-  if (!isDetailsCacheCurrent(detail)) return false;
+  if (!detail || !isDetailsCacheCurrent(detail)) return false;
   if (type === "genre") return (detail.genres ?? []).length > 0;
   if (type === "tags" || type === "flags") return (detail.categories ?? []).length > 0;
   if (type === "language") return (detail.supported_languages ?? []).length > 0;

@@ -725,6 +725,7 @@
   "statusbar.removeFrom": "Usuń z „{name}”",
   "statusbar.detailsProgress": "Szczegóły {fetched}/{total}",
   "statusbar.slowing": "Spowalnianie — opóźnienie {seconds}s",
+  "statusbar.prepareCache": "Przygotuj cache ({count})",
   "recommend.title": "W co zagrać dalej",
   "recommend.shuffle": "Losuj",
   "recommend.shuffleTitle": "Losuj rekomendacje",

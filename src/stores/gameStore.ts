@@ -33,6 +33,37 @@ function normalizeDetailsForCache(details: GameDetails): GameDetails {
   };
 }
 
+function hasUsableLegacyDetails(details: GameDetails): boolean {
+  const name = String(details.name ?? "").trim();
+  const hasRealName = !!name && !isPlaceholderGameName(details.app_id, name);
+  const hasListData =
+    (details.genres ?? []).length > 0 ||
+    (details.categories ?? []).length > 0 ||
+    (details.developers ?? []).length > 0 ||
+    (details.publishers ?? []).length > 0 ||
+    (details.supported_languages ?? []).length > 0;
+  const hasPlatform =
+    !!details.platforms &&
+    (details.platforms.windows || details.platforms.mac || details.platforms.linux);
+  const hasPrice =
+    details.is_free ||
+    details.price_initial != null ||
+    details.price_final != null ||
+    !!details.price_currency ||
+    !!details.price_cache;
+
+  return (
+    hasRealName ||
+    hasListData ||
+    hasPlatform ||
+    hasPrice ||
+    !!details.release_date ||
+    details.metacritic_score != null ||
+    !!details.header_image ||
+    !!details.capsule_image
+  );
+}
+
 function markDetailsCacheFresh(details: GameDetails, previous?: GameDetails): GameDetails {
   const fetchedAt = Date.now();
   return {
@@ -42,7 +73,7 @@ function markDetailsCacheFresh(details: GameDetails, previous?: GameDetails): Ga
   };
 }
 
-export function isDetailsCacheCurrent(detail: GameDetails | undefined): detail is GameDetails {
+export function isDetailsCacheCurrent(detail: GameDetails | undefined): boolean {
   return !!detail && detail.cache_schema === DETAILS_CACHE_SCHEMA_VERSION;
 }
 
@@ -297,8 +328,16 @@ export const useGameStore = create<GameState>((set, get) => ({
         const parsed: Record<number, GameDetails> = JSON.parse(raw);
         const cleaned: Record<number, GameDetails> = {};
         let changed = false;
+        const migratedAt = Date.now();
         for (const [id, details] of Object.entries(parsed)) {
-          const cleanDetails = normalizeDetailsForCache(details);
+          let cleanDetails = normalizeDetailsForCache(details);
+          if (!isDetailsCacheCurrent(cleanDetails) && hasUsableLegacyDetails(cleanDetails)) {
+            cleanDetails = {
+              ...mergeDetailsPriceCache(cleanDetails, undefined, cleanDetails.fetched_at ?? migratedAt),
+              cache_schema: DETAILS_CACHE_SCHEMA_VERSION,
+              fetched_at: cleanDetails.fetched_at ?? migratedAt,
+            };
+          }
           cleaned[Number(id)] = cleanDetails;
           if (JSON.stringify(cleanDetails) !== JSON.stringify(details)) changed = true;
         }

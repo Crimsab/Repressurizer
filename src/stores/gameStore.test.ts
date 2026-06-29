@@ -1,8 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+afterEach(() => {
+  vi.doUnmock("@tauri-apps/api/core");
+});
+
 const VIEW_MODE_STORAGE_KEY = "repressurizer-library-view-mode";
 
-function makeDetails(appId = 10, currency = "EUR", price = 999) {
+function makeDetails(appId = 10, currency: string | null = "EUR", price: number | null = 999) {
   return {
     app_id: appId,
     name: `Game ${appId}`,
@@ -143,6 +147,54 @@ describe("gameStore details cache metadata", () => {
     expect(isDetailsCacheCurrent(legacyDetail)).toBe(false);
     expect(detailsCacheNeedsRefresh(legacyDetail)).toBe(true);
     expect(detailsCacheNeedsRefresh(undefined)).toBe(true);
+  });
+
+  it("promotes usable legacy details during hydration but keeps empty entries stale", async () => {
+    vi.stubGlobal("localStorage", createStorage());
+    const emptyLegacy = {
+      ...makeDetails(11, null, null),
+      name: "",
+      genres: [],
+      categories: [],
+      release_date: null,
+      metacritic_score: null,
+      developers: [],
+      publishers: [],
+      supported_languages: [],
+      platforms: { windows: false, mac: false, linux: false },
+      price_initial: null,
+      price_final: null,
+      price_currency: null,
+      is_free: false,
+    };
+    const saved: string[] = [];
+
+    vi.doMock("@tauri-apps/api/core", () => ({
+      invoke: vi.fn(async (command: string, args?: { data?: string }) => {
+        if (command === "load_details_cache") {
+          return JSON.stringify({
+            10: makeDetails(10),
+            11: emptyLegacy,
+          });
+        }
+        if (command === "save_details_cache" && args?.data) {
+          saved.push(args.data);
+        }
+        return null;
+      }),
+    }));
+    vi.resetModules();
+
+    const { DETAILS_CACHE_SCHEMA_VERSION, detailsCacheNeedsRefresh, useGameStore } = await import("./gameStore");
+
+    await useGameStore.getState().hydrateDetailsCache();
+
+    const hydrated = useGameStore.getState().details;
+    expect(hydrated[10]?.cache_schema).toBe(DETAILS_CACHE_SCHEMA_VERSION);
+    expect(hydrated[10]?.fetched_at).toEqual(expect.any(Number));
+    expect(detailsCacheNeedsRefresh(hydrated[10])).toBe(false);
+    expect(detailsCacheNeedsRefresh(hydrated[11])).toBe(true);
+    expect(saved.length).toBe(1);
   });
 
   it("keeps price snapshots for multiple currencies on the same details record", async () => {
