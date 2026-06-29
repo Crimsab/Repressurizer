@@ -55,6 +55,23 @@ const DEFAULT_FILTERS: FilterState = {
 };
 
 export type SortBy = "name" | "playtime" | "lastPlayed" | "appid" | "metacritic" | "hltb" | "achievements" | "status";
+export type ViewMode = "grid" | "list";
+
+const VIEW_MODE_STORAGE_KEY = "repressurizer-library-view-mode";
+
+function loadViewMode(): ViewMode {
+  try {
+    const raw = localStorage.getItem(VIEW_MODE_STORAGE_KEY);
+    if (raw === "grid" || raw === "list") return raw;
+  } catch {}
+  return "grid";
+}
+
+function saveViewMode(viewMode: ViewMode) {
+  try {
+    localStorage.setItem(VIEW_MODE_STORAGE_KEY, viewMode);
+  } catch {}
+}
 
 interface GameState {
   games: Record<number, OwnedGame>;
@@ -64,7 +81,7 @@ interface GameState {
   searchQuery: string;
   sortBy: SortBy;
   sortAsc: boolean;
-  viewMode: "grid" | "list";
+  viewMode: ViewMode;
   selectedGameIds: Record<number, boolean>;
   filters: FilterState;
 
@@ -79,7 +96,7 @@ interface GameState {
   setSearchQuery: (query: string) => void;
   setSortBy: (sort: SortBy) => void;
   toggleSortAsc: () => void;
-  setViewMode: (mode: "grid" | "list") => void;
+  setViewMode: (mode: ViewMode) => void;
   toggleGameSelection: (appId: number) => void;
   rangeSelectGames: (fromId: number, toId: number, orderedIds: number[]) => void;
   selectAllGames: () => void;
@@ -103,7 +120,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   searchQuery: "",
   sortBy: "name",
   sortAsc: true,
-  viewMode: "grid",
+  viewMode: loadViewMode(),
   selectedGameIds: {},
   filters: { ...DEFAULT_FILTERS },
 
@@ -207,7 +224,10 @@ export const useGameStore = create<GameState>((set, get) => ({
   setSearchQuery: (searchQuery) => set({ searchQuery }),
   setSortBy: (sortBy) => set({ sortBy }),
   toggleSortAsc: () => set((state) => ({ sortAsc: !state.sortAsc })),
-  setViewMode: (viewMode) => set({ viewMode }),
+  setViewMode: (viewMode) => {
+    saveViewMode(viewMode);
+    set({ viewMode });
+  },
 
   toggleGameSelection: (appId) =>
     set((state) => {

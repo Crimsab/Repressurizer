@@ -31,11 +31,24 @@ export function ContextMenu({ x, y, game, onClose, onViewDetails }: ContextMenuP
   const addGamesToCategory = useCategoryStore((s) => s.addGamesToCategory);
   const removeGamesFromCategory = useCategoryStore((s) => s.removeGamesFromCategory);
 
-  const currentStatus = useStatusStore((s) => s.statuses[game.appid] ?? "none");
-  const setStatus = useStatusStore((s) => s.setStatus);
+  const statuses = useStatusStore((s) => s.statuses);
+  const setBulkStatus = useStatusStore((s) => s.setBulkStatus);
 
-  const selectedCount = Object.keys(selectedGameIds).length;
-  const isMulti = selectedCount > 1 && selectedGameIds[game.appid];
+  const selectedIds = useMemo(() => Object.keys(selectedGameIds).map(Number), [selectedGameIds]);
+  const selectedCount = selectedIds.length;
+  const isMulti = selectedCount > 1 && !!selectedGameIds[game.appid];
+  const statusTargetIds = useMemo(
+    () => isMulti ? selectedIds : [game.appid],
+    [game.appid, isMulti, selectedIds]
+  );
+  const activeStatus = useMemo<GameStatus | null>(() => {
+    const [firstId] = statusTargetIds;
+    if (firstId == null) return null;
+    const firstStatus = statuses[firstId] ?? "none";
+    return statusTargetIds.every((id) => (statuses[id] ?? "none") === firstStatus)
+      ? firstStatus
+      : null;
+  }, [statusTargetIds, statuses]);
 
   const editableCollections = useMemo(
     () => [...collections]
@@ -211,37 +224,35 @@ export function ContextMenu({ x, y, game, onClose, onViewDetails }: ContextMenuP
       </div>
 
       {/* Status */}
-      {!isMulti && (
-        <>
-          <div className="border-t border-repressurizer-border" />
-          <div className="py-1">
-            <p className="px-3 py-1 text-[10px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("sort.status")}</p>
-            {STATUS_OPTIONS.map((s) => {
-              const meta = STATUS_META[s];
-              const isActive = currentStatus === s;
-              return (
-                <button
-                  key={s}
-                  onClick={() => { setStatus(game.appid, s); onClose(); }}
-                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors hover:bg-repressurizer-surface-hover"
-                >
-                  <span className={`h-2 w-2 rounded-full ${isActive ? "ring-1 ring-white" : ""} ${
-                    s === "none" ? "bg-repressurizer-border" :
-                    s === "playing" ? "bg-sky-400" :
-                    s === "beaten" ? "bg-violet-400" :
-                    s === "completed" ? "bg-repressurizer-accent" :
-                    "bg-repressurizer-text-faint"
-                  }`} />
-                  <span className={isActive ? "text-white font-medium" : `${meta.color || "text-repressurizer-text-muted"}`}>
-                    {s === "none" ? t("context.noStatus") : t(`status.${s}` as TranslationKey)}
-                  </span>
-                  {isActive && <Check size={12} weight="bold" className="ml-auto text-repressurizer-accent" />}
-                </button>
-              );
-            })}
-          </div>
-        </>
-      )}
+      <>
+        <div className="border-t border-repressurizer-border" />
+        <div className="py-1">
+          <p className="px-3 py-1 text-[10px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("sort.status")}</p>
+          {STATUS_OPTIONS.map((s) => {
+            const meta = STATUS_META[s];
+            const isActive = activeStatus === s;
+            return (
+              <button
+                key={s}
+                onClick={() => { setBulkStatus(statusTargetIds, s); onClose(); }}
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm transition-colors hover:bg-repressurizer-surface-hover"
+              >
+                <span className={`h-2 w-2 rounded-full ${isActive ? "ring-1 ring-white" : ""} ${
+                  s === "none" ? "bg-repressurizer-border" :
+                  s === "playing" ? "bg-sky-400" :
+                  s === "beaten" ? "bg-violet-400" :
+                  s === "completed" ? "bg-repressurizer-accent" :
+                  "bg-repressurizer-text-faint"
+                }`} />
+                <span className={isActive ? "text-white font-medium" : `${meta.color || "text-repressurizer-text-muted"}`}>
+                  {s === "none" ? t("context.noStatus") : t(`status.${s}` as TranslationKey)}
+                </span>
+                {isActive && <Check size={12} weight="bold" className="ml-auto text-repressurizer-accent" />}
+              </button>
+            );
+          })}
+        </div>
+      </>
 
       {editableCollections.length > 0 && (
         <>

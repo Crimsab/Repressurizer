@@ -243,6 +243,52 @@ function detailIdsNeedingFetchForType(
     .filter((id) => detailNeedsFetchForType(type, details[id]));
 }
 
+function detailIdsReadyForType(
+  type: CategorizerType,
+  games: Record<number, OwnedGame>,
+  details: Record<number, GameDetails>
+): number[] {
+  if (!categorizerNeedsDetails(type)) return [];
+  return Object.keys(games)
+    .map(Number)
+    .filter((id) => !detailNeedsFetchForType(type, details[id]));
+}
+
+function detailsReadyForType(
+  type: CategorizerType,
+  games: Record<number, OwnedGame>,
+  details: Record<number, GameDetails>
+): GameDetails[] {
+  return detailIdsReadyForType(type, games, details)
+    .map((id) => details[id])
+    .filter((detail): detail is GameDetails => !!detail);
+}
+
+function missingDetailIdsForPresets(
+  presets: AutoCategorizePreset[],
+  games: Record<number, OwnedGame>,
+  details: Record<number, GameDetails>
+): number[] {
+  return [
+    ...new Set(
+      presets
+        .filter((preset) => categorizerNeedsDetails(preset.type))
+        .flatMap((preset) => detailIdsNeedingFetchForType(preset.type, games, details))
+    ),
+  ];
+}
+
+function canRunPresetsWithCache(
+  presets: AutoCategorizePreset[],
+  games: Record<number, OwnedGame>,
+  details: Record<number, GameDetails>
+): boolean {
+  return presets.some((preset) => {
+    if (!categorizerNeedsDetails(preset.type)) return true;
+    return detailIdsReadyForType(preset.type, games, details).length > 0;
+  });
+}
+
 // Pure JS HLTB categorizer
 function runHltbCategorizerJs(
   games: OwnedGame[],
@@ -350,6 +396,7 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
   const [fetchError, setFetchError] = useState("");
   const [result, setResult] = useState<CategorizeResult | null>(persist.lastResult);
   const [previewContext, setPreviewContext] = useState<PreviewSortContext | null>(null);
+  const [previewNotice, setPreviewNotice] = useState("");
   const [runError, setRunError] = useState("");
 
   const categorizer = CATEGORIZERS.find((c) => c.value === type)!;
@@ -460,13 +507,7 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
   }, []);
 
   const startMissingPresetFetch = useCallback((presets: AutoCategorizePreset[]): boolean => {
-    const missingDetails = [
-      ...new Set(
-        presets
-          .filter((preset) => categorizerNeedsDetails(preset.type))
-          .flatMap((preset) => detailIdsNeedingFetchForType(preset.type, games, details))
-      ),
-    ];
+    const missingDetails = missingDetailIdsForPresets(presets, games, details);
 
     if (missingDetails.length > 0) {
       if (!apiKey) {
@@ -549,6 +590,25 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
     await runPresetSequence(presets);
   };
 
+  const handleRunPresetsCachedOnly = async () => {
+    const presets = [...persist.presets];
+    if (presets.length === 0) return;
+
+    if (!canRunPresetsWithCache(presets, games, details)) {
+      setRunError(t("auto.cachedOnlyNoMetadata"));
+      return;
+    }
+
+    setRunError("");
+    setFetchError("");
+    setWaitingForFetch(false);
+    setPendingPresetRun(null);
+    await runPresetSequence(presets, {
+      cachedOnly: true,
+      skippedDetails: missingDetailIdsForPresets(presets, games, details).length,
+    });
+  };
+
   // ---- Step: configure → run ----
   const handleConfigure = async () => {
     persist.set({
@@ -620,12 +680,40 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
     await runCategorizer();
   };
 
+  const handleConfigureCachedOnly = async () => {
+    persist.set({
+      hoursConfig,
+      genreConfig,
+      tagsConfig,
+      yearConfig,
+      devPubConfig,
+      flagsConfig,
+      languageConfig,
+      platformConfig,
+      nameConfig,
+      ratingConfig,
+    });
+
+    if (categorizer.needsDetails && detailIdsReadyForType(type, games, details).length === 0) {
+      setRunError(t("auto.cachedOnlyNoMetadata"));
+      return;
+    }
+
+    const skippedDetails = categorizer.needsDetails
+      ? detailIdsNeedingFetchForType(type, games, details).length
+      : 0;
+    await runCategorizer({ cachedOnly: true, skippedDetails });
+  };
+
   const runCategorizerConfig = useCallback(async (
     runType: CategorizerType,
-    config: AutoCategorizePresetConfig
+    config: AutoCategorizePresetConfig,
+    options: { cachedOnly?: boolean } = {}
   ): Promise<CategorizeResult> => {
     const allGames = Object.values(games);
-    const allDetails = Object.values(details);
+    const allDetails = options.cachedOnly && categorizerNeedsDetails(runType)
+      ? detailsReadyForType(runType, games, details)
+      : Object.values(details);
 
     if (runType === "hours") {
       const cfg = config as HoursConfig;
@@ -711,18 +799,22 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
     return runScoreCategorizer(allDetails, true);
   }, [games, details, hltbData, ratings]);
 
-  const runCategorizer = useCallback(async () => {
+  const runCategorizer = useCallback(async (
+    options: { cachedOnly?: boolean; skippedDetails?: number } = {}
+  ) => {
     setRunError("");
     try {
       const config = currentConfig();
-      const res = withExpectedAutoCategories(
-        await runCategorizerConfig(type, config),
-        type,
-        config
-      );
+      const rawResult = await runCategorizerConfig(type, config, options);
+      const res = options.cachedOnly
+        ? rawResult
+        : withExpectedAutoCategories(rawResult, type, config);
 
       setResult(res);
       setPreviewContext({ type, config });
+      setPreviewNotice(options.cachedOnly
+        ? t("auto.cachedOnlyNotice", { count: options.skippedDetails ?? 0 })
+        : "");
       persist.set({ lastResult: res });
       gotoStep("preview");
     } catch (e) {
@@ -750,18 +842,20 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
     t,
   ]);
 
-  const runPresetSequence = useCallback(async (presets: AutoCategorizePreset[]) => {
+  const runPresetSequence = useCallback(async (
+    presets: AutoCategorizePreset[],
+    options: { cachedOnly?: boolean; skippedDetails?: number } = {}
+  ) => {
     setRunError("");
     try {
       const assignmentSets = new Map<string, Set<number>>();
       const categorizedIds = new Set<number>();
 
       for (const preset of presets) {
-        const presetResult = withExpectedAutoCategories(
-          await runCategorizerConfig(preset.type, preset.config),
-          preset.type,
-          preset.config
-        );
+        const rawPresetResult = await runCategorizerConfig(preset.type, preset.config, options);
+        const presetResult = options.cachedOnly
+          ? rawPresetResult
+          : withExpectedAutoCategories(rawPresetResult, preset.type, preset.config);
         for (const [category, ids] of Object.entries(presetResult.assignments)) {
           const bucket = assignmentSets.get(category) ?? new Set<number>();
           for (const id of ids) {
@@ -785,6 +879,9 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
 
       setResult(res);
       setPreviewContext(null);
+      setPreviewNotice(options.cachedOnly
+        ? t("auto.cachedOnlyNotice", { count: options.skippedDetails ?? 0 })
+        : "");
       persist.set({ lastResult: res });
       gotoStep("preview");
     } catch (e) {
@@ -839,9 +936,11 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
               presets={persist.presets}
               onChoose={handleChoose}
               onRunPresets={handleRunPresets}
+              onRunPresetsCachedOnly={handleRunPresetsCachedOnly}
               onLoadPreset={handleLoadPreset}
               onDeletePreset={handleDeletePreset}
               onMovePreset={handleMovePreset}
+              error={runError}
             />
           )}
           {step === "configure" && (
@@ -866,6 +965,17 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
               error={runError}
               onBack={() => gotoStep("choose")}
               onNext={handleConfigure}
+              onCachedOnly={handleConfigureCachedOnly}
+              cachedOnlyAvailable={
+                categorizer.needsDetails &&
+                detailIdsReadyForType(type, games, details).length > 0 &&
+                detailIdsNeedingFetchForType(type, games, details).length > 0
+              }
+              cachedOnlyMissingCount={
+                categorizer.needsDetails
+                  ? detailIdsNeedingFetchForType(type, games, details).length
+                  : 0
+              }
             />
           )}
           {step === "fetch" && (
@@ -883,6 +993,7 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
             <PreviewStep
               result={result}
               context={previewContext}
+              notice={previewNotice}
               onBack={() => gotoStep("configure")}
               onApply={handleApply}
             />
@@ -945,16 +1056,20 @@ function ChooseStep({
   presets,
   onChoose,
   onRunPresets,
+  onRunPresetsCachedOnly,
   onLoadPreset,
   onDeletePreset,
   onMovePreset,
+  error,
 }: {
   presets: AutoCategorizePreset[];
   onChoose: (t: CategorizerType) => void;
   onRunPresets: () => void;
+  onRunPresetsCachedOnly: () => void;
   onLoadPreset: (preset: AutoCategorizePreset) => void;
   onDeletePreset: (id: string) => void;
   onMovePreset: (id: string, direction: -1 | 1) => void;
+  error: string;
 }) {
   const t = useT();
   const gameCount = useGameStore((s) => Object.keys(s.games).length);
@@ -1032,23 +1147,40 @@ function ChooseStep({
         />
       </div>
 
+      {error && (
+        <div className="mb-3 flex items-center gap-2 rounded-xl border border-repressurizer-danger/20 bg-repressurizer-danger/8 p-3 text-sm text-repressurizer-danger">
+          <Warning size={16} weight="fill" />
+          {error}
+        </div>
+      )}
+
       {presets.length > 0 && (
         <div className="mb-4 rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg p-3">
           <div className="mb-2 flex items-center justify-between gap-3">
             <p className="text-[11px] font-medium uppercase tracking-wider text-repressurizer-text-faint">
               {t("auto.presets.saved")}
             </p>
-            <button
-              type="button"
-              onClick={onRunPresets}
-              className="btn-press inline-flex items-center gap-1.5 rounded-lg bg-repressurizer-accent/15 px-2.5 py-1 text-[11px] font-medium text-repressurizer-accent transition-colors hover:bg-repressurizer-accent/25"
-            >
-              <Playlist size={12} weight="duotone" />
-              {t("auto.presets.runAll")}
-              <span className="font-mono text-[10px] tabular-nums text-repressurizer-accent/70">
-                {presets.length}
-              </span>
-            </button>
+            <div className="flex shrink-0 items-center gap-2">
+              <button
+                type="button"
+                onClick={onRunPresetsCachedOnly}
+                className="btn-press inline-flex items-center gap-1.5 rounded-lg border border-repressurizer-border bg-repressurizer-surface px-2.5 py-1 text-[11px] font-medium text-repressurizer-text-muted transition-colors hover:border-repressurizer-accent hover:text-repressurizer-accent"
+              >
+                <CopySimple size={12} weight="duotone" />
+                {t("auto.presets.runCached")}
+              </button>
+              <button
+                type="button"
+                onClick={onRunPresets}
+                className="btn-press inline-flex items-center gap-1.5 rounded-lg bg-repressurizer-accent/15 px-2.5 py-1 text-[11px] font-medium text-repressurizer-accent transition-colors hover:bg-repressurizer-accent/25"
+              >
+                <Playlist size={12} weight="duotone" />
+                {t("auto.presets.runAll")}
+                <span className="font-mono text-[10px] tabular-nums text-repressurizer-accent/70">
+                  {presets.length}
+                </span>
+              </button>
+            </div>
           </div>
           <div className="space-y-1">
             {presets.map((preset, index) => (
@@ -1214,7 +1346,7 @@ function ConfigureStep({
   platformConfig, setPlatformConfig, nameConfig, setNameConfig,
   ratingConfig, setRatingConfig,
   hltbConfig, setHltbConfig, metadata, presetName, setPresetName, onSavePreset,
-  loadedPresetId, error, onBack, onNext,
+  loadedPresetId, error, onBack, onNext, onCachedOnly, cachedOnlyAvailable, cachedOnlyMissingCount,
 }: {
   type: CategorizerType;
   hoursConfig: HoursConfig; setHoursConfig: (c: HoursConfig) => void;
@@ -1236,6 +1368,9 @@ function ConfigureStep({
   error: string;
   onBack: () => void;
   onNext: () => void;
+  onCachedOnly: () => void;
+  cachedOnlyAvailable: boolean;
+  cachedOnlyMissingCount: number;
 }) {
   const t = useT();
   return (
@@ -1307,10 +1442,22 @@ function ConfigureStep({
           <ArrowLeft size={14} />
           {t("auto.back")}
         </button>
-        <button onClick={onNext} className="btn-press inline-flex items-center gap-1.5 rounded-xl bg-repressurizer-accent px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-repressurizer-accent-hover">
-          {t("auto.run")}
-          <ArrowRight size={14} />
-        </button>
+        <div className="flex items-center gap-2">
+          {cachedOnlyAvailable && (
+            <button
+              onClick={onCachedOnly}
+              className="btn-press inline-flex items-center gap-1.5 rounded-xl border border-repressurizer-border bg-repressurizer-surface px-4 py-2 text-sm font-medium text-repressurizer-text-muted transition-colors hover:border-repressurizer-accent hover:text-repressurizer-accent"
+              title={t("auto.cachedOnlyTooltip", { count: cachedOnlyMissingCount })}
+            >
+              <CopySimple size={14} />
+              {t("auto.runCachedOnly")}
+            </button>
+          )}
+          <button onClick={onNext} className="btn-press inline-flex items-center gap-1.5 rounded-xl bg-repressurizer-accent px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-repressurizer-accent-hover">
+            {t("auto.run")}
+            <ArrowRight size={14} />
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -2106,9 +2253,10 @@ function FetchStep({ progress, total, error, waiting, coolingDown, cooldownSecs,
 // Step: Preview
 // ============================================================
 
-function PreviewStep({ result, context, onBack, onApply }: {
+function PreviewStep({ result, context, notice, onBack, onApply }: {
   result: CategorizeResult;
   context: PreviewSortContext | null;
+  notice: string;
   onBack: () => void;
   onApply: () => void;
 }) {
@@ -2132,6 +2280,12 @@ function PreviewStep({ result, context, onBack, onApply }: {
 
   return (
     <div className="space-y-4">
+      {notice && (
+        <div className="flex items-start gap-2 rounded-xl border border-amber-500/20 bg-amber-500/10 p-3 text-sm text-amber-300">
+          <Warning size={16} weight="fill" className="mt-0.5 shrink-0" />
+          <span>{notice}</span>
+        </div>
+      )}
       {/* Summary */}
       <div className="grid grid-cols-3 gap-3">
         {[

@@ -8,7 +8,7 @@ import { useSettingsStore } from "../../stores/settingsStore";
 import { useFailedGamesStore } from "../../stores/failedGamesStore";
 import { useToastStore } from "../../stores/toastStore";
 import { useExportUiStore } from "../../stores/exportUiStore";
-import { saveCollections, saveShortcuts } from "../../lib/tauri";
+import { isSteamRunning, saveCollections, saveShortcuts } from "../../lib/tauri";
 import { buildSavePreview, type SavePreview } from "../../lib/savePreview";
 import { hasAdvancedFilters } from "../../lib/search";
 import { useT, type TranslationKey } from "../../lib/i18n";
@@ -39,6 +39,7 @@ import {
   Hourglass,
   Tag,
   TextAa,
+  Warning,
 } from "@phosphor-icons/react";
 
 const loadSettingsPage = () => import("../settings/SettingsPage").then((m) => ({ default: m.SettingsPage }));
@@ -132,6 +133,7 @@ export function Header() {
   const [showTimeline, setShowTimeline] = useState(false);
   const [showSavePreview, setShowSavePreview] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [steamRunningForSave, setSteamRunningForSave] = useState<boolean | null>(null);
 
   const t = useT();
   const toast = useToastStore;
@@ -151,6 +153,26 @@ export function Header() {
       unlisten?.();
     };
   }, []);
+
+  useEffect(() => {
+    if (!showSavePreview) {
+      setSteamRunningForSave(null);
+      return;
+    }
+
+    let cancelled = false;
+    setSteamRunningForSave(null);
+    isSteamRunning()
+      .then((running) => {
+        if (!cancelled) setSteamRunningForSave(running);
+      })
+      .catch(() => {
+        if (!cancelled) setSteamRunningForSave(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [showSavePreview]);
 
   const savePreview = buildSavePreview(savedCollections, collections, games);
 
@@ -497,6 +519,7 @@ export function Header() {
         <SavePreviewDialog
           preview={savePreview}
           saving={saving}
+          steamRunning={steamRunningForSave === true}
           onCancel={() => setShowSavePreview(false)}
           onConfirm={handleSave}
         />
@@ -508,11 +531,13 @@ export function Header() {
 function SavePreviewDialog({
   preview,
   saving,
+  steamRunning,
   onCancel,
   onConfirm,
 }: {
   preview: SavePreview;
   saving: boolean;
+  steamRunning: boolean;
   onCancel: () => void;
   onConfirm: () => void;
 }) {
@@ -544,6 +569,18 @@ function SavePreviewDialog({
             <p className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3 text-sm text-repressurizer-text-muted">
               {t("savePreview.noDiff")}
             </p>
+          )}
+
+          {steamRunning && (
+            <div className="flex items-start gap-2 rounded-xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-300">
+              <Warning size={16} weight="fill" className="mt-0.5 shrink-0" />
+              <div>
+                <p className="font-medium text-amber-200">{t("savePreview.steamRunning.title")}</p>
+                <p className="mt-1 text-xs leading-relaxed text-amber-200/80">
+                  {t("savePreview.steamRunning.desc")}
+                </p>
+              </div>
+            </div>
           )}
 
           {preview.addedCollections.length > 0 && (
@@ -579,7 +616,7 @@ function SavePreviewDialog({
           </button>
           <button
             onClick={onConfirm}
-            disabled={saving}
+            disabled={saving || steamRunning}
             className="btn-press rounded-lg bg-repressurizer-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-repressurizer-accent-hover disabled:opacity-50"
           >
             {saving ? t("header.saving") : t("savePreview.createBackupAndSave")}

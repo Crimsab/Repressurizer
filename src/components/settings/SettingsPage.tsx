@@ -18,20 +18,8 @@ import { useAchievementsStore } from "../../stores/achievementsStore";
 import { useWishlistStore } from "../../stores/wishlistStore";
 import { useSteamAppIndexStore } from "../../stores/steamAppIndexStore";
 import {
-  DEFAULT_DEVPUB_CONFIG,
-  DEFAULT_FLAGS_CONFIG,
-  DEFAULT_GENRE_CONFIG,
-  DEFAULT_HOURS_CONFIG,
-  DEFAULT_LANGUAGE_CONFIG,
-  DEFAULT_NAME_CONFIG,
-  DEFAULT_PLATFORM_CONFIG,
-  DEFAULT_STEAM_RATING_CONFIG,
-  DEFAULT_TAGS_CONFIG,
-  DEFAULT_YEAR_CONFIG,
   useAutoCategorizeStore,
   type AutoCategorizePreset,
-  type AutoCategorizePresetConfig,
-  type CategorizerType,
 } from "../../stores/autoCategorizeStore";
 import {
   useAdvancedFilterStore,
@@ -61,20 +49,10 @@ import {
 } from "../../lib/tauri";
 import type {
   CacheInfo,
-  DevPubConfig,
   FamilyLibraryResult,
-  FlagsConfig,
-  GenreConfig,
-  HoursConfig,
-  LanguageConfig,
   LegacySharedConfigGame,
   LocalLicenseApp,
-  NameConfig,
-  PlatformConfig,
-  SteamRatingConfig,
   SteamShortcut,
-  TagsConfig,
-  YearGrouping,
 } from "../../lib/tauri";
 import {
   clearSteamFamilyToken,
@@ -83,11 +61,11 @@ import {
   saveSteamFamilyToken,
   type SteamFamilyTokenCache,
 } from "../../lib/steamFamilyToken";
+import { depressurizerAutoCatsToPresets } from "../../lib/depressurizerAutoCats";
 import type {
   AppSettings,
   AutomationPublishLogEntry,
   BackupInfo,
-  DepressurizerImportedAutoCat,
   DepressurizerImportedFilter,
   DepressurizerProfileImport,
   OwnedGame,
@@ -2046,38 +2024,6 @@ function depressurizerGamesToOwnedGames(imported: DepressurizerProfileImport): O
     }));
 }
 
-const DEFAULT_HLTB_IMPORT_CONFIG: HoursConfig = {
-  prefix: "",
-  rules: [
-    { name: "Very Short (< 5h)", min_hours: 0, max_hours: 5 },
-    { name: "Short (5-15h)", min_hours: 5, max_hours: 15 },
-    { name: "Medium (15-30h)", min_hours: 15, max_hours: 30 },
-    { name: "Long (30-60h)", min_hours: 30, max_hours: 60 },
-    { name: "Very Long (60h+)", min_hours: 60, max_hours: 0 },
-  ],
-};
-
-function depressurizerAutoCatsToPresets(imported: DepressurizerProfileImport): AutoCategorizePreset[] {
-  const now = Date.now();
-  return imported.autoCats
-    .map((autoCat, index) => {
-      const type = depressurizerAutoCatType(autoCat.normalizedType);
-      if (!type || !autoCat.supported) return null;
-      const config = depressurizerAutoCatConfig(autoCat, type);
-      if (!config) return null;
-      const name = autoCat.name.trim() || `Depressurizer ${type}`;
-      return {
-        id: `dep-${now}-${index}-${hashName(`${name}:${type}`)}`,
-        name,
-        type,
-        config,
-        createdAt: now,
-        updatedAt: now,
-      };
-    })
-    .filter((preset): preset is AutoCategorizePreset => preset !== null);
-}
-
 function mergeAutoCategorizePresets(importedPresets: AutoCategorizePreset[]): number {
   if (importedPresets.length === 0) return 0;
   const autoCatStore = useAutoCategorizeStore.getState();
@@ -2101,222 +2047,6 @@ function mergeAutoCategorizePresets(importedPresets: AutoCategorizePreset[]): nu
 
 function autoCategorizePresetKey(preset: AutoCategorizePreset): string {
   return `${preset.type}:${preset.name.trim().toLowerCase()}:${JSON.stringify(preset.config)}`;
-}
-
-function depressurizerAutoCatType(normalizedType: string): CategorizerType | null {
-  if (
-    normalizedType === "hours" ||
-    normalizedType === "genre" ||
-    normalizedType === "tags" ||
-    normalizedType === "year" ||
-    normalizedType === "score" ||
-    normalizedType === "rating" ||
-    normalizedType === "hltb" ||
-    normalizedType === "devpub" ||
-    normalizedType === "flags" ||
-    normalizedType === "language" ||
-    normalizedType === "platform" ||
-    normalizedType === "name"
-  ) {
-    return normalizedType;
-  }
-  return null;
-}
-
-function depressurizerAutoCatConfig(
-  autoCat: DepressurizerImportedAutoCat,
-  type: CategorizerType
-): AutoCategorizePresetConfig | null {
-  const prefix = autoCat.prefix ?? rawTextField(autoCat.rawConfig, ["prefix"]) ?? "";
-
-  if (type === "hours") {
-    return cloneHoursConfig(DEFAULT_HOURS_CONFIG, prefix);
-  }
-  if (type === "genre") {
-    const config: GenreConfig = {
-      ...DEFAULT_GENRE_CONFIG,
-      prefix,
-      max_categories: rawNumberField(autoCat.rawConfig, ["maxCategories", "maxGenres"]) ?? DEFAULT_GENRE_CONFIG.max_categories,
-      ignored_genres: rawStringListField(autoCat.rawConfig, ["ignoredGenres", "ignored"]).filter(Boolean),
-    };
-    if (config.ignored_genres.length === 0) {
-      config.ignored_genres = [...DEFAULT_GENRE_CONFIG.ignored_genres];
-    }
-    return config;
-  }
-  if (type === "tags") {
-    const config: TagsConfig = {
-      ...DEFAULT_TAGS_CONFIG,
-      prefix,
-      max_tags: rawNumberField(autoCat.rawConfig, ["maxTags", "maxCategories"]) ?? DEFAULT_TAGS_CONFIG.max_tags,
-      included_tags: rawStringListField(autoCat.rawConfig, ["includedTags", "includeTags", "tags"]).filter(Boolean),
-    };
-    return config;
-  }
-  if (type === "year") {
-    return {
-      ...DEFAULT_YEAR_CONFIG,
-      prefix,
-      grouping: normalizeYearGrouping(rawTextField(autoCat.rawConfig, ["grouping", "yearGrouping"])) ?? DEFAULT_YEAR_CONFIG.grouping,
-      include_unknown: rawBoolField(autoCat.rawConfig, ["includeUnknown", "includeUnknownYear"]) ?? DEFAULT_YEAR_CONFIG.include_unknown,
-    };
-  }
-  if (type === "score") {
-    return {};
-  }
-  if (type === "rating") {
-    const config: SteamRatingConfig = {
-      ...DEFAULT_STEAM_RATING_CONFIG,
-      prefix,
-      use_wilson_score: rawBoolField(autoCat.rawConfig, ["useWilsonScore", "UseWilsonScore"]) ?? DEFAULT_STEAM_RATING_CONFIG.use_wilson_score,
-    };
-    return config;
-  }
-  if (type === "hltb") {
-    return cloneHoursConfig(DEFAULT_HLTB_IMPORT_CONFIG, prefix);
-  }
-  if (type === "devpub") {
-    const config: DevPubConfig = {
-      ...DEFAULT_DEVPUB_CONFIG,
-      prefix,
-      include_developers: rawBoolField(autoCat.rawConfig, ["includeDevelopers", "developers"]) ?? DEFAULT_DEVPUB_CONFIG.include_developers,
-      include_publishers: rawBoolField(autoCat.rawConfig, ["includePublishers", "publishers"]) ?? DEFAULT_DEVPUB_CONFIG.include_publishers,
-      selected: rawStringListField(autoCat.rawConfig, ["selected", "included", "names"]).filter(Boolean),
-      min_games: rawNumberField(autoCat.rawConfig, ["minGames", "minimumGames"]) ?? DEFAULT_DEVPUB_CONFIG.min_games,
-    };
-    return config;
-  }
-  if (type === "flags") {
-    const config: FlagsConfig = {
-      ...DEFAULT_FLAGS_CONFIG,
-      prefix,
-      max_flags: rawNumberField(autoCat.rawConfig, ["maxFlags", "maxCategories"]) ?? DEFAULT_FLAGS_CONFIG.max_flags,
-      included_flags: rawStringListField(autoCat.rawConfig, ["includedFlags", "flags"]).filter(Boolean),
-    };
-    return config;
-  }
-  if (type === "language") {
-    const config: LanguageConfig = {
-      ...DEFAULT_LANGUAGE_CONFIG,
-      prefix,
-      max_languages: rawNumberField(autoCat.rawConfig, ["maxLanguages", "maxCategories"]) ?? DEFAULT_LANGUAGE_CONFIG.max_languages,
-      included_languages: rawStringListField(autoCat.rawConfig, ["includedLanguages", "languages"]).filter(Boolean),
-    };
-    return config;
-  }
-  if (type === "platform") {
-    const config: PlatformConfig = {
-      ...DEFAULT_PLATFORM_CONFIG,
-      prefix,
-      include_windows: rawBoolField(autoCat.rawConfig, ["includeWindows", "windows"]) ?? DEFAULT_PLATFORM_CONFIG.include_windows,
-      include_mac: rawBoolField(autoCat.rawConfig, ["includeMac", "mac"]) ?? DEFAULT_PLATFORM_CONFIG.include_mac,
-      include_linux: rawBoolField(autoCat.rawConfig, ["includeLinux", "linux"]) ?? DEFAULT_PLATFORM_CONFIG.include_linux,
-    };
-    return config;
-  }
-  if (type === "name") {
-    const config: NameConfig = {
-      ...DEFAULT_NAME_CONFIG,
-      prefix,
-      skip_leading_the: rawBoolField(autoCat.rawConfig, ["skipLeadingThe", "ignoreThe"]) ?? DEFAULT_NAME_CONFIG.skip_leading_the,
-      group_numbers: rawBoolField(autoCat.rawConfig, ["groupNumbers", "numbers"]) ?? DEFAULT_NAME_CONFIG.group_numbers,
-      group_other: rawBoolField(autoCat.rawConfig, ["groupOther", "other"]) ?? DEFAULT_NAME_CONFIG.group_other,
-    };
-    return config;
-  }
-
-  return null;
-}
-
-function cloneHoursConfig(config: HoursConfig, prefix: string): HoursConfig {
-  return {
-    ...config,
-    prefix,
-    rules: config.rules.map((rule) => ({ ...rule })),
-  };
-}
-
-function normalizeYearGrouping(value: string | undefined): YearGrouping | undefined {
-  if (!value) return undefined;
-  const normalized = value.replace(/[^a-z]/gi, "").toLowerCase();
-  if (normalized.includes("half")) return "HalfDecade";
-  if (normalized.includes("decade")) return "Decade";
-  if (normalized.includes("none") || normalized.includes("year")) return "None";
-  return undefined;
-}
-
-function rawTextField(raw: unknown, names: string[]): string | undefined {
-  return rawText(rawField(raw, names));
-}
-
-function rawNumberField(raw: unknown, names: string[]): number | undefined {
-  const text = rawTextField(raw, names);
-  if (!text) return undefined;
-  const parsed = Number(text);
-  return Number.isFinite(parsed) ? parsed : undefined;
-}
-
-function rawBoolField(raw: unknown, names: string[]): boolean | undefined {
-  const text = rawTextField(raw, names);
-  if (!text) return undefined;
-  if (["true", "1", "yes", "on"].includes(text.trim().toLowerCase())) return true;
-  if (["false", "0", "no", "off"].includes(text.trim().toLowerCase())) return false;
-  return undefined;
-}
-
-function rawStringListField(raw: unknown, names: string[]): string[] {
-  return rawStringList(rawField(raw, names));
-}
-
-function rawField(raw: unknown, names: string[]): unknown {
-  const record = rawRecord(raw);
-  if (!record) return undefined;
-  const wanted = new Set(names.map(normalizeRawKey));
-  for (const [key, value] of Object.entries(record)) {
-    if (wanted.has(normalizeRawKey(key))) return value;
-  }
-  return undefined;
-}
-
-function rawRecord(raw: unknown): Record<string, unknown> | null {
-  return raw && typeof raw === "object" && !Array.isArray(raw)
-    ? (raw as Record<string, unknown>)
-    : null;
-}
-
-function rawText(value: unknown): string | undefined {
-  if (typeof value === "string") return value.trim() || undefined;
-  if (typeof value === "number" || typeof value === "boolean") return String(value);
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      const text = rawText(item);
-      if (text) return text;
-    }
-    return undefined;
-  }
-  const record = rawRecord(value);
-  if (!record) return undefined;
-  if (typeof record._text === "string") return record._text.trim() || undefined;
-  return undefined;
-}
-
-function rawStringList(value: unknown): string[] {
-  const text = rawText(value);
-  if (text) return [text];
-  if (Array.isArray(value)) {
-    return value.flatMap(rawStringList);
-  }
-  const record = rawRecord(value);
-  if (!record) return [];
-  return Object.entries(record)
-    .filter(([key]) => !key.startsWith("_"))
-    .flatMap(([, entry]) => rawStringList(entry))
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
-function normalizeRawKey(key: string): string {
-  return key.replace(/[^a-z0-9]/gi, "").toLowerCase();
 }
 
 function depressurizerFiltersToSavedAdvancedFilters(

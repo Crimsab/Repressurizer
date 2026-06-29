@@ -158,7 +158,7 @@ export function StatusBar() {
   const activeCategory = useCategoryStore((s) => s.activeCategory);
   const addGamesToCategory = useCategoryStore((s) => s.addGamesToCategory);
   const removeGamesFromCategory = useCategoryStore((s) => s.removeGamesFromCategory);
-  const setStatus = useStatusStore((s) => s.setStatus);
+  const setBulkStatus = useStatusStore((s) => s.setBulkStatus);
 
   // The active category, if it's a removable user collection
   const activeColl = collections.find(
@@ -184,7 +184,7 @@ export function StatusBar() {
   };
 
   const handleBulkStatus = (status: GameStatus) => {
-    for (const id of selectedIds) setStatus(id, status);
+    setBulkStatus(selectedIds, status);
   };
 
   return (

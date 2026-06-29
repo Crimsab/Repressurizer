@@ -29,9 +29,21 @@ function saveStatuses(statuses: Record<number, GameStatus>) {
   invoke("save_app_data", { key: "statuses.json", data: JSON.stringify(statuses) }).catch(() => {});
 }
 
+function applyStatus(statuses: Record<number, GameStatus>, appId: number, status: GameStatus) {
+  const current = statuses[appId] ?? "none";
+  if (current === status) return false;
+  if (status === "none") {
+    delete statuses[appId];
+  } else {
+    statuses[appId] = status;
+  }
+  return true;
+}
+
 interface StatusState {
   statuses: Record<number, GameStatus>;
   setStatus: (appId: number, status: GameStatus) => void;
+  setBulkStatus: (appIds: number[], status: GameStatus) => void;
   getStatus: (appId: number) => GameStatus;
   hydrate: () => Promise<void>;
 }
@@ -42,11 +54,19 @@ export const useStatusStore = create<StatusState>((set, get) => ({
   setStatus: (appId, status) =>
     set((state) => {
       const next = { ...state.statuses };
-      if (status === "none") {
-        delete next[appId];
-      } else {
-        next[appId] = status;
+      if (!applyStatus(next, appId, status)) return state;
+      saveStatuses(next);
+      return { statuses: next };
+    }),
+
+  setBulkStatus: (appIds, status) =>
+    set((state) => {
+      const next = { ...state.statuses };
+      let changed = false;
+      for (const appId of appIds) {
+        changed = applyStatus(next, appId, status) || changed;
       }
+      if (!changed) return state;
       saveStatuses(next);
       return { statuses: next };
     }),

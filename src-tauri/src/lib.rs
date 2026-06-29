@@ -882,6 +882,11 @@ fn save_wishlist_cache(_app: tauri::AppHandle, data: String) -> Result<(), Strin
     save_named_cache("wishlist.json", data)
 }
 
+#[tauri::command]
+fn is_steam_running() -> bool {
+    sam::is_steam_running()
+}
+
 fn load_named_cache(name: &str) -> Option<String> {
     let path = app_data_file_path(name).ok()?;
     match read_optional_text_file(&path, "cache file") {
@@ -1165,6 +1170,7 @@ pub fn run() {
             collections::restore_backup,
             collections::delete_backup,
             collections::create_manual_backup,
+            is_steam_running,
             depressurizer_profile::import_depressurizer_profile,
             api::fetch_library,
             api::fetch_steam_app_list,

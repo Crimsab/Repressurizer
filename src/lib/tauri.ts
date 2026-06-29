@@ -45,6 +45,10 @@ export async function saveCollections(
   });
 }
 
+export async function isSteamRunning(): Promise<boolean> {
+  return invoke<boolean>("is_steam_running");
+}
+
 export async function listBackups(
   steamPath: string,
   steamId3: string
