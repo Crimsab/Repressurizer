@@ -32,6 +32,7 @@ import { isSteamAppIndexStale } from "../../lib/steamAppIndex";
 import { useFailedGamesStore, getIgnoredGameName, MAX_FAIL_RUNS } from "../../stores/failedGamesStore";
 import { useHltbStore } from "../../stores/hltbStore";
 import { useHltbIgnoredStore, getHltbIgnoredGameName, HLTB_MAX_FAILS } from "../../stores/hltbIgnoredStore";
+import { changelogEntries, type ChangelogEntry } from "../../lib/changelog";
 
 import {
   listBackups,
@@ -886,7 +887,17 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
         id: "updates",
         tab: "about" as const,
         label: t("settings.updates.section"),
-        keywords: [t("settings.updates.check"), t("settings.updates.autoCheck"), "about version update install"],
+        keywords: [t("settings.updates.check"), t("settings.updates.autoCheck"), "about version update install release latest"],
+      },
+      {
+        id: "changelog",
+        tab: "about" as const,
+        label: t("settings.changelog.title"),
+        keywords: [
+          t("settings.changelog.title"),
+          t("settings.changelog.desc"),
+          "release notes changelog changes novita novità version versions aggiornamenti modifiche whats new",
+        ],
       },
       {
         id: "reset",
@@ -907,9 +918,12 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
         keywords: [
           t("appearance.smartLists"),
           t("appearance.emptyLists"),
+          t("appearance.hideCollectionOnly"),
+          t("appearance.hideCollectionOnly.desc"),
+          t("filter.localCollectionOnly"),
           t("appearance.filterBar"),
           t("appearance.nowPlaying"),
-          "visibility panels ui empty zero sidebar uncategorized",
+          "visibility panels ui empty zero sidebar uncategorized local only local-only local collection collection-only solo locali raccolta locale nascondi hide",
         ],
       },
       {
@@ -922,7 +936,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
         id: "language",
         tab: "appearance" as const,
         label: t("appearance.language"),
-        keywords: [t("appearance.language"), "language locale translation"],
+        keywords: [t("appearance.language"), "language translation i18n lingua idioma"],
       },
       {
         id: "sidebar",
@@ -1060,7 +1074,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
               className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-repressurizer-text-faint"
             />
             <input
-              type="search"
+              type="text"
               value={settingsSearch}
               onChange={(e) => setSettingsSearch(e.target.value)}
               placeholder={t("settings.search.placeholder")}
@@ -2054,6 +2068,10 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                     </p>
                   </div>
                 </div>
+              )}
+
+              {isSectionVisible("changelog") && (
+                <ChangelogPanel entries={changelogEntries} />
               )}
 
               {/* Reset */}
@@ -3772,6 +3790,78 @@ function BackupRow({
           <TrashSimple size={11} />
           {t("backups.delete")}
         </button>
+      </div>
+    </div>
+  );
+}
+
+function ChangelogPanel({ entries }: { entries: ChangelogEntry[] }) {
+  const t = useT();
+  const visibleEntries = entries.slice(0, 8);
+
+  return (
+    <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3">
+      <p className="font-medium text-repressurizer-text">{t("settings.changelog.title")}</p>
+      <p className="mt-0.5 text-xs leading-relaxed text-repressurizer-text-faint">
+        {t("settings.changelog.desc")}
+      </p>
+
+      <div className="mt-3 divide-y divide-repressurizer-border-subtle overflow-hidden rounded-lg border border-repressurizer-border-subtle bg-repressurizer-surface/40">
+        {visibleEntries.map((entry, index) => {
+          const userGroups = entry.groups.filter((group) => group.audience === "user" && group.items.length > 0);
+          return (
+            <details
+              key={entry.version}
+              open={index === 0}
+              className="group/changelog [&[open]_.changelog-caret]:rotate-90"
+            >
+              <summary className="flex cursor-pointer list-none items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-repressurizer-surface-hover/50 [&::-webkit-details-marker]:hidden">
+                <CaretRight
+                  size={13}
+                  weight="bold"
+                  className="changelog-caret shrink-0 text-repressurizer-text-faint transition-transform"
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-medium text-repressurizer-text">v{entry.version}</span>
+                  <span className="block text-[11px] text-repressurizer-text-faint">{entry.date}</span>
+                </span>
+              </summary>
+              <div className="space-y-3 border-t border-repressurizer-border-subtle px-3 pb-3 pt-2">
+                {userGroups.map((group) => (
+                  <div key={`${entry.version}-${group.title}`}>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-repressurizer-text-faint">
+                      {group.title}
+                    </p>
+                    <ul className="mt-1.5 space-y-1.5">
+                      {group.items.map((item) => (
+                        <li key={item.sha} className="flex gap-2 text-xs leading-relaxed text-repressurizer-text-muted">
+                          <span className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-repressurizer-accent/70" />
+                          <span>{item.text}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ))}
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => void open(entry.releaseUrl)}
+                    className="btn-press rounded-lg border border-repressurizer-border bg-repressurizer-bg px-2.5 py-1 text-[11px] font-medium text-repressurizer-text-muted transition-colors hover:text-repressurizer-text"
+                  >
+                    {t("settings.changelog.openRelease")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void open(entry.compareUrl)}
+                    className="btn-press rounded-lg border border-repressurizer-border bg-repressurizer-bg px-2.5 py-1 text-[11px] font-medium text-repressurizer-text-muted transition-colors hover:text-repressurizer-text"
+                  >
+                    {t("settings.changelog.compare")}
+                  </button>
+                </div>
+              </div>
+            </details>
+          );
+        })}
       </div>
     </div>
   );

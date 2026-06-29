@@ -6,7 +6,7 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Built with Tauri](https://img.shields.io/badge/Tauri-Rust%20%2B%20React-24c8db)](https://tauri.app/)
 
-Repressurizer is a modern desktop Steam library manager for editing Steam collections, organizing backlogs, and deciding what to play next.
+Repressurizer is a modern Windows Steam library manager for editing Steam collections, enriching local library metadata, building AutoCat collections, and keeping safe backups before writes.
 
 It is a spiritual successor to Depressurizer: same useful idea, rebuilt as a separate Tauri app with a Rust backend and a React interface.
 
@@ -14,7 +14,7 @@ It is a spiritual successor to Depressurizer: same useful idea, rebuilt as a sep
 
 ## Status
 
-Early Windows release. Repressurizer can read and write local Steam collection data, but it is still young software: keep backups enabled, use the preview before saving, and close Steam before applying collection changes.
+Windows is the supported target. Repressurizer can read and write local Steam collection data, but it is still backup-first software: keep backups enabled, use the preview before saving, and close Steam before applying collection changes.
 
 ## Download
 
@@ -27,11 +27,26 @@ Always download the newest build from the [latest release page](https://github.c
 
 Older releases remain available on the [releases page](https://github.com/Crimsab/Repressurizer/releases).
 
+See [CHANGELOG.md](CHANGELOG.md) for the generated release history.
+
 ## Quick Start
 
 1. Install Repressurizer or unzip the portable build.
 2. Open Settings and add a Steam Web API key from <https://steamcommunity.com/dev/apikey>.
 3. Load your Steam library, keep backups enabled, and use the save preview before writing collection changes.
+
+## What Repressurizer Changes
+
+| Area | Behavior |
+| --- | --- |
+| Steam collections | Reads and writes local Steam collection files and the local Steam UI cache when available. |
+| Backups | Creates local backups before collection writes and supports manual restore. |
+| Metadata cache | Stores Steam details, Steam reviews, regional prices, HLTB matches, achievements, wishlist, and Family summaries locally for faster browsing. |
+| AutoCat | Generates or updates Steam collections from cached/fetched library metadata. |
+| Steam Tools | Optional guarded tooling for local diagnostics and SAM-related achievement actions. |
+| Automation export | Publishes read-only JSON snapshots to configured HTTP targets when enabled. |
+
+Repressurizer does not edit your Steam account remotely. Collection saves are local file writes; metadata fetches and automation exports are separate network operations.
 
 ## Features
 
@@ -110,6 +125,7 @@ Repressurizer can generate Steam collections from your library data:
 - By release year, half-decade, or decade.
 - By Metacritic score.
 - By HLTB main-story duration.
+- By Steam review rating or review volume.
 
 Auto-categorizing uses cached metadata when possible, fetches missing Steam details in the background, and can create a backup before applying generated collections.
 
@@ -124,7 +140,7 @@ Auto-categorizing uses cached metadata when possible, fetches missing Steam deta
 - CLI: the release includes `repressurizer-cli` for JSON diagnostics, redacted settings inspection, snapshot export/validation/publish, cache inspection, backups, SAM probe/schema/achievement listing, and guarded one-line SAM achievement actions that use the saved Steam path.
 - Local Steam files: reads and writes collection data directly, with backups.
 
-For setup, receiver expectations, CLI usage, and schema/package details, see [docs/automation-export.md](docs/automation-export.md), [docs/cli.md](docs/cli.md), and [docs/integrations/repressurizer-snapshot-v1.md](docs/integrations/repressurizer-snapshot-v1.md).
+For setup, receiver expectations, CLI usage, network/cache behavior, and schema/package details, see [docs/automation-export.md](docs/automation-export.md), [docs/cli.md](docs/cli.md), [docs/cache-and-network.md](docs/cache-and-network.md), and [docs/integrations/repressurizer-snapshot-v1.md](docs/integrations/repressurizer-snapshot-v1.md).
 
 ### Planning And Discovery Tools
 
@@ -168,7 +184,7 @@ Before public testing:
 
 Diagnostics exports are redacted and should not include Steam Web API keys, Store tokens, or full Steam IDs.
 
-For local data and network behavior, see [docs/privacy.md](docs/privacy.md).
+For local data and network behavior, see [docs/privacy.md](docs/privacy.md) and [docs/cache-and-network.md](docs/cache-and-network.md).
 
 ## Development
 
@@ -185,6 +201,14 @@ bun run build
 `bun run test` runs both unit tests and the Playwright browser smoke checks. Playwright attaches dashboard/settings screenshots under `test-results/` for visual review.
 
 Localization coverage is tracked in [docs/localization.md](docs/localization.md#localization-status). Use `bun run i18n:status` to print the table locally and `bun run i18n:status:write` to refresh the generated doc block.
+
+Release history is generated from tags and Conventional Commit subjects:
+
+```bash
+bun run changelog:write
+```
+
+This updates both `CHANGELOG.md` and the changelog JSON used by the in-app Info page.
 
 For a local Windows build:
 
@@ -211,6 +235,8 @@ After CI passes, matching integration package tags are also created from `packag
 For Steam Family setup and the optional Store `webapi_token` fallback, see [docs/steam-family.md](docs/steam-family.md).
 
 For automation export and integration libraries, see [docs/automation-export.md](docs/automation-export.md).
+
+For cache preparation, Steam request behavior, regional prices, and proxy routing, see [docs/cache-and-network.md](docs/cache-and-network.md).
 
 For contribution guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md). For private vulnerability reporting guidance, see [SECURITY.md](SECURITY.md).
 

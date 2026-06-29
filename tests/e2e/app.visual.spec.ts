@@ -190,6 +190,27 @@ test("keeps Steam Tools in Settings instead of the home toolbar", async ({ page 
   await testInfo.attach("settings-steam-tools-entry", { path: screenshotPath, contentType: "image/png" });
 });
 
+test("settings search finds local-only visibility and generated changelog", async ({ page }) => {
+  await page.goto("/");
+  await page.getByTitle("Settings").click();
+
+  const settingsDialog = page.locator(".fixed.inset-0").filter({
+    has: page.getByRole("heading", { name: "Settings" }),
+  });
+  const search = settingsDialog.getByPlaceholder("Search settings, tokens, HLTB, tray, exports...");
+
+  await expect(search).toHaveAttribute("type", "text");
+  await search.fill("local");
+  await expect(settingsDialog.getByRole("button", { name: "Visibility" })).toBeVisible();
+  await settingsDialog.getByRole("button", { name: "Visibility" }).click();
+  await expect(settingsDialog.getByText("Hide local-only games")).toBeVisible();
+
+  await search.fill("changelog");
+  await expect(settingsDialog.getByText("Changelog").first()).toBeVisible();
+  await expect(settingsDialog.getByText("v0.4.6")).toBeVisible();
+  await expect(settingsDialog.getByText("Batch Steam price refreshes")).toBeVisible();
+});
+
 test("game achievement details show Steam Achievement Manager preflight separately from Steam Web API data", async ({ page }, testInfo) => {
   await page.addInitScript(() => {
     const raw = window.localStorage.getItem("repressurizer-settings");

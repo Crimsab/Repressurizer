@@ -1673,7 +1673,7 @@ function SamBackupViewerDialog({
                 className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-repressurizer-text-faint"
               />
               <input
-                type="search"
+                type="text"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder={t("detail.sam.searchBackups")}

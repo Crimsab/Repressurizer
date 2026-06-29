@@ -18,6 +18,7 @@
     "i18n:check": "bun scripts/i18n-check.ts",
     "i18n:status": "bun scripts/i18n-status.ts",
     "i18n:status:write": "bun scripts/i18n-status.ts --write",
+    "changelog:write": "bun scripts/generate-changelog.ts",
     "test": "bun run test:unit && bun run test:e2e",
     "test:unit": "vitest run src packages/integration/test",
     "test:e2e": "playwright test",
