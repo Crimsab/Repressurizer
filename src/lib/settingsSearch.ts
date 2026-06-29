@@ -64,7 +64,7 @@ function scoreSettingsSearchSection<TTab extends string>(
     const tokenScore = Math.max(labelScore, keywordScore, bestTokenScore(token, allTokens));
 
     if (tokenScore <= 0) return 0;
-    score += tokenScore;
+    score += tokenScore + Math.min(countTokenMatches(token, allTokens), 6) * 20;
   }
 
   return score - index / 100;
@@ -80,6 +80,10 @@ function bestTokenScore(query: string, candidates: string[]): number {
     best = Math.max(best, tokenMatchScore(query, candidate));
   }
   return best;
+}
+
+function countTokenMatches(query: string, candidates: string[]): number {
+  return candidates.reduce((count, candidate) => count + (tokenMatchScore(query, candidate) > 0 ? 1 : 0), 0);
 }
 
 function tokenMatchScore(query: string, candidate: string): number {

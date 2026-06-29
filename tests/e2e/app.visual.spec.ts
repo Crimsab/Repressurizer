@@ -205,6 +205,18 @@ test("settings search finds local-only visibility and generated changelog", asyn
   await settingsDialog.getByRole("button", { name: "Visibility" }).click();
   await expect(settingsDialog.getByText("Hide local-only games")).toBeVisible();
 
+  await search.fill("socks5 proxy");
+  await expect(settingsDialog.getByText("Proxy routing")).toBeVisible();
+
+  await search.fill("apii key");
+  await expect(settingsDialog.getByText("Steam Web API Key").first()).toBeVisible();
+
+  await search.fill("webook token");
+  await expect(settingsDialog.getByText("Automation export").first()).toBeVisible();
+
+  await search.fill("depresurizer profile");
+  await expect(settingsDialog.getByText("Import Depressurizer profile")).toBeVisible();
+
   await search.fill("changelog");
   await expect(settingsDialog.getByText("Changelog").first()).toBeVisible();
   await expect(settingsDialog.getByText("v0.4.6")).toBeVisible();
