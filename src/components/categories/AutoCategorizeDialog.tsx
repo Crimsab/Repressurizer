@@ -23,6 +23,7 @@ import {
 import {
   categorizeBySteamRating,
   defaultSteamRatingRules,
+  isSteamRatingFresh,
   steamRatingIdsNeedingFetch,
 } from "../../lib/steamRatings";
 import {
@@ -51,7 +52,7 @@ import {
   type SteamRatingRule,
   type YearGrouping,
 } from "../../lib/tauri";
-import type { GameDetails, OwnedGame } from "../../lib/types";
+import type { GameDetails, OwnedGame, SteamReviewSummary } from "../../lib/types";
 import type { HltbData } from "../../lib/tauri";
 import {
   X,
@@ -281,12 +282,35 @@ function missingDetailIdsForPresets(
 function canRunPresetsWithCache(
   presets: AutoCategorizePreset[],
   games: Record<number, OwnedGame>,
-  details: Record<number, GameDetails>
+  details: Record<number, GameDetails>,
+  ratings: Record<number, SteamReviewSummary>
 ): boolean {
   return presets.some((preset) => {
+    if (categorizerNeedsRatings(preset.type)) {
+      return ratingIdsReady(games, ratings).length > 0;
+    }
     if (!categorizerNeedsDetails(preset.type)) return true;
     return detailIdsReadyForType(preset.type, games, details).length > 0;
   });
+}
+
+function ratingIdsReady(
+  games: Record<number, OwnedGame>,
+  ratings: Record<number, SteamReviewSummary>
+): number[] {
+  return Object.keys(games)
+    .map(Number)
+    .filter((id) => isSteamRatingFresh(ratings[id]));
+}
+
+function missingRatingIdsForPresets(
+  presets: AutoCategorizePreset[],
+  games: Record<number, OwnedGame>,
+  ratings: Record<number, SteamReviewSummary>
+): number[] {
+  return presets.some((preset) => categorizerNeedsRatings(preset.type))
+    ? steamRatingIdsNeedingFetch(games, ratings)
+    : [];
 }
 
 // Pure JS HLTB categorizer
@@ -506,6 +530,12 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
     return useSteamRatingsStore.getState().ratings;
   }, []);
 
+  useEffect(() => {
+    if (step === "configure" && categorizerNeedsRatings(type)) {
+      ensureSteamRatingsHydrated().catch(() => {});
+    }
+  }, [ensureSteamRatingsHydrated, step, type]);
+
   const startMissingPresetFetch = useCallback((presets: AutoCategorizePreset[]): boolean => {
     const missingDetails = missingDetailIdsForPresets(presets, games, details);
 
@@ -593,8 +623,11 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
   const handleRunPresetsCachedOnly = async () => {
     const presets = [...persist.presets];
     if (presets.length === 0) return;
+    const currentRatings = presets.some((preset) => categorizerNeedsRatings(preset.type))
+      ? await ensureSteamRatingsHydrated()
+      : ratings;
 
-    if (!canRunPresetsWithCache(presets, games, details)) {
+    if (!canRunPresetsWithCache(presets, games, details, currentRatings)) {
       setRunError(t("auto.cachedOnlyNoMetadata"));
       return;
     }
@@ -605,7 +638,9 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
     setPendingPresetRun(null);
     await runPresetSequence(presets, {
       cachedOnly: true,
-      skippedDetails: missingDetailIdsForPresets(presets, games, details).length,
+      skippedDetails:
+        missingDetailIdsForPresets(presets, games, details).length +
+        missingRatingIdsForPresets(presets, games, currentRatings).length,
     });
   };
 
@@ -698,9 +733,18 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
       setRunError(t("auto.cachedOnlyNoMetadata"));
       return;
     }
+    const currentRatings = categorizer.needsRatings
+      ? await ensureSteamRatingsHydrated()
+      : ratings;
+    if (categorizer.needsRatings && ratingIdsReady(games, currentRatings).length === 0) {
+      setRunError(t("auto.cachedOnlyNoMetadata"));
+      return;
+    }
 
     const skippedDetails = categorizer.needsDetails
       ? detailIdsNeedingFetchForType(type, games, details).length
+      : categorizer.needsRatings
+        ? steamRatingIdsNeedingFetch(games, currentRatings).length
       : 0;
     await runCategorizer({ cachedOnly: true, skippedDetails });
   };
@@ -711,13 +755,17 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
     options: { cachedOnly?: boolean } = {}
   ): Promise<CategorizeResult> => {
     const allGames = Object.values(games);
+    const ratingsForRun = useSteamRatingsStore.getState().ratings;
+    const gamesForRun = options.cachedOnly && categorizerNeedsRatings(runType)
+      ? allGames.filter((game) => isSteamRatingFresh(ratingsForRun[game.appid]))
+      : allGames;
     const allDetails = options.cachedOnly && categorizerNeedsDetails(runType)
       ? detailsReadyForType(runType, games, details)
       : Object.values(details);
 
     if (runType === "hours") {
       const cfg = config as HoursConfig;
-      return runHoursCategorizer(allGames, {
+      return runHoursCategorizer(gamesForRun, {
         ...cfg,
         prefix: cfg.prefix || undefined,
       });
@@ -776,28 +824,28 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
     }
     if (runType === "name") {
       const cfg = config as NameConfig;
-      return runNameCategorizer(allGames, {
+      return runNameCategorizer(gamesForRun, {
         ...cfg,
         prefix: cfg.prefix || undefined,
       });
     }
     if (runType === "hltb") {
       const cfg = config as HoursConfig;
-      return runHltbCategorizerJs(allGames, hltbData, {
+      return runHltbCategorizerJs(gamesForRun, hltbData, {
         ...cfg,
         prefix: cfg.prefix || undefined,
       });
     }
     if (runType === "rating") {
       const cfg = config as SteamRatingConfig;
-      return categorizeBySteamRating(allGames, ratings, {
+      return categorizeBySteamRating(gamesForRun, ratingsForRun, {
         ...cfg,
         prefix: cfg.prefix || undefined,
       });
     }
 
     return runScoreCategorizer(allDetails, true);
-  }, [games, details, hltbData, ratings]);
+  }, [games, details, hltbData]);
 
   const runCategorizer = useCallback(async (
     options: { cachedOnly?: boolean; skippedDetails?: number } = {}
@@ -967,13 +1015,22 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
               onNext={handleConfigure}
               onCachedOnly={handleConfigureCachedOnly}
               cachedOnlyAvailable={
-                categorizer.needsDetails &&
-                detailIdsReadyForType(type, games, details).length > 0 &&
-                detailIdsNeedingFetchForType(type, games, details).length > 0
+                (
+                  categorizer.needsDetails &&
+                  detailIdsReadyForType(type, games, details).length > 0 &&
+                  detailIdsNeedingFetchForType(type, games, details).length > 0
+                ) ||
+                (
+                  categorizer.needsRatings &&
+                  ratingIdsReady(games, ratings).length > 0 &&
+                  steamRatingIdsNeedingFetch(games, ratings).length > 0
+                )
               }
               cachedOnlyMissingCount={
                 categorizer.needsDetails
                   ? detailIdsNeedingFetchForType(type, games, details).length
+                  : categorizer.needsRatings
+                    ? steamRatingIdsNeedingFetch(games, ratings).length
                   : 0
               }
             />
