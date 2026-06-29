@@ -2918,6 +2918,7 @@ function AppearanceTab({ isSectionVisible }: { isSectionVisible: (id: string) =>
     showEmptyLists,
     showNowPlaying,
     showFilterBar,
+    hideCollectionOnlyGames,
     showDetailHltb,
     showDetailMetacritic,
     showDetailPrice,
@@ -3156,6 +3157,13 @@ function AppearanceTab({ isSectionVisible }: { isSectionVisible: (id: string) =>
           description={t("appearance.filterBar.desc")}
           checked={showFilterBar}
           onChange={(v) => setSettings({ showFilterBar: v })}
+        />
+        <ToggleRow
+          icon={<Database size={15} weight="duotone" />}
+          label={t("appearance.hideCollectionOnly")}
+          description={t("appearance.hideCollectionOnly.desc")}
+          checked={hideCollectionOnlyGames}
+          onChange={(v) => setSettings({ hideCollectionOnlyGames: v })}
         />
         <ToggleRow
           icon={<Timer size={15} weight="duotone" />}

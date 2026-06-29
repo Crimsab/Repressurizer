@@ -31,6 +31,7 @@ const defaults: AppSettings = {
   showEmptyLists: false,
   showNowPlaying: true,
   showFilterBar: true,
+  hideCollectionOnlyGames: false,
   showDetailHltb: true,
   showDetailMetacritic: true,
   showDetailPrice: true,

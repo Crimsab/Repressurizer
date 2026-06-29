@@ -334,6 +334,7 @@ export interface AppSettings {
   showEmptyLists: boolean;
   showNowPlaying: boolean;
   showFilterBar: boolean;
+  hideCollectionOnlyGames: boolean;
   showDetailHltb: boolean;
   showDetailMetacritic: boolean;
   showDetailPrice: boolean;

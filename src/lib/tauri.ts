@@ -188,7 +188,7 @@ export async function fetchSteamAppList(apiKey: string): Promise<SteamAppListIte
 
 // Map currency setting to Steam country code for regional pricing
 const CURRENCY_TO_CC: Record<string, string> = {
-  EUR: "de", USD: "us", GBP: "gb", JPY: "jp", CAD: "ca",
+  EUR: "it", USD: "us", GBP: "gb", JPY: "jp", CAD: "ca",
   AUD: "au", CHF: "ch", BRL: "br", PLN: "pl", RUB: "ru",
 };
 

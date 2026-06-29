@@ -428,11 +428,19 @@ pub async fn fetch_game_details(
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
     let requested_cc = country_code.unwrap_or_default().trim().to_ascii_lowercase();
-    let mut attempts = Vec::new();
+    let mut attempts: Vec<Option<&str>> = Vec::new();
     if !requested_cc.is_empty() {
         attempts.push(Some(requested_cc.as_str()));
+        if is_euro_country_code(&requested_cc) {
+            for fallback in ["it", "fr", "es", "nl", "at", "be", "ie", "pt", "fi"] {
+                if fallback != requested_cc {
+                    attempts.push(Some(fallback));
+                }
+            }
+        }
+    } else {
+        attempts.push(None);
     }
-    attempts.push(None);
     if requested_cc != "us" {
         attempts.push(Some("us"));
     }
@@ -448,6 +456,31 @@ pub async fn fetch_game_details(
     }
 
     Err(last_error)
+}
+
+fn is_euro_country_code(country_code: &str) -> bool {
+    matches!(
+        country_code,
+        "at" | "be"
+            | "cy"
+            | "de"
+            | "ee"
+            | "es"
+            | "fi"
+            | "fr"
+            | "gr"
+            | "hr"
+            | "ie"
+            | "it"
+            | "lt"
+            | "lu"
+            | "lv"
+            | "mt"
+            | "nl"
+            | "pt"
+            | "si"
+            | "sk"
+    )
 }
 
 async fn fetch_game_details_with_country(
@@ -1341,6 +1374,13 @@ mod tests {
             126,
             "FINAL FANTASY VII"
         )));
+    }
+
+    #[test]
+    fn euro_country_detection_includes_italy_and_germany() {
+        assert!(is_euro_country_code("it"));
+        assert!(is_euro_country_code("de"));
+        assert!(!is_euro_country_code("us"));
     }
 
     #[test]

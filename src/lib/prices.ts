@@ -20,3 +20,24 @@ export function sanitizeGameDetailsPrices(details: GameDetails): GameDetails {
     price_currency: initial == null && final == null ? null : details.price_currency,
   };
 }
+
+export function detailsPriceMatchesCurrency(
+  details: GameDetails | null | undefined,
+  currency: string | null | undefined
+): boolean {
+  if (!details || details.is_free) return true;
+  if (details.price_initial == null && details.price_final == null) return true;
+
+  const expected = String(currency ?? "").trim().toUpperCase();
+  const actual = String(details.price_currency ?? "").trim().toUpperCase();
+  if (!expected || !actual) return true;
+
+  return expected === actual;
+}
+
+export function detailsPriceNeedsCurrencyRefresh(
+  details: GameDetails | null | undefined,
+  currency: string | null | undefined
+): boolean {
+  return !detailsPriceMatchesCurrency(details, currency);
+}

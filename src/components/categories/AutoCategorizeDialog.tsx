@@ -15,8 +15,9 @@ import {
 import { useBackgroundFetchStore } from "../../stores/backgroundFetchStore";
 import { useHltbStore } from "../../stores/hltbStore";
 import { useSteamRatingsStore } from "../../stores/steamRatingsStore";
-import { useFailedGamesStore } from "../../stores/failedGamesStore";
-import { useHltbIgnoredStore } from "../../stores/hltbIgnoredStore";
+import { MAX_FAIL_RUNS, useFailedGamesStore } from "../../stores/failedGamesStore";
+import { HLTB_MAX_FAILS, useHltbIgnoredStore } from "../../stores/hltbIgnoredStore";
+import { detailsPriceNeedsCurrencyRefresh } from "../../lib/prices";
 import {
   applyAutoCategorizeAssignments,
   withExpectedAutoCategories,
@@ -1134,21 +1135,39 @@ function ChooseStep({
   const ratingsHydrating = useSteamRatingsStore((s) => s.hydrating);
   const hydrateRatingsCache = useSteamRatingsStore((s) => s.hydrateCache);
   const hltbData = useHltbStore((s) => s.data);
-  const ignoredDetailsIds = useFailedGamesStore((s) => s.ignoredIds());
-  const ignoredHltbIds = useHltbIgnoredStore((s) => s.ignoredIds());
+  const ignoredDetailFails = useFailedGamesStore((s) => s.fails);
+  const ignoredHltbFails = useHltbIgnoredStore((s) => s.fails);
+  const currency = useSettingsStore((s) => s.currency);
   const [cacheNotice, setCacheNotice] = useState("");
   const gameIds = useMemo(() => Object.keys(games).map(Number), [games]);
-  const ignoredDetailsSet = useMemo(() => new Set(ignoredDetailsIds), [ignoredDetailsIds]);
-  const ignoredHltbSet = useMemo(() => new Set(ignoredHltbIds), [ignoredHltbIds]);
+  const ignoredDetailsSet = useMemo(
+    () =>
+      new Set(
+        Object.entries(ignoredDetailFails)
+          .filter(([, count]) => count >= MAX_FAIL_RUNS)
+          .map(([id]) => Number(id))
+      ),
+    [ignoredDetailFails]
+  );
+  const ignoredHltbSet = useMemo(
+    () =>
+      new Set(
+        Object.entries(ignoredHltbFails)
+          .filter(([, count]) => count >= HLTB_MAX_FAILS)
+          .map(([id]) => Number(id))
+      ),
+    [ignoredHltbFails]
+  );
   const detailIdsNeedingRefresh = useMemo(
-    () => gameIds.filter((id) => detailsCacheNeedsRefresh(details[id])),
-    [details, gameIds]
+    () => gameIds.filter((id) => detailsCacheNeedsRefresh(details[id]) || detailsPriceNeedsCurrencyRefresh(details[id], currency)),
+    [currency, details, gameIds]
   );
   const fetchableDetailIds = useMemo(
     () => detailIdsNeedingRefresh.filter((id) => !ignoredDetailsSet.has(id)),
     [detailIdsNeedingRefresh, ignoredDetailsSet]
   );
   const staleDetailCount = gameIds.filter((id) => !!details[id] && detailsCacheNeedsRefresh(details[id])).length;
+  const wrongCurrencyDetailCount = gameIds.filter((id) => detailsPriceNeedsCurrencyRefresh(details[id], currency)).length;
   const ignoredDetailCount = detailIdsNeedingRefresh.length - fetchableDetailIds.length;
   const cachedCount = gameCount - detailIdsNeedingRefresh.length;
   const missingHltbIds = useMemo(
@@ -1250,6 +1269,7 @@ function ChooseStep({
           fetchable={fetchableDetailIds.length}
           notes={[
             staleDetailCount > 0 ? t("auto.cache.detailsStale", { count: staleDetailCount }) : "",
+            wrongCurrencyDetailCount > 0 ? t("auto.cache.wrongCurrency", { count: wrongCurrencyDetailCount }) : "",
             ignoredDetailCount > 0 ? t("auto.cache.ignored", { count: ignoredDetailCount }) : "",
           ].filter(Boolean)}
           onFetch={handleFetchDetails}

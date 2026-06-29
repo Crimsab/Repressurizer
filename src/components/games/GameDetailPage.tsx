@@ -21,6 +21,7 @@ import {
   runSamAchievementAction,
 } from "../../lib/tauri";
 import { extractReleaseYear } from "../../lib/search";
+import { detailsPriceMatchesCurrency } from "../../lib/prices";
 import { SteamImage } from "./SteamImage";
 import { SelectMenu } from "../ui/SelectMenu";
 import { useHltbStore } from "../../stores/hltbStore";
@@ -133,15 +134,15 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
       setAchievements(cachedAchievements);
     }
 
-    if (cachedDetails) {
+    if (cachedDetails && detailsPriceMatchesCurrency(cachedDetails, currency)) {
       setDetails(cachedDetails);
       setLoadingDetails(false);
       return () => {
         cancelled = true;
       };
     } else {
-      setDetails(null);
-      setLoadingDetails(true);
+      setDetails(cachedDetails ?? null);
+      setLoadingDetails(!cachedDetails);
       fetchGameDetails(game.appid, currencyToCountryCode(currency))
         .then((d) => {
           if (cancelled) return;

@@ -8,6 +8,7 @@ import { useAchievementsStore } from "../../stores/achievementsStore";
 import { useReviewStore } from "../../stores/reviewStore";
 import { useSteamRatingsStore } from "../../stores/steamRatingsStore";
 import { useFamilyStore } from "../../stores/familyStore";
+import { useSettingsStore } from "../../stores/settingsStore";
 import { MAX_FAIL_RUNS, useFailedGamesStore } from "../../stores/failedGamesStore";
 import { matchesSavedAdvancedFilter, useAdvancedFilterStore } from "../../stores/advancedFilterStore";
 import { GameCard } from "./GameCard";
@@ -64,6 +65,7 @@ export function GameGrid() {
   const reviews = useReviewStore((s) => s.reviews);
   const steamRatings = useSteamRatingsStore((s) => s.ratings);
   const familyApps = useFamilyStore((s) => s.apps);
+  const hideCollectionOnlyGames = useSettingsStore((s) => s.hideCollectionOnlyGames);
   const failedGames = useFailedGamesStore((s) => s.fails);
   const savedAdvancedFilters = useAdvancedFilterStore((s) => s.filters);
   const activeAdvancedFilterId = useAdvancedFilterStore((s) => s.activeFilterId);
@@ -135,6 +137,10 @@ export function GameGrid() {
     } else {
       // "all" — exclude hidden
       gameList = gameList.filter((g) => !hiddenIds.has(g.appid));
+    }
+
+    if (hideCollectionOnlyGames && !filters.onlyCollectionOnly) {
+      gameList = gameList.filter((g) => !g.is_collection_only);
     }
 
     if (searchQuery.trim()) {
@@ -333,7 +339,7 @@ export function GameGrid() {
     });
 
     return gameList;
-  }, [games, activeCategory, collections, familyApps, searchQuery, sortBy, sortAsc, filters, activeAdvancedFilter, statuses, allGameTags, hltbData, achievementSummaries, details, reviews, steamRatings, duplicateAppIds, delistedAppIds]);
+  }, [games, activeCategory, collections, familyApps, searchQuery, sortBy, sortAsc, filters, activeAdvancedFilter, statuses, allGameTags, hltbData, achievementSummaries, details, reviews, steamRatings, hideCollectionOnlyGames, duplicateAppIds, delistedAppIds]);
 
   const orderedIds = useMemo(() => filteredGames.map((g) => g.appid), [filteredGames]);
 
