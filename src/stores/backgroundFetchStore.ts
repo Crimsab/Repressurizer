@@ -12,7 +12,7 @@ import { isSteamRatingFresh, isSteamReviewRateLimitedError } from "../lib/steamR
 import type { GameDetails } from "../lib/types";
 
 // ── Config ────────────────────────────────────────────────────────────────────
-const DETAILS_BASE_DELAY_MS = 1200;    // base delay between Steam requests (~1 req/sec)
+const DEFAULT_DETAILS_BASE_DELAY_MS = 1200;    // base delay between Steam requests (~1 req/sec)
 const DETAILS_RETRY_DELAY_MS = 2000;   // slower on retry pass
 
 // Adaptive delay: only grows for UNEXPECTED failures (not known-removed games)
@@ -21,9 +21,38 @@ const DETAILS_FAIL_MAX_MS      = 12_000;
 const DETAILS_SLOWDOWN_THRESHOLD_MS = 3_000; // when to show "slowing down" indicator
 
 // HLTB: concurrency controlled by settings (default 3), 500ms between batches
-const HLTB_BATCH_DELAY_MS = 500;
-const RATINGS_BASE_DELAY_MS = 1200;
-const RATINGS_RATE_LIMIT_COOLDOWN_MS = 5 * 60 * 1000;
+const DEFAULT_HLTB_BATCH_DELAY_MS = 500;
+const DEFAULT_ACHIEVEMENTS_BATCH_DELAY_MS = 300;
+const DEFAULT_RATINGS_BASE_DELAY_MS = 1200;
+const DEFAULT_RATINGS_RATE_LIMIT_COOLDOWN_MINUTES = 5;
+const MIN_FETCH_DELAY_MS = 100;
+
+function clampMs(value: number | undefined, fallback: number, min: number, max: number) {
+  const n = Math.round(Number(value));
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(min, Math.min(max, n));
+}
+
+function detailsBaseDelayMs() {
+  return clampMs(useSettingsStore.getState().steamDetailsDelayMs, DEFAULT_DETAILS_BASE_DELAY_MS, MIN_FETCH_DELAY_MS, 30_000);
+}
+
+function ratingsBaseDelayMs() {
+  return clampMs(useSettingsStore.getState().steamRatingsDelayMs, DEFAULT_RATINGS_BASE_DELAY_MS, MIN_FETCH_DELAY_MS, 30_000);
+}
+
+function ratingsCooldownMinutes() {
+  const minutes = Math.round(Number(useSettingsStore.getState().steamRatingsCooldownMinutes));
+  return Number.isFinite(minutes) ? Math.max(1, Math.min(60, minutes)) : DEFAULT_RATINGS_RATE_LIMIT_COOLDOWN_MINUTES;
+}
+
+function hltbBatchDelayMs() {
+  return clampMs(useSettingsStore.getState().hltbBatchDelayMs, DEFAULT_HLTB_BATCH_DELAY_MS, MIN_FETCH_DELAY_MS, 30_000);
+}
+
+function achievementsBatchDelayMs() {
+  return clampMs(useSettingsStore.getState().achievementsBatchDelayMs, DEFAULT_ACHIEVEMENTS_BATCH_DELAY_MS, MIN_FETCH_DELAY_MS, 30_000);
+}
 
 /** True when the error is a permanent "game not on Steam" failure (not a network issue) */
 function isPermanentError(e: unknown): boolean {
@@ -334,7 +363,7 @@ async function _runDetailsLoop(missingIds: number[]) {
     }
 
     if (!_detailsAbort && i < missingIds.length - 1) {
-      await sleep(DETAILS_BASE_DELAY_MS + _extraDelayMs);
+      await sleep(detailsBaseDelayMs() + _extraDelayMs);
     }
   }
 
@@ -382,7 +411,7 @@ async function _runDetailsLoop(missingIds: number[]) {
       }
 
       if (!_detailsAbort && i < retryQueue.length - 1) {
-        await sleep(DETAILS_RETRY_DELAY_MS + Math.min(_extraDelayMs, 3000));
+        await sleep(Math.max(DETAILS_RETRY_DELAY_MS, detailsBaseDelayMs()) + Math.min(_extraDelayMs, 3000));
       }
     }
   }
@@ -442,7 +471,7 @@ async function _runHltbLoop(items: Array<{ appId: number; name: string }>) {
     _setState({ hltbFetched: Math.min(fetched, items.length) });
 
     if (!_hltbAbort && batchStart < items.length) {
-      await sleep(HLTB_BATCH_DELAY_MS);
+      await sleep(hltbBatchDelayMs());
     }
   }
 
@@ -452,8 +481,6 @@ async function _runHltbLoop(items: Array<{ appId: number; name: string }>) {
 }
 
 // ── Achievements loop (concurrent batches, like HLTB) ─────────────────────────
-
-const ACHIEVEMENTS_BATCH_DELAY_MS = 300;
 
 async function _runAchievementsLoop(items: Array<{ appId: number; name: string }>) {
   const { apiKey, steamId64 } = useSettingsStore.getState();
@@ -494,7 +521,7 @@ async function _runAchievementsLoop(items: Array<{ appId: number; name: string }
     _setState({ achievementsFetched: Math.min(fetched, items.length) });
 
     if (!_achievementsAbort && batchStart < items.length) {
-      await sleep(ACHIEVEMENTS_BATCH_DELAY_MS);
+      await sleep(achievementsBatchDelayMs());
     }
   }
 
@@ -535,13 +562,14 @@ async function _runRatingsLoop(items: Array<{ appId: number; name: string }>) {
         if (isSteamReviewRateLimitedError(e)) {
           console.warn(`[Ratings] rate-limited while fetching ${name} (${appId}): ${e}`);
           rateLimitRetries++;
+          const cooldownMinutes = ratingsCooldownMinutes();
           addToRecent(
             "ratingsRecentNames",
             rateLimitRetries === 1
-              ? "⏳ Steam rate limit; waiting 5m"
-              : `⏳ Steam still rate-limited; waiting 5m (${rateLimitRetries})`
+              ? `⏳ Steam rate limit; waiting ${cooldownMinutes}m`
+              : `⏳ Steam still rate-limited; waiting ${cooldownMinutes}m (${rateLimitRetries})`
           );
-          const shouldContinue = await waitRatingsCooldown(RATINGS_RATE_LIMIT_COOLDOWN_MS);
+          const shouldContinue = await waitRatingsCooldown(cooldownMinutes * 60 * 1000);
           if (!shouldContinue) break;
           _setState({ ratingsCurrentName: `[retry] ${name}` });
           continue;
@@ -567,7 +595,7 @@ async function _runRatingsLoop(items: Array<{ appId: number; name: string }>) {
     _setState({ ratingsFetched: fetched });
 
     if (!_ratingsAbort && i < items.length - 1) {
-      await sleep(RATINGS_BASE_DELAY_MS);
+      await sleep(ratingsBaseDelayMs());
     }
   }
 

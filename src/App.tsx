@@ -395,15 +395,17 @@ function AppContent() {
       const { startDetailsFetch, startHltbFetch } = useBackgroundFetchStore.getState();
       const cachedHltb = useHltbStore.getState().data;
 
-      if (currentSettings.apiKey) {
+      if (currentSettings.apiKey && currentSettings.autoFetchDetailsOnRefresh !== false) {
         const missingDetails = mergedGames.map((g) => g.appid).filter((id) => !cachedDetails[id]);
         startDetailsFetch(missingDetails);
       }
 
-      const missingHltb = mergedGames
-        .filter((g) => !cachedHltb[g.appid])
-        .map((g) => ({ appId: g.appid, name: g.name }));
-      startHltbFetch(missingHltb);
+      if (currentSettings.autoFetchHltbOnRefresh !== false) {
+        const missingHltb = mergedGames
+          .filter((g) => !cachedHltb[g.appid])
+          .map((g) => ({ appId: g.appid, name: g.name }));
+        startHltbFetch(missingHltb);
+      }
 
       if (notify) toast.getState().success("Steam library refreshed.");
       if (notify) await sendWorkflowNotification("Steam library refreshed.", true);

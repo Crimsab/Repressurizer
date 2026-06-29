@@ -270,6 +270,39 @@ export type AppTheme = "dark" | "dim" | "light";
 export type AppLocale = string;
 export type AppStartupMode = "tray" | "window";
 export type AutomationPublishLogStatus = "success" | "failed" | "skipped";
+export type ProxyType = "http" | "https" | "socks5";
+export type ProxyRotationMode = "fixed" | "roundRobin" | "batch" | "random";
+
+export interface ProxyProfile {
+  id: string;
+  name: string;
+  type: ProxyType;
+  host: string;
+  port: number;
+  username: string;
+  password: string;
+  enabled: boolean;
+  batchSize: number;
+  lastTestStatus?: "ok" | "failed" | "";
+  lastTestMessage?: string;
+  lastTestLatencyMs?: number;
+  lastTestAt?: number;
+}
+
+export interface ProxyScopes {
+  steamApi: boolean;
+  steamStore: boolean;
+  hltb: boolean;
+  automation: boolean;
+}
+
+export interface ProxySettings {
+  enabled: boolean;
+  mode: ProxyRotationMode;
+  activeProfileId: string;
+  scopes: ProxyScopes;
+  profiles: ProxyProfile[];
+}
 
 export interface AutomationPublishLogEntry {
   id: string;
@@ -305,6 +338,14 @@ export interface AppSettings {
   // Fetch settings
   hltbConcurrency: number;
   achievementsConcurrency: number;
+  steamDetailsDelayMs: number;
+  steamRatingsDelayMs: number;
+  steamRatingsCooldownMinutes: number;
+  hltbBatchDelayMs: number;
+  achievementsBatchDelayMs: number;
+  autoFetchDetailsOnRefresh: boolean;
+  autoFetchHltbOnRefresh: boolean;
+  proxySettings: ProxySettings;
   // Steam Tools lab
   steamToolsEnabled: boolean;
   steamToolsAchievementWritesEnabled: boolean;

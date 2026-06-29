@@ -13,6 +13,7 @@ import type {
   SamAchievementActionInput,
   SamAchievementActionResult,
   SamBackupInfo,
+  ProxyProfile,
 } from "./types";
 
 export async function detectSteam(): Promise<SteamInfo> {
@@ -47,6 +48,23 @@ export async function saveCollections(
 
 export async function isSteamRunning(): Promise<boolean> {
   return invoke<boolean>("is_steam_running");
+}
+
+export interface ProxyTestResult {
+  ok: boolean;
+  status: number;
+  latencyMs: number;
+  message: string;
+}
+
+export async function testProxyProfile(
+  profile: ProxyProfile,
+  testUrl?: string
+): Promise<ProxyTestResult> {
+  return invoke<ProxyTestResult>("test_proxy_profile", {
+    profile,
+    testUrl: testUrl ?? null,
+  });
 }
 
 export async function listBackups(

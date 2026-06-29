@@ -1,6 +1,8 @@
 use serde::{de, Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
 
+use crate::http_policy::{client_builder_for_scope, HttpProxyScope};
+
 // === Achievement types ===
 
 #[derive(Debug, Clone, Serialize)]
@@ -244,7 +246,9 @@ pub async fn fetch_library(api_key: String, steam_id64: String) -> Result<Vec<Ow
         api_key, steam_id64
     );
 
-    let client = reqwest::Client::new();
+    let client = client_builder_for_scope(HttpProxyScope::SteamApi)?
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
     let response = client
         .get(&url)
         .send()
@@ -272,7 +276,7 @@ pub async fn fetch_steam_review_summary(app_id: u64) -> Result<SteamReviewSummar
         app_id
     );
 
-    let client = reqwest::Client::builder()
+    let client = client_builder_for_scope(HttpProxyScope::SteamStore)?
         .user_agent(format!("Repressurizer/{}", env!("CARGO_PKG_VERSION")))
         .build()
         .map_err(|e| e.to_string())?;
@@ -336,7 +340,7 @@ pub async fn fetch_steam_app_list(api_key: String) -> Result<Vec<SteamAppListIte
         return Err("Steam Web API key is required to refresh the Steam app index.".to_string());
     }
 
-    let client = reqwest::Client::builder()
+    let client = client_builder_for_scope(HttpProxyScope::SteamApi)?
         .user_agent("Repressurizer/0.1")
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
@@ -416,7 +420,7 @@ pub async fn fetch_game_details(
     app_id: u64,
     country_code: Option<String>,
 ) -> Result<GameDetails, String> {
-    let client = reqwest::Client::builder()
+    let client = client_builder_for_scope(HttpProxyScope::SteamStore)?
         .user_agent(
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0",
         )
@@ -591,7 +595,9 @@ pub async fn fetch_achievements(
     steam_id64: String,
     app_id: u64,
 ) -> Result<AchievementSummary, String> {
-    let client = reqwest::Client::new();
+    let client = client_builder_for_scope(HttpProxyScope::SteamApi)?
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
     // Fetch player achievements
     let player_url = format!(
@@ -708,7 +714,13 @@ pub async fn fetch_achievements_summary(
         api_key, steam_id64, app_id
     );
 
-    let resp = reqwest::get(&url)
+    let client = client_builder_for_scope(HttpProxyScope::SteamApi)?
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+
+    let resp = client
+        .get(&url)
+        .send()
         .await
         .map_err(|e| format!("Failed to fetch achievements: {}", e))?;
 
@@ -948,7 +960,7 @@ where
 
 #[tauri::command]
 pub async fn fetch_wishlist(steam_id64: String) -> Result<Vec<WishlistItem>, String> {
-    let client = reqwest::Client::builder()
+    let client = client_builder_for_scope(HttpProxyScope::SteamApi)?
         .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
         .build()
         .map_err(|e| e.to_string())?;
@@ -1027,7 +1039,7 @@ pub async fn fetch_family_library(
     steam_id64: Option<String>,
     include_non_games: Option<bool>,
 ) -> Result<FamilyLibraryResult, String> {
-    let client = reqwest::Client::builder()
+    let client = client_builder_for_scope(HttpProxyScope::SteamApi)?
         .user_agent("Repressurizer/0.1")
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
@@ -1622,7 +1634,9 @@ mod tests {
 
 #[tauri::command]
 pub async fn resolve_vanity_url(api_key: String, vanity_url: String) -> Result<String, String> {
-    let client = reqwest::Client::new();
+    let client = client_builder_for_scope(HttpProxyScope::SteamApi)?
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
     let url = format!(
         "https://api.steampowered.com/ISteamUser/ResolveVanityURL/v1/?key={}&vanityurl={}",
         api_key, vanity_url
@@ -1681,7 +1695,9 @@ pub async fn fetch_player_summary(
     api_key: String,
     steam_id64: String,
 ) -> Result<PlayerSummary, String> {
-    let client = reqwest::Client::new();
+    let client = client_builder_for_scope(HttpProxyScope::SteamApi)?
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
     let url = format!(
         "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?key={}&steamids={}",
         api_key, steam_id64
@@ -1735,7 +1751,9 @@ pub async fn fetch_friend_list(
     api_key: String,
     steam_id64: String,
 ) -> Result<Vec<FriendSummary>, String> {
-    let client = reqwest::Client::new();
+    let client = client_builder_for_scope(HttpProxyScope::SteamApi)?
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
     let url = format!(
         "https://api.steampowered.com/ISteamUser/GetFriendList/v1/?key={}&steamid={}&relationship=friend",
         api_key, steam_id64

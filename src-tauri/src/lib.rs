@@ -1,6 +1,7 @@
 pub mod automation;
 pub mod categorizer;
 pub mod hltb;
+pub mod http_policy;
 pub mod steam;
 
 use categorizer::commands;
@@ -666,7 +667,7 @@ async fn post_json_export(input: PostJsonExportInput) -> Result<HttpPublishResul
         return Err("Export target URL must use http or https".to_string());
     }
 
-    let client = reqwest::Client::builder()
+    let client = http_policy::client_builder_for_scope(http_policy::HttpProxyScope::Automation)?
         .user_agent(format!("Repressurizer/{}", env!("CARGO_PKG_VERSION")))
         .timeout(std::time::Duration::from_secs(30))
         .build()
@@ -814,6 +815,7 @@ fn export_diagnostics(
         },
         "privacy": {
             "api_key_included": false,
+            "proxy_credentials_included": false,
             "steam_ids_redacted": true,
         }
     });
@@ -1171,6 +1173,8 @@ pub fn run() {
             collections::delete_backup,
             collections::create_manual_backup,
             is_steam_running,
+            http_policy::configure_http_policy,
+            http_policy::test_proxy_profile,
             depressurizer_profile::import_depressurizer_profile,
             api::fetch_library,
             api::fetch_steam_app_list,

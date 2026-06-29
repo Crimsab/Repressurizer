@@ -1,5 +1,8 @@
 use crate::app_data_dir;
 use crate::hltb::HltbData;
+use crate::http_policy::{
+    client_builder_for_scope, configure_http_policy, HttpProxyScope, ProxySettings,
+};
 use crate::steam::{api, collections};
 use chrono::{SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
@@ -98,6 +101,7 @@ pub fn trigger_publish_now() {
 
 pub async fn build_snapshot_from_settings() -> Result<Value, String> {
     let settings_value = read_settings_value()?;
+    configure_http_policy_from_settings_value(&settings_value)?;
     let settings = parse_settings(&settings_value)?;
     build_snapshot(&settings).await
 }
@@ -138,6 +142,7 @@ pub fn automation_status_from_settings() -> Result<Value, String> {
 
 async fn publish_once(force: bool) -> Result<(), String> {
     let mut settings_value = read_settings_value()?;
+    configure_http_policy_from_settings_value(&settings_value)?;
     let settings = parse_settings(&settings_value)?;
     if !settings.setup_complete || !settings.automation_publish_enabled {
         return Ok(());
@@ -630,7 +635,7 @@ async fn post_json(url: &str, body: &str, bearer_token: Option<&str>) -> Result<
         return Err("Export target URL must use http or https".to_string());
     }
 
-    let client = reqwest::Client::builder()
+    let client = client_builder_for_scope(HttpProxyScope::Automation)?
         .user_agent(format!("Repressurizer/{}", env!("CARGO_PKG_VERSION")))
         .build()
         .map_err(|error| error.to_string())?;
@@ -695,6 +700,17 @@ fn read_settings_value() -> Result<Value, String> {
 fn parse_settings(value: &Value) -> Result<AutomationSettings, String> {
     serde_json::from_value(value.clone())
         .map_err(|error| format!("Failed to parse automation settings: {}", error))
+}
+
+fn configure_http_policy_from_settings_value(value: &Value) -> Result<(), String> {
+    let settings = value
+        .get("proxySettings")
+        .cloned()
+        .map(serde_json::from_value::<ProxySettings>)
+        .transpose()
+        .map_err(|error| format!("Failed to parse proxy settings: {}", error))?
+        .unwrap_or_default();
+    configure_http_policy(settings)
 }
 
 fn save_settings_value(value: &Value) -> Result<(), String> {

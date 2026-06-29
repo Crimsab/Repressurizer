@@ -3,6 +3,8 @@ use serde_json::Value as JsonValue;
 use std::collections::HashSet;
 use std::sync::{Mutex, OnceLock};
 
+use crate::http_policy::{client_builder_for_scope, HttpProxyScope};
+
 const UA: &str =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36";
 const TOKEN_TTL_SECS: u64 = 300;
@@ -648,7 +650,7 @@ pub async fn fetch_hltb(
     app_id: Option<u64>,
     release_year: Option<u32>,
 ) -> Result<Option<HltbData>, String> {
-    let client = reqwest::Client::builder()
+    let client = client_builder_for_scope(HttpProxyScope::Hltb)?
         .user_agent(UA)
         .build()
         .map_err(|e| e.to_string())?;

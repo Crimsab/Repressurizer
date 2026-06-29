@@ -524,6 +524,7 @@ fn cache_info() -> Value {
 
 fn diagnostics(steam_path: &str, steam_id3: &str, steam_id64: &str) -> Value {
     let data_dir = app_data_dir();
+    let settings = read_settings_json().ok();
     let collections_path = PathBuf::from(steam_path)
         .join("userdata")
         .join(steam_id3)
@@ -583,14 +584,21 @@ fn diagnostics(steam_path: &str, steam_id3: &str, steam_id64: &str) -> Value {
             "steamFamilyBytes": cache_size("steam_family.json"),
             "settingsBytes": cache_size("settings.json"),
         },
+        "network": settings
+            .as_ref()
+            .map(settings_network_summary)
+            .unwrap_or(Value::Null),
         "privacy": {
             "apiKeyIncluded": false,
+            "proxyCredentialsIncluded": false,
             "steamIdsRedacted": true,
         }
     })
 }
 
 fn settings_summary(settings: &Value, path: &str) -> Value {
+    let network = settings_network_summary(settings);
+
     json!({
         "settingsAvailable": true,
         "path": path,
@@ -618,6 +626,8 @@ fn settings_summary(settings: &Value, path: &str) -> Value {
             "lastHttpStatus": settings.get("automationPublishLastHttpStatus").cloned().unwrap_or(Value::Null),
             "bearerTokenConfigured": setting_configured(settings, "automationPublishBearerToken"),
         },
+        "fetch": network["fetch"].clone(),
+        "proxy": network["proxy"].clone(),
         "steamTools": {
             "enabled": setting_bool(settings, "steamToolsEnabled"),
             "achievementWritesEnabled": setting_bool(settings, "steamToolsAchievementWritesEnabled"),
@@ -635,8 +645,50 @@ fn settings_summary(settings: &Value, path: &str) -> Value {
         "privacy": {
             "apiKeyIncluded": false,
             "bearerTokenIncluded": false,
+            "proxyCredentialsIncluded": false,
             "steamFamilyStoreTokenIncluded": false,
             "steamIdsRedacted": true,
+        }
+    })
+}
+
+fn settings_network_summary(settings: &Value) -> Value {
+    let proxy_settings = settings.get("proxySettings").unwrap_or(&Value::Null);
+    let proxy_scopes = proxy_settings.get("scopes").unwrap_or(&Value::Null);
+    let proxy_profiles = proxy_settings.get("profiles").and_then(Value::as_array);
+    let proxy_profile_count = proxy_profiles.map(|profiles| profiles.len()).unwrap_or(0);
+    let proxy_enabled_profile_count = proxy_profiles
+        .map(|profiles| {
+            profiles
+                .iter()
+                .filter(|profile| value_bool_default(profile, "enabled", true))
+                .count()
+        })
+        .unwrap_or(0);
+
+    json!({
+        "fetch": {
+            "steamDetailsDelayMs": setting_u64_default(settings, "steamDetailsDelayMs", 1200),
+            "steamRatingsDelayMs": setting_u64_default(settings, "steamRatingsDelayMs", 1200),
+            "steamRatingsCooldownMinutes": setting_u64_default(settings, "steamRatingsCooldownMinutes", 5),
+            "hltbBatchDelayMs": setting_u64_default(settings, "hltbBatchDelayMs", 500),
+            "achievementsBatchDelayMs": setting_u64_default(settings, "achievementsBatchDelayMs", 300),
+            "autoFetchDetailsOnRefresh": setting_bool_default(settings, "autoFetchDetailsOnRefresh", true),
+            "autoFetchHltbOnRefresh": setting_bool_default(settings, "autoFetchHltbOnRefresh", true),
+        },
+        "proxy": {
+            "enabled": value_bool_default(proxy_settings, "enabled", false),
+            "mode": value_str_default(proxy_settings, "mode", "roundRobin"),
+            "activeProfileConfigured": !value_str_default(proxy_settings, "activeProfileId", "").trim().is_empty(),
+            "profileCount": proxy_profile_count,
+            "enabledProfileCount": proxy_enabled_profile_count,
+            "scopes": {
+                "steamApi": value_bool_default(proxy_scopes, "steamApi", true),
+                "steamStore": value_bool_default(proxy_scopes, "steamStore", true),
+                "hltb": value_bool_default(proxy_scopes, "hltb", true),
+                "automation": value_bool_default(proxy_scopes, "automation", false),
+            },
+            "proxyCredentialsIncluded": false,
         }
     })
 }
@@ -678,12 +730,31 @@ fn setting_bool(settings: &Value, key: &str) -> bool {
     settings.get(key).and_then(Value::as_bool).unwrap_or(false)
 }
 
+fn setting_bool_default(settings: &Value, key: &str, default: bool) -> bool {
+    settings
+        .get(key)
+        .and_then(Value::as_bool)
+        .unwrap_or(default)
+}
+
 fn setting_u64(settings: &Value, key: &str) -> u64 {
     settings.get(key).and_then(Value::as_u64).unwrap_or(0)
 }
 
+fn setting_u64_default(settings: &Value, key: &str, default: u64) -> u64 {
+    settings.get(key).and_then(Value::as_u64).unwrap_or(default)
+}
+
 fn setting_str<'a>(settings: &'a Value, key: &str) -> &'a str {
     settings.get(key).and_then(Value::as_str).unwrap_or("")
+}
+
+fn value_bool_default(value: &Value, key: &str, default: bool) -> bool {
+    value.get(key).and_then(Value::as_bool).unwrap_or(default)
+}
+
+fn value_str_default<'a>(value: &'a Value, key: &str, default: &'a str) -> &'a str {
+    value.get(key).and_then(Value::as_str).unwrap_or(default)
 }
 
 fn setting_configured(settings: &Value, key: &str) -> bool {
@@ -790,6 +861,45 @@ mod tests {
             "automationPublishEnabled": true,
             "automationPublishUrl": "https://example.test/snapshot",
             "automationPublishIntervalHours": 12,
+            "steamDetailsDelayMs": 1500,
+            "steamRatingsDelayMs": 2500,
+            "steamRatingsCooldownMinutes": 7,
+            "hltbBatchDelayMs": 750,
+            "achievementsBatchDelayMs": 650,
+            "autoFetchDetailsOnRefresh": false,
+            "autoFetchHltbOnRefresh": true,
+            "proxySettings": {
+                "enabled": true,
+                "mode": "batch",
+                "activeProfileId": "proxy-a",
+                "scopes": {
+                    "steamApi": true,
+                    "steamStore": false,
+                    "hltb": true,
+                    "automation": true
+                },
+                "profiles": [
+                    {
+                        "id": "proxy-a",
+                        "name": "Primary",
+                        "type": "http",
+                        "host": "127.0.0.1",
+                        "port": 8080,
+                        "username": "proxy-user",
+                        "password": "proxy-secret",
+                        "enabled": true,
+                        "batchSize": 3
+                    },
+                    {
+                        "id": "proxy-b",
+                        "name": "Disabled",
+                        "type": "socks5",
+                        "host": "127.0.0.2",
+                        "port": 1080,
+                        "enabled": false
+                    }
+                ]
+            },
             "steamToolsEnabled": true,
             "steamToolsAchievementWritesEnabled": true,
         });
@@ -799,7 +909,24 @@ mod tests {
         assert_eq!(summary["steam"]["steamId64"], "***2345");
         assert_eq!(summary["credentials"]["apiKeyConfigured"], true);
         assert_eq!(summary["automation"]["bearerTokenConfigured"], true);
+        assert_eq!(summary["fetch"]["steamDetailsDelayMs"], 1500);
+        assert_eq!(summary["fetch"]["steamRatingsCooldownMinutes"], 7);
+        assert_eq!(summary["fetch"]["autoFetchDetailsOnRefresh"], false);
+        assert_eq!(summary["proxy"]["enabled"], true);
+        assert_eq!(summary["proxy"]["mode"], "batch");
+        assert_eq!(summary["proxy"]["activeProfileConfigured"], true);
+        assert_eq!(summary["proxy"]["profileCount"], 2);
+        assert_eq!(summary["proxy"]["enabledProfileCount"], 1);
+        assert_eq!(summary["proxy"]["scopes"]["steamStore"], false);
+        assert_eq!(summary["proxy"]["scopes"]["automation"], true);
+        assert_eq!(summary["proxy"]["proxyCredentialsIncluded"], false);
         assert_eq!(summary["privacy"]["apiKeyIncluded"], false);
+        assert_eq!(summary["privacy"]["proxyCredentialsIncluded"], false);
+
+        let encoded = serde_json::to_string(&summary).expect("summary serializes");
+        assert!(!encoded.contains("secret"));
+        assert!(!encoded.contains("proxy-user"));
+        assert!(!encoded.contains("127.0.0.1"));
     }
 
     #[test]

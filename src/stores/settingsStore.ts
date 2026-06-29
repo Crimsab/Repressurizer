@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
-import type { AppSettings, AppTheme } from "../lib/types";
+import type { AppSettings, AppTheme, ProxyProfile, ProxyRotationMode, ProxyType } from "../lib/types";
 
 interface SettingsState extends AppSettings {
   hydrateFromDisk: () => Promise<void>;
@@ -36,6 +36,25 @@ const defaults: AppSettings = {
   showDetailPrice: true,
   hltbConcurrency: 5,
   achievementsConcurrency: 5,
+  steamDetailsDelayMs: 1200,
+  steamRatingsDelayMs: 1200,
+  steamRatingsCooldownMinutes: 5,
+  hltbBatchDelayMs: 500,
+  achievementsBatchDelayMs: 300,
+  autoFetchDetailsOnRefresh: true,
+  autoFetchHltbOnRefresh: true,
+  proxySettings: {
+    enabled: false,
+    mode: "roundRobin",
+    activeProfileId: "",
+    scopes: {
+      steamApi: true,
+      steamStore: true,
+      hltb: true,
+      automation: false,
+    },
+    profiles: [],
+  },
   steamToolsEnabled: false,
   steamToolsAchievementWritesEnabled: false,
   steamToolsCardFarmingEnabled: false,
@@ -67,12 +86,77 @@ const defaults: AppSettings = {
   includeSteamFamilyNonGames: false,
 };
 
+const PROXY_TYPES: ProxyType[] = ["http", "https", "socks5"];
+const PROXY_MODES: ProxyRotationMode[] = ["fixed", "roundRobin", "batch", "random"];
+
+function clampInteger(value: unknown, fallback: number, min: number, max: number): number {
+  const n = Math.trunc(Number(value));
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(min, Math.min(max, n));
+}
+
+function normalizeProxyProfile(raw: Partial<ProxyProfile>, index: number): ProxyProfile {
+  const type = PROXY_TYPES.includes(raw.type as ProxyType) ? raw.type as ProxyType : "http";
+  return {
+    id: typeof raw.id === "string" && raw.id.trim() ? raw.id : `proxy-${index + 1}`,
+    name: typeof raw.name === "string" ? raw.name : `Proxy ${index + 1}`,
+    type,
+    host: typeof raw.host === "string" ? raw.host : "",
+    port: clampInteger(raw.port, 8080, 1, 65535),
+    username: typeof raw.username === "string" ? raw.username : "",
+    password: typeof raw.password === "string" ? raw.password : "",
+    enabled: raw.enabled !== false,
+    batchSize: clampInteger(raw.batchSize, 1, 1, 100),
+    lastTestStatus: raw.lastTestStatus === "ok" || raw.lastTestStatus === "failed" ? raw.lastTestStatus : "",
+    lastTestMessage: typeof raw.lastTestMessage === "string" ? raw.lastTestMessage : "",
+    lastTestLatencyMs: clampInteger(raw.lastTestLatencyMs, 0, 0, Number.MAX_SAFE_INTEGER),
+    lastTestAt: clampInteger(raw.lastTestAt, 0, 0, Number.MAX_SAFE_INTEGER),
+  };
+}
+
 function loadFromStorage(): AppSettings {
   try {
     const raw = localStorage.getItem("repressurizer-settings");
-    if (raw) return { ...defaults, ...JSON.parse(raw) };
+    if (raw) return normalizeSettings(JSON.parse(raw));
   } catch {}
   return defaults;
+}
+
+function normalizeSettings(raw: Partial<AppSettings>): AppSettings {
+  const proxySettings = raw.proxySettings ?? defaults.proxySettings;
+  const proxyMode = PROXY_MODES.includes(proxySettings.mode as ProxyRotationMode)
+    ? proxySettings.mode as ProxyRotationMode
+    : defaults.proxySettings.mode;
+
+  return {
+    ...defaults,
+    ...raw,
+    steamDetailsDelayMs: clampInteger(raw.steamDetailsDelayMs, defaults.steamDetailsDelayMs, 100, 30_000),
+    steamRatingsDelayMs: clampInteger(raw.steamRatingsDelayMs, defaults.steamRatingsDelayMs, 100, 30_000),
+    steamRatingsCooldownMinutes: clampInteger(raw.steamRatingsCooldownMinutes, defaults.steamRatingsCooldownMinutes, 1, 60),
+    hltbBatchDelayMs: clampInteger(raw.hltbBatchDelayMs, defaults.hltbBatchDelayMs, 100, 30_000),
+    achievementsBatchDelayMs: clampInteger(raw.achievementsBatchDelayMs, defaults.achievementsBatchDelayMs, 100, 30_000),
+    proxySettings: {
+      ...defaults.proxySettings,
+      ...proxySettings,
+      mode: proxyMode,
+      scopes: {
+        ...defaults.proxySettings.scopes,
+        ...(proxySettings.scopes ?? {}),
+      },
+      profiles: (proxySettings.profiles ?? []).map(normalizeProxyProfile),
+    },
+  };
+}
+
+function syncHttpPolicy(proxySettings: AppSettings["proxySettings"]) {
+  try {
+    invoke("configure_http_policy", { settings: proxySettings }).catch((error) => {
+      console.warn("[Settings] Failed to configure HTTP policy:", error);
+    });
+  } catch (error) {
+    console.warn("[Settings] Failed to configure HTTP policy:", error);
+  }
 }
 
 function saveToStorage(state: AppSettings) {
@@ -81,6 +165,7 @@ function saveToStorage(state: AppSettings) {
   } catch {}
   // Also persist to Tauri FS
   invoke("save_app_data", { key: "settings.json", data: JSON.stringify(state) }).catch(() => {});
+  syncHttpPolicy(state.proxySettings);
 }
 
 // Preset accent palettes — each has main, hover, muted
@@ -141,15 +226,17 @@ function darkenHex(hex: string, amount: number): string {
   return rgbToHex(r * (1 - amount), g * (1 - amount), b * (1 - amount));
 }
 
+const initialSettings = loadFromStorage();
+
 export const useSettingsStore = create<SettingsState>((set) => ({
-  ...loadFromStorage(),
+  ...initialSettings,
   hydrateFromDisk: async () => {
     try {
       const raw = await invoke<string | null>("load_app_data", { key: "settings.json" });
       if (!raw) return;
       const parsed = JSON.parse(raw) as Partial<AppSettings>;
       set((state) => {
-        const next = { ...state, ...parsed };
+        const next = normalizeSettings({ ...state, ...parsed });
         saveToStorage(next);
         return next;
       });
@@ -159,7 +246,7 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   },
   setSettings: (settings) =>
     set((state) => {
-      const next = { ...state, ...settings };
+      const next = normalizeSettings({ ...state, ...settings });
       saveToStorage(next);
       return next;
     }),
@@ -168,3 +255,5 @@ export const useSettingsStore = create<SettingsState>((set) => ({
     set(defaults);
   },
 }));
+
+syncHttpPolicy(initialSettings.proxySettings);
