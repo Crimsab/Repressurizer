@@ -8,7 +8,8 @@ import { useFailedGamesStore } from "./failedGamesStore";
 import { useHltbIgnoredStore } from "./hltbIgnoredStore";
 import { useSettingsStore } from "./settingsStore";
 import { extractReleaseYear } from "../lib/search";
-import type { GameDetails, SteamReviewSummary } from "../lib/types";
+import { isSteamRatingFresh } from "../lib/steamRatings";
+import type { GameDetails } from "../lib/types";
 
 // ── Config ────────────────────────────────────────────────────────────────────
 const DETAILS_BASE_DELAY_MS = 1200;    // base delay between Steam requests (~1 req/sec)
@@ -206,16 +207,19 @@ export const useBackgroundFetchStore = create<BackgroundFetchState>((set, get) =
 
     startRatingsFetch: (items) => {
       if (_ratingsRunning || items.length === 0) return;
+      const ratings = useSteamRatingsStore.getState().ratings;
+      const filtered = items.filter((item) => !isSteamRatingFresh(ratings[item.appId]));
+      if (filtered.length === 0) return;
       _ratingsRunning = true;
       _ratingsAbort = false;
       set({
         ratingsRunning: true,
         ratingsFetched: 0,
-        ratingsTotal: items.length,
+        ratingsTotal: filtered.length,
         ratingsCurrentName: "",
         ratingsRecentNames: [],
       });
-      _runRatingsLoop(items);
+      _runRatingsLoop(filtered);
     },
 
     stopRatingsFetch: () => {
@@ -490,7 +494,6 @@ async function _runAchievementsLoop(items: Array<{ appId: number; name: string }
 
 async function _runRatingsLoop(items: Array<{ appId: number; name: string }>) {
   console.log(`[Ratings] Starting fetch for ${items.length} games`);
-  const buffer: SteamReviewSummary[] = [];
   let fetched = 0;
 
   for (let i = 0; i < items.length; i++) {
@@ -501,7 +504,7 @@ async function _runRatingsLoop(items: Array<{ appId: number; name: string }>) {
 
     try {
       const summary = await fetchSteamReviewSummary(appId);
-      buffer.push(summary);
+      useSteamRatingsStore.getState().setRating(appId, summary);
       const label = summary.total_reviews > 0
         ? `${name} · ${summary.review_score_desc || `${summary.positive_percentage ?? 0}%`}`
         : `${name} · no reviews`;
@@ -514,13 +517,6 @@ async function _runRatingsLoop(items: Array<{ appId: number; name: string }>) {
 
     fetched++;
     _setState({ ratingsFetched: fetched });
-
-    if (buffer.length >= 25 || i === items.length - 1) {
-      if (buffer.length > 0) {
-        useSteamRatingsStore.getState().setBulkRatings([...buffer]);
-        buffer.length = 0;
-      }
-    }
 
     if (!_ratingsAbort && i < items.length - 1) {
       await sleep(RATINGS_BASE_DELAY_MS);

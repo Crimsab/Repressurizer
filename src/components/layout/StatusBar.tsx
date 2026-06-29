@@ -143,6 +143,13 @@ export function StatusBar() {
   const achievementsRecentNames = useBackgroundFetchStore((s) => s.achievementsRecentNames);
   const stopAchievementsFetch = useBackgroundFetchStore((s) => s.stopAchievementsFetch);
 
+  const ratingsRunning = useBackgroundFetchStore((s) => s.ratingsRunning);
+  const ratingsFetched = useBackgroundFetchStore((s) => s.ratingsFetched);
+  const ratingsTotal = useBackgroundFetchStore((s) => s.ratingsTotal);
+  const ratingsCurrentName = useBackgroundFetchStore((s) => s.ratingsCurrentName);
+  const ratingsRecentNames = useBackgroundFetchStore((s) => s.ratingsRecentNames);
+  const stopRatingsFetch = useBackgroundFetchStore((s) => s.stopRatingsFetch);
+
   const collections = useCategoryStore((s) => s.collections);
   const activeCategory = useCategoryStore((s) => s.activeCategory);
   const addGamesToCategory = useCategoryStore((s) => s.addGamesToCategory);
@@ -158,6 +165,7 @@ export function StatusBar() {
   const [showDetailsPopover, setShowDetailsPopover] = useState(false);
   const [showHltbPopover, setShowHltbPopover] = useState(false);
   const [showAchievementsPopover, setShowAchievementsPopover] = useState(false);
+  const [showRatingsPopover, setShowRatingsPopover] = useState(false);
 
   const selectedCount = Object.keys(selectedGameIds).length;
   const selectedIds = Object.keys(selectedGameIds).map(Number);
@@ -178,7 +186,7 @@ export function StatusBar() {
   return (
     <footer
       className="flex items-center gap-4 border-t border-repressurizer-border-subtle bg-repressurizer-surface/50 px-4 py-1 text-[11px] text-repressurizer-text-faint font-mono tabular-nums"
-      onMouseDown={() => { setShowDetailsPopover(false); setShowHltbPopover(false); setShowAchievementsPopover(false); }}
+      onMouseDown={() => { setShowDetailsPopover(false); setShowHltbPopover(false); setShowAchievementsPopover(false); setShowRatingsPopover(false); }}
     >
       <span>{t("statusbar.games", { count: gameCount })}</span>
       <span>{t("statusbar.categories", { count: categoryCount })}</span>
@@ -276,7 +284,7 @@ export function StatusBar() {
         <div className="relative">
           <button
             onMouseDown={(e) => e.stopPropagation()}
-            onClick={(e) => { e.stopPropagation(); setShowHltbPopover(false); setShowDetailsPopover((v) => !v); }}
+            onClick={(e) => { e.stopPropagation(); setShowHltbPopover(false); setShowAchievementsPopover(false); setShowRatingsPopover(false); setShowDetailsPopover((v) => !v); }}
             className="inline-flex items-center gap-1.5 text-amber-400 hover:text-amber-300 transition-colors"
           >
             <Spinner size={9} className={detailsCoolingDown ? "shrink-0" : "animate-spin shrink-0"} />
@@ -309,7 +317,7 @@ export function StatusBar() {
         <div className="relative">
           <button
             onMouseDown={(e) => e.stopPropagation()}
-            onClick={(e) => { e.stopPropagation(); setShowDetailsPopover(false); setShowAchievementsPopover(false); setShowHltbPopover((v) => !v); }}
+            onClick={(e) => { e.stopPropagation(); setShowDetailsPopover(false); setShowAchievementsPopover(false); setShowRatingsPopover(false); setShowHltbPopover((v) => !v); }}
             className="inline-flex items-center gap-1.5 text-sky-400 hover:text-sky-300 transition-colors"
           >
             <Spinner size={9} className="animate-spin shrink-0" />
@@ -334,7 +342,7 @@ export function StatusBar() {
         <div className="relative">
           <button
             onMouseDown={(e) => e.stopPropagation()}
-            onClick={(e) => { e.stopPropagation(); setShowDetailsPopover(false); setShowHltbPopover(false); setShowAchievementsPopover((v) => !v); }}
+            onClick={(e) => { e.stopPropagation(); setShowDetailsPopover(false); setShowHltbPopover(false); setShowRatingsPopover(false); setShowAchievementsPopover((v) => !v); }}
             className="inline-flex items-center gap-1.5 text-violet-400 hover:text-violet-300 transition-colors"
           >
             <Spinner size={9} className="animate-spin shrink-0" />
@@ -350,6 +358,31 @@ export function StatusBar() {
               recentNames={achievementsRecentNames}
               onStop={stopAchievementsFetch}
               onClose={() => setShowAchievementsPopover(false)}
+            />
+          )}
+        </div>
+      )}
+
+      {ratingsRunning && (
+        <div className="relative">
+          <button
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); setShowDetailsPopover(false); setShowHltbPopover(false); setShowAchievementsPopover(false); setShowRatingsPopover((v) => !v); }}
+            className="inline-flex items-center gap-1.5 text-violet-400 hover:text-violet-300 transition-colors"
+          >
+            <Spinner size={9} className="animate-spin shrink-0" />
+            <span>{t("fetch.ratings")} {ratingsFetched}/{ratingsTotal}</span>
+          </button>
+          {showRatingsPopover && (
+            <FetchPopover
+              title={t("fetch.ratings")}
+              color="violet"
+              fetched={ratingsFetched}
+              total={ratingsTotal}
+              currentName={ratingsCurrentName}
+              recentNames={ratingsRecentNames}
+              onStop={stopRatingsFetch}
+              onClose={() => setShowRatingsPopover(false)}
             />
           )}
         </div>

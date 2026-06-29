@@ -89,6 +89,22 @@ describe("categorizeBySteamRating", () => {
       Mixed: [1],
     });
   });
+
+  it("uses custom rating rules when provided", () => {
+    const result = categorizeBySteamRating(
+      [game(10)],
+      { 10: rating(10, 7, 3) },
+      {
+        prefix: "Custom: ",
+        rules: [
+          { name: "Loved enough", min_score: 70, max_score: 100, min_reviews: 1, max_reviews: 0 },
+          { name: "Not loved", min_score: 0, max_score: 69, min_reviews: 1, max_reviews: 0 },
+        ],
+      }
+    );
+
+    expect(result.assignments).toEqual({ "Custom: Loved enough": [10] });
+  });
 });
 
 describe("steam rating cache freshness", () => {

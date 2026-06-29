@@ -1,15 +1,7 @@
-import type { SteamRatingConfig, CategorizeResult } from "./tauri";
+import type { SteamRatingConfig, SteamRatingRule, CategorizeResult } from "./tauri";
 import type { OwnedGame, SteamReviewSummary } from "./types";
 
 export const STEAM_RATING_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
-
-export interface SteamRatingRule {
-  name: string;
-  min_score: number;
-  max_score: number;
-  min_reviews: number;
-  max_reviews: number;
-}
 
 export const STEAM_RATING_RULES: SteamRatingRule[] = [
   { name: "Overwhelmingly Positive", min_score: 95, max_score: 100, min_reviews: 500, max_reviews: 0 },
@@ -24,7 +16,28 @@ export const STEAM_RATING_RULES: SteamRatingRule[] = [
 ];
 
 export function expectedSteamRatingCategoryNames(config: SteamRatingConfig = {}): string[] {
-  return STEAM_RATING_RULES.map((rule) => prefixedName(config.prefix, rule.name));
+  return steamRatingRulesForConfig(config).map((rule) => prefixedName(config.prefix, rule.name));
+}
+
+export function steamRatingRulesForConfig(config: SteamRatingConfig = {}): SteamRatingRule[] {
+  const source = config.rules?.length ? config.rules : STEAM_RATING_RULES;
+  return source
+    .map(normalizeSteamRatingRule)
+    .filter((rule) => rule.name.length > 0);
+}
+
+export function defaultSteamRatingRules(): SteamRatingRule[] {
+  return STEAM_RATING_RULES.map((rule) => ({ ...rule }));
+}
+
+function normalizeSteamRatingRule(rule: SteamRatingRule): SteamRatingRule {
+  return {
+    name: String(rule.name ?? "").trim(),
+    min_score: clampInt(rule.min_score, 0, 100),
+    max_score: clampInt(rule.max_score, 0, 100),
+    min_reviews: Math.max(0, Math.floor(Number(rule.min_reviews) || 0)),
+    max_reviews: Math.max(0, Math.floor(Number(rule.max_reviews) || 0)),
+  };
 }
 
 export function isSteamRatingFresh(
@@ -59,7 +72,7 @@ export function categorizeBySteamRating(
     const score = scoreForRating(rating, config.use_wilson_score ?? false);
     if (score == null) continue;
 
-    const rule = STEAM_RATING_RULES.find((item) => {
+    const rule = steamRatingRulesForConfig(config).find((item) => {
       const inScore = score >= item.min_score && score <= item.max_score;
       const enoughReviews = rating.total_reviews >= item.min_reviews;
       const belowMax = item.max_reviews === 0 || rating.total_reviews <= item.max_reviews;
@@ -104,4 +117,9 @@ export function wilsonLowerBoundPercentage(positive: number, total: number): num
 
 function prefixedName(prefix: string | undefined, name: string): string {
   return `${prefix ?? ""}${name}`.trim();
+}
+
+function clampInt(value: number, min: number, max: number): number {
+  const n = Math.floor(Number(value) || 0);
+  return Math.max(min, Math.min(max, n));
 }

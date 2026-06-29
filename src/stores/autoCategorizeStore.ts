@@ -12,6 +12,7 @@ import type {
   SteamRatingConfig,
   CategorizeResult,
 } from "../lib/tauri";
+import { defaultSteamRatingRules } from "../lib/steamRatings";
 
 export type CategorizerType =
   | "hours"
@@ -136,6 +137,7 @@ export const DEFAULT_NAME_CONFIG: NameConfig = {
 export const DEFAULT_STEAM_RATING_CONFIG: SteamRatingConfig = {
   prefix: "",
   use_wilson_score: false,
+  rules: defaultSteamRatingRules(),
 };
 
 const defaults: Omit<AutoCategorizeState, "set"> = {

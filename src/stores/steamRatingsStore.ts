@@ -6,6 +6,8 @@ const STORAGE_KEY = "steam_ratings_cache.json";
 
 interface SteamRatingsState {
   ratings: Record<number, SteamReviewSummary>;
+  hydrated: boolean;
+  hydrating: boolean;
   setRating: (appId: number, rating: SteamReviewSummary) => void;
   setBulkRatings: (ratings: SteamReviewSummary[]) => void;
   getRating: (appId: number) => SteamReviewSummary | null;
@@ -15,6 +17,8 @@ interface SteamRatingsState {
 function saveAsync(ratings: Record<number, SteamReviewSummary>) {
   saveAppData(STORAGE_KEY, JSON.stringify(ratings)).catch(() => {});
 }
+
+let hydratePromise: Promise<void> | null = null;
 
 function cleanRatings(raw: Record<string, SteamReviewSummary>): Record<number, SteamReviewSummary> {
   const next: Record<number, SteamReviewSummary> = {};
@@ -40,6 +44,8 @@ function cleanRatings(raw: Record<string, SteamReviewSummary>): Record<number, S
 
 export const useSteamRatingsStore = create<SteamRatingsState>((set, get) => ({
   ratings: {},
+  hydrated: false,
+  hydrating: false,
 
   setRating: (appId, rating) =>
     set((state) => {
@@ -59,11 +65,24 @@ export const useSteamRatingsStore = create<SteamRatingsState>((set, get) => ({
   getRating: (appId) => get().ratings[appId] ?? null,
 
   hydrateCache: async () => {
-    try {
-      const raw = await loadAppData(STORAGE_KEY);
-      if (raw) set({ ratings: cleanRatings(JSON.parse(raw)) });
-    } catch {
-      // Cache miss or parse error: start fresh.
-    }
+    if (get().hydrated) return;
+    if (hydratePromise) return hydratePromise;
+    set({ hydrating: true });
+    hydratePromise = (async () => {
+      try {
+        const raw = await loadAppData(STORAGE_KEY);
+        set({
+          ratings: raw ? cleanRatings(JSON.parse(raw)) : {},
+          hydrated: true,
+          hydrating: false,
+        });
+      } catch {
+        // Cache miss or parse error: start fresh.
+        set({ ratings: {}, hydrated: true, hydrating: false });
+      } finally {
+        hydratePromise = null;
+      }
+    })();
+    return hydratePromise;
   },
 }));

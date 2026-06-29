@@ -380,6 +380,15 @@ export interface NameConfig {
 export interface SteamRatingConfig {
   prefix?: string;
   use_wilson_score?: boolean;
+  rules?: SteamRatingRule[];
+}
+
+export interface SteamRatingRule {
+  name: string;
+  min_score: number;
+  max_score: number;
+  min_reviews: number;
+  max_reviews: number;
 }
 
 export async function runHoursCategorizer(
