@@ -209,6 +209,7 @@ bun run changelog:write
 ```
 
 This updates both `CHANGELOG.md` and the changelog JSON used by the in-app Info page.
+The release workflow runs the same generator before packaging, so release builds include changelog data for the tag being built.
 
 For a local Windows build:
 
