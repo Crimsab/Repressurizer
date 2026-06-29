@@ -6,8 +6,43 @@ import { displayNameFromDetails, isPlaceholderGameName } from "../lib/libraryMer
 import { useSteamAppIndexStore } from "./steamAppIndexStore";
 import { sanitizeGameDetailsPrices } from "../lib/prices";
 
+export const DETAILS_CACHE_SCHEMA_VERSION = 2;
+
 function persistDetailsCache(details: Record<number, GameDetails>) {
   invoke("save_details_cache", { data: JSON.stringify(details) }).catch(() => {});
+}
+
+function normalizeDetailsForCache(details: GameDetails): GameDetails {
+  const cleanDetails = sanitizeGameDetailsPrices(details);
+  return {
+    ...cleanDetails,
+    genres: Array.isArray(cleanDetails.genres) ? cleanDetails.genres : [],
+    categories: Array.isArray(cleanDetails.categories) ? cleanDetails.categories : [],
+    developers: Array.isArray(cleanDetails.developers) ? cleanDetails.developers : [],
+    publishers: Array.isArray(cleanDetails.publishers) ? cleanDetails.publishers : [],
+    supported_languages: Array.isArray(cleanDetails.supported_languages) ? cleanDetails.supported_languages : [],
+    platforms: {
+      windows: !!cleanDetails.platforms?.windows,
+      mac: !!cleanDetails.platforms?.mac,
+      linux: !!cleanDetails.platforms?.linux,
+    },
+  };
+}
+
+function markDetailsCacheFresh(details: GameDetails): GameDetails {
+  return {
+    ...normalizeDetailsForCache(details),
+    cache_schema: DETAILS_CACHE_SCHEMA_VERSION,
+    fetched_at: Date.now(),
+  };
+}
+
+export function isDetailsCacheCurrent(detail: GameDetails | undefined): detail is GameDetails {
+  return !!detail && detail.cache_schema === DETAILS_CACHE_SCHEMA_VERSION;
+}
+
+export function detailsCacheNeedsRefresh(detail: GameDetails | undefined): boolean {
+  return !isDetailsCacheCurrent(detail);
 }
 
 export interface FilterState {
@@ -54,7 +89,20 @@ const DEFAULT_FILTERS: FilterState = {
   onlyCollectionOnly: false,
 };
 
-export type SortBy = "name" | "playtime" | "lastPlayed" | "appid" | "metacritic" | "hltb" | "achievements" | "status";
+export type SortBy =
+  | "name"
+  | "playtime"
+  | "lastPlayed"
+  | "appid"
+  | "metacritic"
+  | "hltb"
+  | "achievements"
+  | "status"
+  | "steamReviews"
+  | "reviewCount"
+  | "releaseDate"
+  | "price"
+  | "userRating";
 export type ViewMode = "grid" | "list";
 
 const VIEW_MODE_STORAGE_KEY = "repressurizer-library-view-mode";
@@ -179,7 +227,7 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   setDetails: (appId, details) =>
     set((state) => {
-      const cleanDetails = sanitizeGameDetailsPrices(details);
+      const cleanDetails = markDetailsCacheFresh(details);
       const next = { ...state.details, [appId]: cleanDetails };
       const games = { ...state.games };
       const game = games[appId];
@@ -195,7 +243,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       const next = { ...state.details };
       const games = { ...state.games };
       for (const rawDetails of details) {
-        const d = sanitizeGameDetailsPrices(rawDetails);
+        const d = markDetailsCacheFresh(rawDetails);
         next[d.app_id] = d;
         const game = games[d.app_id];
         if (game && (game.is_collection_only || isPlaceholderGameName(d.app_id, game.name))) {
@@ -219,9 +267,9 @@ export const useGameStore = create<GameState>((set, get) => ({
         const cleaned: Record<number, GameDetails> = {};
         let changed = false;
         for (const [id, details] of Object.entries(parsed)) {
-          const cleanDetails = sanitizeGameDetailsPrices(details);
+          const cleanDetails = normalizeDetailsForCache(details);
           cleaned[Number(id)] = cleanDetails;
-          if (cleanDetails !== details) changed = true;
+          if (JSON.stringify(cleanDetails) !== JSON.stringify(details)) changed = true;
         }
         if (changed) persistDetailsCache(cleaned);
         set({ details: cleaned });

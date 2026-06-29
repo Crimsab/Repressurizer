@@ -1,5 +1,9 @@
 import { useState, useCallback, useEffect, useMemo, type ReactNode } from "react";
-import { useGameStore } from "../../stores/gameStore";
+import {
+  detailsCacheNeedsRefresh,
+  isDetailsCacheCurrent,
+  useGameStore,
+} from "../../stores/gameStore";
 import { useCategoryStore } from "../../stores/categoryStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import {
@@ -11,6 +15,8 @@ import {
 import { useBackgroundFetchStore } from "../../stores/backgroundFetchStore";
 import { useHltbStore } from "../../stores/hltbStore";
 import { useSteamRatingsStore } from "../../stores/steamRatingsStore";
+import { useFailedGamesStore } from "../../stores/failedGamesStore";
+import { useHltbIgnoredStore } from "../../stores/hltbIgnoredStore";
 import {
   applyAutoCategorizeAssignments,
   withExpectedAutoCategories,
@@ -218,20 +224,24 @@ function sortValues(values: string[]): string[] {
 
 function detailNeedsFetchForType(type: CategorizerType, detail: GameDetails | undefined): boolean {
   if (!categorizerNeedsDetails(type)) return false;
-  if (!detail) return true;
+  return detailsCacheNeedsRefresh(detail);
+}
 
-  if (type === "genre") return (detail.genres ?? []).length === 0;
-  if (type === "tags" || type === "flags") return (detail.categories ?? []).length === 0;
-  if (type === "language") return (detail.supported_languages ?? []).length === 0;
+function detailHasDataForType(type: CategorizerType, detail: GameDetails | undefined): boolean {
+  if (!categorizerNeedsDetails(type)) return true;
+  if (!isDetailsCacheCurrent(detail)) return false;
+  if (type === "genre") return (detail.genres ?? []).length > 0;
+  if (type === "tags" || type === "flags") return (detail.categories ?? []).length > 0;
+  if (type === "language") return (detail.supported_languages ?? []).length > 0;
   if (type === "devpub") {
-    return (detail.developers ?? []).length === 0 && (detail.publishers ?? []).length === 0;
+    return (detail.developers ?? []).length > 0 || (detail.publishers ?? []).length > 0;
   }
   if (type === "platform") {
     const platforms = detail.platforms;
-    return !platforms || (!platforms.windows && !platforms.mac && !platforms.linux);
+    return !!platforms && (platforms.windows || platforms.mac || platforms.linux);
   }
 
-  return false;
+  return true;
 }
 
 function detailIdsNeedingFetchForType(
@@ -252,7 +262,7 @@ function detailIdsReadyForType(
   if (!categorizerNeedsDetails(type)) return [];
   return Object.keys(games)
     .map(Number)
-    .filter((id) => !detailNeedsFetchForType(type, details[id]));
+    .filter((id) => detailHasDataForType(type, details[id]));
 }
 
 function detailsReadyForType(
@@ -362,7 +372,6 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
   const ratings = useSteamRatingsStore((s) => s.ratings);
   const collections = useCategoryStore((s) => s.collections);
   const applyImportedCollections = useCategoryStore((s) => s.applyImportedCollections);
-  const apiKey = useSettingsStore((s) => s.apiKey);
   const steamPath = useSettingsStore((s) => s.steamPath);
   const steamId3 = useSettingsStore((s) => s.steamId3);
   const hltbData = useHltbStore((s) => s.data);
@@ -424,7 +433,10 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
   const [runError, setRunError] = useState("");
 
   const categorizer = CATEGORIZERS.find((c) => c.value === type)!;
-  const metadata = useMemo(() => buildAutoCatMetadata(Object.values(details)), [details]);
+  const metadata = useMemo(
+    () => buildAutoCatMetadata(Object.values(details).filter(isDetailsCacheCurrent)),
+    [details]
+  );
 
   // When a background fetch completes and we were waiting: run categorizer.
   useEffect(() => {
@@ -540,13 +552,6 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
     const missingDetails = missingDetailIdsForPresets(presets, games, details);
 
     if (missingDetails.length > 0) {
-      if (!apiKey) {
-        setFetchError(t("auto.detailsRequired"));
-        setFetchKind("details");
-        setStep("fetch");
-        return true;
-      }
-
       setFetchError("");
       setStep("fetch");
       setFetchKind("details");
@@ -571,7 +576,6 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
 
     return false;
   }, [
-    apiKey,
     details,
     detailsRunning,
     fetchItemsForIds,
@@ -688,13 +692,6 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
       const missing = detailIdsNeedingFetchForType(type, games, details);
 
       if (missing.length > 0) {
-        if (!apiKey) {
-          setFetchError(t("auto.detailsRequired"));
-          setFetchKind("details");
-          setStep("fetch");
-          return;
-        }
-
         setFetchError("");
         setStep("fetch");
         setFetchKind("details");
@@ -1137,10 +1134,33 @@ function ChooseStep({
   const ratingsHydrating = useSteamRatingsStore((s) => s.hydrating);
   const hydrateRatingsCache = useSteamRatingsStore((s) => s.hydrateCache);
   const hltbData = useHltbStore((s) => s.data);
+  const ignoredDetailsIds = useFailedGamesStore((s) => s.ignoredIds());
+  const ignoredHltbIds = useHltbIgnoredStore((s) => s.ignoredIds());
+  const [cacheNotice, setCacheNotice] = useState("");
   const gameIds = useMemo(() => Object.keys(games).map(Number), [games]);
-  const cachedCount = gameIds.filter((id) => !!details[id]).length;
-  const hltbCount = gameIds.filter((id) => !!hltbData[id]).length;
-  const missingCount = gameCount - cachedCount;
+  const ignoredDetailsSet = useMemo(() => new Set(ignoredDetailsIds), [ignoredDetailsIds]);
+  const ignoredHltbSet = useMemo(() => new Set(ignoredHltbIds), [ignoredHltbIds]);
+  const detailIdsNeedingRefresh = useMemo(
+    () => gameIds.filter((id) => detailsCacheNeedsRefresh(details[id])),
+    [details, gameIds]
+  );
+  const fetchableDetailIds = useMemo(
+    () => detailIdsNeedingRefresh.filter((id) => !ignoredDetailsSet.has(id)),
+    [detailIdsNeedingRefresh, ignoredDetailsSet]
+  );
+  const staleDetailCount = gameIds.filter((id) => !!details[id] && detailsCacheNeedsRefresh(details[id])).length;
+  const ignoredDetailCount = detailIdsNeedingRefresh.length - fetchableDetailIds.length;
+  const cachedCount = gameCount - detailIdsNeedingRefresh.length;
+  const missingHltbIds = useMemo(
+    () => gameIds.filter((id) => !hltbData[id]),
+    [gameIds, hltbData]
+  );
+  const fetchableHltbIds = useMemo(
+    () => missingHltbIds.filter((id) => !ignoredHltbSet.has(id)),
+    [ignoredHltbSet, missingHltbIds]
+  );
+  const hltbIgnoredCount = missingHltbIds.length - fetchableHltbIds.length;
+  const hltbCount = gameCount - missingHltbIds.length;
   const missingRatings = ratingsHydrated ? steamRatingIdsNeedingFetch(games, ratings) : [];
   const ratingCount = ratingsHydrated ? gameCount - missingRatings.length : 0;
   const detailsRunning = useBackgroundFetchStore((s) => s.detailsRunning);
@@ -1154,19 +1174,66 @@ function ChooseStep({
   const ratingsFetched = useBackgroundFetchStore((s) => s.ratingsFetched);
   const ratingsTotal = useBackgroundFetchStore((s) => s.ratingsTotal);
   const startRatingsFetch = useBackgroundFetchStore((s) => s.startRatingsFetch);
+  const startHltbFetch = useBackgroundFetchStore((s) => s.startHltbFetch);
+
+  const fetchItemsForIds = useCallback((ids: number[]) => (
+    ids.map((id) => ({ appId: id, name: games[id]?.name ?? `#${id}` }))
+  ), [games]);
 
   const handleFetchDetails = () => {
-    const missing = gameIds.filter((id) => !details[id]);
-    if (missing.length > 0) startDetailsFetch(missing);
+    setCacheNotice("");
+    if (fetchableDetailIds.length > 0) {
+      startDetailsFetch(fetchableDetailIds);
+      return;
+    }
+    if (detailIdsNeedingRefresh.length > 0) {
+      setCacheNotice(t("auto.cache.onlyIgnored"));
+      return;
+    }
+    setCacheNotice(t("auto.cache.ready"));
   };
 
-  const handleFetchRatings = async () => {
+  const handleFetchRatings = async (): Promise<boolean> => {
     if (!ratingsHydrated) await hydrateRatingsCache();
     const currentRatings = useSteamRatingsStore.getState().ratings;
     const missing = steamRatingIdsNeedingFetch(games, currentRatings);
     if (missing.length > 0) {
-      startRatingsFetch(missing.map((id) => ({ appId: id, name: games[id]?.name ?? `#${id}` })));
+      startRatingsFetch(fetchItemsForIds(missing));
+      return true;
     }
+    return false;
+  };
+
+  const handleFetchHltb = () => {
+    setCacheNotice("");
+    if (fetchableHltbIds.length > 0) {
+      startHltbFetch(fetchItemsForIds(fetchableHltbIds));
+      return;
+    }
+    if (missingHltbIds.length > 0) {
+      setCacheNotice(t("auto.cache.hltbOnlyIgnored"));
+      return;
+    }
+    setCacheNotice(t("auto.cache.ready"));
+  };
+
+  const handlePrepareCache = async () => {
+    setCacheNotice("");
+    let started = false;
+
+    if (!detailsRunning && fetchableDetailIds.length > 0) {
+      startDetailsFetch(fetchableDetailIds);
+      started = true;
+    }
+    if (!ratingsRunning) {
+      started = (await handleFetchRatings()) || started;
+    }
+    if (!hltbRunning && fetchableHltbIds.length > 0) {
+      startHltbFetch(fetchItemsForIds(fetchableHltbIds));
+      started = true;
+    }
+
+    setCacheNotice(started ? t("auto.cache.prepareStarted") : t("auto.cache.ready"));
   };
 
   return (
@@ -1179,7 +1246,12 @@ function ChooseStep({
           running={detailsRunning}
           progress={detailsFetched}
           progressTotal={detailsTotal}
-          missing={missingCount}
+          missing={detailIdsNeedingRefresh.length}
+          fetchable={fetchableDetailIds.length}
+          notes={[
+            staleDetailCount > 0 ? t("auto.cache.detailsStale", { count: staleDetailCount }) : "",
+            ignoredDetailCount > 0 ? t("auto.cache.ignored", { count: ignoredDetailCount }) : "",
+          ].filter(Boolean)}
           onFetch={handleFetchDetails}
         />
         <CacheStatusCard
@@ -1190,6 +1262,7 @@ function ChooseStep({
           progress={ratingsFetched}
           progressTotal={ratingsTotal}
           missing={ratingsHydrated ? missingRatings.length : gameCount}
+          fetchable={ratingsHydrated ? missingRatings.length : gameCount}
           loading={ratingsHydrating || !ratingsHydrated}
           onFetch={handleFetchRatings}
         />
@@ -1200,9 +1273,36 @@ function ChooseStep({
           running={hltbRunning}
           progress={hltbFetched}
           progressTotal={hltbTotal}
-          missing={Math.max(0, gameCount - hltbCount)}
+          missing={missingHltbIds.length}
+          fetchable={fetchableHltbIds.length}
+          notes={[
+            hltbIgnoredCount > 0 ? t("auto.cache.hltbIgnored", { count: hltbIgnoredCount }) : "",
+          ].filter(Boolean)}
+          onFetch={handleFetchHltb}
         />
       </div>
+
+      <div className="mb-3 flex flex-col gap-2 rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-3 py-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-repressurizer-text">{t("auto.cache.prepare")}</p>
+          <p className="mt-0.5 text-xs text-repressurizer-text-faint">{t("auto.cache.prepare.desc")}</p>
+        </div>
+        <button
+          type="button"
+          onClick={handlePrepareCache}
+          className="btn-press inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-repressurizer-accent/15 px-3 py-2 text-sm font-medium text-repressurizer-accent transition-colors hover:bg-repressurizer-accent/25"
+        >
+          <Robot size={14} weight="duotone" />
+          {t("auto.cache.prepare")}
+        </button>
+      </div>
+
+      {cacheNotice && (
+        <div className="mb-3 flex items-center gap-2 rounded-xl border border-repressurizer-border-subtle bg-repressurizer-surface px-3 py-2 text-xs text-repressurizer-text-muted">
+          <Warning size={14} weight="duotone" className="shrink-0 text-repressurizer-text-faint" />
+          {cacheNotice}
+        </div>
+      )}
 
       {error && (
         <div className="mb-3 flex items-center gap-2 rounded-xl border border-repressurizer-danger/20 bg-repressurizer-danger/8 p-3 text-sm text-repressurizer-danger">
@@ -1339,6 +1439,8 @@ function CacheStatusCard({
   progress,
   progressTotal,
   missing,
+  fetchable,
+  notes,
   loading,
   onFetch,
 }: {
@@ -1349,11 +1451,14 @@ function CacheStatusCard({
   progress: number;
   progressTotal: number;
   missing: number;
+  fetchable?: number;
+  notes?: string[];
   loading?: boolean;
   onFetch?: () => void;
 }) {
   const t = useT();
   const isComplete = total > 0 && missing === 0;
+  const fetchableCount = fetchable ?? missing;
   return (
     <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-3 py-2">
       <div className="flex items-center justify-between gap-2">
@@ -1374,7 +1479,7 @@ function CacheStatusCard({
           <span className="shrink-0 rounded-md bg-repressurizer-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-repressurizer-accent">
             {t("auto.allCached")}
           </span>
-        ) : onFetch && missing > 0 ? (
+        ) : onFetch && fetchableCount > 0 ? (
           <button
             type="button"
             onClick={onFetch}
@@ -1387,6 +1492,15 @@ function CacheStatusCard({
       <p className="mt-1 font-mono text-sm font-medium tabular-nums text-repressurizer-text">
         {cached} / {total}
       </p>
+      {notes && notes.length > 0 && (
+        <div className="mt-1 space-y-0.5">
+          {notes.map((note) => (
+            <p key={note} className="truncate text-[10px] text-repressurizer-text-faint">
+              {note}
+            </p>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

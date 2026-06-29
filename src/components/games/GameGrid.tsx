@@ -6,6 +6,7 @@ import { useTagsStore } from "../../stores/tagsStore";
 import { useHltbStore } from "../../stores/hltbStore";
 import { useAchievementsStore } from "../../stores/achievementsStore";
 import { useReviewStore } from "../../stores/reviewStore";
+import { useSteamRatingsStore } from "../../stores/steamRatingsStore";
 import { useFamilyStore } from "../../stores/familyStore";
 import { MAX_FAIL_RUNS, useFailedGamesStore } from "../../stores/failedGamesStore";
 import { matchesSavedAdvancedFilter, useAdvancedFilterStore } from "../../stores/advancedFilterStore";
@@ -15,6 +16,7 @@ import { useT, type TranslationKey } from "../../lib/i18n";
 import { Spinner, MagnifyingGlass, FolderOpen, Clock, UsersThree } from "@phosphor-icons/react";
 import { extractReleaseYear, parseSearchQuery, matchesFilter, hasAdvancedFilters } from "../../lib/search";
 import { possibleDuplicateAppIds } from "../../lib/gameIdentity";
+import { scoreForRating } from "../../lib/steamRatings";
 
 const loadGameDetailPage = () => import("./GameDetailPage").then((m) => ({ default: m.GameDetailPage }));
 const loadContextMenu = () => import("./ContextMenu").then((m) => ({ default: m.ContextMenu }));
@@ -22,6 +24,20 @@ const GameDetailPage = lazy(loadGameDetailPage);
 const ContextMenu = lazy(loadContextMenu);
 const preloadGameDetailPage = () => { void loadGameDetailPage(); };
 const preloadContextMenu = () => { void loadContextMenu(); };
+
+function releaseDateSortValue(date: string | null | undefined): number {
+  if (!date) return -1;
+  const parsed = Date.parse(date);
+  if (Number.isFinite(parsed)) return parsed;
+  const year = extractReleaseYear(date);
+  return year == null ? -1 : Date.UTC(year, 0, 1);
+}
+
+function priceSortValue(detail: ReturnType<typeof useGameStore.getState>["details"][number] | undefined): number {
+  if (!detail) return -1;
+  if (detail.is_free) return 0;
+  return detail.price_final ?? detail.price_initial ?? -1;
+}
 
 interface ContextMenuState {
   x: number;
@@ -46,6 +62,7 @@ export function GameGrid() {
   const achievementSummaries = useAchievementsStore((s) => s.summaries);
   const details = useGameStore((s) => s.details);
   const reviews = useReviewStore((s) => s.reviews);
+  const steamRatings = useSteamRatingsStore((s) => s.ratings);
   const familyApps = useFamilyStore((s) => s.apps);
   const failedGames = useFailedGamesStore((s) => s.fails);
   const savedAdvancedFilters = useAdvancedFilterStore((s) => s.filters);
@@ -284,6 +301,27 @@ export function GameGrid() {
           cmp = pa - pb;
           break;
         }
+        case "steamReviews": {
+          const sa = steamRatings[a.appid] ? scoreForRating(steamRatings[a.appid], true) ?? -1 : -1;
+          const sb = steamRatings[b.appid] ? scoreForRating(steamRatings[b.appid], true) ?? -1 : -1;
+          cmp = sa - sb;
+          break;
+        }
+        case "reviewCount": {
+          const ca = steamRatings[a.appid]?.total_reviews ?? -1;
+          const cb = steamRatings[b.appid]?.total_reviews ?? -1;
+          cmp = ca - cb;
+          break;
+        }
+        case "releaseDate":
+          cmp = releaseDateSortValue(details[a.appid]?.release_date) - releaseDateSortValue(details[b.appid]?.release_date);
+          break;
+        case "price":
+          cmp = priceSortValue(details[a.appid]) - priceSortValue(details[b.appid]);
+          break;
+        case "userRating":
+          cmp = (reviews[a.appid]?.rating ?? -1) - (reviews[b.appid]?.rating ?? -1);
+          break;
         case "status": {
           const oa = STATUS_ORDER[statuses[a.appid] ?? "none"] ?? 4;
           const ob = STATUS_ORDER[statuses[b.appid] ?? "none"] ?? 4;
@@ -295,7 +333,7 @@ export function GameGrid() {
     });
 
     return gameList;
-  }, [games, activeCategory, collections, familyApps, searchQuery, sortBy, sortAsc, filters, activeAdvancedFilter, statuses, allGameTags, hltbData, achievementSummaries, details, reviews, duplicateAppIds, delistedAppIds]);
+  }, [games, activeCategory, collections, familyApps, searchQuery, sortBy, sortAsc, filters, activeAdvancedFilter, statuses, allGameTags, hltbData, achievementSummaries, details, reviews, steamRatings, duplicateAppIds, delistedAppIds]);
 
   const orderedIds = useMemo(() => filteredGames.map((g) => g.appid), [filteredGames]);
 

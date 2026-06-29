@@ -40,6 +40,8 @@ import {
   Tag,
   TextAa,
   Warning,
+  ChartLineUp,
+  CurrencyDollar,
 } from "@phosphor-icons/react";
 
 const loadSettingsPage = () => import("../settings/SettingsPage").then((m) => ({ default: m.SettingsPage }));
@@ -76,8 +78,13 @@ const SORT_OPTIONS: { value: SortBy; labelKey: TranslationKey; icon: React.React
   { value: "lastPlayed",   labelKey: "sort.lastPlayed",    icon: <CalendarBlank size={12} /> },
   { value: "appid",        labelKey: "sort.newest",        icon: <Sparkle size={12} />, hintKey: "sort.hint.appid" },
   { value: "metacritic",   labelKey: "sort.metacritic",    icon: <Star size={12} />, hintKey: "sort.hint.metacritic" },
+  { value: "steamReviews", labelKey: "sort.steamReviews",  icon: <ChartLineUp size={12} />, hintKey: "sort.hint.steamReviews" },
+  { value: "reviewCount",  labelKey: "sort.reviewCount",   icon: <ChartBar size={12} />, hintKey: "sort.hint.reviewCount" },
   { value: "hltb",         labelKey: "sort.hltb",          icon: <Hourglass size={12} />, hintKey: "sort.hint.hltb" },
   { value: "achievements", labelKey: "sort.achievements",  icon: <Trophy size={12} />, hintKey: "sort.hint.achievements" },
+  { value: "releaseDate",  labelKey: "sort.releaseDate",   icon: <CalendarBlank size={12} />, hintKey: "sort.hint.releaseDate" },
+  { value: "price",        labelKey: "sort.price",         icon: <CurrencyDollar size={12} />, hintKey: "sort.hint.price" },
+  { value: "userRating",   labelKey: "sort.userRating",    icon: <GameController size={12} />, hintKey: "sort.hint.userRating" },
   { value: "status",       labelKey: "sort.status",        icon: <Tag size={12} /> },
 ];
 

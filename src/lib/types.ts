@@ -115,6 +115,8 @@ export interface OwnedGame {
 export interface GameDetails {
   app_id: number;
   name: string;
+  cache_schema?: number;
+  fetched_at?: number;
   genres: string[];
   categories: string[];
   release_date: string | null;

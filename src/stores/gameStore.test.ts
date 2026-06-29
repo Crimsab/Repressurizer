@@ -2,6 +2,27 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const VIEW_MODE_STORAGE_KEY = "repressurizer-library-view-mode";
 
+function makeDetails(appId = 10) {
+  return {
+    app_id: appId,
+    name: `Game ${appId}`,
+    genres: ["Action"],
+    categories: ["Single-player"],
+    release_date: "Jan 1, 2020",
+    metacritic_score: 80,
+    developers: ["Studio"],
+    publishers: ["Publisher"],
+    supported_languages: ["English"],
+    platforms: { windows: true, mac: false, linux: false },
+    header_image: null,
+    capsule_image: null,
+    price_initial: 1999,
+    price_final: 999,
+    price_currency: "EUR",
+    is_free: false,
+  };
+}
+
 function createStorage(initial: Record<string, string> = {}) {
   const data: Record<string, string> = { ...initial };
   return {
@@ -85,5 +106,42 @@ describe("gameStore game merging", () => {
     ]);
 
     expect(useGameStore.getState().games[1467450]?.name).toBe("The Chronicles Of Myrtana: Archolos");
+  });
+});
+
+describe("gameStore details cache metadata", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.resetModules();
+  });
+
+  it("marks newly stored details as current cache schema", async () => {
+    vi.stubGlobal("localStorage", createStorage());
+    vi.resetModules();
+
+    const {
+      DETAILS_CACHE_SCHEMA_VERSION,
+      isDetailsCacheCurrent,
+      useGameStore,
+    } = await import("./gameStore");
+
+    useGameStore.getState().setDetails(10, makeDetails(10));
+
+    const detail = useGameStore.getState().details[10];
+    expect(detail?.cache_schema).toBe(DETAILS_CACHE_SCHEMA_VERSION);
+    expect(detail?.fetched_at).toEqual(expect.any(Number));
+    expect(isDetailsCacheCurrent(detail)).toBe(true);
+  });
+
+  it("treats legacy details without cache schema as needing refresh", async () => {
+    vi.stubGlobal("localStorage", createStorage());
+    vi.resetModules();
+
+    const { detailsCacheNeedsRefresh, isDetailsCacheCurrent } = await import("./gameStore");
+    const legacyDetail = makeDetails(11);
+
+    expect(isDetailsCacheCurrent(legacyDetail)).toBe(false);
+    expect(detailsCacheNeedsRefresh(legacyDetail)).toBe(true);
+    expect(detailsCacheNeedsRefresh(undefined)).toBe(true);
   });
 });
