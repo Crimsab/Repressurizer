@@ -617,6 +617,8 @@
   "auto.maxOpenPlaceholder": "max. (0=ouvert)",
   "auto.newBucket": "Nouvelle tranche",
   "auto.resetDefaults": "Réinitialiser",
+  "auto.addMissingDefaults": "Ajouter les valeurs manquantes",
+  "auto.replaceWithDefaults": "Remplacer par les valeurs",
   "auto.duplicate": "Dupliquer",
   "auto.newRatingRule": "Nouvelle tranche d’avis",
   "auto.copyName": "Copie de {name}",

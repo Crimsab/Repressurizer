@@ -617,6 +617,8 @@
   "auto.maxOpenPlaceholder": "max. (0=offen)",
   "auto.newBucket": "Neuer Bereich",
   "auto.resetDefaults": "Standard zurücksetzen",
+  "auto.addMissingDefaults": "Fehlende Standards hinzufügen",
+  "auto.replaceWithDefaults": "Durch Standards ersetzen",
   "auto.duplicate": "Duplizieren",
   "auto.newRatingRule": "Neuer Review-Bereich",
   "auto.copyName": "{name} Kopie",

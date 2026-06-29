@@ -617,6 +617,8 @@
   "auto.maxOpenPlaceholder": "max (0=open)",
   "auto.newBucket": "New bucket",
   "auto.resetDefaults": "Reset defaults",
+  "auto.addMissingDefaults": "Add missing defaults",
+  "auto.replaceWithDefaults": "Replace with defaults",
   "auto.duplicate": "Duplicate",
   "auto.newRatingRule": "New rating bucket",
   "auto.copyName": "{name} copy",

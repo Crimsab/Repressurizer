@@ -617,6 +617,8 @@
   "auto.maxOpenPlaceholder": "máx. (0=abierto)",
   "auto.newBucket": "Nuevo tramo",
   "auto.resetDefaults": "Restablecer valores",
+  "auto.addMissingDefaults": "Añadir valores faltantes",
+  "auto.replaceWithDefaults": "Sustituir por valores",
   "auto.duplicate": "Duplicar",
   "auto.newRatingRule": "Nuevo tramo de reseñas",
   "auto.copyName": "Copia de {name}",

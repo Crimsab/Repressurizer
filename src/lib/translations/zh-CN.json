@@ -617,6 +617,8 @@
   "auto.maxOpenPlaceholder": "最大（0=开放）",
   "auto.newBucket": "新分段",
   "auto.resetDefaults": "恢复默认",
+  "auto.addMissingDefaults": "添加缺失默认值",
+  "auto.replaceWithDefaults": "替换为默认值",
   "auto.duplicate": "复制",
   "auto.newRatingRule": "新评测分段",
   "auto.copyName": "{name} 副本",

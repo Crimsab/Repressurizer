@@ -617,6 +617,8 @@
   "auto.maxOpenPlaceholder": "maks. (0=otwarty)",
   "auto.newBucket": "Nowy przedział",
   "auto.resetDefaults": "Przywróć domyślne",
+  "auto.addMissingDefaults": "Dodaj brakujące domyślne",
+  "auto.replaceWithDefaults": "Zastąp domyślnymi",
   "auto.duplicate": "Duplikuj",
   "auto.newRatingRule": "Nowy przedział recenzji",
   "auto.copyName": "Kopia {name}",

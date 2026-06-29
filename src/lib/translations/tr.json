@@ -617,6 +617,8 @@
   "auto.maxOpenPlaceholder": "maks (0=açık)",
   "auto.newBucket": "Yeni grup",
   "auto.resetDefaults": "Varsayılana dön",
+  "auto.addMissingDefaults": "Eksik varsayılanları ekle",
+  "auto.replaceWithDefaults": "Varsayılanlarla değiştir",
   "auto.duplicate": "Çoğalt",
   "auto.newRatingRule": "Yeni inceleme grubu",
   "auto.copyName": "{name} kopyası",

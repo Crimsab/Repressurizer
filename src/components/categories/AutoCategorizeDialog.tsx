@@ -1735,6 +1735,15 @@ function SteamRatingConfigForm({
     updateRules(defaultSteamRatingRules());
     setSelected(0);
   };
+  const addMissingDefaultRules = () => {
+    const existing = new Set(rules.map((rule) => rule.name.trim().toLocaleLowerCase()).filter(Boolean));
+    const missing = defaultSteamRatingRules().filter(
+      (rule) => !existing.has(rule.name.trim().toLocaleLowerCase())
+    );
+    if (missing.length === 0) return;
+    updateRules([...rules, ...missing]);
+    setSelected(rules.length);
+  };
 
   return (
     <div className="space-y-4">
@@ -1742,13 +1751,32 @@ function SteamRatingConfigForm({
       <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg p-4 text-sm text-repressurizer-text-muted">
         <div className="mb-3 flex items-center justify-between gap-3">
           <p className="font-medium text-repressurizer-text">{t("auto.steamRatingBuckets")}</p>
-          <button
-            type="button"
-            onClick={resetRules}
-            className="btn-press rounded-lg border border-repressurizer-border-subtle px-2 py-1 text-[11px] text-repressurizer-text-faint transition-colors hover:border-repressurizer-border hover:text-repressurizer-text"
-          >
-            {t("auto.resetDefaults")}
-          </button>
+          <div className="flex shrink-0 gap-1">
+            <button
+              type="button"
+              onClick={addMissingDefaultRules}
+              className="btn-press rounded-lg border border-repressurizer-border-subtle px-2 py-1 text-[11px] text-repressurizer-text-faint transition-colors hover:border-repressurizer-border hover:text-repressurizer-text"
+            >
+              {t("auto.addMissingDefaults")}
+            </button>
+            <button
+              type="button"
+              onClick={resetRules}
+              className="btn-press rounded-lg border border-repressurizer-danger/30 px-2 py-1 text-[11px] text-repressurizer-danger/70 transition-colors hover:border-repressurizer-danger hover:text-repressurizer-danger"
+            >
+              {t("auto.replaceWithDefaults")}
+            </button>
+          </div>
+        </div>
+        <div className="mb-3 rounded-xl border border-repressurizer-border-subtle bg-repressurizer-surface px-3 py-2">
+          <CheckboxRow
+            label={t("auto.useWilsonScore")}
+            checked={config.use_wilson_score ?? false}
+            onChange={(checked) => onChange({ ...config, use_wilson_score: checked })}
+          />
+          <p className="mt-2 text-xs leading-relaxed text-repressurizer-text-faint">
+            {t("auto.useWilsonScore.explain")}
+          </p>
         </div>
         <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(220px,0.9fr)]">
           <div className="min-h-0 space-y-1">
@@ -1826,15 +1854,6 @@ function SteamRatingConfigForm({
           <p className="mt-2 text-xs text-amber-400">{t("auto.duplicateRuleNames")}</p>
         )}
       </div>
-      <CheckboxRow
-        label={t("auto.useWilsonScore")}
-        checked={config.use_wilson_score ?? false}
-        onChange={(checked) => onChange({ ...config, use_wilson_score: checked })}
-      />
-      <p className="text-xs leading-relaxed text-repressurizer-text-faint">{t("auto.useWilsonScore.desc")}</p>
-      <p className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-3 py-2 text-xs leading-relaxed text-repressurizer-text-muted">
-        {t("auto.useWilsonScore.explain")}
-      </p>
     </div>
   );
 }

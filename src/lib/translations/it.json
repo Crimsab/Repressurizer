@@ -617,6 +617,8 @@
   "auto.maxOpenPlaceholder": "max (0=aperto)",
   "auto.newBucket": "Nuova fascia",
   "auto.resetDefaults": "Ripristina default",
+  "auto.addMissingDefaults": "Aggiungi default mancanti",
+  "auto.replaceWithDefaults": "Sostituisci con default",
   "auto.duplicate": "Duplica",
   "auto.newRatingRule": "Nuova fascia recensioni",
   "auto.copyName": "Copia {name}",
