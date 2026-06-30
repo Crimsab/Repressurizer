@@ -1,11 +1,45 @@
-import type { OwnedGame, SteamCollection } from "./types";
 import { computeStats } from "./stats";
 import { generateLibrarySnapshotJson } from "./automationExport";
-import type { AchievementSummary, GameDetails } from "./types";
+import { getHltbHours, hltbModeLabel } from "./hltb";
+import type { AchievementSummary, GameDetails, HltbTimeMode, OwnedGame, SteamCollection } from "./types";
 import type { FamilyLibraryApp, HltbData, WishlistItem } from "./tauri";
+import type { GameStatus } from "../stores/statusStore";
 
 export type ExportScope = "all" | "category" | "categories" | "categories_pick" | "stats" | "snapshot";
 export type ExportFormat = "json" | "csv" | "txt" | "md";
+export type ExportPresenceFilter = "all" | "with" | "without";
+export type ExportCollectionOnlyFilter = "include" | "exclude" | "only";
+export type ExportPlayedFilter = "all" | "played" | "unplayed";
+
+export type ExportFieldKey =
+  | "appid"
+  | "name"
+  | "playtime"
+  | "lastPlayed"
+  | "status"
+  | "hltb"
+  | "categories"
+  | "genres"
+  | "features"
+  | "releaseDate"
+  | "metacritic"
+  | "developers"
+  | "publishers"
+  | "platforms"
+  | "price"
+  | "collectionOnly";
+
+export interface ExportFilters {
+  minSteamHours?: number | null;
+  maxSteamHours?: number | null;
+  minHltbHours?: number | null;
+  maxHltbHours?: number | null;
+  statuses?: readonly GameStatus[];
+  hltbPresence?: ExportPresenceFilter;
+  detailsPresence?: ExportPresenceFilter;
+  collectionOnly?: ExportCollectionOnlyFilter;
+  played?: ExportPlayedFilter;
+}
 
 export interface ExportOptions {
   scope: ExportScope;
@@ -15,7 +49,9 @@ export interface ExportOptions {
   collections: SteamCollection[];
   activeCategory?: string;
   /** For scope `categories_pick`: collection keys to include (structured + flat union). */
-  categoryKeys?: string[];
+  categoryKeys?: readonly string[];
+  /** User status map, used for status fields and status filters. */
+  statuses?: Record<number, GameStatus>;
   details?: Record<number, GameDetails>;
   hltbData?: Record<number, HltbData>;
   achievements?: Record<number, AchievementSummary>;
@@ -28,12 +64,218 @@ export interface ExportOptions {
   appVersion?: string;
   steamId64?: string;
   steamPersonaName?: string;
+  hltbTimeMode?: HltbTimeMode;
+  fields?: readonly ExportFieldKey[];
+  filters?: ExportFilters;
+  excludedCategoryKeys?: readonly string[];
+  skipEmptyCategories?: boolean;
   /**
    * For `categories_pick` only: `structured` = one section per category (default).
-   * `flat_unique` = single deduplicated list; CSV adds a Categories column.
+   * `flat_unique` = single deduplicated list; CSV adds a Categories column when enabled.
    */
   pickLayout?: "structured" | "flat_unique";
 }
+
+export interface ExportPreview {
+  gameCount: number;
+  categoryCount: number;
+  skippedGameCount: number;
+  skippedCategoryCount: number;
+  fieldCount: number;
+}
+
+interface ExportGameRecord {
+  appid: number;
+  name: string;
+  playtime_hours: number;
+  playtime_minutes: number;
+  last_played: string | null;
+  last_played_timestamp: number | null;
+  status: GameStatus;
+  hltb_hours: number | null;
+  hltb_mode: HltbTimeMode;
+  hltb: {
+    hours: number | null;
+    mode: HltbTimeMode;
+    mode_label: string;
+    main_story: number | null;
+    main_extra: number | null;
+    completionist: number | null;
+    game_id?: number | null;
+    game_name?: string | null;
+    confidence?: number | null;
+  } | null;
+  categories: string[];
+  genres: string[];
+  features: string[];
+  release_date: string | null;
+  metacritic_score: number | null;
+  developers: string[];
+  publishers: string[];
+  platforms: string[];
+  price: {
+    display: string | null;
+    initial: number | null;
+    final: number | null;
+    currency: string | null;
+    country_code?: string | null;
+    is_free: boolean;
+  } | null;
+  collection_only: boolean;
+  has_details: boolean;
+}
+
+interface ExportCategoryRecord {
+  name: string;
+  key: string;
+  is_dynamic: boolean;
+  game_count: number;
+  source_game_count: number;
+  skipped_game_count: number;
+  missing_appids: number[];
+  games: ExportGameRecord[];
+}
+
+interface ExportDataset {
+  games: ExportGameRecord[];
+  categories: ExportCategoryRecord[];
+  fieldDefinitions: ExportFieldDefinition[];
+  skippedGameCount: number;
+  skippedCategoryCount: number;
+}
+
+interface ExportFieldDefinition {
+  key: ExportFieldKey;
+  label: string;
+  jsonKey: string;
+  jsonValue: (record: ExportGameRecord) => unknown;
+  cellValue: (record: ExportGameRecord) => string;
+}
+
+export const DEFAULT_EXPORT_FIELDS: ExportFieldKey[] = [
+  "appid",
+  "name",
+  "playtime",
+  "lastPlayed",
+  "status",
+  "hltb",
+  "categories",
+];
+
+const FIELD_DEFINITIONS: ExportFieldDefinition[] = [
+  {
+    key: "appid",
+    label: "App ID",
+    jsonKey: "appid",
+    jsonValue: (r) => r.appid,
+    cellValue: (r) => String(r.appid),
+  },
+  {
+    key: "name",
+    label: "Name",
+    jsonKey: "name",
+    jsonValue: (r) => r.name,
+    cellValue: (r) => r.name,
+  },
+  {
+    key: "playtime",
+    label: "Steam Hours",
+    jsonKey: "playtime",
+    jsonValue: (r) => ({ hours: r.playtime_hours, minutes: r.playtime_minutes }),
+    cellValue: (r) => r.playtime_hours.toFixed(1),
+  },
+  {
+    key: "lastPlayed",
+    label: "Last Played",
+    jsonKey: "last_played",
+    jsonValue: (r) => r.last_played,
+    cellValue: (r) => r.last_played ?? "Never",
+  },
+  {
+    key: "status",
+    label: "Status",
+    jsonKey: "status",
+    jsonValue: (r) => r.status,
+    cellValue: (r) => (r.status === "none" ? "" : r.status),
+  },
+  {
+    key: "hltb",
+    label: "HLTB Hours",
+    jsonKey: "hltb",
+    jsonValue: (r) => r.hltb,
+    cellValue: (r) => (r.hltb_hours == null ? "" : r.hltb_hours.toFixed(1)),
+  },
+  {
+    key: "categories",
+    label: "Categories",
+    jsonKey: "categories",
+    jsonValue: (r) => r.categories,
+    cellValue: (r) => r.categories.join("; "),
+  },
+  {
+    key: "genres",
+    label: "Genres",
+    jsonKey: "genres",
+    jsonValue: (r) => r.genres,
+    cellValue: (r) => r.genres.join("; "),
+  },
+  {
+    key: "features",
+    label: "Steam Features",
+    jsonKey: "steam_features",
+    jsonValue: (r) => r.features,
+    cellValue: (r) => r.features.join("; "),
+  },
+  {
+    key: "releaseDate",
+    label: "Release Date",
+    jsonKey: "release_date",
+    jsonValue: (r) => r.release_date,
+    cellValue: (r) => r.release_date ?? "",
+  },
+  {
+    key: "metacritic",
+    label: "Metacritic",
+    jsonKey: "metacritic_score",
+    jsonValue: (r) => r.metacritic_score,
+    cellValue: (r) => (r.metacritic_score == null ? "" : String(r.metacritic_score)),
+  },
+  {
+    key: "developers",
+    label: "Developers",
+    jsonKey: "developers",
+    jsonValue: (r) => r.developers,
+    cellValue: (r) => r.developers.join("; "),
+  },
+  {
+    key: "publishers",
+    label: "Publishers",
+    jsonKey: "publishers",
+    jsonValue: (r) => r.publishers,
+    cellValue: (r) => r.publishers.join("; "),
+  },
+  {
+    key: "platforms",
+    label: "Platforms",
+    jsonKey: "platforms",
+    jsonValue: (r) => r.platforms,
+    cellValue: (r) => r.platforms.join("; "),
+  },
+  {
+    key: "price",
+    label: "Price",
+    jsonKey: "price",
+    jsonValue: (r) => r.price,
+    cellValue: (r) => r.price?.display ?? "",
+  },
+  {
+    key: "collectionOnly",
+    label: "Local Only",
+    jsonKey: "collection_only",
+    jsonValue: (r) => r.collection_only,
+    cellValue: (r) => (r.collection_only ? "yes" : "no"),
+  },
+];
 
 function isCategoriesStructured(opts: ExportOptions): boolean {
   if (opts.scope === "categories") return true;
@@ -41,64 +283,290 @@ function isCategoriesStructured(opts: ExportOptions): boolean {
   return false;
 }
 
-function categoryNamesForApp(appid: number, cols: SteamCollection[]): string {
-  return cols.filter((c) => c.added.includes(appid)).map((c) => c.name).join("; ");
+function selectedFields(opts: ExportOptions): ExportFieldDefinition[] {
+  if (opts.titlesOnly && opts.scope !== "stats" && opts.scope !== "snapshot") {
+    return FIELD_DEFINITIONS.filter((field) => field.key === "name");
+  }
+  const keys = new Set(opts.fields?.length ? opts.fields : DEFAULT_EXPORT_FIELDS);
+  keys.add("name");
+  return FIELD_DEFINITIONS.filter((field) => keys.has(field.key));
+}
+
+function normalizeFilters(filters: ExportFilters | undefined): Required<ExportFilters> {
+  return {
+    minSteamHours: filters?.minSteamHours ?? null,
+    maxSteamHours: filters?.maxSteamHours ?? null,
+    minHltbHours: filters?.minHltbHours ?? null,
+    maxHltbHours: filters?.maxHltbHours ?? null,
+    statuses: filters?.statuses ?? [],
+    hltbPresence: filters?.hltbPresence ?? "all",
+    detailsPresence: filters?.detailsPresence ?? "all",
+    collectionOnly: filters?.collectionOnly ?? "include",
+    played: filters?.played ?? "all",
+  };
+}
+
+function pad2(value: number): string {
+  return String(value).padStart(2, "0");
+}
+
+function filenameTimestamp(now: Date | number = Date.now()): string {
+  const d = now instanceof Date ? now : new Date(now);
+  return `${d.getFullYear()}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}-${pad2(d.getHours())}${pad2(d.getMinutes())}${pad2(d.getSeconds())}`;
+}
+
+function formatHours(minutes: number): number {
+  return Number((minutes / 60).toFixed(1));
+}
+
+function formatIsoDate(timestampSeconds: number | null | undefined): string | null {
+  if (!timestampSeconds) return null;
+  return new Date(timestampSeconds * 1000).toISOString().slice(0, 10);
+}
+
+function asList(values: string[] | null | undefined): string[] {
+  return Array.isArray(values) ? values.filter(Boolean) : [];
+}
+
+function platformList(details: GameDetails | undefined): string[] {
+  if (!details?.platforms) return [];
+  const platforms: string[] = [];
+  if (details.platforms.windows) platforms.push("Windows");
+  if (details.platforms.mac) platforms.push("macOS");
+  if (details.platforms.linux) platforms.push("Linux");
+  return platforms;
+}
+
+function priceDisplay(details: GameDetails | undefined): ExportGameRecord["price"] {
+  if (!details) return null;
+  if (details.is_free) {
+    return {
+      display: "Free",
+      initial: details.price_initial,
+      final: details.price_final,
+      currency: details.price_currency,
+      country_code: details.price_country_code,
+      is_free: true,
+    };
+  }
+  const display =
+    details.price_final != null && details.price_currency
+      ? `${(details.price_final / 100).toFixed(2)} ${details.price_currency}`
+      : null;
+  return {
+    display,
+    initial: details.price_initial,
+    final: details.price_final,
+    currency: details.price_currency,
+    country_code: details.price_country_code,
+    is_free: false,
+  };
+}
+
+function categoryNamesForApp(appid: number, cols: SteamCollection[]): string[] {
+  return cols.filter((c) => c.added.includes(appid)).map((c) => c.name);
+}
+
+function exportableCollections(opts: ExportOptions): SteamCollection[] {
+  const excluded = new Set(opts.excludedCategoryKeys ?? []);
+  return opts.collections.filter((c) => !c.is_deleted && !excluded.has(c.key));
 }
 
 function pickCollections(opts: ExportOptions): SteamCollection[] {
+  const collections = exportableCollections(opts);
   if (opts.scope === "categories_pick" && opts.categoryKeys?.length) {
     const keys = new Set(opts.categoryKeys);
-    return opts.collections.filter((c) => keys.has(c.key));
+    return collections.filter((c) => keys.has(c.key));
   }
   if (opts.scope === "categories") {
-    return opts.collections.filter((c) => c.id !== "hidden");
+    return collections.filter((c) => c.id !== "hidden");
+  }
+  if (opts.scope === "category" && opts.activeCategory) {
+    return collections.filter((c) => c.key === opts.activeCategory);
   }
   return [];
 }
 
-function getGamesForScope(opts: ExportOptions): OwnedGame[] {
+function gamesFromIds(ids: number[], games: Record<number, OwnedGame>): OwnedGame[] {
+  const result: OwnedGame[] = [];
+  const seen = new Set<number>();
+  for (const id of ids) {
+    if (seen.has(id)) continue;
+    const game = games[id];
+    if (!game) continue;
+    seen.add(id);
+    result.push(game);
+  }
+  return result;
+}
+
+function getGamesForScope(opts: ExportOptions, pickedCollections = pickCollections(opts)): OwnedGame[] {
   const all = Object.values(opts.games);
   if (opts.scope === "all") return all;
   if (opts.scope === "category" && opts.activeCategory) {
-    const col = opts.collections.find((c) => c.key === opts.activeCategory);
-    if (!col) return [];
-    const ids = new Set(col.added);
-    return all.filter((g) => ids.has(g.appid));
+    const col = pickedCollections.find((c) => c.key === opts.activeCategory);
+    return col ? gamesFromIds(col.added, opts.games) : [];
   }
   if (opts.scope === "categories_pick" && opts.categoryKeys?.length) {
-    const keys = new Set(opts.categoryKeys);
-    const idSet = new Set<number>();
-    for (const c of opts.collections) {
-      if (!keys.has(c.key)) continue;
-      for (const id of c.added) idSet.add(id);
-    }
-    return all.filter((g) => idSet.has(g.appid));
+    return gamesFromIds(pickedCollections.flatMap((c) => c.added), opts.games);
+  }
+  if (opts.scope === "categories") {
+    return gamesFromIds(pickedCollections.flatMap((c) => c.added), opts.games);
   }
   return all;
 }
 
-function formatHours(minutes: number): string {
-  return (minutes / 60).toFixed(1);
+function buildRecord(
+  game: OwnedGame,
+  opts: ExportOptions,
+  categoryCollections: SteamCollection[]
+): ExportGameRecord {
+  const hltbMode = opts.hltbTimeMode ?? "main_story";
+  const hltb = opts.hltbData?.[game.appid];
+  const details = opts.details?.[game.appid];
+  const hltbHours = getHltbHours(hltb, hltbMode);
+  const status = opts.statuses?.[game.appid] ?? "none";
+
+  return {
+    appid: game.appid,
+    name: String(game.name ?? ""),
+    playtime_hours: formatHours(game.playtime_forever),
+    playtime_minutes: game.playtime_forever,
+    last_played: formatIsoDate(game.rtime_last_played),
+    last_played_timestamp: game.rtime_last_played || null,
+    status,
+    hltb_hours: hltbHours,
+    hltb_mode: hltbMode,
+    hltb: hltb
+      ? {
+          hours: hltbHours,
+          mode: hltbMode,
+          mode_label: hltbModeLabel(hltbMode),
+          main_story: hltb.main_story ?? null,
+          main_extra: hltb.main_extra ?? null,
+          completionist: hltb.completionist ?? null,
+          game_id: hltb.game_id,
+          game_name: hltb.game_name,
+          confidence: hltb.confidence,
+        }
+      : null,
+    categories: categoryNamesForApp(game.appid, categoryCollections),
+    genres: asList(details?.genres),
+    features: asList(details?.categories),
+    release_date: details?.release_date ?? null,
+    metacritic_score: details?.metacritic_score ?? null,
+    developers: asList(details?.developers),
+    publishers: asList(details?.publishers),
+    platforms: platformList(details),
+    price: priceDisplay(details),
+    collection_only: Boolean(game.is_collection_only),
+    has_details: Boolean(details),
+  };
 }
 
-function gameRow(g: OwnedGame) {
+function matchesExportFilters(record: ExportGameRecord, filters: Required<ExportFilters>): boolean {
+  if (filters.minSteamHours != null && record.playtime_hours < filters.minSteamHours) return false;
+  if (filters.maxSteamHours != null && record.playtime_hours > filters.maxSteamHours) return false;
+  if (filters.minHltbHours != null && (record.hltb_hours == null || record.hltb_hours < filters.minHltbHours)) {
+    return false;
+  }
+  if (filters.maxHltbHours != null && (record.hltb_hours == null || record.hltb_hours > filters.maxHltbHours)) {
+    return false;
+  }
+  if (filters.statuses.length > 0 && !filters.statuses.includes(record.status)) return false;
+  if (filters.hltbPresence === "with" && record.hltb_hours == null) return false;
+  if (filters.hltbPresence === "without" && record.hltb_hours != null) return false;
+  if (filters.detailsPresence === "with" && !record.has_details) return false;
+  if (filters.detailsPresence === "without" && record.has_details) return false;
+  if (filters.collectionOnly === "exclude" && record.collection_only) return false;
+  if (filters.collectionOnly === "only" && !record.collection_only) return false;
+  if (filters.played === "played" && record.playtime_minutes <= 0) return false;
+  if (filters.played === "unplayed" && record.playtime_minutes > 0) return false;
+  return true;
+}
+
+function buildExportDataset(opts: ExportOptions): ExportDataset {
+  const fields = selectedFields(opts);
+  const filters = normalizeFilters(opts.filters);
+  const pickedCollections = pickCollections(opts);
+  const categoryCollections =
+    opts.scope === "categories" || opts.scope === "categories_pick" || opts.scope === "category"
+      ? pickedCollections
+      : exportableCollections(opts).filter((c) => c.id !== "hidden");
+
+  if (isCategoriesStructured(opts)) {
+    const categories: ExportCategoryRecord[] = [];
+    const includedByAppId = new Map<number, ExportGameRecord>();
+    const sourceAppIds = new Set<number>();
+    let skippedCategoryCount = 0;
+
+    for (const collection of pickedCollections) {
+      const sourceGames = gamesFromIds(collection.added, opts.games);
+      for (const game of sourceGames) sourceAppIds.add(game.appid);
+      const missingAppIds = collection.added.filter((id) => !opts.games[id]);
+      const rows = sourceGames
+        .map((game) => buildRecord(game, opts, categoryCollections))
+        .filter((record) => matchesExportFilters(record, filters));
+
+      if (opts.skipEmptyCategories && rows.length === 0) {
+        skippedCategoryCount += 1;
+        continue;
+      }
+
+      for (const row of rows) includedByAppId.set(row.appid, row);
+      categories.push({
+        name: collection.name,
+        key: collection.key,
+        is_dynamic: collection.is_dynamic,
+        game_count: rows.length,
+        source_game_count: collection.added.length,
+        skipped_game_count: Math.max(0, collection.added.length - rows.length),
+        missing_appids: missingAppIds,
+        games: rows,
+      });
+    }
+
+    return {
+      games: [...includedByAppId.values()],
+      categories,
+      fieldDefinitions: fields,
+      skippedGameCount: Math.max(0, sourceAppIds.size - includedByAppId.size),
+      skippedCategoryCount,
+    };
+  }
+
+  const sourceGames = getGamesForScope(opts, pickedCollections);
+  const games = sourceGames
+    .map((game) => buildRecord(game, opts, categoryCollections))
+    .filter((record) => matchesExportFilters(record, filters));
+
   return {
-    appid: g.appid,
-    name: String(g.name ?? ""),
-    playtime_hours: formatHours(g.playtime_forever),
-    last_played: g.rtime_last_played ? new Date(g.rtime_last_played * 1000).toISOString().slice(0, 10) : "Never",
+    games,
+    categories: [],
+    fieldDefinitions: fields,
+    skippedGameCount: Math.max(0, sourceGames.length - games.length),
+    skippedCategoryCount: 0,
   };
+}
+
+function projectRecord(record: ExportGameRecord, fields: ExportFieldDefinition[]): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const field of fields) out[field.jsonKey] = field.jsonValue(record);
+  return out;
+}
+
+function sortByName(a: ExportGameRecord, b: ExportGameRecord): number {
+  return a.name.localeCompare(b.name);
 }
 
 // --- Titles only ---
 function toTitlesOnly(opts: ExportOptions): string {
-  const games = getGamesForScope(opts).sort((a, b) =>
-    String(a.name ?? "").localeCompare(String(b.name ?? ""))
-  );
-  if (opts.format === "json") return JSON.stringify(games.map((g) => String(g.name ?? "")), null, 2);
-  if (opts.format === "csv") return ["Name", ...games.map((g) => escapeCSV(String(g.name ?? "")))].join("\n");
-  if (opts.format === "md") return games.map((g) => `- ${String(g.name ?? "")}`).join("\n");
-  return games.map((g) => String(g.name ?? "")).join("\n");
+  const dataset = buildExportDataset(opts);
+  const games = [...dataset.games].sort(sortByName);
+  if (opts.format === "json") return JSON.stringify(games.map((g) => g.name), null, 2);
+  if (opts.format === "csv") return ["Name", ...games.map((g) => escapeCSV(g.name))].join("\n");
+  if (opts.format === "md") return games.map((g) => `- ${g.name}`).join("\n");
+  return games.map((g) => g.name).join("\n");
 }
 
 // --- JSON ---
@@ -124,25 +592,25 @@ function toJSON(opts: ExportOptions): string {
   if (opts.scope === "stats") {
     return JSON.stringify(computeStats(opts.games, opts.collections), null, 2);
   }
-  if (opts.scope === "categories_pick" && opts.pickLayout === "flat_unique") {
-    return JSON.stringify(getGamesForScope(opts).map(gameRow), null, 2);
-  }
+
+  const dataset = buildExportDataset(opts);
   if (isCategoriesStructured(opts)) {
-    const cols = pickCollections(opts);
-    const data = cols.map((c) => ({
-      name: c.name,
-      key: c.key,
-      is_dynamic: c.is_dynamic,
-      game_count: c.added.length,
-      games: c.added.map((id) => {
-        const g = opts.games[id];
-        return g ? gameRow(g) : { appid: id, name: `Unknown (#${id})`, playtime_hours: "0", last_played: "Never" };
-      }),
-    }));
-    return JSON.stringify(data, null, 2);
+    return JSON.stringify(
+      dataset.categories.map((category) => ({
+        name: category.name,
+        key: category.key,
+        is_dynamic: category.is_dynamic,
+        game_count: category.game_count,
+        source_game_count: category.source_game_count,
+        skipped_game_count: category.skipped_game_count,
+        missing_appids: category.missing_appids,
+        games: category.games.map((game) => projectRecord(game, dataset.fieldDefinitions)),
+      })),
+      null,
+      2
+    );
   }
-  const games = getGamesForScope(opts).map(gameRow);
-  return JSON.stringify(games, null, 2);
+  return JSON.stringify(dataset.games.map((game) => projectRecord(game, dataset.fieldDefinitions)), null, 2);
 }
 
 // --- CSV ---
@@ -151,6 +619,10 @@ function escapeCSV(val: string): string {
     return `"${val.replace(/"/g, '""')}"`;
   }
   return val;
+}
+
+function csvRow(record: ExportGameRecord, fields: ExportFieldDefinition[]): string {
+  return fields.map((field) => escapeCSV(field.cellValue(record))).join(",");
 }
 
 function toCSV(opts: ExportOptions): string {
@@ -173,46 +645,34 @@ function toCSV(opts: ExportOptions): string {
     return lines.join("\n");
   }
 
-  if (opts.scope === "categories_pick" && opts.pickLayout === "flat_unique") {
-    const cols = pickCollections(opts);
-    const list = getGamesForScope(opts).sort((a, b) =>
-      String(a.name ?? "").localeCompare(String(b.name ?? ""))
-    );
-    const h = "App ID,Name,Playtime (hours),Last Played,Categories";
-    const rows = list.map((g) => {
-      const r = gameRow(g);
-      const cats = categoryNamesForApp(g.appid, cols);
-      return `${r.appid},${escapeCSV(r.name)},${r.playtime_hours},${r.last_played},${escapeCSV(cats)}`;
-    });
-    return [h, ...rows].join("\n");
-  }
-
-  const games = getGamesForScope(opts);
-  const header = "App ID,Name,Playtime (hours),Last Played";
-  const rows = games.map((g) => {
-    const r = gameRow(g);
-    return `${r.appid},${escapeCSV(r.name)},${r.playtime_hours},${r.last_played}`;
-  });
+  const dataset = buildExportDataset(opts);
+  const header = dataset.fieldDefinitions.map((field) => field.label).join(",");
 
   if (isCategoriesStructured(opts)) {
-    const sections: string[] = [];
-    for (const col of pickCollections(opts)) {
-      const ids = new Set(col.added);
-      const catGames = Object.values(opts.games).filter((g) => ids.has(g.appid));
-      sections.push(`\n# ${col.name} (${catGames.length} games)`);
-      sections.push(header);
-      catGames.forEach((g) => {
-        const r = gameRow(g);
-        sections.push(`${r.appid},${escapeCSV(r.name)},${r.playtime_hours},${r.last_played}`);
-      });
+    const rows: string[] = [
+      ["Category", "Category Key", "Category Game Count", ...dataset.fieldDefinitions.map((field) => field.label)]
+        .map(escapeCSV)
+        .join(","),
+    ];
+    for (const category of dataset.categories) {
+      const prefix = [category.name, category.key, String(category.game_count)].map(escapeCSV).join(",");
+      if (category.games.length === 0) {
+        rows.push(`${prefix},${dataset.fieldDefinitions.map(() => "").join(",")}`);
+        continue;
+      }
+      for (const game of category.games) rows.push(`${prefix},${csvRow(game, dataset.fieldDefinitions)}`);
     }
-    return sections.join("\n");
+    return rows.join("\n");
   }
 
-  return [header, ...rows].join("\n");
+  return [header, ...dataset.games.map((game) => csvRow(game, dataset.fieldDefinitions))].join("\n");
 }
 
 // --- TXT ---
+function toTextLine(record: ExportGameRecord, fields: ExportFieldDefinition[]): string {
+  return fields.map((field) => field.cellValue(record) || "-").join(" | ");
+}
+
 function toTXT(opts: ExportOptions): string {
   if (opts.scope === "stats") {
     const stats = computeStats(opts.games, opts.collections);
@@ -236,45 +696,47 @@ function toTXT(opts: ExportOptions): string {
     return lines.join("\n");
   }
 
-  const games = getGamesForScope(opts);
-
-  if (opts.scope === "categories_pick" && opts.pickLayout === "flat_unique") {
-    const list = getGamesForScope(opts).sort((a, b) =>
-      String(a.name ?? "").localeCompare(String(b.name ?? ""))
-    );
-    const title = "SELECTED CATEGORIES (UNIQUE GAMES)";
-    const lines = [title, "=".repeat(title.length), `${list.length} unique games`, ""];
-    list.forEach((g) => {
-      lines.push(`  ${String(g.name ?? "").padEnd(45)} ${formatHours(g.playtime_forever).padStart(8)}h`);
-    });
-    return lines.join("\n");
-  }
+  const dataset = buildExportDataset(opts);
+  const heading =
+    opts.scope === "category"
+      ? "CATEGORY EXPORT"
+      : opts.scope === "categories_pick"
+        ? "SELECTED CATEGORIES"
+        : opts.scope === "categories"
+          ? "STEAM LIBRARY - CATEGORIES"
+          : "STEAM LIBRARY";
+  const header = dataset.fieldDefinitions.map((field) => field.label).join(" | ");
 
   if (isCategoriesStructured(opts)) {
-    const title =
-      opts.scope === "categories_pick" ? "STEAM LIBRARY - SELECTED CATEGORIES" : "STEAM LIBRARY - ALL CATEGORIES";
-    const underline = "=".repeat(title.length);
-    const sections: string[] = [title, underline];
-    for (const col of pickCollections(opts)) {
-      const ids = new Set(col.added);
-      const catGames = Object.values(opts.games).filter((g) => ids.has(g.appid));
-      sections.push("", `${col.name} (${catGames.length} games)`, "-".repeat(col.name.length + 10));
-      catGames.forEach((g) => {
-        sections.push(`  ${String(g.name ?? "").padEnd(45)} ${formatHours(g.playtime_forever).padStart(8)}h`);
-      });
+    const sections: string[] = [heading, "=".repeat(heading.length)];
+    for (const category of dataset.categories) {
+      sections.push("", `${category.name} (${category.game_count} games)`, "-".repeat(category.name.length + 10), header);
+      for (const game of category.games) sections.push(toTextLine(game, dataset.fieldDefinitions));
     }
     return sections.join("\n");
   }
 
-  const header = opts.scope === "category" ? `CATEGORY EXPORT` : "STEAM LIBRARY";
-  const lines = [header, "=".repeat(header.length), `${games.length} games`, ""];
-  games.forEach((g) => {
-    lines.push(`  ${String(g.name ?? "").padEnd(45)} ${formatHours(g.playtime_forever).padStart(8)}h`);
-  });
+  const lines = [heading, "=".repeat(heading.length), `${dataset.games.length} games`, "", header];
+  for (const game of dataset.games) lines.push(toTextLine(game, dataset.fieldDefinitions));
   return lines.join("\n");
 }
 
 // --- Markdown ---
+function escapeMarkdownCell(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/\|/g, "\\|").replace(/\n/g, " ");
+}
+
+function markdownRow(record: ExportGameRecord, fields: ExportFieldDefinition[]): string {
+  return `| ${fields.map((field) => escapeMarkdownCell(field.cellValue(record))).join(" | ")} |`;
+}
+
+function markdownHeader(fields: ExportFieldDefinition[]): string[] {
+  return [
+    `| ${fields.map((field) => escapeMarkdownCell(field.label)).join(" | ")} |`,
+    `| ${fields.map(() => "---").join(" | ")} |`,
+  ];
+}
+
 function toMarkdown(opts: ExportOptions): string {
   if (opts.scope === "stats") {
     const stats = computeStats(opts.games, opts.collections);
@@ -292,63 +754,39 @@ function toMarkdown(opts: ExportOptions): string {
       "",
       "| # | Game | Hours |",
       "|---|------|-------|",
-      ...stats.topPlayed.map((g, i) => `| ${i + 1} | ${g.name} | ${g.hours}h |`),
+      ...stats.topPlayed.map((g, i) => `| ${i + 1} | ${escapeMarkdownCell(g.name)} | ${g.hours}h |`),
       "",
       "## Playtime Distribution",
       "",
       "| Bucket | Games |",
       "|--------|-------|",
-      ...stats.playtimeBuckets.map((b) => `| ${b.label} | ${b.count} |`),
+      ...stats.playtimeBuckets.map((b) => `| ${escapeMarkdownCell(b.label)} | ${b.count} |`),
     ];
     return lines.join("\n");
   }
 
-  const games = getGamesForScope(opts);
-
-  if (opts.scope === "categories_pick" && opts.pickLayout === "flat_unique") {
-    const cols = pickCollections(opts);
-    const list = getGamesForScope(opts).sort((a, b) =>
-      String(a.name ?? "").localeCompare(String(b.name ?? ""))
-    );
-    const lines = [
-      "# Selected categories (deduplicated)",
-      "",
-      `**${list.length} games**`,
-      "",
-      "| Game | Hours | Last Played | Categories |",
-      "|------|-------|-------------|------------|",
-    ];
-    list.forEach((g) => {
-      const r = gameRow(g);
-      const cats = categoryNamesForApp(g.appid, cols);
-      lines.push(`| ${r.name} | ${r.playtime_hours}h | ${r.last_played} | ${cats} |`);
-    });
-    return lines.join("\n");
-  }
+  const dataset = buildExportDataset(opts);
+  const title =
+    opts.scope === "category"
+      ? "Category Export"
+      : opts.scope === "categories_pick"
+        ? "Selected Categories"
+        : opts.scope === "categories"
+          ? "Steam Library - Categories"
+          : "Steam Library";
 
   if (isCategoriesStructured(opts)) {
-    const h1 =
-      opts.scope === "categories_pick" ? "# Steam Library - Selected Categories" : "# Steam Library - All Categories";
-    const sections = [h1, ""];
-    for (const col of pickCollections(opts)) {
-      const ids = new Set(col.added);
-      const catGames = Object.values(opts.games).filter((g) => ids.has(g.appid));
-      sections.push(`## ${col.name} (${catGames.length} games)`, "", "| Game | Hours | Last Played |", "|------|-------|-------------|");
-      catGames.forEach((g) => {
-        const r = gameRow(g);
-        sections.push(`| ${r.name} | ${r.playtime_hours}h | ${r.last_played} |`);
-      });
+    const sections = [`# ${title}`, ""];
+    for (const category of dataset.categories) {
+      sections.push(`## ${category.name} (${category.game_count} games)`, "", ...markdownHeader(dataset.fieldDefinitions));
+      for (const game of category.games) sections.push(markdownRow(game, dataset.fieldDefinitions));
       sections.push("");
     }
     return sections.join("\n");
   }
 
-  const title = opts.scope === "category" ? "Category Export" : "Steam Library";
-  const lines = [`# ${title}`, "", `**${games.length} games**`, "", "| Game | Hours | Last Played |", "|------|-------|-------------|"];
-  games.forEach((g) => {
-    const r = gameRow(g);
-    lines.push(`| ${r.name} | ${r.playtime_hours}h | ${r.last_played} |`);
-  });
+  const lines = [`# ${title}`, "", `**${dataset.games.length} games**`, "", ...markdownHeader(dataset.fieldDefinitions)];
+  for (const game of dataset.games) lines.push(markdownRow(game, dataset.fieldDefinitions));
   return lines.join("\n");
 }
 
@@ -364,6 +802,35 @@ export function generateExport(opts: ExportOptions): string {
   if (opts.scope === "snapshot") return toJSON({ ...opts, format: "json" });
   if (opts.titlesOnly && opts.scope !== "stats") return toTitlesOnly(opts);
   return FORMATTERS[opts.format](opts);
+}
+
+export function getExportPreview(opts: ExportOptions): ExportPreview {
+  if (opts.scope === "stats") {
+    return {
+      gameCount: Object.keys(opts.games).length,
+      categoryCount: opts.collections.filter((c) => !c.is_deleted).length,
+      skippedGameCount: 0,
+      skippedCategoryCount: 0,
+      fieldCount: 0,
+    };
+  }
+  if (opts.scope === "snapshot") {
+    return {
+      gameCount: Object.keys(opts.games).length,
+      categoryCount: opts.collections.filter((c) => !c.is_deleted).length,
+      skippedGameCount: 0,
+      skippedCategoryCount: 0,
+      fieldCount: 0,
+    };
+  }
+  const dataset = buildExportDataset(opts);
+  return {
+    gameCount: dataset.games.length,
+    categoryCount: isCategoriesStructured(opts) ? dataset.categories.length : 0,
+    skippedGameCount: dataset.skippedGameCount,
+    skippedCategoryCount: dataset.skippedCategoryCount,
+    fieldCount: dataset.fieldDefinitions.length,
+  };
 }
 
 const FORMAT_EXTENSIONS: Record<ExportFormat, string> = {
@@ -389,6 +856,8 @@ export interface DefaultFilenameOptions {
   categoryName?: string;
   /** Number of categories for `categories_pick` default name. */
   pickCount?: number;
+  /** Injectable timestamp for tests. Defaults to current local time. */
+  now?: Date | number;
 }
 
 export function getDefaultFilename(
@@ -397,17 +866,18 @@ export function getDefaultFilename(
   opts?: DefaultFilenameOptions
 ): string {
   const ext = FORMAT_EXTENSIONS[format];
-  if (scope === "stats") return `repressurizer-stats.${ext}`;
-  if (scope === "snapshot") return "repressurizer-library-snapshot.json";
-  if (scope === "categories") return `repressurizer-categories.${ext}`;
+  const stamp = filenameTimestamp(opts?.now);
+  if (scope === "stats") return `repressurizer-stats-${stamp}.${ext}`;
+  if (scope === "snapshot") return `repressurizer-library-snapshot-${stamp}.json`;
+  if (scope === "categories") return `repressurizer-categories-${stamp}.${ext}`;
   if (scope === "categories_pick") {
     const n = opts?.pickCount ?? 0;
-    return `repressurizer-categories-${n}-selected.${ext}`;
+    return `repressurizer-categories-${n}-selected-${stamp}.${ext}`;
   }
   if (scope === "category" && opts?.categoryName) {
-    return `repressurizer-category-${sanitizeExportBasename(opts.categoryName)}.${ext}`;
+    return `repressurizer-category-${sanitizeExportBasename(opts.categoryName)}-${stamp}.${ext}`;
   }
-  return `repressurizer-games.${ext}`;
+  return `repressurizer-games-${stamp}.${ext}`;
 }
 
 const FORMAT_FILTERS: Record<ExportFormat, { name: string; extensions: string[] }> = {
