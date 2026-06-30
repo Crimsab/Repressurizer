@@ -48,7 +48,7 @@ export interface ExportOptions {
   games: Record<number, OwnedGame>;
   collections: SteamCollection[];
   activeCategory?: string;
-  /** For scope `categories_pick`: collection keys to include (structured + flat union). */
+  /** For category export scopes: collection keys to include (structured + flat union). */
   categoryKeys?: readonly string[];
   /** User status map, used for status fields and status filters. */
   statuses?: Record<number, GameStatus>;
@@ -157,7 +157,6 @@ export const DEFAULT_EXPORT_FIELDS: ExportFieldKey[] = [
   "name",
   "playtime",
   "lastPlayed",
-  "status",
   "hltb",
   "categories",
 ];
@@ -374,9 +373,10 @@ function exportableCollections(opts: ExportOptions): SteamCollection[] {
 
 function pickCollections(opts: ExportOptions): SteamCollection[] {
   const collections = exportableCollections(opts);
-  if (opts.scope === "categories_pick" && opts.categoryKeys?.length) {
+  if ((opts.scope === "categories" || opts.scope === "categories_pick") && opts.categoryKeys) {
     const keys = new Set(opts.categoryKeys);
-    return collections.filter((c) => keys.has(c.key));
+    const scoped = opts.scope === "categories" ? collections.filter((c) => c.id !== "hidden") : collections;
+    return scoped.filter((c) => keys.has(c.key));
   }
   if (opts.scope === "categories") {
     return collections.filter((c) => c.id !== "hidden");
@@ -407,7 +407,7 @@ function getGamesForScope(opts: ExportOptions, pickedCollections = pickCollectio
     const col = pickedCollections.find((c) => c.key === opts.activeCategory);
     return col ? gamesFromIds(col.added, opts.games) : [];
   }
-  if (opts.scope === "categories_pick" && opts.categoryKeys?.length) {
+  if (opts.scope === "categories_pick" && opts.categoryKeys) {
     return gamesFromIds(pickedCollections.flatMap((c) => c.added), opts.games);
   }
   if (opts.scope === "categories") {

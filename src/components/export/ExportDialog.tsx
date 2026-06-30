@@ -132,7 +132,7 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
   const statuses = useStatusStore((s) => s.statuses);
   const activeCategory = useCategoryStore((s) => s.activeCategory);
   const collections = useCategoryStore((s) => s.collections);
-  const selectedCategoryKeys = useCategoryStore((s) => s.selectedCategoryKeys);
+  const sidebarSelectedCategoryKeys = useCategoryStore((s) => s.selectedCategoryKeys);
   const overrideCategoryKey = useExportUiStore((s) => s.overrideCategoryKey);
   const resetIntent = useExportUiStore((s) => s.resetIntent);
   const settings = useSettingsStore();
@@ -146,7 +146,7 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
   const [fields, setFields] = useState<ExportFieldKey[]>(DEFAULT_EXPORT_FIELDS);
   const [filters, setFilters] = useState<ExportFilters>(DEFAULT_FILTERS);
   const [skipEmptyCategories, setSkipEmptyCategories] = useState(true);
-  const [excludedCategoryKeys, setExcludedCategoryKeys] = useState<string[]>([]);
+  const [selectedExportCategoryKeys, setSelectedExportCategoryKeys] = useState<string[]>([]);
   const [categoryQuery, setCategoryQuery] = useState("");
   const [status, setStatus] = useState<"idle" | "success" | "error">("idle");
   const [statusMsg, setStatusMsg] = useState("");
@@ -174,9 +174,11 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
   const canCustomizeRows = scope !== "stats" && scope !== "snapshot";
   const isCategoryScope = scope === "category";
   const isPickScope = scope === "categories_pick";
+  const isCategorySelectionScope = scope === "categories" || scope === "categories_pick";
   const isStructuredCategoryExport = scope === "categories" || (isPickScope && pickLayout === "structured");
   const categoryDisabled = isCategoryScope && !effectiveCategoryKey;
-  const pickDisabled = isPickScope && selectedCategoryKeys.length === 0;
+  const pickDisabled = isPickScope && sidebarSelectedCategoryKeys.length === 0;
+  const categorySelectionDisabled = isCategorySelectionScope && selectedExportCategoryKeys.length === 0;
 
   const categoryOptions = useMemo(
     () =>
@@ -191,6 +193,17 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
     if (!query) return categoryOptions;
     return categoryOptions.filter((collection) => collection.name.toLowerCase().includes(query));
   }, [categoryOptions, categoryQuery]);
+
+  useEffect(() => {
+    if (scope === "categories") {
+      setSelectedExportCategoryKeys(categoryOptions.map((collection) => collection.key));
+      return;
+    }
+    if (scope === "categories_pick") {
+      const availableKeys = new Set(categoryOptions.map((collection) => collection.key));
+      setSelectedExportCategoryKeys(sidebarSelectedCategoryKeys.filter((key) => availableKeys.has(key)));
+    }
+  }, [categoryOptions, scope, sidebarSelectedCategoryKeys]);
 
   const exportOptions = useMemo(
     () => ({
@@ -207,11 +220,10 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
       steamId64: settings.steamId64,
       steamPersonaName: settings.steamPersonaName,
       activeCategory: effectiveCategoryKey,
-      categoryKeys: scope === "categories_pick" ? selectedCategoryKeys : undefined,
+      categoryKeys: isCategorySelectionScope ? selectedExportCategoryKeys : undefined,
       pickLayout: scope === "categories_pick" ? pickLayout : undefined,
       fields,
       filters,
-      excludedCategoryKeys,
       skipEmptyCategories,
     }),
     [
@@ -227,11 +239,11 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
       settings.steamId64,
       settings.steamPersonaName,
       effectiveCategoryKey,
-      selectedCategoryKeys,
+      isCategorySelectionScope,
+      selectedExportCategoryKeys,
       pickLayout,
       fields,
       filters,
-      excludedCategoryKeys,
       skipEmptyCategories,
     ]
   );
@@ -241,7 +253,7 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
   const scopeRows = [
     ...BASE_SCOPES,
     SNAPSHOT_SCOPE,
-    ...(selectedCategoryKeys.length >= 1 ? [PICK_SCOPE] : []),
+    ...(sidebarSelectedCategoryKeys.length >= 1 ? [PICK_SCOPE] : []),
   ];
 
   const playedOptions: SelectMenuOption<ExportPlayedFilter>[] = [
@@ -270,7 +282,7 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
           scope === "category"
             ? { categoryName: effectiveCatName }
             : scope === "categories_pick"
-              ? { pickCount: selectedCategoryKeys.length }
+              ? { pickCount: selectedExportCategoryKeys.length }
               : undefined,
       });
 
@@ -298,8 +310,8 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
     updateFilters({ statuses: toggleInList(filters.statuses ?? [], nextStatus) });
   };
 
-  const toggleExcludedCategory = (key: string) => {
-    setExcludedCategoryKeys((current) => toggleInList(current, key));
+  const toggleExportCategory = (key: string) => {
+    setSelectedExportCategoryKeys((current) => toggleInList(current, key));
   };
 
   return (
@@ -382,14 +394,14 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
               )}
               {isPickScope && (
                 <p className="mt-2 text-xs text-repressurizer-text-muted">
-                  {selectedCategoryKeys.length > 0
-                    ? <>{t("export.pickCount", { count: selectedCategoryKeys.length })}</>
+                  {sidebarSelectedCategoryKeys.length > 0
+                    ? <>{t("export.pickCount", { count: sidebarSelectedCategoryKeys.length })}</>
                     : t("export.pickEmpty")}
                 </p>
               )}
             </section>
 
-            {isPickScope && selectedCategoryKeys.length >= 1 && (
+            {isPickScope && sidebarSelectedCategoryKeys.length >= 1 && (
               <section className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3">
                 <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-repressurizer-text-faint">
                   {t("export.pickLayoutTitle")}
@@ -599,44 +611,70 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
               </section>
             )}
 
-            {canCustomizeRows && isStructuredCategoryExport && (
+            {canCustomizeRows && isCategorySelectionScope && (
               <section>
-                <div className="mb-2 flex items-center gap-2">
-                  <SlidersHorizontal size={14} className="text-repressurizer-accent" />
-                  <h3 className="text-[11px] font-medium uppercase tracking-wider text-repressurizer-text-faint">
-                    {t("export.skipCategories")}
-                  </h3>
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <SlidersHorizontal size={14} className="text-repressurizer-accent" />
+                    <h3 className="text-[11px] font-medium uppercase tracking-wider text-repressurizer-text-faint">
+                      {t("export.skipCategories")}
+                    </h3>
+                  </div>
+                  <span className="text-[11px] text-repressurizer-text-faint">
+                    {t("export.categorySelected", {
+                      selected: selectedExportCategoryKeys.length,
+                      total: categoryOptions.length,
+                    })}
+                  </span>
                 </div>
                 <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg p-3">
-                  <label className="mb-3 flex cursor-pointer items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={skipEmptyCategories}
-                      onChange={(e) => setSkipEmptyCategories(e.target.checked)}
-                      className="h-4 w-4 rounded accent-repressurizer-accent"
-                    />
-                    <span className="text-xs text-repressurizer-text">{t("export.skipEmptyCategories")}</span>
-                  </label>
-                  <div className="mb-2 flex items-center gap-2 rounded-lg border border-repressurizer-border-subtle px-2 py-1.5">
-                    <MagnifyingGlass size={13} className="text-repressurizer-text-faint" />
-                    <input
-                      value={categoryQuery}
-                      onChange={(e) => setCategoryQuery(e.target.value)}
-                      placeholder={t("export.categorySearch")}
-                      className="min-w-0 flex-1 bg-transparent text-xs text-repressurizer-text outline-none placeholder:text-repressurizer-text-faint"
-                    />
+                  {isStructuredCategoryExport && (
+                    <label className="mb-3 flex cursor-pointer items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={skipEmptyCategories}
+                        onChange={(e) => setSkipEmptyCategories(e.target.checked)}
+                        className="h-4 w-4 rounded accent-repressurizer-accent"
+                      />
+                      <span className="text-xs text-repressurizer-text">{t("export.skipEmptyCategories")}</span>
+                    </label>
+                  )}
+                  <div className="mb-2 flex items-center gap-2">
+                    <div className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-repressurizer-border-subtle px-2 py-1.5">
+                      <MagnifyingGlass size={13} className="text-repressurizer-text-faint" />
+                      <input
+                        value={categoryQuery}
+                        onChange={(e) => setCategoryQuery(e.target.value)}
+                        placeholder={t("export.categorySearch")}
+                        className="min-w-0 flex-1 bg-transparent text-xs text-repressurizer-text outline-none placeholder:text-repressurizer-text-faint"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedExportCategoryKeys(categoryOptions.map((collection) => collection.key))}
+                      className="rounded-lg border border-repressurizer-border-subtle px-2.5 py-1.5 text-[11px] text-repressurizer-text-muted transition-colors hover:border-repressurizer-border hover:text-repressurizer-text"
+                    >
+                      {t("export.categorySelectAll")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedExportCategoryKeys([])}
+                      className="rounded-lg border border-repressurizer-border-subtle px-2.5 py-1.5 text-[11px] text-repressurizer-text-muted transition-colors hover:border-repressurizer-border hover:text-repressurizer-text"
+                    >
+                      {t("export.categorySelectNone")}
+                    </button>
                   </div>
                   <div className="max-h-36 space-y-1 overflow-y-auto pr-1">
                     {visibleCategoryOptions.map((collection) => {
-                      const excluded = excludedCategoryKeys.includes(collection.key);
+                      const selected = selectedExportCategoryKeys.includes(collection.key);
                       return (
                         <button
                           key={collection.key}
                           type="button"
-                          onClick={() => toggleExcludedCategory(collection.key)}
+                          onClick={() => toggleExportCategory(collection.key)}
                           className={`flex w-full items-center justify-between gap-3 rounded-lg border px-2.5 py-1.5 text-left text-xs transition-colors ${
-                            excluded
-                              ? "border-repressurizer-danger/40 bg-repressurizer-danger/10 text-repressurizer-danger"
+                            selected
+                              ? "border-repressurizer-accent/50 bg-repressurizer-accent/10 text-repressurizer-accent"
                               : "border-transparent text-repressurizer-text-muted hover:border-repressurizer-border-subtle hover:text-repressurizer-text"
                           }`}
                         >
@@ -648,11 +686,6 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
                       );
                     })}
                   </div>
-                  {excludedCategoryKeys.length > 0 && (
-                    <p className="mt-2 text-[11px] text-repressurizer-text-faint">
-                      {t("export.categorySkipped", { count: excludedCategoryKeys.length })}
-                    </p>
-                  )}
                 </div>
               </section>
             )}
@@ -691,7 +724,7 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
             <button
               type="button"
               onClick={() => void handleExport()}
-              disabled={categoryDisabled || pickDisabled || status === "success" || (canCustomizeRows && preview.gameCount === 0)}
+              disabled={categoryDisabled || pickDisabled || categorySelectionDisabled || status === "success" || (canCustomizeRows && preview.gameCount === 0)}
               className="btn-press flex w-full items-center justify-center gap-2 rounded-xl bg-repressurizer-accent py-3 text-sm font-medium text-white transition-colors hover:bg-repressurizer-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
             >
               <Export size={16} weight="bold" />

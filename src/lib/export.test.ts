@@ -57,6 +57,7 @@ describe("manual export", () => {
   };
   const collections = [
     collection("user-collections.rpg", "RPG", [1, 2, 999]),
+    collection("user-collections.favorite", "Favorites", [3]),
     collection("user-collections.empty", "Empty after filters", [2]),
     collection("user-collections.skip", "Skip me", [3]),
   ];
@@ -74,6 +75,24 @@ describe("manual export", () => {
     ).toBe("repressurizer-category-RPG-Great-20260630-123456.json");
   });
 
+  it("does not export status by default", () => {
+    const exported = JSON.parse(
+      generateExport({
+        scope: "all",
+        format: "json",
+        games,
+        collections,
+        statuses: { 1: "playing" },
+      })
+    );
+
+    expect(exported[0]).toMatchObject({
+      appid: 1,
+      name: "Alpha",
+    });
+    expect(exported[0]).not.toHaveProperty("status");
+  });
+
   it("exports structured categories after filters with correct counts", () => {
     const opts = {
       scope: "categories" as const,
@@ -85,7 +104,7 @@ describe("manual export", () => {
       statuses: { 1: "playing" as const, 3: "completed" as const },
       fields: ["appid", "name", "playtime", "status", "hltb", "categories", "genres", "collectionOnly"] as const,
       filters: { minSteamHours: 0.5 },
-      excludedCategoryKeys: ["user-collections.skip"],
+      excludedCategoryKeys: ["user-collections.favorite", "user-collections.skip"],
       skipEmptyCategories: true,
     };
 
@@ -166,6 +185,28 @@ describe("manual export", () => {
     expect(lines[0]).toBe("Category,Category Key,Category Game Count,App ID,Name,Steam Hours");
     expect(lines.some((line) => line.startsWith("# "))).toBe(false);
     expect(lines).toContain("RPG,user-collections.rpg,2,1,Alpha,0.5");
+    expect(lines).toContain("Favorites,user-collections.favorite,1,3,Gamma,2.0");
     expect(lines).toContain("Empty after filters,user-collections.empty,1,2,Beta,0.0");
+  });
+
+  it("uses selected category keys for all-categories exports", () => {
+    const exported = JSON.parse(
+      generateExport({
+        scope: "categories",
+        format: "json",
+        games,
+        collections,
+        categoryKeys: ["user-collections.favorite"],
+        fields: ["appid", "name"],
+      })
+    );
+
+    expect(exported).toHaveLength(1);
+    expect(exported[0]).toMatchObject({
+      key: "user-collections.favorite",
+      name: "Favorites",
+      game_count: 1,
+    });
+    expect(exported[0].games).toEqual([{ appid: 3, name: "Gamma" }]);
   });
 });
