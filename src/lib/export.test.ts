@@ -106,6 +106,7 @@ describe("manual export", () => {
       filters: { minSteamHours: 0.5 },
       excludedCategoryKeys: ["user-collections.favorite", "user-collections.skip"],
       skipEmptyCategories: true,
+      categoryColors: { "user-collections.rpg": "#10b981" },
     };
 
     const preview = getExportPreview(opts);
@@ -120,6 +121,7 @@ describe("manual export", () => {
     expect(exported).toHaveLength(1);
     expect(exported[0]).toMatchObject({
       name: "RPG",
+      color: "#10B981",
       game_count: 1,
       source_game_count: 3,
       skipped_game_count: 2,

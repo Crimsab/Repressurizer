@@ -81,6 +81,7 @@ export function buildAutomationSnapshotFromContext(context: AutomationPublishCon
     steamId64: context.settings.steamId64,
     steamPersonaName: context.settings.steamPersonaName,
     payloadSettings: context.settings.automationPublishPayload,
+    categoryColors: context.settings.categoryColors,
   });
 }
 

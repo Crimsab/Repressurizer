@@ -4,9 +4,11 @@ import { useGameStore } from "../../stores/gameStore";
 import { useStatusStore, STATUS_META } from "../../stores/statusStore";
 import { useTagsStore } from "../../stores/tagsStore";
 import { useFamilyStore } from "../../stores/familyStore";
+import { useSettingsStore } from "../../stores/settingsStore";
 import type { OwnedGame } from "../../lib/types";
 import { X, Clock, UsersThree } from "@phosphor-icons/react";
 import { SteamImage } from "./SteamImage";
+import { categoryPillStyle, getCategoryColor } from "../../lib/categoryColors";
 
 interface GameCardProps {
   game: OwnedGame;
@@ -22,6 +24,7 @@ export function GameCard({ game, onContextMenu, onDoubleClick, onIntent, onShift
   const toggleGameSelection = useGameStore((s) => s.toggleGameSelection);
   const clearSelection = useGameStore((s) => s.clearSelection);
   const collections = useCategoryStore((s) => s.collections);
+  const categoryColors = useSettingsStore((s) => s.categoryColors ?? {});
   const removeGameFromCategory = useCategoryStore((s) => s.removeGameFromCategory);
   const status = useStatusStore((s) => s.statuses[game.appid] ?? "none");
   const statusMeta = STATUS_META[status];
@@ -140,7 +143,8 @@ export function GameCard({ game, onContextMenu, onDoubleClick, onIntent, onShift
             <span
               key={cat.key}
               title={String(cat.name ?? "")}
-              className="group/badge inline-flex shrink-0 items-center rounded-md bg-repressurizer-accent/10 px-1.5 py-0.5 text-[10px] text-repressurizer-accent/80"
+              style={categoryPillStyle(getCategoryColor(cat, categoryColors))}
+              className="group/badge inline-flex shrink-0 items-center rounded-md border border-transparent bg-repressurizer-accent/10 px-1.5 py-0.5 text-[10px] text-repressurizer-accent/80"
             >
               <span className="max-w-[80px] truncate">{String(cat.name ?? "")}</span>
               <button

@@ -33,6 +33,8 @@ struct AutomationSettings {
     automation_publish_last_attempted_at: String,
     #[serde(default)]
     automation_publish_payload: AutomationPublishPayloadSettings,
+    #[serde(default)]
+    category_colors: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -458,6 +460,7 @@ fn build_library_snapshot(
                 "key": collection.key,
                 "name": collection.name,
                 "isDynamic": collection.is_dynamic,
+                "color": category_color(collection, &settings.category_colors),
                 "gameCount": app_ids.len(),
                 "appIds": app_ids,
             }))
@@ -489,6 +492,7 @@ fn build_library_snapshot(
                 "key": key,
                 "name": name,
                 "isDynamic": is_dynamic,
+                "color": collection.get("color").cloned().unwrap_or(Value::Null),
             }));
         }
     }
@@ -968,6 +972,58 @@ fn steam_tail(steam_id64: &str) -> Option<String> {
     let chars = trimmed.chars().collect::<Vec<_>>();
     let start = chars.len().saturating_sub(4);
     Some(chars[start..].iter().collect())
+}
+
+fn normalize_hex_color(value: &str) -> Option<String> {
+    let trimmed = value.trim().trim_start_matches('#');
+    if trimmed.len() == 3 && trimmed.chars().all(|c| c.is_ascii_hexdigit()) {
+        let expanded = trimmed
+            .chars()
+            .flat_map(|c| [c, c])
+            .collect::<String>()
+            .to_uppercase();
+        return Some(format!("#{expanded}"));
+    }
+    if trimmed.len() == 6 && trimmed.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Some(format!("#{}", trimmed.to_uppercase()));
+    }
+    None
+}
+
+fn is_favorite_collection(collection: &collections::SteamCollection) -> bool {
+    let id = collection.id.to_lowercase();
+    let key = collection.key.to_lowercase();
+    let name = collection.name.trim().to_lowercase();
+    id == "favorite"
+        || id == "favorites"
+        || key == "favorite"
+        || key == "favorites"
+        || key.ends_with(".favorite")
+        || key.ends_with(".favorites")
+        || name == "favorite"
+        || name == "favorites"
+        || name == "preferiti"
+}
+
+fn category_color(
+    collection: &collections::SteamCollection,
+    colors: &HashMap<String, String>,
+) -> Option<String> {
+    colors
+        .get(&collection.key)
+        .and_then(|value| normalize_hex_color(value))
+        .or_else(|| {
+            colors
+                .get(&collection.id)
+                .and_then(|value| normalize_hex_color(value))
+        })
+        .or_else(|| {
+            if is_favorite_collection(collection) {
+                Some("#D6A43A".to_string())
+            } else {
+                None
+            }
+        })
 }
 
 fn string_or_null(value: &str) -> Value {

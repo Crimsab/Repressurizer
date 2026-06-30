@@ -212,6 +212,7 @@ describe("buildLibrarySnapshot", () => {
         key: "user-collections.action",
         name: "Action",
         isDynamic: false,
+        color: null,
         gameCount: 1,
         appIds: [10],
       },
@@ -284,5 +285,32 @@ describe("buildLibrarySnapshot", () => {
       },
     });
     expect(snapshot.checksum).toMatch(/^fnv1a32:[0-9a-f]{8}$/);
+  });
+
+  it("exports default and custom category colors", () => {
+    const snapshot = buildLibrarySnapshot({
+      games: {
+        10: game(10, "Hades", 90),
+        20: game(20, "Portal", 30),
+      },
+      collections: [
+        collection("user-collections.favorite", "Favorites", [10]),
+        collection("user-collections.puzzle", "Puzzle", [20]),
+      ],
+      categoryColors: {
+        "user-collections.puzzle": "#38bdf8",
+      },
+      appVersion: "0.4.7",
+      generatedAt: "2026-06-18T18:00:00.000Z",
+    });
+
+    expect(snapshot.collections).toMatchObject([
+      { key: "user-collections.favorite", color: "#D6A43A" },
+      { key: "user-collections.puzzle", color: "#38BDF8" },
+    ]);
+    expect(snapshot.games.find((item) => item.appId === 10)?.collections[0]).toMatchObject({
+      key: "user-collections.favorite",
+      color: "#D6A43A",
+    });
   });
 });

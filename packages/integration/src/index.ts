@@ -29,6 +29,7 @@ export interface LibrarySnapshotCollection {
   key: string;
   name: string;
   isDynamic: boolean;
+  color?: string | null;
   gameCount: number;
   appIds: number[];
 }
@@ -37,6 +38,7 @@ export interface LibrarySnapshotCollectionRef {
   key: string;
   name: string;
   isDynamic: boolean;
+  color?: string | null;
 }
 
 export interface LibrarySnapshotGameDetails {
@@ -183,6 +185,10 @@ function isNullableString(value: unknown): value is string | null {
   return value === null || typeof value === "string";
 }
 
+function isOptionalNullableString(value: unknown): value is string | null | undefined {
+  return value === undefined || isNullableString(value);
+}
+
 function isNullableNumber(value: unknown): value is number | null {
   return value === null || isNonNegativeNumber(value);
 }
@@ -217,6 +223,7 @@ function validateCollectionRef(issues: SnapshotValidationIssue[], value: unknown
   if (typeof value.key !== "string" || !value.key) issue(issues, `${path}.key`, "must be a non-empty string");
   if (typeof value.name !== "string") issue(issues, `${path}.name`, "must be a string");
   if (typeof value.isDynamic !== "boolean") issue(issues, `${path}.isDynamic`, "must be a boolean");
+  if (!isOptionalNullableString(value.color)) issue(issues, `${path}.color`, "must be a string or null");
 }
 
 function validateCollection(issues: SnapshotValidationIssue[], value: unknown, path: string): void {
@@ -227,6 +234,7 @@ function validateCollection(issues: SnapshotValidationIssue[], value: unknown, p
   if (typeof value.key !== "string" || !value.key) issue(issues, `${path}.key`, "must be a non-empty string");
   if (typeof value.name !== "string") issue(issues, `${path}.name`, "must be a string");
   if (typeof value.isDynamic !== "boolean") issue(issues, `${path}.isDynamic`, "must be a boolean");
+  if (!isOptionalNullableString(value.color)) issue(issues, `${path}.color`, "must be a string or null");
   if (!isNonNegativeInteger(value.gameCount)) issue(issues, `${path}.gameCount`, "must be a non-negative integer");
 
   if (!Array.isArray(value.appIds)) {

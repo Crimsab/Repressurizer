@@ -1,5 +1,6 @@
 import { computeStats } from "./stats";
 import { generateLibrarySnapshotJson } from "./automationExport";
+import { getCategoryColor } from "./categoryColors";
 import { getHltbHours, hltbModeLabel } from "./hltb";
 import type { AchievementSummary, GameDetails, HltbTimeMode, OwnedGame, SteamCollection } from "./types";
 import type { FamilyLibraryApp, HltbData, WishlistItem } from "./tauri";
@@ -65,6 +66,7 @@ export interface ExportOptions {
   steamId64?: string;
   steamPersonaName?: string;
   hltbTimeMode?: HltbTimeMode;
+  categoryColors?: Record<string, string>;
   fields?: readonly ExportFieldKey[];
   filters?: ExportFilters;
   excludedCategoryKeys?: readonly string[];
@@ -129,6 +131,7 @@ interface ExportCategoryRecord {
   name: string;
   key: string;
   is_dynamic: boolean;
+  color: string | null;
   game_count: number;
   source_game_count: number;
   skipped_game_count: number;
@@ -518,6 +521,7 @@ function buildExportDataset(opts: ExportOptions): ExportDataset {
         name: collection.name,
         key: collection.key,
         is_dynamic: collection.is_dynamic,
+        color: getCategoryColor(collection, opts.categoryColors),
         game_count: rows.length,
         source_game_count: collection.added.length,
         skipped_game_count: Math.max(0, collection.added.length - rows.length),
@@ -587,6 +591,7 @@ function toJSON(opts: ExportOptions): string {
       appVersion: opts.appVersion,
       steamId64: opts.steamId64,
       steamPersonaName: opts.steamPersonaName,
+      categoryColors: opts.categoryColors,
     });
   }
   if (opts.scope === "stats") {
@@ -600,6 +605,7 @@ function toJSON(opts: ExportOptions): string {
         name: category.name,
         key: category.key,
         is_dynamic: category.is_dynamic,
+        color: category.color,
         game_count: category.game_count,
         source_game_count: category.source_game_count,
         skipped_game_count: category.skipped_game_count,

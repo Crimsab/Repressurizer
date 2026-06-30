@@ -23,9 +23,19 @@ import {
   ArrowsMerge,
   CopySimple,
   UsersThree,
+  Palette,
+  ArrowCounterClockwise,
 } from "@phosphor-icons/react";
 import { useT } from "../../lib/i18n";
 import { SteamImage } from "../games/SteamImage";
+import {
+  CATEGORY_COLOR_SWATCHES,
+  categoryPillStyle,
+  colorWithAlpha,
+  getCategoryColor,
+  getDefaultCategoryColor,
+  normalizeHexColor,
+} from "../../lib/categoryColors";
 
 const loadGameDetailPage = () => import("../games/GameDetailPage").then((m) => ({ default: m.GameDetailPage }));
 const loadMergeCategoriesDialog = () => import("../categories/MergeCategoriesDialog").then((m) => ({ default: m.MergeCategoriesDialog }));
@@ -66,6 +76,7 @@ export function Sidebar() {
   const showSmartLists = useSettingsStore((s) => s.showSmartLists);
   const showNowPlaying = useSettingsStore((s) => s.showNowPlaying);
   const sidebarWidth = useSettingsStore((s) => s.sidebarWidth);
+  const categoryColors = useSettingsStore((s) => s.categoryColors ?? {});
   const setSettings = useSettingsStore((s) => s.setSettings);
 
   const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
@@ -104,6 +115,7 @@ export function Sidebar() {
   const [confirmDeleteKeys, setConfirmDeleteKeys] = useState<string[] | null>(null);
   const [showMerge, setShowMerge] = useState(false);
   const [duplicateFor, setDuplicateFor] = useState<SteamCollection | null>(null);
+  const [colorFor, setColorFor] = useState<SteamCollection | null>(null);
   const [duplicateName, setDuplicateName] = useState("");
   const categoryAnchorRef = useRef<string | null>(null);
 
@@ -193,7 +205,6 @@ export function Sidebar() {
   const handleContextMenu = (e: React.MouseEvent, col: SteamCollection) => {
     e.preventDefault();
     e.stopPropagation();
-    if (col.is_dynamic) return;
     if (
       selectedCategoryKeys.length > 1 &&
       !selectedCategoryKeys.includes(col.key)
@@ -358,7 +369,6 @@ export function Sidebar() {
         {sortedCollections.map((col) => (
           <div
             key={col.key}
-            draggable={!col.is_dynamic && editingKey !== col.key}
             onDragStart={(e) => {
               if (col.is_dynamic) return;
               // If there are selected games, this is a game-to-category drag — don't intercept
@@ -411,7 +421,23 @@ export function Sidebar() {
                 />
               </form>
             ) : (
+              (() => {
+                const categoryColor = getCategoryColor(col, categoryColors);
+                const selected = !col.is_dynamic && selectedCategoryKeys.includes(col.key);
+                const active = activeCategory === col.key;
+                const tinted = Boolean(categoryColor && (active || selected));
+                return (
               <button
+                draggable={!col.is_dynamic && editingKey !== col.key}
+                style={
+                  categoryColor
+                    ? {
+                        backgroundColor: tinted ? colorWithAlpha(categoryColor, selected ? 0.18 : 0.12) : undefined,
+                        color: tinted ? categoryColor : undefined,
+                        boxShadow: tinted ? `inset 0 0 0 1px ${colorWithAlpha(categoryColor, 0.34)}` : undefined,
+                      }
+                    : undefined
+                }
                 onClick={(e) => {
                   if (col.is_dynamic) {
                     setActiveCategory(col.key);
@@ -461,24 +487,54 @@ export function Sidebar() {
                     ? "bg-repressurizer-surface-hover text-repressurizer-text"
                     : "text-repressurizer-text hover:bg-repressurizer-surface-hover"
                 } ${col.is_dynamic ? "italic text-repressurizer-text-muted" : ""} ${
-                  !col.is_dynamic && selectedCategoryKeys.includes(col.key)
+                  selected
                     ? "ring-1 ring-repressurizer-accent bg-repressurizer-accent/10 text-repressurizer-accent"
                     : ""
                 }`}
               >
                 {!col.is_dynamic && (
-                  <DotsSixVertical size={10} weight="bold" className="shrink-0 text-repressurizer-text-faint opacity-0 group-hover:opacity-50 transition-opacity cursor-grab" />
+                  <span
+                    draggable
+                    onDragStart={(e) => {
+                      if (Object.keys(selectedGameIds).length > 0) return;
+                      e.stopPropagation();
+                      e.dataTransfer.setData("text/x-category-key", col.key);
+                      handleCategoryDragStart(col.key);
+                    }}
+                    title={t("sidebar.category.dragReorder")}
+                    className="shrink-0 text-repressurizer-text-faint opacity-0 transition-opacity cursor-grab active:cursor-grabbing group-hover:opacity-70"
+                  >
+                    <DotsSixVertical size={10} weight="bold" />
+                  </span>
                 )}
                 {col.is_dynamic ? (
-                  <Robot size={14} weight="duotone" className="shrink-0 text-repressurizer-text-faint" />
+                  <Robot
+                    size={14}
+                    weight="duotone"
+                    className="shrink-0"
+                    style={categoryColor ? { color: categoryColor } : undefined}
+                  />
                 ) : (
-                  <FolderOpen size={14} weight={activeCategory === col.key ? "fill" : "duotone"} className="shrink-0 text-repressurizer-text-faint" />
+                  <FolderOpen
+                    size={14}
+                    weight={activeCategory === col.key ? "fill" : "duotone"}
+                    className="shrink-0"
+                    style={categoryColor ? { color: categoryColor } : undefined}
+                  />
                 )}
                 <span className="flex-1 truncate">{col.name}</span>
+                {categoryColor && (
+                  <span
+                    className="h-2 w-2 shrink-0 rounded-full ring-1 ring-black/30"
+                    style={{ backgroundColor: categoryColor }}
+                  />
+                )}
                 <span className="font-mono text-[10px] text-repressurizer-text-faint tabular-nums pr-1">
                   {col.is_dynamic ? t("sidebar.auto") : col.added.length}
                 </span>
               </button>
+                );
+              })()
             )}
           </div>
         ))}
@@ -643,6 +699,10 @@ export function Sidebar() {
             setDuplicateName(`${col.name} (copy)`);
             setContextMenu(null);
           }}
+          onColor={(col) => {
+            setColorFor(col);
+            setContextMenu(null);
+          }}
         />
       )}
 
@@ -711,6 +771,33 @@ export function Sidebar() {
           </div>
         </div>
       )}
+
+      {colorFor && (
+        <CategoryColorDialog
+          collection={colorFor}
+          color={categoryColors[colorFor.key] ?? ""}
+          resolvedColor={getCategoryColor(colorFor, categoryColors)}
+          defaultColor={getDefaultCategoryColor(colorFor)}
+          onClose={() => setColorFor(null)}
+          onApply={(color) => {
+            const normalized = normalizeHexColor(color);
+            if (!normalized) return;
+            setSettings({
+              categoryColors: {
+                ...categoryColors,
+                [colorFor.key]: normalized,
+              },
+            });
+            setColorFor(null);
+          }}
+          onReset={() => {
+            const next = { ...categoryColors };
+            delete next[colorFor.key];
+            setSettings({ categoryColors: next });
+            setColorFor(null);
+          }}
+        />
+      )}
     </aside>
   );
 }
@@ -765,6 +852,7 @@ function CategoryContextMenu({
   onExportSelected,
   onMergeSelected,
   onDuplicate,
+  onColor,
 }: {
   x: number;
   y: number;
@@ -779,6 +867,7 @@ function CategoryContextMenu({
   onExportSelected: () => void;
   onMergeSelected: () => void;
   onDuplicate: (col: SteamCollection) => void;
+  onColor: (col: SteamCollection) => void;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const t = useT();
@@ -859,33 +948,144 @@ function CategoryContextMenu({
       </div>
       <div className="py-1">
         <button
+          onClick={() => onColor(collection)}
+          className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-repressurizer-text hover:bg-repressurizer-surface-hover transition-colors"
+        >
+          <Palette size={14} className="text-repressurizer-text-muted" />
+          {t("sidebar.category.color")}
+        </button>
+        <button
           onClick={() => onExportCategory(collection)}
           className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-repressurizer-text hover:bg-repressurizer-surface-hover transition-colors"
         >
           <Export size={14} className="text-repressurizer-text-muted" />
           {t("sidebar.category.download")}
         </button>
-        <button
-          onClick={() => onDuplicate(collection)}
-          className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-repressurizer-text hover:bg-repressurizer-surface-hover transition-colors"
-        >
-          <CopySimple size={14} className="text-repressurizer-text-muted" />
-          {t("sidebar.category.duplicate")}
-        </button>
-        <button
-          onClick={() => onRename(collection)}
-          className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-repressurizer-text hover:bg-repressurizer-surface-hover transition-colors"
-        >
-          <PencilSimple size={14} className="text-repressurizer-text-muted" />
-          {t("category.rename")}
-        </button>
-        <button
-          onClick={() => onDelete(collection)}
-          className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-repressurizer-danger hover:bg-repressurizer-danger/10 transition-colors"
-        >
-          <TrashSimple size={14} />
-          {t("category.delete")}
-        </button>
+        {!collection.is_dynamic && (
+          <>
+            <button
+              onClick={() => onDuplicate(collection)}
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-repressurizer-text hover:bg-repressurizer-surface-hover transition-colors"
+            >
+              <CopySimple size={14} className="text-repressurizer-text-muted" />
+              {t("sidebar.category.duplicate")}
+            </button>
+            <button
+              onClick={() => onRename(collection)}
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-repressurizer-text hover:bg-repressurizer-surface-hover transition-colors"
+            >
+              <PencilSimple size={14} className="text-repressurizer-text-muted" />
+              {t("category.rename")}
+            </button>
+            <button
+              onClick={() => onDelete(collection)}
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-repressurizer-danger hover:bg-repressurizer-danger/10 transition-colors"
+            >
+              <TrashSimple size={14} />
+              {t("category.delete")}
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CategoryColorDialog({
+  collection,
+  color,
+  resolvedColor,
+  defaultColor,
+  onClose,
+  onApply,
+  onReset,
+}: {
+  collection: SteamCollection;
+  color: string;
+  resolvedColor: string | null;
+  defaultColor: string | null;
+  onClose: () => void;
+  onApply: (color: string) => void;
+  onReset: () => void;
+}) {
+  const t = useT();
+  const initial = normalizeHexColor(color) ?? resolvedColor ?? defaultColor ?? CATEGORY_COLOR_SWATCHES[1];
+  const [draft, setDraft] = useState(initial);
+  const normalizedDraft = normalizeHexColor(draft);
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="w-full max-w-sm rounded-2xl border border-repressurizer-border bg-repressurizer-surface p-5 shadow-xl">
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-white">{t("category.color.title")}</p>
+            <p className="mt-1 truncate text-xs text-repressurizer-text-muted">{collection.name}</p>
+          </div>
+          <span
+            className="h-8 w-8 shrink-0 rounded-xl border border-repressurizer-border"
+            style={categoryPillStyle(normalizedDraft)}
+          />
+        </div>
+
+        <div className="mb-4 flex items-center gap-3 rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-3 py-3">
+          <input
+            type="color"
+            value={normalizedDraft ?? CATEGORY_COLOR_SWATCHES[1]}
+            onChange={(e) => setDraft(e.target.value)}
+            className="h-9 w-12 cursor-pointer rounded-lg border border-repressurizer-border bg-transparent"
+            aria-label={t("category.color.pick")}
+          />
+          <input
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            className="min-w-0 flex-1 bg-transparent font-mono text-sm uppercase text-repressurizer-text outline-none placeholder:text-repressurizer-text-faint"
+            placeholder="#10B981"
+          />
+        </div>
+
+        <div className="mb-5 grid grid-cols-5 gap-2">
+          {CATEGORY_COLOR_SWATCHES.map((swatch) => (
+            <button
+              key={swatch}
+              type="button"
+              onClick={() => setDraft(swatch)}
+              className="btn-press h-8 rounded-lg border border-repressurizer-border transition-transform hover:scale-105"
+              style={{ backgroundColor: swatch }}
+              aria-label={swatch}
+            />
+          ))}
+        </div>
+
+        <div className="flex items-center justify-between gap-2">
+          <button
+            type="button"
+            onClick={onReset}
+            className="btn-press inline-flex items-center gap-1.5 rounded-lg border border-repressurizer-border px-3 py-1.5 text-sm text-repressurizer-text-muted hover:text-repressurizer-text"
+          >
+            <ArrowCounterClockwise size={14} />
+            {defaultColor ? t("category.color.resetDefault") : t("category.color.clear")}
+          </button>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="btn-press rounded-lg px-3 py-1.5 text-sm text-repressurizer-text-muted hover:bg-repressurizer-surface-hover hover:text-white"
+            >
+              {t("category.cancel")}
+            </button>
+            <button
+              type="button"
+              disabled={!normalizedDraft}
+              onClick={() => normalizedDraft && onApply(normalizedDraft)}
+              className="btn-press rounded-lg bg-repressurizer-accent px-3 py-1.5 text-sm text-white hover:bg-repressurizer-accent-hover disabled:opacity-40"
+            >
+              {t("category.color.apply")}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

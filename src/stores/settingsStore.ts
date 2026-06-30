@@ -10,6 +10,7 @@ import type {
   ProxyType,
 } from "../lib/types";
 import { isHltbTimeMode } from "../lib/hltb";
+import { normalizeCategoryColors } from "../lib/categoryColors";
 
 interface SettingsState extends AppSettings {
   hydrateFromDisk: () => Promise<void>;
@@ -74,6 +75,7 @@ const defaults: AppSettings = {
   currency: "EUR",
   onboardingComplete: false,
   categoryOrder: [],
+  categoryColors: {},
   minimizeToTray: false,
   trayCloseChoiceMade: false,
   startOnLogin: false,
@@ -190,6 +192,7 @@ function normalizeSettings(raw: Partial<AppSettings>): AppSettings {
     hltbBatchDelayMs: clampInteger(raw.hltbBatchDelayMs, defaults.hltbBatchDelayMs, 100, 30_000),
     achievementsBatchDelayMs: clampInteger(raw.achievementsBatchDelayMs, defaults.achievementsBatchDelayMs, 100, 30_000),
     hltbTimeMode: isHltbTimeMode(raw.hltbTimeMode) ? raw.hltbTimeMode as HltbTimeMode : defaults.hltbTimeMode,
+    categoryColors: normalizeCategoryColors(raw.categoryColors),
     automationPublishPayload: normalizeAutomationPublishPayload(raw.automationPublishPayload),
     proxySettings: {
       ...defaults.proxySettings,

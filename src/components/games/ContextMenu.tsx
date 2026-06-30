@@ -2,10 +2,12 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-shell";
 import { useCategoryStore } from "../../stores/categoryStore";
 import { useGameStore } from "../../stores/gameStore";
+import { useSettingsStore } from "../../stores/settingsStore";
 import { useStatusStore, STATUS_META, type GameStatus } from "../../stores/statusStore";
 import type { OwnedGame } from "../../lib/types";
 import { useT, type TranslationKey } from "../../lib/i18n";
 import { Eye, ArrowSquareOut, Check, EyeSlash, Play, Star, CaretRight, MagnifyingGlass } from "@phosphor-icons/react";
+import { colorWithAlpha, getCategoryColor } from "../../lib/categoryColors";
 
 const STATUS_OPTIONS: GameStatus[] = ["none", "playing", "beaten", "completed", "abandoned"];
 
@@ -30,6 +32,7 @@ export function ContextMenu({ x, y, game, onClose, onViewDetails }: ContextMenuP
   const selectedGameIds = useGameStore((s) => s.selectedGameIds);
   const addGamesToCategory = useCategoryStore((s) => s.addGamesToCategory);
   const removeGamesFromCategory = useCategoryStore((s) => s.removeGamesFromCategory);
+  const categoryColors = useSettingsStore((s) => s.categoryColors ?? {});
 
   const statuses = useStatusStore((s) => s.statuses);
   const setBulkStatus = useStatusStore((s) => s.setBulkStatus);
@@ -303,6 +306,7 @@ export function ContextMenu({ x, y, game, onClose, onViewDetails }: ContextMenuP
           <div className="min-h-0 overflow-auto py-1">
             {filteredCollections.map((col) => {
               const inCat = !isMulti && gameInCategory(col.key);
+              const categoryColor = getCategoryColor(col, categoryColors);
               return (
                 <button
                   key={col.key}
@@ -315,10 +319,20 @@ export function ContextMenu({ x, y, game, onClose, onViewDetails }: ContextMenuP
                         ? "border-repressurizer-accent bg-repressurizer-accent text-white"
                         : "border-repressurizer-border"
                     }`}
+                    style={
+                      categoryColor
+                        ? {
+                            borderColor: colorWithAlpha(categoryColor, inCat ? 0.85 : 0.55),
+                            backgroundColor: inCat ? categoryColor : colorWithAlpha(categoryColor, 0.12),
+                          }
+                        : undefined
+                    }
                   >
                     {inCat && <Check size={9} weight="bold" />}
                   </span>
-                  <span className="truncate">{String(col.name ?? "")}</span>
+                  <span className="truncate" style={categoryColor && inCat ? { color: categoryColor } : undefined}>
+                    {String(col.name ?? "")}
+                  </span>
                 </button>
               );
             })}

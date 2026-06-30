@@ -6,6 +6,7 @@ import type {
   SteamCollection,
 } from "./types";
 import type { FamilyLibraryApp, HltbData, WishlistItem } from "./tauri";
+import { getCategoryColor } from "./categoryColors";
 
 export const LIBRARY_SNAPSHOT_SCHEMA_VERSION = "repressurizer.library-snapshot.v1" as const;
 
@@ -26,6 +27,7 @@ export interface LibrarySnapshotOptions {
   steamPersonaName?: string;
   generatedAt?: string;
   payloadSettings?: Partial<AutomationPublishPayloadSettings>;
+  categoryColors?: Record<string, string>;
 }
 
 export interface LibrarySnapshot {
@@ -56,6 +58,7 @@ export interface LibrarySnapshotCollection {
   key: string;
   name: string;
   isDynamic: boolean;
+  color: string | null;
   gameCount: number;
   appIds: number[];
 }
@@ -72,6 +75,7 @@ export interface LibrarySnapshotGame {
     key: string;
     name: string;
     isDynamic: boolean;
+    color: string | null;
   }>;
   details: {
     releaseDate: string | null;
@@ -346,6 +350,7 @@ export function buildLibrarySnapshot(options: LibrarySnapshotOptions): LibrarySn
         key: collection.key,
         name: collection.name,
         isDynamic: Boolean(collection.is_dynamic),
+        color: getCategoryColor(collection, options.categoryColors),
         gameCount: appIds.length,
         appIds,
       };
@@ -387,6 +392,7 @@ export function buildLibrarySnapshot(options: LibrarySnapshotOptions): LibrarySn
         key: collection.key,
         name: collection.name,
         isDynamic: collection.isDynamic,
+        color: collection.color,
       });
       collectionRefsByAppId.set(appId, refs);
     }

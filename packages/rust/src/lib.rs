@@ -57,6 +57,8 @@ pub struct LibrarySnapshotCollection {
     pub key: String,
     pub name: String,
     pub is_dynamic: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<String>,
     pub game_count: usize,
     pub app_ids: Vec<u32>,
 }
@@ -67,6 +69,8 @@ pub struct LibrarySnapshotCollectionRef {
     pub key: String,
     pub name: String,
     pub is_dynamic: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

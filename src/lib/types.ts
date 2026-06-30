@@ -395,6 +395,7 @@ export interface AppSettings {
   onboardingComplete: boolean;
   // Category order
   categoryOrder: string[];
+  categoryColors: Record<string, string>;
   // System tray
   minimizeToTray: boolean;
   trayCloseChoiceMade: boolean;

@@ -54,6 +54,7 @@ const settings: AppSettings = {
   currency: "EUR",
   onboardingComplete: true,
   categoryOrder: [],
+  categoryColors: {},
   minimizeToTray: false,
   trayCloseChoiceMade: false,
   startOnLogin: false,

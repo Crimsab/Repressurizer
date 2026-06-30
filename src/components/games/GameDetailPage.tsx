@@ -25,6 +25,7 @@ import { detailsPriceMatchesCurrency, detailsWithPriceForCurrency } from "../../
 import { SteamImage } from "./SteamImage";
 import { SelectMenu } from "../ui/SelectMenu";
 import { useHltbStore } from "../../stores/hltbStore";
+import { categoryPillStyle, getCategoryColor } from "../../lib/categoryColors";
 import type {
   OwnedGame,
   GameDetails,
@@ -633,6 +634,7 @@ function InfoTab({
   onRemoveFromCategory: (key: string) => void;
 }) {
   const t = useT();
+  const categoryColors = useSettingsStore((s) => s.categoryColors ?? {});
   const gameCatKeys = new Set(gameCategories.map((c) => c.key));
   const note = useNotesStore((s) => s.notes[game.appid] ?? "");
   const setNote = useNotesStore((s) => s.setNote);
@@ -923,6 +925,7 @@ function InfoTab({
                     ? onRemoveFromCategory(col.key)
                     : onAddToCategory(col.key)
                 }
+                style={inCat ? categoryPillStyle(getCategoryColor(col, categoryColors)) : undefined}
                 className={`btn-press inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs transition-all ${
                   inCat
                     ? "border-repressurizer-accent/40 bg-repressurizer-accent/10 text-repressurizer-accent"
