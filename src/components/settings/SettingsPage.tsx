@@ -242,6 +242,13 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
   }, [updateMessage]);
 
   useEffect(() => {
+    if (!message) return;
+    const isError = /(failed|fallit|error|errore|could not|non riusc)/i.test(message);
+    const timer = window.setTimeout(() => setMessage(""), isError ? 8000 : 5000);
+    return () => window.clearTimeout(timer);
+  }, [message]);
+
+  useEffect(() => {
     let cancelled = false;
     loadSteamFamilyToken()
       .then((cache) => {
@@ -1070,6 +1077,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
   const automationStatusLabel = settings.automationPublishLastStatus
     ? t(`settings.automationExport.status.${settings.automationPublishLastStatus}` as Parameters<typeof t>[0])
     : t("settings.automationExport.status.idle");
+  const messageIsError = /(failed|fallit|error|errore|could not|non riusc)/i.test(message);
   const automationPayload = settings.automationPublishPayload;
   const automationCategoryOptions = useMemo(
     () =>
@@ -1233,15 +1241,23 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
         {/* Content */}
         <div className="flex-1 overflow-auto p-4 sm:p-6">
           {message && (
-            <div className={`mb-4 flex items-center gap-2 rounded-xl border p-3.5 text-sm ${
-              message.includes("failed") || message.includes("Failed")
+            <div className={`mb-4 flex items-start gap-2 rounded-xl border p-3.5 text-sm ${
+              messageIsError
                 ? "border-repressurizer-danger/20 bg-repressurizer-danger/8 text-repressurizer-danger"
                 : "border-repressurizer-success/20 bg-repressurizer-success/8 text-repressurizer-success"
             }`}>
-              {message.includes("failed") || message.includes("Failed")
-                ? <Warning size={16} weight="fill" />
-                : <CheckCircle size={16} weight="fill" />}
-              {message}
+              {messageIsError
+                ? <Warning size={16} weight="fill" className="mt-0.5 shrink-0" />
+                : <CheckCircle size={16} weight="fill" className="mt-0.5 shrink-0" />}
+              <p className="min-w-0 flex-1 leading-relaxed">{message}</p>
+              <button
+                type="button"
+                onClick={() => setMessage("")}
+                aria-label={t("settings.message.dismiss")}
+                className="btn-press -mr-1 -mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-current opacity-60 transition-opacity hover:bg-white/5 hover:opacity-100"
+              >
+                <X size={13} weight="bold" />
+              </button>
             </div>
           )}
 
@@ -2272,16 +2288,24 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                   )}
                   {updateMessage && (
                     <div
-                      className={`mt-3 flex items-center gap-2 rounded-lg border px-3 py-2 text-xs ${
+                      className={`mt-3 flex items-start gap-2 rounded-lg border px-3 py-2 text-xs ${
                         updateMessage.tone === "error"
                           ? "border-repressurizer-danger/20 bg-repressurizer-danger/8 text-repressurizer-danger"
                           : "border-repressurizer-success/20 bg-repressurizer-success/8 text-repressurizer-success"
                       }`}
                     >
                       {updateMessage.tone === "error"
-                        ? <Warning size={14} weight="fill" />
-                        : <CheckCircle size={14} weight="fill" />}
-                      {updateMessage.text}
+                        ? <Warning size={14} weight="fill" className="mt-0.5 shrink-0" />
+                        : <CheckCircle size={14} weight="fill" className="mt-0.5 shrink-0" />}
+                      <p className="min-w-0 flex-1 leading-relaxed">{updateMessage.text}</p>
+                      <button
+                        type="button"
+                        onClick={() => setUpdateMessage(null)}
+                        aria-label={t("settings.message.dismiss")}
+                        className="btn-press -mr-1 -mt-1 flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-current opacity-60 transition-opacity hover:bg-white/5 hover:opacity-100"
+                      >
+                        <X size={12} weight="bold" />
+                      </button>
                     </div>
                   )}
                   <div className="mt-3 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-surface/40 px-3 py-2.5">
