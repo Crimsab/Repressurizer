@@ -4,6 +4,7 @@ import { useGameStore } from "../../stores/gameStore";
 import { useCategoryStore } from "../../stores/categoryStore";
 import { usePlayHistoryStore } from "../../stores/playHistoryStore";
 import { useSteamAppIndexStore } from "../../stores/steamAppIndexStore";
+import { useAppNameOverrideStore } from "../../stores/appNameOverrideStore";
 import {
   detectSteam,
   detectSteamAt,
@@ -76,8 +77,16 @@ export function SetupWizard() {
 
       const details = useGameStore.getState().details;
       await useSteamAppIndexStore.getState().hydrate();
+      await useAppNameOverrideStore.getState().hydrate();
+      useAppNameOverrideStore.getState().mergeNames(games);
       const appIndex = useSteamAppIndexStore.getState().data;
-      setLoadedGames(mergeCollectionOnlyGames(games, collections, details, appIndex));
+      setLoadedGames(mergeCollectionOnlyGames(
+        games,
+        collections,
+        details,
+        appIndex,
+        useAppNameOverrideStore.getState().resolveName
+      ));
       setLoadedCollections(collections);
       setStep(2);
       setLoading(false);

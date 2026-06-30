@@ -1,7 +1,8 @@
-import type { OwnedGame, GameDetails, AchievementSummary } from "./types";
+import type { OwnedGame, GameDetails, AchievementSummary, HltbTimeMode } from "./types";
 import type { GameStatus } from "../stores/statusStore";
 import type { GameReview } from "../stores/reviewStore";
 import type { FamilyLibraryApp, HltbData } from "./tauri";
+import { getHltbHours } from "./hltb";
 
 type PlatformKey = "windows" | "mac" | "linux";
 
@@ -42,6 +43,7 @@ export interface SearchFilter {
 
 export interface MatchContext {
   hltbData?: Record<number, HltbData>;
+  hltbTimeMode?: HltbTimeMode;
   achievements?: Record<number, AchievementSummary>;
   familyApps?: Record<number, FamilyLibraryApp>;
   duplicateAppIds?: Set<number>;
@@ -345,7 +347,7 @@ export function matchesFilter(
   if (filter.maxHours != null && hours > filter.maxHours) return false;
 
   if (filter.minHltbHours != null || filter.maxHltbHours != null) {
-    const hltbHours = context.hltbData?.[game.appid]?.main_story;
+    const hltbHours = getHltbHours(context.hltbData?.[game.appid], context.hltbTimeMode ?? "main_story");
     if (hltbHours == null) return false;
     if (filter.minHltbHours != null && hltbHours < filter.minHltbHours) return false;
     if (filter.maxHltbHours != null && hltbHours > filter.maxHltbHours) return false;

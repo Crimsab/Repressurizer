@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
-import type { AppSettings, AppTheme, ProxyProfile, ProxyRotationMode, ProxyType } from "../lib/types";
+import type { AppSettings, AppTheme, HltbTimeMode, ProxyProfile, ProxyRotationMode, ProxyType } from "../lib/types";
+import { isHltbTimeMode } from "../lib/hltb";
 
 interface SettingsState extends AppSettings {
   hydrateFromDisk: () => Promise<void>;
@@ -42,6 +43,7 @@ const defaults: AppSettings = {
   steamRatingsCooldownMinutes: 5,
   hltbBatchDelayMs: 500,
   achievementsBatchDelayMs: 300,
+  hltbTimeMode: "main_story",
   autoFetchDetailsOnRefresh: true,
   autoFetchHltbOnRefresh: true,
   proxySettings: {
@@ -137,6 +139,7 @@ function normalizeSettings(raw: Partial<AppSettings>): AppSettings {
     steamRatingsCooldownMinutes: clampInteger(raw.steamRatingsCooldownMinutes, defaults.steamRatingsCooldownMinutes, 1, 60),
     hltbBatchDelayMs: clampInteger(raw.hltbBatchDelayMs, defaults.hltbBatchDelayMs, 100, 30_000),
     achievementsBatchDelayMs: clampInteger(raw.achievementsBatchDelayMs, defaults.achievementsBatchDelayMs, 100, 30_000),
+    hltbTimeMode: isHltbTimeMode(raw.hltbTimeMode) ? raw.hltbTimeMode as HltbTimeMode : defaults.hltbTimeMode,
     proxySettings: {
       ...defaults.proxySettings,
       ...proxySettings,

@@ -33,6 +33,7 @@ import {
   isSteamRatingFresh,
   steamRatingIdsNeedingFetch,
 } from "../../lib/steamRatings";
+import { getHltbHours, hltbModeLabel, HLTB_TIME_MODES } from "../../lib/hltb";
 import {
   runHoursCategorizer,
   runGenreCategorizer,
@@ -59,7 +60,7 @@ import {
   type SteamRatingRule,
   type YearGrouping,
 } from "../../lib/tauri";
-import type { GameDetails, OwnedGame, SteamReviewSummary } from "../../lib/types";
+import type { GameDetails, HltbTimeMode, OwnedGame, SteamReviewSummary } from "../../lib/types";
 import type { HltbData } from "../../lib/tauri";
 import {
   X,
@@ -89,6 +90,7 @@ import {
   CopySimple,
 } from "@phosphor-icons/react";
 import { useT, type TranslationKey } from "../../lib/i18n";
+import { SelectMenu } from "../ui/SelectMenu";
 
 // ============================================================
 // Types
@@ -134,6 +136,7 @@ const CATEGORIZERS: {
 
 const DEFAULT_HLTB_CONFIG: HoursConfig = {
   prefix: "",
+  hltb_time_mode: "main_story",
   rules: [
     { name: "Very Short (< 5h)", min_hours: 0, max_hours: 5 },
     { name: "Short (5–15h)", min_hours: 5, max_hours: 15 },
@@ -335,9 +338,9 @@ function runHltbCategorizerJs(
 
   for (const game of games) {
     const hltb = hltbData[game.appid];
-    if (!hltb || hltb.main_story == null) continue;
+    const hours = getHltbHours(hltb, hltbModeForConfig(config));
+    if (hours == null) continue;
 
-    const hours = hltb.main_story;
     for (const rule of config.rules) {
       const inMin = hours >= rule.min_hours;
       const inMax = rule.max_hours === 0 || hours < rule.max_hours;
@@ -355,6 +358,17 @@ function runHltbCategorizerJs(
     assignments,
     games_processed: games.length,
     games_categorized: categorized,
+  };
+}
+
+function hltbModeForConfig(config: Partial<HoursConfig>, fallback?: HltbTimeMode): HltbTimeMode {
+  return config.hltb_time_mode ?? fallback ?? "main_story";
+}
+
+function withProcessedAppIds(result: CategorizeResult, ids: number[]): CategorizeResult {
+  return {
+    ...result,
+    processed_app_ids: [...new Set(ids.filter((id) => Number.isFinite(id)).map((id) => Math.trunc(id)))],
   };
 }
 
@@ -376,6 +390,7 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
   const steamPath = useSettingsStore((s) => s.steamPath);
   const steamId3 = useSettingsStore((s) => s.steamId3);
   const hltbData = useHltbStore((s) => s.data);
+  const hltbTimeMode = useSettingsStore((s) => s.hltbTimeMode);
 
   const persist = useAutoCategorizeStore();
 
@@ -410,7 +425,10 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
   const [ratingConfig, setRatingConfig] = useState<SteamRatingConfig>(
     persist.ratingConfig ?? DEFAULT_STEAM_RATING_CONFIG
   );
-  const [hltbConfig, setHltbConfig] = useState<HoursConfig>(DEFAULT_HLTB_CONFIG);
+  const [hltbConfig, setHltbConfig] = useState<HoursConfig>({
+    ...DEFAULT_HLTB_CONFIG,
+    hltb_time_mode: hltbTimeMode,
+  });
   const [presetName, setPresetName] = useState("");
   const [loadedPresetId, setLoadedPresetId] = useState<string | null>(null);
 
@@ -763,87 +781,93 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
 
     if (runType === "hours") {
       const cfg = config as HoursConfig;
-      return runHoursCategorizer(gamesForRun, {
+      return withProcessedAppIds(await runHoursCategorizer(gamesForRun, {
         ...cfg,
         prefix: cfg.prefix || undefined,
-      });
+      }), gamesForRun.map((game) => game.appid));
     }
     if (runType === "genre") {
       const cfg = config as GenreConfig;
-      return runGenreCategorizer(allDetails, {
+      return withProcessedAppIds(await runGenreCategorizer(allDetails, {
         ...cfg,
         prefix: cfg.prefix || undefined,
-      });
+      }), allDetails.map((detail) => detail.app_id));
     }
     if (runType === "tags") {
       const cfg = config as TagsConfig;
-      return runTagsCategorizer(allDetails, {
+      return withProcessedAppIds(await runTagsCategorizer(allDetails, {
         ...cfg,
         prefix: cfg.prefix || undefined,
-      });
+      }), allDetails.map((detail) => detail.app_id));
     }
     if (runType === "year") {
       const cfg = config as YearConfig;
-      return runYearCategorizer(allDetails, {
+      return withProcessedAppIds(await runYearCategorizer(allDetails, {
         ...cfg,
         prefix: cfg.prefix || undefined,
-      });
+      }), allDetails.map((detail) => detail.app_id));
     }
     if (runType === "devpub") {
       const cfg = config as DevPubConfig;
-      return runDevPubCategorizer(allDetails, {
+      return withProcessedAppIds(await runDevPubCategorizer(allDetails, {
         ...cfg,
         prefix: cfg.prefix || undefined,
         min_games: cfg.min_games || undefined,
-      });
+      }), allDetails.map((detail) => detail.app_id));
     }
     if (runType === "flags") {
       const cfg = config as FlagsConfig;
-      return runFlagsCategorizer(allDetails, {
+      return withProcessedAppIds(await runFlagsCategorizer(allDetails, {
         ...cfg,
         prefix: cfg.prefix || undefined,
         max_flags: cfg.max_flags || undefined,
-      });
+      }), allDetails.map((detail) => detail.app_id));
     }
     if (runType === "language") {
       const cfg = config as LanguageConfig;
-      return runLanguageCategorizer(allDetails, {
+      return withProcessedAppIds(await runLanguageCategorizer(allDetails, {
         ...cfg,
         prefix: cfg.prefix || undefined,
         max_languages: cfg.max_languages || undefined,
-      });
+      }), allDetails.map((detail) => detail.app_id));
     }
     if (runType === "platform") {
       const cfg = config as PlatformConfig;
-      return runPlatformCategorizer(allDetails, {
+      return withProcessedAppIds(await runPlatformCategorizer(allDetails, {
         ...cfg,
         prefix: cfg.prefix || undefined,
-      });
+      }), allDetails.map((detail) => detail.app_id));
     }
     if (runType === "name") {
       const cfg = config as NameConfig;
-      return runNameCategorizer(gamesForRun, {
+      return withProcessedAppIds(await runNameCategorizer(gamesForRun, {
         ...cfg,
         prefix: cfg.prefix || undefined,
-      });
+      }), gamesForRun.map((game) => game.appid));
     }
     if (runType === "hltb") {
       const cfg = config as HoursConfig;
-      return runHltbCategorizerJs(gamesForRun, hltbData, {
+      const mode = hltbModeForConfig(cfg, hltbTimeMode);
+      return withProcessedAppIds(runHltbCategorizerJs(gamesForRun, hltbData, {
         ...cfg,
         prefix: cfg.prefix || undefined,
-      });
+        hltb_time_mode: mode,
+      }), gamesForRun
+        .filter((game) => getHltbHours(hltbData[game.appid], mode) != null)
+        .map((game) => game.appid));
     }
     if (runType === "rating") {
       const cfg = config as SteamRatingConfig;
-      return categorizeBySteamRating(gamesForRun, ratingsForRun, {
+      return withProcessedAppIds(categorizeBySteamRating(gamesForRun, ratingsForRun, {
         ...cfg,
         prefix: cfg.prefix || undefined,
-      });
+      }), gamesForRun
+        .filter((game) => isSteamRatingFresh(ratingsForRun[game.appid]))
+        .map((game) => game.appid));
     }
 
-    return runScoreCategorizer(allDetails, true);
-  }, [games, details, hltbData]);
+    return withProcessedAppIds(await runScoreCategorizer(allDetails, true), allDetails.map((detail) => detail.app_id));
+  }, [games, details, hltbData, hltbTimeMode]);
 
   const runCategorizer = useCallback(async (
     options: { cachedOnly?: boolean; skippedDetails?: number } = {}
@@ -949,7 +973,9 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
     }
 
     applyImportedCollections(
-      applyAutoCategorizeAssignments(collections, result.assignments)
+      applyAutoCategorizeAssignments(collections, result.assignments, undefined, {
+        processedAppIds: result.processed_app_ids,
+      })
     );
 
     gotoStep("done");
@@ -1566,7 +1592,7 @@ function ConfigureStep({
       {type === "genre" && <GenreConfigForm config={genreConfig} onChange={setGenreConfig} suggestions={metadata.genreValues} />}
       {type === "tags" && <TagsConfigForm config={tagsConfig} onChange={setTagsConfig} suggestions={metadata.flagValues} />}
       {type === "year" && <YearConfigForm config={yearConfig} onChange={setYearConfig} />}
-      {type === "hltb" && <HoursConfigForm config={hltbConfig} onChange={setHltbConfig} label={t("auto.hltbBuckets")} />}
+      {type === "hltb" && <HoursConfigForm config={hltbConfig} onChange={setHltbConfig} label={t("auto.hltbBuckets")} showHltbMode />}
       {type === "devpub" && <DevPubConfigForm config={devPubConfig} onChange={setDevPubConfig} suggestions={metadata.studioValues} metadata={metadata} />}
       {type === "flags" && <FlagsConfigForm config={flagsConfig} onChange={setFlagsConfig} suggestions={metadata.flagValues} metadata={metadata} />}
       {type === "language" && <LanguageConfigForm config={languageConfig} onChange={setLanguageConfig} suggestions={metadata.languageValues} metadata={metadata} />}
@@ -1640,7 +1666,17 @@ function PrefixInput({ value, onChange }: { value: string; onChange: (v: string)
   );
 }
 
-function HoursConfigForm({ config, onChange, label }: { config: HoursConfig; onChange: (c: HoursConfig) => void; label?: string }) {
+function HoursConfigForm({
+  config,
+  onChange,
+  label,
+  showHltbMode = false,
+}: {
+  config: HoursConfig;
+  onChange: (c: HoursConfig) => void;
+  label?: string;
+  showHltbMode?: boolean;
+}) {
   const t = useT();
   const updateRule = (i: number, field: string, val: string) => {
     const rules = config.rules.map((r, idx) =>
@@ -1654,6 +1690,24 @@ function HoursConfigForm({ config, onChange, label }: { config: HoursConfig; onC
   return (
     <div className="space-y-4">
       <PrefixInput value={config.prefix ?? ""} onChange={(v) => onChange({ ...config, prefix: v })} />
+      {showHltbMode && (
+        <div>
+          <label className="mb-1.5 block text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">
+            {t("auto.hltbTimeType")}
+          </label>
+          <SelectMenu<HltbTimeMode>
+            ariaLabel={t("auto.hltbTimeType")}
+            value={hltbModeForConfig(config)}
+            onChange={(mode) => onChange({ ...config, hltb_time_mode: mode })}
+            size="sm"
+            className="w-full"
+            options={HLTB_TIME_MODES.map((mode) => ({
+              value: mode,
+              label: hltbModeLabel(mode),
+            }))}
+          />
+        </div>
+      )}
       <div>
         <div className="mb-2 flex items-center justify-between">
           <label className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{label ?? t("auto.timeBuckets")}</label>

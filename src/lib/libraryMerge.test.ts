@@ -70,6 +70,18 @@ describe("libraryMerge", () => {
     expect(merged.find((g) => g.appid === 39140)?.name).toBe("FINAL FANTASY VII");
   });
 
+  it("uses local name overrides when details and app index are missing", () => {
+    const merged = mergeCollectionOnlyGames(
+      [baseGame],
+      [collection],
+      {},
+      undefined,
+      (appId) => appId === 39140 ? "FINAL FANTASY VII" : null
+    );
+
+    expect(merged.find((g) => g.appid === 39140)?.name).toBe("FINAL FANTASY VII");
+  });
+
   it("recognizes placeholder names", () => {
     expect(isPlaceholderGameName(39140, "App 39140")).toBe(true);
     expect(isPlaceholderGameName(39140, "Unknown (#39140)")).toBe(true);

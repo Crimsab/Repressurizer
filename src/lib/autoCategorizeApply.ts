@@ -24,14 +24,22 @@ export type AutoCategorizeApplyType =
   | "platform"
   | "name";
 
+interface AutoCategorizeApplyOptions {
+  processedAppIds?: Iterable<number>;
+}
+
 export function applyAutoCategorizeAssignments(
   collections: SteamCollection[],
   assignments: Record<string, number[]>,
-  timestamp = Math.floor(Date.now() / 1000)
+  timestamp = Math.floor(Date.now() / 1000),
+  options: AutoCategorizeApplyOptions = {}
 ): SteamCollection[] {
   const assignmentEntries = normalizeAssignments(assignments);
   const usedKeys = new Set(collections.map((collection) => collection.key));
   const matchedAssignmentNames = new Set<string>();
+  const processedAppIds = options.processedAppIds
+    ? new Set([...options.processedAppIds].filter((id) => Number.isFinite(id)).map((id) => Math.trunc(id)))
+    : null;
 
   const nextCollections = collections.map((collection) => {
     if (collection.is_dynamic) return collection;
@@ -40,10 +48,13 @@ export function applyAutoCategorizeAssignments(
     if (!assignment) return collection;
 
     matchedAssignmentNames.add(assignment.normalizedName);
+    const preserved = processedAppIds
+      ? collection.added.filter((appId) => !processedAppIds.has(appId))
+      : [];
     return {
       ...collection,
       name: assignment.name,
-      added: assignment.added,
+      added: uniqueSortedIds([...preserved, ...assignment.added]),
       removed: [],
       timestamp,
       is_deleted: false,

@@ -25,6 +25,7 @@ const settings: AppSettings = {
   showDetailMetacritic: true,
   showDetailPrice: true,
   hltbConcurrency: 5,
+  hltbTimeMode: "main_story",
   achievementsConcurrency: 5,
   steamDetailsDelayMs: 1200,
   steamRatingsDelayMs: 1200,

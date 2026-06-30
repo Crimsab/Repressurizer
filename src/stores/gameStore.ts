@@ -4,6 +4,7 @@ import type { OwnedGame, GameDetails, GamePriceOverview } from "../lib/types";
 import type { GameStatus } from "./statusStore";
 import { displayNameFromDetails, isPlaceholderGameName } from "../lib/libraryMerge";
 import { useSteamAppIndexStore } from "./steamAppIndexStore";
+import { useAppNameOverrideStore } from "./appNameOverrideStore";
 import { mergeDetailsPriceCache, mergePriceSnapshotIntoDetails, sanitizeGameDetailsPrices } from "../lib/prices";
 
 export const DETAILS_CACHE_SCHEMA_VERSION = 2;
@@ -224,10 +225,12 @@ export const useGameStore = create<GameState>((set, get) => ({
     set((state) => {
       const map: Record<number, OwnedGame> = {};
       const appIndex = useSteamAppIndexStore.getState().data;
+      const nameStore = useAppNameOverrideStore.getState();
+      nameStore.mergeNames(games);
       for (const g of games) {
         map[g.appid] = {
           ...g,
-          name: displayNameFromDetails(g, state.details[g.appid], appIndex),
+          name: displayNameFromDetails(g, state.details[g.appid], appIndex, nameStore.resolveName),
         };
       }
       return { games: map, loading: false, error: null };
@@ -237,6 +240,8 @@ export const useGameStore = create<GameState>((set, get) => ({
     set((state) => {
       const map = { ...state.games };
       const appIndex = useSteamAppIndexStore.getState().data;
+      const nameStore = useAppNameOverrideStore.getState();
+      nameStore.mergeNames(games);
       for (const game of games) {
         const existing = map[game.appid];
         const merged = existing
@@ -256,7 +261,7 @@ export const useGameStore = create<GameState>((set, get) => ({
           : game;
         map[game.appid] = {
           ...merged,
-          name: displayNameFromDetails(merged, state.details[game.appid], appIndex),
+          name: displayNameFromDetails(merged, state.details[game.appid], appIndex, nameStore.resolveName),
         };
       }
       return { games: map };
@@ -268,8 +273,17 @@ export const useGameStore = create<GameState>((set, get) => ({
       const next = { ...state.details, [appId]: cleanDetails };
       const games = { ...state.games };
       const game = games[appId];
+      useAppNameOverrideStore.getState().mergeNames([{ appid: cleanDetails.app_id, name: cleanDetails.name }]);
       if (game && (game.is_collection_only || isPlaceholderGameName(appId, game.name))) {
-        games[appId] = { ...game, name: displayNameFromDetails(game, cleanDetails, useSteamAppIndexStore.getState().data) };
+        games[appId] = {
+          ...game,
+          name: displayNameFromDetails(
+            game,
+            cleanDetails,
+            useSteamAppIndexStore.getState().data,
+            useAppNameOverrideStore.getState().resolveName
+          ),
+        };
       }
       persistDetailsCache(next);
       return { details: next, games };
@@ -279,14 +293,25 @@ export const useGameStore = create<GameState>((set, get) => ({
     set((state) => {
       const next = { ...state.details };
       const games = { ...state.games };
+      const nameEntries: Array<{ appid: number; name: string | null }> = [];
       for (const rawDetails of details) {
         const d = markDetailsCacheFresh(rawDetails, next[rawDetails.app_id]);
         next[d.app_id] = d;
+        nameEntries.push({ appid: d.app_id, name: d.name });
         const game = games[d.app_id];
         if (game && (game.is_collection_only || isPlaceholderGameName(d.app_id, game.name))) {
-          games[d.app_id] = { ...game, name: displayNameFromDetails(game, d, useSteamAppIndexStore.getState().data) };
+          games[d.app_id] = {
+            ...game,
+            name: displayNameFromDetails(
+              game,
+              d,
+              useSteamAppIndexStore.getState().data,
+              useAppNameOverrideStore.getState().resolveName
+            ),
+          };
         }
       }
+      useAppNameOverrideStore.getState().mergeNames(nameEntries);
       persistDetailsCache(next);
       return { details: next, games };
     }),

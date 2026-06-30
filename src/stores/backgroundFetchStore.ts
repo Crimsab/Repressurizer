@@ -10,6 +10,7 @@ import { useSettingsStore } from "./settingsStore";
 import { extractReleaseYear } from "../lib/search";
 import { detailsPriceNeedsCurrencyRefresh } from "../lib/prices";
 import { isSteamRatingFresh, isSteamReviewRateLimitedError } from "../lib/steamRatings";
+import { getHltbHours } from "../lib/hltb";
 import type { GameDetails, GamePriceOverview } from "../lib/types";
 
 // ── Config ────────────────────────────────────────────────────────────────────
@@ -181,6 +182,7 @@ export const useBackgroundFetchStore = create<BackgroundFetchState>((set, get) =
 
       _detailsRunning = true;
       _detailsAbort = false;
+      _extraDelayMs = 0;
       set({
         detailsRunning: true,
         detailsFetched: 0,
@@ -198,6 +200,7 @@ export const useBackgroundFetchStore = create<BackgroundFetchState>((set, get) =
     stopDetailsFetch: () => {
       _detailsAbort = true;
       _detailsRunning = false;
+      _extraDelayMs = 0;
       set({ detailsRunning: false, detailsCurrentName: "", detailsCoolingDown: false, detailsCooldownSecs: 0 });
     },
 
@@ -287,7 +290,7 @@ function sleep(ms: number) {
 
 function addToRecent(key: "detailsRecentNames" | "hltbRecentNames" | "achievementsRecentNames" | "ratingsRecentNames", label: string) {
   const prev = _getState()[key];
-  _setState({ [key]: [label, ...prev].slice(0, MAX_RECENT) } as Partial<BackgroundFetchState>);
+  _setState({ [key]: [label, ...prev.filter((item) => item !== label)].slice(0, MAX_RECENT) } as Partial<BackgroundFetchState>);
 }
 
 /**
@@ -323,6 +326,7 @@ async function _runDetailsLoop(missingIds: number[]) {
   const currency = useSettingsStore.getState().currency ?? "EUR";
   const cc = currencyToCountryCode(currency);
   const currentDetails = useGameStore.getState().details;
+  const failedGamesStore = useFailedGamesStore.getState();
   const priceOnlyIds = missingIds.filter((id) => {
     const detail = currentDetails[id];
     return isDetailsCacheCurrent(detail) && detailsPriceNeedsCurrencyRefresh(detail, currency);
@@ -383,13 +387,21 @@ async function _runDetailsLoop(missingIds: number[]) {
       onDetailsSuccess();
       ok = true;
       succeeded++;
-      } catch (e) {
+    } catch (e) {
+      if (isPermanentError(e)) {
+        const failed = _getState().detailsFailed + 1;
+        _setState({ detailsFailed: failed });
+        failedGamesStore.recordFailure(id);
+        addToRecent("detailsRecentNames", `✗ ${name} (unavailable)`);
+        console.warn(`[Details] ✗ ${name} (${id}): ${e} — confirmed unavailable`);
+      } else {
         console.warn(`[Details] ✗ ${name} (${id}): ${e}`);
         onDetailsFail(id);
         retryQueue.push(id);
         if (_extraDelayMs >= DETAILS_SLOWDOWN_THRESHOLD_MS) {
           addToRecent("detailsRecentNames", `⚠ Slowing down (${Math.round(_extraDelayMs / 1000)}s delay)`);
         }
+      }
     }
 
     fetched++;
@@ -419,7 +431,6 @@ async function _runDetailsLoop(missingIds: number[]) {
   if (!_detailsAbort && retryQueue.length > 0) {
     console.log(`[Details] Pass 2: retrying ${retryQueue.length} failed games`);
     addToRecent("detailsRecentNames", `↻ Retrying ${retryQueue.length} failed games…`);
-    const failedGamesStore = useFailedGamesStore.getState();
 
     for (let i = 0; i < retryQueue.length; i++) {
       if (_detailsAbort) break;
@@ -500,9 +511,12 @@ async function _runHltbLoop(items: Array<{ appId: number; name: string }>) {
         const result = await fetchHltb(name, appId, releaseYear);
         if (result) {
           useHltbStore.getState().setData(appId, result);
-          const summary = result.main_story != null ? `${result.main_story}h` : "N/A";
+          const selectedHours =
+            getHltbHours(result, useSettingsStore.getState().hltbTimeMode) ??
+            getHltbHours(result, "first_available");
+          const summary = selectedHours != null ? `${selectedHours}h` : "N/A";
           addToRecent("hltbRecentNames", `${name} · ${summary}`);
-          console.log(`[HLTB] ✓ ${name}: main=${summary}`);
+          console.log(`[HLTB] ✓ ${name}: ${summary}`);
         } else {
           addToRecent("hltbRecentNames", `${name} · not found`);
           console.log(`[HLTB] Not found: ${name}`);
@@ -624,7 +638,6 @@ async function _runRatingsLoop(items: Array<{ appId: number; name: string }>) {
         }
 
         failed++;
-        _setState({ ratingsFailed: failed });
         addToRecent("ratingsRecentNames", `✗ ${name}`);
         console.warn(`[Ratings] ✗ ${name} (${appId}): ${e}`);
         processed = true;
@@ -633,14 +646,10 @@ async function _runRatingsLoop(items: Array<{ appId: number; name: string }>) {
 
     if (!processed) break;
 
-    if (succeeded > _getState().ratingsSucceeded) {
-      _setState({ ratingsSucceeded: succeeded });
-    }
-
     if (_ratingsAbort && failed > 0) break;
 
     fetched++;
-    _setState({ ratingsFetched: fetched });
+    _setState({ ratingsFetched: fetched, ratingsSucceeded: succeeded, ratingsFailed: failed });
 
     if (!_ratingsAbort && i < items.length - 1) {
       await sleep(ratingsBaseDelayMs());

@@ -17,6 +17,7 @@ import { useFamilyStore } from "../../stores/familyStore";
 import { useAchievementsStore } from "../../stores/achievementsStore";
 import { useWishlistStore } from "../../stores/wishlistStore";
 import { useSteamAppIndexStore } from "../../stores/steamAppIndexStore";
+import { useAppNameOverrideStore } from "../../stores/appNameOverrideStore";
 import { useBackgroundFetchStore } from "../../stores/backgroundFetchStore";
 import {
   useAutoCategorizeStore,
@@ -116,7 +117,7 @@ import {
 } from "@phosphor-icons/react";
 import { ACCENT_PRESETS, applyAccentColor, applyTheme } from "../../stores/settingsStore";
 import { getLocaleDisplayName, getLocaleFlag, normalizeLocale, SUPPORTED_LOCALES, useT } from "../../lib/i18n";
-import type { AppStartupMode, AppTheme } from "../../lib/types";
+import type { AppStartupMode, AppTheme, HltbTimeMode } from "../../lib/types";
 import { automationPublishStatusPatch, publishAutomationSnapshot } from "../../lib/automationPublish";
 import { SelectMenu } from "../ui/SelectMenu";
 import {
@@ -125,6 +126,7 @@ import {
   type RankedSettingsSearchSection,
   type SettingsSearchSection,
 } from "../../lib/settingsSearch";
+import { hltbModeLabel, HLTB_TIME_MODES } from "../../lib/hltb";
 
 interface SettingsPageProps {
   onClose: () => void;
@@ -451,6 +453,8 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
 
       const imported = await importDepressurizerProfile(selected);
       await hydrateSteamAppIndexForNames(settings.apiKey || imported.steamWebApiKey || "");
+      await useAppNameOverrideStore.getState().hydrate();
+      useAppNameOverrideStore.getState().mergeNames(imported.games);
       const mergedCollections = mergeImportedCollections(
         useCategoryStore.getState().collections,
         imported.collections
@@ -860,6 +864,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
         label: t("settings.fetchSpeed"),
         keywords: [
           t("settings.hltbConcurrency"),
+          t("settings.hltbTimeMode"),
           t("settings.achievementsConcurrency"),
           t("settings.steamDetailsDelay"),
           t("settings.steamRatingsDelay"),
@@ -1453,6 +1458,23 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                   <p className="text-xs text-repressurizer-text-faint">
                     {t("settings.hltbConcurrency.desc")}
                   </p>
+                  <div className="rounded-lg border border-repressurizer-border-subtle bg-repressurizer-surface px-3 py-2">
+                    <p className="mb-1.5 text-xs text-repressurizer-text-faint">{t("settings.hltbTimeMode")}</p>
+                    <SelectMenu
+                      ariaLabel={t("settings.hltbTimeMode")}
+                      value={settings.hltbTimeMode}
+                      onChange={(hltbTimeMode) => settings.setSettings({ hltbTimeMode: hltbTimeMode as HltbTimeMode })}
+                      size="sm"
+                      className="w-full"
+                      options={HLTB_TIME_MODES.map((mode) => ({
+                        value: mode,
+                        label: hltbModeLabel(mode),
+                      }))}
+                    />
+                    <p className="mt-1.5 text-[11px] leading-relaxed text-repressurizer-text-faint">
+                      {t("settings.hltbTimeMode.desc")}
+                    </p>
+                  </div>
                 </div>
                 <div className="rounded-xl bg-repressurizer-bg border border-repressurizer-border-subtle px-4 py-3 space-y-2">
                   <div className="flex items-center justify-between">
@@ -2487,6 +2509,9 @@ function resolveImportedSteamGameName(appId: number, preferredName?: string | nu
 
   const cachedDetailName = useGameStore.getState().details[appId]?.name?.trim();
   if (cachedDetailName) return cachedDetailName;
+
+  const cachedImportedName = useAppNameOverrideStore.getState().resolveName(appId);
+  if (cachedImportedName) return cachedImportedName;
 
   return useSteamAppIndexStore.getState().resolveName(appId) ?? preferred ?? `App ${appId}`;
 }

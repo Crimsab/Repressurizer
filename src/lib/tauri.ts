@@ -15,6 +15,7 @@ import type {
   SamBackupInfo,
   ProxyProfile,
   GamePriceOverview,
+  HltbTimeMode,
 } from "./types";
 
 export async function detectSteam(): Promise<SteamInfo> {
@@ -342,6 +343,7 @@ export interface CategorizeResult {
   assignments: Record<string, number[]>;
   games_processed: number;
   games_categorized: number;
+  processed_app_ids?: number[];
 }
 
 export interface HoursRule {
@@ -353,6 +355,7 @@ export interface HoursRule {
 export interface HoursConfig {
   prefix?: string;
   rules: HoursRule[];
+  hltb_time_mode?: HltbTimeMode;
 }
 
 export interface GenreConfig {

@@ -22,6 +22,7 @@ import { useFamilyStore } from "./stores/familyStore";
 import { usePlayHistoryStore } from "./stores/playHistoryStore";
 import { useSteamAppIndexStore } from "./stores/steamAppIndexStore";
 import { useSteamRatingsStore } from "./stores/steamRatingsStore";
+import { useAppNameOverrideStore } from "./stores/appNameOverrideStore";
 import { fetchLibrary, loadCollections, createManualBackup, fetchPlayerSummary, hideMainWindow, quitApp, getStartupContext } from "./lib/tauri";
 import { mergeCollectionOnlyGames } from "./lib/libraryMerge";
 import {
@@ -156,6 +157,7 @@ function AppContent() {
   const hydratePlayHistory = usePlayHistoryStore((s) => s.hydrate);
   const hydrateSteamAppIndex = useSteamAppIndexStore((s) => s.hydrate);
   const hydrateSteamRatings = useSteamRatingsStore((s) => s.hydrateCache);
+  const hydrateAppNames = useAppNameOverrideStore((s) => s.hydrate);
   const hydrateSettingsFromDisk = useSettingsStore((s) => s.hydrateFromDisk);
   const setCollections = useCategoryStore((s) => s.setCollections);
   const [reloading, setReloading] = useState(false);
@@ -360,11 +362,18 @@ function AppContent() {
         fetchLibrary(currentSettings.apiKey, currentSettings.steamId64),
         loadCollections(currentSettings.steamPath, currentSettings.steamId3),
         useFamilyStore.getState().hydrate(),
+        useAppNameOverrideStore.getState().hydrate(),
       ]);
       const familyGames = useFamilyStore.getState().sharedGamesAsOwned();
       const cachedDetails = useGameStore.getState().details;
       const appIndex = useSteamAppIndexStore.getState().data;
-      const mergedGames = mergeCollectionOnlyGames([...games, ...familyGames], collections, cachedDetails, appIndex);
+      const mergedGames = mergeCollectionOnlyGames(
+        [...games, ...familyGames],
+        collections,
+        cachedDetails,
+        appIndex,
+        useAppNameOverrideStore.getState().resolveName
+      );
       const newGameCount =
         previousGameIds.size > 0
           ? mergedGames.filter((game) => !previousGameIds.has(game.appid)).length
@@ -579,6 +588,7 @@ function AppContent() {
     hydratePlayHistory();
     hydrateSteamAppIndex();
     hydrateSteamRatings();
+    hydrateAppNames();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [interactiveStartupReady]);
 

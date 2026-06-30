@@ -19,6 +19,7 @@ import { extractReleaseYear, parseSearchQuery, matchesFilter, hasAdvancedFilters
 import { possibleDuplicateAppIds } from "../../lib/gameIdentity";
 import { scoreForRating } from "../../lib/steamRatings";
 import { priceSnapshotForCurrency } from "../../lib/prices";
+import { getHltbHours } from "../../lib/hltb";
 
 const loadGameDetailPage = () => import("./GameDetailPage").then((m) => ({ default: m.GameDetailPage }));
 const loadContextMenu = () => import("./ContextMenu").then((m) => ({ default: m.ContextMenu }));
@@ -72,6 +73,7 @@ export function GameGrid() {
   const familyApps = useFamilyStore((s) => s.apps);
   const hideCollectionOnlyGames = useSettingsStore((s) => s.hideCollectionOnlyGames);
   const currency = useSettingsStore((s) => s.currency);
+  const hltbTimeMode = useSettingsStore((s) => s.hltbTimeMode);
   const failedGames = useFailedGamesStore((s) => s.fails);
   const savedAdvancedFilters = useAdvancedFilterStore((s) => s.filters);
   const activeAdvancedFilterId = useAdvancedFilterStore((s) => s.activeFilterId);
@@ -155,6 +157,7 @@ export function GameGrid() {
         gameList = gameList.filter((g) =>
           matchesFilter(g, details[g.appid], statuses, allGameTags, reviews, filter, {
             hltbData,
+            hltbTimeMode,
             achievements: achievementSummaries,
             familyApps,
             duplicateAppIds,
@@ -198,8 +201,7 @@ export function GameGrid() {
     // HLTB duration filter
     if (filters.minHltbHours !== null || filters.maxHltbHours !== null) {
       gameList = gameList.filter((g) => {
-        const hltb = hltbData[g.appid];
-        const hours = hltb?.main_story ?? null;
+        const hours = getHltbHours(hltbData[g.appid], hltbTimeMode);
         if (hours == null) return false; // exclude games without HLTB data when filter is active
         if (filters.minHltbHours !== null && hours < filters.minHltbHours) return false;
         if (filters.maxHltbHours !== null && hours > filters.maxHltbHours) return false;
@@ -300,8 +302,8 @@ export function GameGrid() {
           break;
         }
         case "hltb": {
-          const ha = hltbData[a.appid]?.main_story ?? -1;
-          const hb = hltbData[b.appid]?.main_story ?? -1;
+          const ha = getHltbHours(hltbData[a.appid], hltbTimeMode) ?? -1;
+          const hb = getHltbHours(hltbData[b.appid], hltbTimeMode) ?? -1;
           cmp = ha - hb;
           break;
         }
@@ -345,7 +347,7 @@ export function GameGrid() {
     });
 
     return gameList;
-  }, [games, activeCategory, collections, familyApps, searchQuery, sortBy, sortAsc, filters, activeAdvancedFilter, statuses, allGameTags, hltbData, achievementSummaries, details, reviews, steamRatings, hideCollectionOnlyGames, currency, duplicateAppIds, delistedAppIds]);
+  }, [games, activeCategory, collections, familyApps, searchQuery, sortBy, sortAsc, filters, activeAdvancedFilter, statuses, allGameTags, hltbData, hltbTimeMode, achievementSummaries, details, reviews, steamRatings, hideCollectionOnlyGames, currency, duplicateAppIds, delistedAppIds]);
 
   const orderedIds = useMemo(() => filteredGames.map((g) => g.appid), [filteredGames]);
 

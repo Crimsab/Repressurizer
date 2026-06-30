@@ -115,6 +115,17 @@ describe("search", () => {
     expect(match("duplicate:false")).toBe(false);
   });
 
+  it("matches HLTB filters using the selected HLTB time mode", () => {
+    expect(match("hltb:70..90", {
+      hltbTimeMode: "completionist",
+      hltbData: { 39140: { main_story: null, main_extra: 48, completionist: 80 } },
+    })).toBe(true);
+    expect(match("hltb:30..40", {
+      hltbTimeMode: "completionist",
+      hltbData: { 39140: { main_story: 36, main_extra: 48, completionist: 80 } },
+    })).toBe(false);
+  });
+
   it("matches missing metadata when details are unavailable", () => {
     const filter = parseSearchQuery("missing:true");
     expect(matchesFilter(game, undefined, {}, {}, {}, filter)).toBe(true);

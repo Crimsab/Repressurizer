@@ -289,6 +289,7 @@ export type AppStartupMode = "tray" | "window";
 export type AutomationPublishLogStatus = "success" | "failed" | "skipped";
 export type ProxyType = "http" | "https" | "socks5";
 export type ProxyRotationMode = "fixed" | "roundRobin" | "batch" | "random";
+export type HltbTimeMode = "main_story" | "main_extra" | "completionist" | "first_available";
 
 export interface ProxyProfile {
   id: string;
@@ -361,6 +362,7 @@ export interface AppSettings {
   steamRatingsCooldownMinutes: number;
   hltbBatchDelayMs: number;
   achievementsBatchDelayMs: number;
+  hltbTimeMode: HltbTimeMode;
   autoFetchDetailsOnRefresh: boolean;
   autoFetchHltbOnRefresh: boolean;
   proxySettings: ProxySettings;

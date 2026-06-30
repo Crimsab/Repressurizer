@@ -45,6 +45,19 @@ describe("applyAutoCategorizeAssignments", () => {
     expect(next.find((item) => item.name === "Manual")?.added).toEqual([7]);
   });
 
+  it("preserves existing games that were not processed by the categorizer", () => {
+    const next = applyAutoCategorizeAssignments(
+      [
+        collection("user-collections.rpg", "RPG", [1, 2, 3, 99]),
+      ],
+      { RPG: [2, 4] },
+      123,
+      { processedAppIds: [1, 2, 3, 4] }
+    );
+
+    expect(next.find((item) => item.name === "RPG")?.added).toEqual([2, 4, 99]);
+  });
+
   it("preserves dynamic collections and creates a static category for the assignment", () => {
     const next = applyAutoCategorizeAssignments(
       [
