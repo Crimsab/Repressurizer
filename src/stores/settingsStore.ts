@@ -1,6 +1,14 @@
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
-import type { AppSettings, AppTheme, HltbTimeMode, ProxyProfile, ProxyRotationMode, ProxyType } from "../lib/types";
+import type {
+  AppSettings,
+  AppTheme,
+  AutomationPublishPayloadSettings,
+  HltbTimeMode,
+  ProxyProfile,
+  ProxyRotationMode,
+  ProxyType,
+} from "../lib/types";
 import { isHltbTimeMode } from "../lib/hltb";
 
 interface SettingsState extends AppSettings {
@@ -86,6 +94,21 @@ const defaults: AppSettings = {
   automationPublishLastMessage: "",
   automationPublishLastHttpStatus: 0,
   automationPublishLogs: [],
+  automationPublishPayload: {
+    categoryMode: "all",
+    categoryKeys: [],
+    includeCollectionOnlyGames: true,
+    requireDetails: false,
+    requireHltb: false,
+    minSteamHours: null,
+    maxSteamHours: null,
+    skipEmptyCollections: false,
+    includeDetails: true,
+    includeHltb: true,
+    includeAchievements: true,
+    includeWishlist: true,
+    includeOwnership: true,
+  },
   includeSteamFamilyNonGames: false,
 };
 
@@ -117,6 +140,33 @@ function normalizeProxyProfile(raw: Partial<ProxyProfile>, index: number): Proxy
   };
 }
 
+function normalizeNullableNumber(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.max(0, n) : null;
+}
+
+function normalizeAutomationPublishPayload(raw: Partial<AutomationPublishPayloadSettings> | undefined): AutomationPublishPayloadSettings {
+  const fallback = defaults.automationPublishPayload;
+  return {
+    categoryMode: raw?.categoryMode === "custom" ? "custom" : "all",
+    categoryKeys: Array.isArray(raw?.categoryKeys)
+      ? raw.categoryKeys.filter((key): key is string => typeof key === "string" && key.trim().length > 0)
+      : fallback.categoryKeys,
+    includeCollectionOnlyGames: raw?.includeCollectionOnlyGames !== false,
+    requireDetails: raw?.requireDetails === true,
+    requireHltb: raw?.requireHltb === true,
+    minSteamHours: normalizeNullableNumber(raw?.minSteamHours),
+    maxSteamHours: normalizeNullableNumber(raw?.maxSteamHours),
+    skipEmptyCollections: raw?.skipEmptyCollections === true,
+    includeDetails: raw?.includeDetails !== false,
+    includeHltb: raw?.includeHltb !== false,
+    includeAchievements: raw?.includeAchievements !== false,
+    includeWishlist: raw?.includeWishlist !== false,
+    includeOwnership: raw?.includeOwnership !== false,
+  };
+}
+
 function loadFromStorage(): AppSettings {
   try {
     const raw = localStorage.getItem("repressurizer-settings");
@@ -140,6 +190,7 @@ function normalizeSettings(raw: Partial<AppSettings>): AppSettings {
     hltbBatchDelayMs: clampInteger(raw.hltbBatchDelayMs, defaults.hltbBatchDelayMs, 100, 30_000),
     achievementsBatchDelayMs: clampInteger(raw.achievementsBatchDelayMs, defaults.achievementsBatchDelayMs, 100, 30_000),
     hltbTimeMode: isHltbTimeMode(raw.hltbTimeMode) ? raw.hltbTimeMode as HltbTimeMode : defaults.hltbTimeMode,
+    automationPublishPayload: normalizeAutomationPublishPayload(raw.automationPublishPayload),
     proxySettings: {
       ...defaults.proxySettings,
       ...proxySettings,

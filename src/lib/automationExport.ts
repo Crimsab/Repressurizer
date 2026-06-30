@@ -1,4 +1,10 @@
-import type { AchievementSummary, GameDetails, OwnedGame, SteamCollection } from "./types";
+import type {
+  AchievementSummary,
+  AutomationPublishPayloadSettings,
+  GameDetails,
+  OwnedGame,
+  SteamCollection,
+} from "./types";
 import type { FamilyLibraryApp, HltbData, WishlistItem } from "./tauri";
 
 export const LIBRARY_SNAPSHOT_SCHEMA_VERSION = "repressurizer.library-snapshot.v1" as const;
@@ -19,6 +25,7 @@ export interface LibrarySnapshotOptions {
   steamId64?: string;
   steamPersonaName?: string;
   generatedAt?: string;
+  payloadSettings?: Partial<AutomationPublishPayloadSettings>;
 }
 
 export interface LibrarySnapshot {
@@ -144,6 +151,43 @@ function isoFromSteamTimestamp(ts: number): string | null {
 
 function compareStableStrings(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
+}
+
+const DEFAULT_PAYLOAD_SETTINGS: AutomationPublishPayloadSettings = {
+  categoryMode: "all",
+  categoryKeys: [],
+  includeCollectionOnlyGames: true,
+  requireDetails: false,
+  requireHltb: false,
+  minSteamHours: null,
+  maxSteamHours: null,
+  skipEmptyCollections: false,
+  includeDetails: true,
+  includeHltb: true,
+  includeAchievements: true,
+  includeWishlist: true,
+  includeOwnership: true,
+};
+
+function normalizePayloadSettings(
+  payloadSettings: Partial<AutomationPublishPayloadSettings> | undefined
+): AutomationPublishPayloadSettings {
+  return {
+    ...DEFAULT_PAYLOAD_SETTINGS,
+    ...payloadSettings,
+    categoryMode: payloadSettings?.categoryMode === "custom" ? "custom" : "all",
+    categoryKeys: Array.isArray(payloadSettings?.categoryKeys)
+      ? payloadSettings.categoryKeys.filter((key) => typeof key === "string" && key.trim())
+      : DEFAULT_PAYLOAD_SETTINGS.categoryKeys,
+    minSteamHours: normalizeOptionalHours(payloadSettings?.minSteamHours),
+    maxSteamHours: normalizeOptionalHours(payloadSettings?.maxSteamHours),
+  };
+}
+
+function normalizeOptionalHours(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.max(0, n) : null;
 }
 
 function isoFromMillis(ts?: number | null): string | null {
@@ -290,19 +334,53 @@ function fnv1a32(input: string): string {
 }
 
 export function buildLibrarySnapshot(options: LibrarySnapshotOptions): LibrarySnapshot {
+  const payloadSettings = normalizePayloadSettings(options.payloadSettings);
+  const selectedCategoryKeys = new Set(payloadSettings.categoryKeys);
+  const categoryFilterActive = payloadSettings.categoryMode === "custom";
+
   const collections = options.collections
-    .filter((collection) => !collection.is_deleted)
-    .map((collection) => ({
-      key: collection.key,
-      name: collection.name,
-      isDynamic: Boolean(collection.is_dynamic),
-      gameCount: collection.added.length,
-      appIds: [...collection.added].sort((a, b) => a - b),
-    }))
+    .filter((collection) => !collection.is_deleted && (!categoryFilterActive || selectedCategoryKeys.has(collection.key)))
+    .map((collection) => {
+      const appIds = [...collection.added].sort((a, b) => a - b);
+      return {
+        key: collection.key,
+        name: collection.name,
+        isDynamic: Boolean(collection.is_dynamic),
+        gameCount: appIds.length,
+        appIds,
+      };
+    })
     .sort((a, b) => compareStableStrings(a.name, b.name) || compareStableStrings(a.key, b.key));
 
+  const includedCollectionAppIds = new Set(collections.flatMap((collection) => collection.appIds));
+  const gamesForSnapshot = Object.values(options.games)
+    .filter((game) => {
+      if (categoryFilterActive && !includedCollectionAppIds.has(game.appid)) return false;
+      if (!payloadSettings.includeCollectionOnlyGames && game.is_collection_only) return false;
+      if (payloadSettings.minSteamHours != null && roundHours(game.playtime_forever) < payloadSettings.minSteamHours) return false;
+      if (payloadSettings.maxSteamHours != null && roundHours(game.playtime_forever) > payloadSettings.maxSteamHours) return false;
+      const details = options.details?.[game.appid];
+      const hltb = toHltbExport(options.hltbData?.[game.appid]);
+      if (payloadSettings.requireDetails && !details) return false;
+      if (payloadSettings.requireHltb && !hltb) return false;
+      return true;
+    })
+    .sort((a, b) => a.appid - b.appid);
+
+  const includedGameIds = new Set(gamesForSnapshot.map((game) => game.appid));
+  const filteredCollections = collections
+    .map((collection) => {
+      const appIds = collection.appIds.filter((appId) => includedGameIds.has(appId));
+      return {
+        ...collection,
+        gameCount: appIds.length,
+        appIds,
+      };
+    })
+    .filter((collection) => !payloadSettings.skipEmptyCollections || collection.gameCount > 0);
+
   const collectionRefsByAppId = new Map<number, LibrarySnapshotGame["collections"]>();
-  for (const collection of collections) {
+  for (const collection of filteredCollections) {
     for (const appId of collection.appIds) {
       const refs = collectionRefsByAppId.get(appId) ?? [];
       refs.push({
@@ -319,19 +397,20 @@ export function buildLibrarySnapshot(options: LibrarySnapshotOptions): LibrarySn
   const familyFetchedAt = isoFromMillis(options.familyLastFetched);
   const familyByAppId = new Map(Object.values(options.familyApps ?? {}).map((app) => [app.appid, app]));
 
-  const games = Object.values(options.games)
-    .sort((a, b) => a.appid - b.appid)
+  const games = gamesForSnapshot
     .map((game) => {
-      const details = toDetailsExport(options.details?.[game.appid]);
-      const hltb = toHltbExport(options.hltbData?.[game.appid]);
-      const achievements = toAchievementsExport(options.achievements?.[game.appid]);
-      const wishlist = toWishlistExport(wishlistByAppId.get(game.appid), wishlistFetchedAt);
-      const ownership = toOwnershipExport(
-        familyByAppId.get(game.appid),
-        options.familyAuthUsed,
-        options.familyOwnerSteamId,
-        familyFetchedAt
-      );
+      const details = payloadSettings.includeDetails ? toDetailsExport(options.details?.[game.appid]) : null;
+      const hltb = payloadSettings.includeHltb ? toHltbExport(options.hltbData?.[game.appid]) : null;
+      const achievements = payloadSettings.includeAchievements ? toAchievementsExport(options.achievements?.[game.appid]) : null;
+      const wishlist = payloadSettings.includeWishlist ? toWishlistExport(wishlistByAppId.get(game.appid), wishlistFetchedAt) : null;
+      const ownership = payloadSettings.includeOwnership
+        ? toOwnershipExport(
+            familyByAppId.get(game.appid),
+            options.familyAuthUsed,
+            options.familyOwnerSteamId,
+            familyFetchedAt
+          )
+        : null;
       return {
         appId: game.appid,
         name: String(game.name ?? ""),
@@ -364,13 +443,13 @@ export function buildLibrarySnapshot(options: LibrarySnapshotOptions): LibrarySn
     },
     summary: {
       gameCount: games.length,
-      collectionCount: collections.length,
+      collectionCount: filteredCollections.length,
       hltbCount: games.filter((game) => game.hltb).length,
       achievementCount: games.filter((game) => game.achievements).length,
       wishlistCount: games.filter((game) => game.wishlist).length,
       familySharedCount: games.filter((game) => game.ownership?.familyShared).length,
     },
-    collections,
+    collections: filteredCollections,
     games,
   };
 

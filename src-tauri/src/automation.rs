@@ -7,7 +7,7 @@ use crate::steam::{api, collections};
 use chrono::{SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -31,6 +31,67 @@ struct AutomationSettings {
     automation_publish_last_checksum: String,
     automation_publish_last_published_at: String,
     automation_publish_last_attempted_at: String,
+    #[serde(default)]
+    automation_publish_payload: AutomationPublishPayloadSettings,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct AutomationPublishPayloadSettings {
+    #[serde(default = "default_category_mode")]
+    category_mode: String,
+    #[serde(default)]
+    category_keys: Vec<String>,
+    #[serde(default = "default_true")]
+    include_collection_only_games: bool,
+    #[serde(default)]
+    require_details: bool,
+    #[serde(default)]
+    require_hltb: bool,
+    #[serde(default)]
+    min_steam_hours: Option<f64>,
+    #[serde(default)]
+    max_steam_hours: Option<f64>,
+    #[serde(default)]
+    skip_empty_collections: bool,
+    #[serde(default = "default_true")]
+    include_details: bool,
+    #[serde(default = "default_true")]
+    include_hltb: bool,
+    #[serde(default = "default_true")]
+    include_achievements: bool,
+    #[serde(default = "default_true")]
+    include_wishlist: bool,
+    #[serde(default = "default_true")]
+    include_ownership: bool,
+}
+
+impl Default for AutomationPublishPayloadSettings {
+    fn default() -> Self {
+        Self {
+            category_mode: default_category_mode(),
+            category_keys: Vec::new(),
+            include_collection_only_games: true,
+            require_details: false,
+            require_hltb: false,
+            min_steam_hours: None,
+            max_steam_hours: None,
+            skip_empty_collections: false,
+            include_details: true,
+            include_hltb: true,
+            include_achievements: true,
+            include_wishlist: true,
+            include_ownership: true,
+        }
+    }
+}
+
+fn default_true() -> bool {
+    true
+}
+
+fn default_category_mode() -> String {
+    "all".to_string()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -327,19 +388,79 @@ fn build_library_snapshot(
     family: FamilyCache,
     settings: &AutomationSettings,
 ) -> Value {
-    let mut exported_collections: Vec<Value> = collections
+    let payload_settings = &settings.automation_publish_payload;
+    let selected_category_keys: HashSet<String> = payload_settings
+        .category_keys
         .iter()
-        .filter(|collection| !collection.is_deleted)
-        .map(|collection| {
-            let mut app_ids = collection.added.clone();
+        .map(|key| key.trim())
+        .filter(|key| !key.is_empty())
+        .map(ToString::to_string)
+        .collect();
+    let category_filter_active = payload_settings.category_mode == "custom";
+    let selected_collections: Vec<&collections::SteamCollection> = collections
+        .iter()
+        .filter(|collection| {
+            !collection.is_deleted
+                && (!category_filter_active || selected_category_keys.contains(&collection.key))
+        })
+        .collect();
+
+    let selected_collection_app_ids: HashSet<u64> = selected_collections
+        .iter()
+        .flat_map(|collection| collection.added.iter().copied())
+        .collect();
+
+    games.retain(|game| {
+        if category_filter_active && !selected_collection_app_ids.contains(&game.appid) {
+            return false;
+        }
+        if !payload_settings.include_collection_only_games && game.is_collection_only {
+            return false;
+        }
+        let steam_hours = round_hours(game.playtime_forever);
+        if payload_settings
+            .min_steam_hours
+            .is_some_and(|min| steam_hours < min)
+        {
+            return false;
+        }
+        if payload_settings
+            .max_steam_hours
+            .is_some_and(|max| steam_hours > max)
+        {
+            return false;
+        }
+        let appid = game.appid.to_string();
+        if payload_settings.require_details && !details.contains_key(&appid) {
+            return false;
+        }
+        if payload_settings.require_hltb && hltb_data.get(&appid).and_then(hltb_export).is_none() {
+            return false;
+        }
+        true
+    });
+
+    let included_game_ids: HashSet<u64> = games.iter().map(|game| game.appid).collect();
+    let mut exported_collections: Vec<Value> = selected_collections
+        .iter()
+        .filter_map(|collection| {
+            let mut app_ids = collection
+                .added
+                .iter()
+                .copied()
+                .filter(|appid| included_game_ids.contains(appid))
+                .collect::<Vec<_>>();
             app_ids.sort_unstable();
-            json!({
+            if payload_settings.skip_empty_collections && app_ids.is_empty() {
+                return None;
+            }
+            Some(json!({
                 "key": collection.key,
                 "name": collection.name,
                 "isDynamic": collection.is_dynamic,
-                "gameCount": collection.added.len(),
+                "gameCount": app_ids.len(),
                 "appIds": app_ids,
-            })
+            }))
         })
         .collect();
     exported_collections.sort_by(|a, b| {
@@ -400,24 +521,45 @@ fn build_library_snapshot(
             });
             let details = details.get(&game.appid.to_string());
             let hltb = hltb_data.get(&game.appid.to_string());
-            let hltb_exported = hltb.and_then(hltb_export);
-            let achievement_exported = achievements
-                .get(&game.appid.to_string())
-                .map(achievement_export);
-            let wishlist_exported = wishlist_by_appid
-                .get(&game.appid)
-                .map(|item| wishlist_export(item, wishlist_fetched_at.as_deref()));
-            let ownership_exported = family_by_appid.get(&game.appid).map(|app| {
-                ownership_export(
-                    app,
-                    family_auth_used.as_deref(),
-                    family_owner_tail.as_deref(),
-                    family_fetched_at.as_deref(),
-                )
-            });
+            let details_exported = if payload_settings.include_details {
+                details.map(details_export)
+            } else {
+                None
+            };
+            let hltb_exported = if payload_settings.include_hltb {
+                hltb.and_then(hltb_export)
+            } else {
+                None
+            };
+            let achievement_exported = if payload_settings.include_achievements {
+                achievements
+                    .get(&game.appid.to_string())
+                    .map(achievement_export)
+            } else {
+                None
+            };
+            let wishlist_exported = if payload_settings.include_wishlist {
+                wishlist_by_appid
+                    .get(&game.appid)
+                    .map(|item| wishlist_export(item, wishlist_fetched_at.as_deref()))
+            } else {
+                None
+            };
+            let ownership_exported = if payload_settings.include_ownership {
+                family_by_appid.get(&game.appid).map(|app| {
+                    ownership_export(
+                        app,
+                        family_auth_used.as_deref(),
+                        family_owner_tail.as_deref(),
+                        family_fetched_at.as_deref(),
+                    )
+                })
+            } else {
+                None
+            };
             let flags = flags_export(
                 game.is_collection_only,
-                details.is_some(),
+                details_exported.is_some(),
                 hltb_exported.is_some(),
                 achievement_exported.as_ref(),
                 wishlist_exported.as_ref(),
@@ -432,7 +574,7 @@ fn build_library_snapshot(
                 "lastPlayedAt": iso_from_steam_timestamp(game.rtime_last_played),
                 "isCollectionOnly": game.is_collection_only,
                 "collections": refs,
-                "details": details.map(details_export).unwrap_or(Value::Null),
+                "details": details_exported.unwrap_or(Value::Null),
                 "hltb": hltb_exported.unwrap_or(Value::Null),
                 "achievements": achievement_exported.unwrap_or(Value::Null),
                 "wishlist": wishlist_exported.unwrap_or(Value::Null),

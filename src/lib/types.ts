@@ -287,6 +287,7 @@ export type AppTheme = "dark" | "dim" | "light";
 export type AppLocale = string;
 export type AppStartupMode = "tray" | "window";
 export type AutomationPublishLogStatus = "success" | "failed" | "skipped";
+export type AutomationPublishCategoryMode = "all" | "custom";
 export type ProxyType = "http" | "https" | "socks5";
 export type ProxyRotationMode = "fixed" | "roundRobin" | "batch" | "random";
 export type HltbTimeMode = "main_story" | "main_extra" | "completionist" | "first_available";
@@ -328,6 +329,22 @@ export interface AutomationPublishLogEntry {
   status: AutomationPublishLogStatus;
   message: string;
   httpStatus: number;
+}
+
+export interface AutomationPublishPayloadSettings {
+  categoryMode: AutomationPublishCategoryMode;
+  categoryKeys: string[];
+  includeCollectionOnlyGames: boolean;
+  requireDetails: boolean;
+  requireHltb: boolean;
+  minSteamHours: number | null;
+  maxSteamHours: number | null;
+  skipEmptyCollections: boolean;
+  includeDetails: boolean;
+  includeHltb: boolean;
+  includeAchievements: boolean;
+  includeWishlist: boolean;
+  includeOwnership: boolean;
 }
 
 export interface AppSettings {
@@ -400,6 +417,7 @@ export interface AppSettings {
   automationPublishLastMessage: string;
   automationPublishLastHttpStatus: number;
   automationPublishLogs: AutomationPublishLogEntry[];
+  automationPublishPayload: AutomationPublishPayloadSettings;
   // Steam Family
   includeSteamFamilyNonGames: boolean;
 }

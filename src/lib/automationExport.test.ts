@@ -160,4 +160,129 @@ describe("buildLibrarySnapshot", () => {
 
     expect(first.checksum).toBe(second.checksum);
   });
+
+  it("filters automation snapshots by category, cache requirements, playtime and collection-only state", () => {
+    const hltb: HltbData = {
+      main_story: 12,
+      main_extra: null,
+      completionist: null,
+      game_id: 1,
+      game_name: "Hades",
+      confidence: 90,
+    };
+    const collectionOnly = {
+      ...game(30, "Removed Family Game", 300),
+      is_collection_only: true,
+    };
+
+    const snapshot = buildLibrarySnapshot({
+      games: {
+        10: game(10, "Hades", 180),
+        20: game(20, "Celeste", 30),
+        30: collectionOnly,
+      },
+      collections: [
+        collection("user-collections.action", "Action", [10, 30]),
+        collection("user-collections.platformers", "Platformers", [20]),
+      ],
+      details: {
+        10: details(10),
+        30: details(30),
+      },
+      hltbData: {
+        10: hltb,
+      },
+      payloadSettings: {
+        categoryMode: "custom",
+        categoryKeys: ["user-collections.action"],
+        includeCollectionOnlyGames: false,
+        minSteamHours: 1,
+        requireDetails: true,
+        requireHltb: true,
+        skipEmptyCollections: true,
+      },
+      appVersion: "0.4.7",
+      generatedAt: "2026-06-18T18:00:00.000Z",
+    });
+
+    expect(snapshot.summary.gameCount).toBe(1);
+    expect(snapshot.summary.collectionCount).toBe(1);
+    expect(snapshot.collections).toEqual([
+      {
+        key: "user-collections.action",
+        name: "Action",
+        isDynamic: false,
+        gameCount: 1,
+        appIds: [10],
+      },
+    ]);
+    expect(snapshot.games.map((item) => item.appId)).toEqual([10]);
+    expect(snapshot.games[0].flags).toMatchObject({
+      collectionOnly: false,
+      hasDetails: true,
+      hasHltb: true,
+    });
+  });
+
+  it("omits optional automation sections while preserving snapshot compatibility", () => {
+    const snapshot = buildLibrarySnapshot({
+      games: {
+        10: game(10, "Hades", 90),
+      },
+      collections: [collection("favorites", "Favorites", [10])],
+      details: { 10: details(10) },
+      hltbData: {
+        10: {
+          main_story: 12,
+          main_extra: 18,
+          completionist: 40,
+          game_id: 1,
+          game_name: "Hades",
+          confidence: 90,
+        },
+      },
+      achievements: {
+        10: {
+          total: 49,
+          achieved: 49,
+          achievements: [],
+        },
+      },
+      wishlistItems: [{ appid: 10, priority: 0, date_added: 1_700_000_100 }],
+      familyApps: { 10: familyApp(10) },
+      payloadSettings: {
+        includeDetails: false,
+        includeHltb: false,
+        includeAchievements: false,
+        includeWishlist: false,
+        includeOwnership: false,
+      },
+      appVersion: "0.4.7",
+      generatedAt: "2026-06-18T18:00:00.000Z",
+    });
+
+    expect(snapshot.summary).toMatchObject({
+      gameCount: 1,
+      hltbCount: 0,
+      achievementCount: 0,
+      wishlistCount: 0,
+      familySharedCount: 0,
+    });
+    expect(snapshot.games[0]).toMatchObject({
+      details: null,
+      hltb: null,
+      achievements: null,
+      wishlist: null,
+      ownership: null,
+      flags: {
+        hasDetails: false,
+        missingDetails: true,
+        hasHltb: false,
+        hasAchievements: false,
+        wishlist: false,
+        familyShared: false,
+      },
+    });
+    expect(snapshot.checksum).toMatch(/^fnv1a32:[0-9a-f]{8}$/);
+  });
 });

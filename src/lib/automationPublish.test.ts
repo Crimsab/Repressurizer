@@ -74,6 +74,21 @@ const settings: AppSettings = {
   automationPublishLastMessage: "",
   automationPublishLastHttpStatus: 0,
   automationPublishLogs: [],
+  automationPublishPayload: {
+    categoryMode: "all",
+    categoryKeys: [],
+    includeCollectionOnlyGames: true,
+    requireDetails: false,
+    requireHltb: false,
+    minSteamHours: null,
+    maxSteamHours: null,
+    skipEmptyCollections: false,
+    includeDetails: true,
+    includeHltb: true,
+    includeAchievements: true,
+    includeWishlist: true,
+    includeOwnership: true,
+  },
   includeSteamFamilyNonGames: false,
 };
 
