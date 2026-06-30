@@ -111,6 +111,36 @@ describe("gameStore game merging", () => {
 
     expect(useGameStore.getState().games[1467450]?.name).toBe("The Chronicles Of Myrtana: Archolos");
   });
+
+  it("uses persisted app name overrides to repair collection-only placeholders", async () => {
+    vi.stubGlobal("localStorage", createStorage());
+    vi.doMock("@tauri-apps/api/core", () => ({
+      invoke: vi.fn(async (command: string, args?: { key?: string }) => {
+        if (command === "load_app_data" && args?.key === "app_name_overrides.json") {
+          return JSON.stringify({ 39140: "FINAL FANTASY VII" });
+        }
+        return null;
+      }),
+    }));
+    vi.resetModules();
+
+    const { useAppNameOverrideStore } = await import("./appNameOverrideStore");
+    const { useGameStore } = await import("./gameStore");
+
+    await useAppNameOverrideStore.getState().hydrate();
+    useGameStore.getState().setGames([
+      {
+        appid: 39140,
+        name: "App 39140",
+        playtime_forever: 0,
+        img_icon_url: null,
+        rtime_last_played: 0,
+        is_collection_only: true,
+      },
+    ]);
+
+    expect(useGameStore.getState().games[39140]?.name).toBe("FINAL FANTASY VII");
+  });
 });
 
 describe("gameStore details cache metadata", () => {
