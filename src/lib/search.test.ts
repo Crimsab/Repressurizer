@@ -97,6 +97,16 @@ describe("search", () => {
     expect(match("platform:linux")).toBe(false);
   });
 
+  it("matches free text against searchable metadata", () => {
+    expect(match("rpg")).toBe(true);
+    expect(match("jrpg")).toBe(true);
+    expect(match("achievement")).toBe(true);
+    expect(match("square")).toBe(true);
+    expect(match("windows")).toBe(true);
+    expect(match("39140")).toBe(true);
+    expect(match("shooter")).toBe(false);
+  });
+
   it("matches release years from Steam date strings", () => {
     expect(match("year:2013")).toBe(true);
     expect(match("released:2010..2020")).toBe(true);

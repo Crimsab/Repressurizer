@@ -321,7 +321,26 @@ export function matchesFilter(
 ): boolean {
   if (filter.invalidRegex) return false;
 
-  const searchableName = normalizeSearchText(`${game.name} ${details?.name ?? ""}`);
+  const gameStatus = statuses[game.appid] ?? "none";
+  const searchableName = normalizeSearchText(
+    [
+      game.name,
+      details?.name,
+      game.appid,
+      game.is_collection_only ? "local only collection only" : "",
+      gameStatus !== "none" ? gameStatus : "",
+      ...(details?.genres ?? []),
+      ...(details?.tags ?? []),
+      ...(details?.categories ?? []),
+      ...(details?.developers ?? []),
+      ...(details?.publishers ?? []),
+      ...(details?.supported_languages ?? []),
+      ...Object.entries(details?.platforms ?? {})
+        .filter(([, supported]) => supported)
+        .map(([platform]) => platform),
+      ...(tags[game.appid] ?? []),
+    ].join(" ")
+  );
   const searchText = normalizeSearchText(filter.text);
   if (!matchesSearchText(searchableName, searchText)) return false;
   if (filter.nameRegex) {
@@ -339,7 +358,6 @@ export function matchesFilter(
   }
 
   if (filter.status) {
-    const gameStatus = statuses[game.appid] ?? "none";
     if (gameStatus !== filter.status) return false;
   }
 

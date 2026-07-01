@@ -15,7 +15,7 @@ import { GameCard } from "./GameCard";
 import type { OwnedGame } from "../../lib/types";
 import { useT, type TranslationKey } from "../../lib/i18n";
 import { Spinner, MagnifyingGlass, FolderOpen, Clock, UsersThree } from "@phosphor-icons/react";
-import { extractReleaseYear, parseSearchQuery, matchesFilter, hasAdvancedFilters } from "../../lib/search";
+import { extractReleaseYear, parseSearchQuery, matchesFilter } from "../../lib/search";
 import { possibleDuplicateAppIds } from "../../lib/gameIdentity";
 import { scoreForRating } from "../../lib/steamRatings";
 import { priceSnapshotForCurrency } from "../../lib/prices";
@@ -153,22 +153,17 @@ export function GameGrid() {
     }
 
     if (searchQuery.trim()) {
-      if (hasAdvancedFilters(searchQuery)) {
-        const filter = parseSearchQuery(searchQuery);
-        gameList = gameList.filter((g) =>
-          matchesFilter(g, details[g.appid], statuses, allGameTags, reviews, filter, {
-            hltbData,
-            hltbTimeMode,
-            achievements: achievementSummaries,
-            familyApps,
-            duplicateAppIds,
-            delistedAppIds,
-          })
-        );
-      } else {
-        const q = searchQuery.toLowerCase();
-        gameList = gameList.filter((g) => g.name.toLowerCase().includes(q));
-      }
+      const filter = parseSearchQuery(searchQuery);
+      gameList = gameList.filter((g) =>
+        matchesFilter(g, details[g.appid], statuses, allGameTags, reviews, filter, {
+          hltbData,
+          hltbTimeMode,
+          achievements: achievementSummaries,
+          familyApps,
+          duplicateAppIds,
+          delistedAppIds,
+        })
+      );
     }
 
     // Playtime filters
