@@ -415,8 +415,6 @@ export interface AppSettings {
   currency: string;
   // Onboarding
   onboardingComplete: boolean;
-  // Category order
-  categoryOrder: string[];
   categoryColors: Record<string, string>;
   // System tray
   minimizeToTray: boolean;

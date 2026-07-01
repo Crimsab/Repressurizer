@@ -53,7 +53,6 @@ const settings: AppSettings = {
   steamToolsMinPlaytimeMinutes: 180,
   currency: "EUR",
   onboardingComplete: true,
-  categoryOrder: [],
   categoryColors: {},
   minimizeToTray: false,
   trayCloseChoiceMade: false,

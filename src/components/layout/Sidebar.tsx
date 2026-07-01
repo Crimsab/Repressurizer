@@ -17,7 +17,6 @@ import {
   Lightning,
   EyeSlash,
   Clock,
-  DotsSixVertical,
   Export,
   X,
   ArrowsMerge,
@@ -103,7 +102,6 @@ export function Sidebar() {
   };
 
   const t = useT();
-  const categoryOrder = useSettingsStore((s) => s.categoryOrder ?? []);
 
   const [newCatName, setNewCatName] = useState("");
   const [showNewCat, setShowNewCat] = useState(false);
@@ -126,39 +124,6 @@ export function Sidebar() {
     },
     [collections]
   );
-
-  // Category reorder drag state
-  const [reorderDragKey, setReorderDragKey] = useState<string | null>(null);
-  const [reorderOverKey, setReorderOverKey] = useState<string | null>(null);
-
-  const handleCategoryDragStart = useCallback((key: string) => {
-    setReorderDragKey(key);
-  }, []);
-
-  const handleCategoryDragOver = useCallback((e: React.DragEvent, key: string) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = "move";
-    setReorderOverKey(key);
-  }, []);
-
-  const handleCategoryDrop = useCallback((targetKey: string) => {
-    if (!reorderDragKey || reorderDragKey === targetKey) {
-      setReorderDragKey(null);
-      setReorderOverKey(null);
-      return;
-    }
-    // Compute new order
-    const currentOrder = sortedCollections.map((c) => c.key);
-    const fromIdx = currentOrder.indexOf(reorderDragKey);
-    const toIdx = currentOrder.indexOf(targetKey);
-    if (fromIdx === -1 || toIdx === -1) return;
-    const newOrder = [...currentOrder];
-    newOrder.splice(fromIdx, 1);
-    newOrder.splice(toIdx, 0, reorderDragKey);
-    setSettings({ categoryOrder: newOrder });
-    setReorderDragKey(null);
-    setReorderOverKey(null);
-  }, [reorderDragKey]);
 
   const gameCount = Object.keys(games).length;
   const allGameIds = Object.keys(games).map(Number);
@@ -247,14 +212,6 @@ export function Sidebar() {
       (showDynamicCategories || !c.is_dynamic)
   );
   const sortedCollections = [...visibleCollections].sort((a, b) => {
-    // Custom order takes priority if both items are in the order list
-    if (categoryOrder.length > 0) {
-      const aIdx = categoryOrder.indexOf(a.key);
-      const bIdx = categoryOrder.indexOf(b.key);
-      if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
-      if (aIdx !== -1) return -1;
-      if (bIdx !== -1) return 1;
-    }
     if (pinFavorites) {
       const aFav = a.id === "favorite" || a.key === "favorite" || a.name.toLowerCase() === "favorite" || a.name.toLowerCase() === "favorites";
       const bFav = b.id === "favorite" || b.key === "favorite" || b.name.toLowerCase() === "favorite" || b.name.toLowerCase() === "favorites";
@@ -369,38 +326,18 @@ export function Sidebar() {
         {sortedCollections.map((col) => (
           <div
             key={col.key}
-            onDragStart={(e) => {
-              if (col.is_dynamic) return;
-              // If there are selected games, this is a game-to-category drag — don't intercept
-              if (Object.keys(selectedGameIds).length > 0) return;
-              e.dataTransfer.setData("text/x-category-key", col.key);
-              handleCategoryDragStart(col.key);
-            }}
             onDragOver={(e) => {
-              // Category reorder drag
-              if (reorderDragKey && !col.is_dynamic) {
-                handleCategoryDragOver(e, col.key);
-                return;
-              }
-              // Game drop on category
               if (!col.is_dynamic) {
                 e.preventDefault();
                 setDragOver(col.key);
               }
             }}
-            onDragLeave={() => { setDragOver(null); setReorderOverKey(null); }}
+            onDragLeave={() => setDragOver(null)}
             onDrop={() => {
-              if (reorderDragKey) {
-                handleCategoryDrop(col.key);
-                return;
-              }
               if (!col.is_dynamic) handleDrop(col.key);
             }}
-            onDragEnd={() => { setReorderDragKey(null); setReorderOverKey(null); }}
             className={`rounded-lg transition-all ${
               dragOver === col.key ? "ring-1 ring-repressurizer-accent bg-repressurizer-accent/5" : ""
-            } ${reorderDragKey === col.key ? "opacity-50" : ""} ${
-              reorderOverKey === col.key && reorderDragKey !== col.key ? "border-t-2 border-repressurizer-accent" : ""
             }`}
           >
             {editingKey === col.key && !col.is_dynamic ? (
@@ -428,7 +365,6 @@ export function Sidebar() {
                 const tinted = Boolean(categoryColor && (active || selected));
                 return (
               <button
-                draggable={!col.is_dynamic && editingKey !== col.key}
                 style={
                   categoryColor
                     ? {
@@ -492,21 +428,6 @@ export function Sidebar() {
                     : ""
                 }`}
               >
-                {!col.is_dynamic && (
-                  <span
-                    draggable
-                    onDragStart={(e) => {
-                      if (Object.keys(selectedGameIds).length > 0) return;
-                      e.stopPropagation();
-                      e.dataTransfer.setData("text/x-category-key", col.key);
-                      handleCategoryDragStart(col.key);
-                    }}
-                    title={t("sidebar.category.dragReorder")}
-                    className="shrink-0 text-repressurizer-text-faint opacity-0 transition-opacity cursor-grab active:cursor-grabbing group-hover:opacity-70"
-                  >
-                    <DotsSixVertical size={10} weight="bold" />
-                  </span>
-                )}
                 {col.is_dynamic ? (
                   <Robot
                     size={14}

@@ -65,7 +65,6 @@
   "sidebar.category.mergeShort": "Fusionner",
   "sidebar.category.duplicate": "Dupliquer…",
   "sidebar.category.color": "Color…",
-  "sidebar.category.dragReorder": "Drag to reorder categories",
   "sidebar.category.exportSelected": "Exporter {count} catégories",
   "sidebar.category.exportSelectedShort": "Exporter",
   "sidebar.category.clearSelection": "Effacer la sélection",
