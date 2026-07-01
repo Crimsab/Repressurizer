@@ -16,17 +16,7 @@ with a Rust backend and a React interface.
 
 ## Preview
 
-![Repressurizer library dashboard](docs/assets/dashboard.png)
-
-## Quick Demo
-
-Watch the high-quality [WebM walkthrough](docs/assets/repressurizer-demo.webm)
-for the full flow: browsing a larger real-artwork library, searching, opening
-game details, previewing AutoCat, configuring export, and checking data
-settings.
-
-A [GIF fallback](docs/assets/repressurizer-demo.gif) is also included for
-surfaces that do not preview WebM.
+![Repressurizer demo](docs/assets/repressurizer-demo.webm)
 
 ## Highlights
 
@@ -40,15 +30,14 @@ surfaces that do not preview WebM.
 - Export filtered game lists, category sets, statistics, or stable JSON
   snapshots for other tools.
 - Publish automation snapshots to HTTP receivers, with checksum-based skips.
-- Use optional Steam Tools for diagnostics and guarded SAM-style achievement
-  actions.
+- Use optional Steam Tools for integration with other tools.
 
 ## Download
 
 Download the newest build from the
 [latest release page](https://github.com/Crimsab/Repressurizer/releases/latest).
 
-| Asset | Use it for |
+| Asset | Use |
 | --- | --- |
 | `Repressurizer_..._x64-setup.exe` | Normal Windows install. |
 | `Repressurizer-portable-windows-x64.zip` | Portable app without installation. |
@@ -189,12 +178,7 @@ Before saving collection changes:
 - Read the save preview.
 - Keep a manual backup when testing against a library you care about.
 
-Diagnostics exports are redacted and should not include Steam Web API keys,
-Store tokens, or full Steam IDs.
-
 ## Development
-
-Use Bun for JavaScript dependencies and project scripts.
 
 ```bash
 bun install
@@ -233,9 +217,6 @@ page. The release workflow runs the generator before packaging.
 
 - TypeScript: [`@crimsab/repressurizer-integration`](https://www.npmjs.com/package/@crimsab/repressurizer-integration)
 - Rust: [`repressurizer-integration`](https://crates.io/crates/repressurizer-integration)
-
-Registry download counts are approximate and may include CI, mirrors, bots, and
-indexers.
 
 ## Contributing
 
