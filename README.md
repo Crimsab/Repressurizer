@@ -20,10 +20,13 @@ with a Rust backend and a React interface.
 
 ## Quick Demo
 
-![Repressurizer animated walkthrough](docs/assets/repressurizer-demo.gif)
+Watch the high-quality [WebM walkthrough](docs/assets/repressurizer-demo.webm)
+for the full flow: browsing a larger real-artwork library, searching, opening
+game details, previewing AutoCat, configuring export, and checking data
+settings.
 
-The GIF is embedded for GitHub. The same capture is also available as a smaller
-[WebM demo](docs/assets/repressurizer-demo.webm).
+A [GIF fallback](docs/assets/repressurizer-demo.gif) is also included for
+surfaces that do not preview WebM.
 
 ## Highlights
 
