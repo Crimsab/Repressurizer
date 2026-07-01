@@ -14,13 +14,18 @@ before it writes anything back to Steam's local files.
 It is inspired by Depressurizer, but rebuilt as a separate Tauri application
 with a Rust backend and a React interface.
 
+## Preview
+
 ![Repressurizer library dashboard](docs/assets/dashboard.png)
+
+## Quick Demo
 
 ![Repressurizer animated walkthrough](docs/assets/repressurizer-demo.gif)
 
-[View the smaller WebM demo](docs/assets/repressurizer-demo.webm).
+The GIF is embedded for GitHub. The same capture is also available as a smaller
+[WebM demo](docs/assets/repressurizer-demo.webm).
 
-## What It Does
+## Highlights
 
 - Edit Steam collections from a fast desktop UI.
 - Sort, search, filter, tag, rate, and track personal game status.
@@ -64,7 +69,7 @@ Repressurizer does not edit your Steam account remotely. Collection saves are
 local file writes; metadata fetches and automation exports are separate network
 operations.
 
-## Main Workflows
+## Workflows
 
 ### Organize Collections
 

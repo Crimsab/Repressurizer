@@ -418,7 +418,7 @@ export function Sidebar() {
                   setEditName(col.name);
                 }}
                 onContextMenu={(e) => handleContextMenu(e, col)}
-                className={`group flex w-full items-center gap-2 rounded-lg px-1 py-1.5 text-left text-sm transition-colors ${
+                className={`group grid min-h-8 w-full grid-cols-[1.25rem_minmax(0,1fr)_0.75rem_2.5rem] items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm transition-colors ${
                   activeCategory === col.key
                     ? "bg-repressurizer-surface-hover text-repressurizer-text"
                     : "text-repressurizer-text hover:bg-repressurizer-surface-hover"
@@ -428,29 +428,32 @@ export function Sidebar() {
                     : ""
                 }`}
               >
-                {col.is_dynamic ? (
-                  <Robot
-                    size={14}
-                    weight="duotone"
-                    className="shrink-0"
-                    style={categoryColor ? { color: categoryColor } : undefined}
-                  />
-                ) : (
-                  <FolderOpen
-                    size={14}
-                    weight={activeCategory === col.key ? "fill" : "duotone"}
-                    className="shrink-0"
-                    style={categoryColor ? { color: categoryColor } : undefined}
-                  />
-                )}
-                <span className="flex-1 truncate">{col.name}</span>
+                <span className="flex h-5 w-5 items-center justify-center">
+                  {col.is_dynamic ? (
+                    <Robot
+                      size={15}
+                      weight="duotone"
+                      className="shrink-0"
+                      style={categoryColor ? { color: categoryColor } : undefined}
+                    />
+                  ) : (
+                    <FolderOpen
+                      size={15}
+                      weight={activeCategory === col.key ? "fill" : "duotone"}
+                      className="shrink-0"
+                      style={categoryColor ? { color: categoryColor } : undefined}
+                    />
+                  )}
+                </span>
+                <span className="min-w-0 truncate">{col.name}</span>
                 {categoryColor && (
                   <span
-                    className="h-2 w-2 shrink-0 rounded-full ring-1 ring-black/30"
+                    className="mx-auto h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-black/30"
                     style={{ backgroundColor: categoryColor }}
                   />
                 )}
-                <span className="font-mono text-[10px] text-repressurizer-text-faint tabular-nums pr-1">
+                {!categoryColor && <span aria-hidden="true" />}
+                <span className="text-right font-mono text-[10px] text-repressurizer-text-faint tabular-nums">
                   {col.is_dynamic ? t("sidebar.auto") : col.added.length}
                 </span>
               </button>
@@ -746,15 +749,16 @@ function SidebarItem({
   return (
     <button
       onClick={onClick}
-      className={`flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm transition-colors ${
+      className={`grid min-h-8 w-full grid-cols-[1.25rem_minmax(0,1fr)_0.75rem_2.5rem] items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm transition-colors ${
         active
           ? "bg-repressurizer-accent/10 text-repressurizer-accent"
           : "text-repressurizer-text hover:bg-repressurizer-surface-hover"
       }`}
     >
-      <span className={active ? "text-repressurizer-accent" : "text-repressurizer-text-faint"}>{icon}</span>
-      <span className="flex-1">{label}</span>
-      <span className="font-mono text-[10px] text-repressurizer-text-faint tabular-nums">{count}</span>
+      <span className={`flex h-5 w-5 items-center justify-center ${active ? "text-repressurizer-accent" : "text-repressurizer-text-faint"}`}>{icon}</span>
+      <span className="min-w-0 truncate">{label}</span>
+      <span aria-hidden="true" />
+      <span className="text-right font-mono text-[10px] text-repressurizer-text-faint tabular-nums">{count}</span>
     </button>
   );
 }
