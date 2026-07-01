@@ -6,87 +6,85 @@
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 [![Built with Tauri](https://img.shields.io/badge/Tauri-Rust%20%2B%20React-24c8db)](https://tauri.app/)
 
-Repressurizer is a modern Windows Steam library manager for editing Steam collections, enriching local library metadata, building AutoCat collections, and keeping safe backups before writes.
+Repressurizer is a modern Windows app for organizing large Steam libraries.
+It edits local Steam collections, enriches your games with cached metadata,
+builds AutoCat collections, exports clean library snapshots, and keeps backups
+before it writes anything back to Steam's local files.
 
-It is a spiritual successor to Depressurizer: same useful idea, rebuilt as a separate Tauri app with a Rust backend and a React interface.
+It is inspired by Depressurizer, but rebuilt as a separate Tauri application
+with a Rust backend and a React interface.
 
 ![Repressurizer library dashboard](docs/assets/dashboard.png)
 
-## Status
+![Repressurizer animated walkthrough](docs/assets/repressurizer-demo.gif)
 
-Windows is the supported target. Repressurizer can read and write local Steam collection data, but it is still backup-first software: keep backups enabled, use the preview before saving, and close Steam before applying collection changes.
+[View the smaller WebM demo](docs/assets/repressurizer-demo.webm).
+
+## What It Does
+
+- Edit Steam collections from a fast desktop UI.
+- Sort, search, filter, tag, rate, and track personal game status.
+- Fetch and cache Steam details, reviews, prices, achievements, wishlist data,
+  Steam Family entries, and HowLongToBeat times.
+- Generate collections with AutoCat from genres, tags, store flags, release
+  year, review rating, Metacritic, HLTB length, playtime, languages, platforms,
+  developers, publishers, and saved presets.
+- Export filtered game lists, category sets, statistics, or stable JSON
+  snapshots for other tools.
+- Publish automation snapshots to HTTP receivers, with checksum-based skips.
+- Use optional Steam Tools for diagnostics and guarded SAM-style achievement
+  actions.
 
 ## Download
 
-Always download the newest build from the [latest release page](https://github.com/Crimsab/Repressurizer/releases/latest).
+Download the newest build from the
+[latest release page](https://github.com/Crimsab/Repressurizer/releases/latest).
 
-- Recommended: `Repressurizer_..._x64-setup.exe` for the normal Windows installer.
-- Portable: `Repressurizer-portable-windows-x64.zip` if you prefer to run it without installing.
-- CLI: `Repressurizer-cli-windows-x64.zip` for scriptable diagnostics, snapshot export, and read-only Steam tooling.
-- Auto-update metadata: `latest.json` is used by the built-in updater.
+| Asset | Use it for |
+| --- | --- |
+| `Repressurizer_..._x64-setup.exe` | Normal Windows install. |
+| `Repressurizer-portable-windows-x64.zip` | Portable app without installation. |
+| `Repressurizer-cli-windows-x64.zip` | Scriptable diagnostics, snapshots, cache checks, and guarded Steam tooling. |
+| `latest.json` | Built-in updater metadata. |
 
-Older releases remain available on the [releases page](https://github.com/Crimsab/Repressurizer/releases).
+Older builds are available on the
+[releases page](https://github.com/Crimsab/Repressurizer/releases).
 
-See [CHANGELOG.md](CHANGELOG.md) for the generated release history.
-
-## Quick Start
+## First Run
 
 1. Install Repressurizer or unzip the portable build.
-2. Open Settings and add a Steam Web API key from <https://steamcommunity.com/dev/apikey>.
-3. Load your Steam library, keep backups enabled, and use the save preview before writing collection changes.
+2. Add a Steam Web API key from <https://steamcommunity.com/dev/apikey>.
+3. Load your Steam library.
+4. Prepare the metadata cache if you want sorting, filters, AutoCat, prices,
+   reviews, HLTB, and achievement data ready before browsing.
+5. Close Steam before saving collection changes.
+6. Review the save preview and keep backups enabled.
 
-## What Repressurizer Changes
+Repressurizer does not edit your Steam account remotely. Collection saves are
+local file writes; metadata fetches and automation exports are separate network
+operations.
 
-| Area | Behavior |
-| --- | --- |
-| Steam collections | Reads and writes local Steam collection files and the local Steam UI cache when available. |
-| Backups | Creates local backups before collection writes and supports manual restore. |
-| Metadata cache | Stores Steam details, Steam reviews, regional prices, HLTB matches, achievements, wishlist, and Family summaries locally for faster browsing. |
-| AutoCat | Generates or updates Steam collections from cached/fetched library metadata. |
-| Steam Tools | Optional guarded tooling for local diagnostics and SAM-related achievement actions. |
-| Automation export | Publishes read-only JSON snapshots to configured HTTP targets when enabled. |
+## Main Workflows
 
-Repressurizer does not edit your Steam account remotely. Collection saves are local file writes; metadata fetches and automation exports are separate network operations.
+### Organize Collections
 
-## Features
+Repressurizer reads Steam's modern collection catalog and, when available, the
+Steam UI LevelDB cache. You can create, rename, duplicate, merge, delete, and
+color collections; drag or bulk-move games; hide local-only collection entries;
+and save with a preview of every collection that will change.
 
-### Steam Collection Editing
+Automatic backups are created before writes, including the matching Steam
+LevelDB catalog value when present.
 
-- Detects local Steam installs and Steam users.
-- Reads and writes Steam's modern collection catalog from `cloud-storage-namespace-1.json` and the Steam UI LevelDB cache when available.
-- Creates automatic backups before saving, including the matching Steam LevelDB catalog value when present, and supports manual backups/restores.
-- Shows a save preview before writing collection changes.
-- Lets you drag games into collections, bulk-select games, and edit multiple games at once.
-- Keeps hidden games separate from normal library browsing.
-- Can merge games that exist only in local Steam collections back into the visible library view.
+### Browse And Filter
 
-### Library Browsing
+The library supports grid and list views, Steam artwork, plain text search,
+regex search, fuzzy settings search, structured filters, and advanced library
+filters. Useful filters include playtime, HLTB length, status, local tags,
+release year, platform, Metacritic, achievements, Steam Family, duplicates,
+missing metadata, local-only games, and delisted or unavailable store entries.
 
-- Grid and list views with Steam header/capsule artwork.
-- Search by plain text or regex.
-- Sort by name, playtime, last played, App ID, Metacritic, HLTB length, achievements, or local status.
-- Right-click games to open details, launch with Steam, open the Steam store page, hide/unhide, set status, and manage collection membership.
-- Game detail pages show metadata, categories, platforms, tags, personal notes, personal rating, achievements, HLTB time, and price data when available.
-
-### Filters
-
-- Playtime range and unplayed-only filters.
-- HLTB main-story duration range.
-- Personal status filters: Playing, Beaten, Completed, Abandoned.
-- Local tag filters.
-- Release year range.
-- Platform filters: Windows, Mac, Linux.
-- Metacritic score range.
-- Achievement completion percentage range.
-- Steam Family shared games.
-- Possible duplicate games.
-- Local collection-only games.
-- Missing metadata.
-- Likely delisted/unavailable Steam store entries.
-
-### Search Query Syntax
-
-The search box supports both normal text and structured filters:
+Examples:
 
 ```text
 stalker
@@ -95,100 +93,100 @@ hours:>10
 playtime:2..40
 hltb:<20
 year:2013..2020
-released:>=2024-01-01
 genre:rpg
 category:achievement
 tag:backlog
 dev:"Square Enix"
-pub:capcom
 platform:windows
 status:playing
-rating:>=8
 metacritic:>85
 achievements:50..100
 family:true
 duplicate:true
 missing:true
-delisted:true
 appid:39140
 ```
 
-Plain text search normalizes punctuation and dotted acronyms, so `stalker` matches `S.T.A.L.K.E.R.` titles.
+Plain text search normalizes punctuation, so `stalker` matches
+`S.T.A.L.K.E.R.` titles.
 
-### Auto-Categorizing
+### Build AutoCat Collections
 
-Repressurizer can generate Steam collections from your library data:
+AutoCat can create or update collections from local playtime, cached Steam
+metadata, HLTB data, Steam reviews, achievements, languages, platforms,
+developers, publishers, and saved presets imported from Depressurizer profiles.
+It prefers cached data, can fetch missing data in the background, and can run
+with cached-only mode when you do not want extra network requests.
 
-- By playtime buckets, such as short, medium, long, endless.
-- By Steam genres.
-- By Steam tags/categories.
-- By release year, half-decade, or decade.
-- By Metacritic score.
-- By HLTB main-story duration.
-- By Steam review rating or review volume.
+![AutoCat preview](docs/assets/autocat.png)
 
-Auto-categorizing uses cached metadata when possible, fetches missing Steam details in the background, and can create a backup before applying generated collections.
+### Export And Automate
 
-### Integrations And Data Sources
+The export dialog can write filtered TXT, Markdown, JSON, or CSV output with
+selectable fields, category inclusion, category skipping, playtime filters,
+HLTB filters, status filters, metadata requirements, and local-only handling.
 
-- Steam Web API: owned games, playtime, achievements, player summaries, friends comparison, wishlist, and store metadata.
-- Steam Store API: game details, genres, categories, release dates, platforms, Metacritic, price data, and artwork.
-- Steam Family: detects Family-shared apps with the Web API key when possible, with an optional Store `webapi_token` fallback for accounts where Steam requires Store-session auth.
-- HowLongToBeat: fetches main story, main plus extras, completionist time, and confidence data.
-- Automation export: writes or publishes a stable `repressurizer.library-snapshot.v1` JSON snapshot with games, collections, Steam metadata, HLTB data, and optional achievement/wishlist/Steam Family summaries. HTTP targets are configurable and uploads are skipped when the snapshot checksum has not changed.
-- Integration libraries: TypeScript receivers can use [`@crimsab/repressurizer-integration`](https://www.npmjs.com/package/@crimsab/repressurizer-integration); Rust receivers can use [`repressurizer-integration`](https://crates.io/crates/repressurizer-integration). Registry download counts are approximate and include automated registry, CI, and indexer traffic.
-- CLI: the release includes `repressurizer-cli` for JSON diagnostics, redacted settings inspection, snapshot export/validation/publish, cache inspection, backups, SAM probe/schema/achievement listing, and guarded one-line SAM achievement actions that use the saved Steam path.
-- Local Steam files: reads and writes collection data directly, with backups.
+Automation export publishes a stable `repressurizer.library-snapshot.v1` JSON
+snapshot to a configured HTTP endpoint. Receivers can use the TypeScript or Rust
+integration libraries to validate and consume the payload.
 
-For setup, receiver expectations, CLI usage, network/cache behavior, and schema/package details, see [docs/automation-export.md](docs/automation-export.md), [docs/cli.md](docs/cli.md), [docs/cache-and-network.md](docs/cache-and-network.md), and [docs/integrations/repressurizer-snapshot-v1.md](docs/integrations/repressurizer-snapshot-v1.md).
+![Export dialog](docs/assets/export.png)
 
-### Planning And Discovery Tools
+### Plan What To Play
 
-- What to Play Next recommendations based on status, rating, genre, HLTB length, and metadata.
-- Library statistics for playtime, genres, platforms, publishers, Metacritic, value, and completion.
-- Play history timeline.
-- Wishlist view.
-- Achievements overview.
-- Friends comparison.
-- Diagnostics export with redaction for safer bug reports.
+Repressurizer includes library statistics, recommendations, play history,
+wishlist view, achievements overview, friends comparison, notes, tags, personal
+ratings, and game status tracking.
 
 ![Repressurizer settings and maintenance](docs/assets/settings.png)
 
+## Documentation
+
+The README is intentionally short. Detailed behavior lives in `docs/`.
+
+| Topic | Link |
+| --- | --- |
+| Documentation index | [docs/README.md](docs/README.md) |
+| Cache, Steam requests, prices, proxies | [docs/cache-and-network.md](docs/cache-and-network.md) |
+| Steam Family setup | [docs/steam-family.md](docs/steam-family.md) |
+| Automation export | [docs/automation-export.md](docs/automation-export.md) |
+| CLI usage | [docs/cli.md](docs/cli.md) |
+| Snapshot schema | [docs/integrations/repressurizer-snapshot-v1.md](docs/integrations/repressurizer-snapshot-v1.md) |
+| TypeScript package release notes | [docs/integrations/integration-package-release.md](docs/integrations/integration-package-release.md) |
+| Rust crate release notes | [docs/integrations/rust-integration-crate.md](docs/integrations/rust-integration-crate.md) |
+| Privacy and local data | [docs/privacy.md](docs/privacy.md) |
+| Localization status | [docs/localization.md](docs/localization.md) |
+
 ## Requirements
 
-- Windows 10/11.
+- Windows 10 or Windows 11.
 - Steam installed locally.
-- WebView2 Runtime. It is already installed on most current Windows systems.
-- A Steam Web API key for library details: <https://steamcommunity.com/dev/apikey>
+- WebView2 Runtime, already installed on most current Windows systems.
+- A Steam Web API key for library, achievement, wishlist, and Steam metadata.
 
-Linux and macOS support are possible, but Windows is the supported target for the first release.
+Linux and macOS support are possible later, but Windows is the supported target
+right now. The app is unsigned, so Windows SmartScreen may warn on early
+releases.
 
-## Known Limitations
+## Safety Model
 
-- Windows is the only supported platform for now.
-- Steam Family data depends on Steam endpoints that may require a Store `webapi_token` for some accounts.
-- HLTB and Steam Store metadata are fetched from unofficial/public endpoints and can occasionally rate-limit, move, or return incomplete data.
-- Some delisted or region-restricted games may have partial metadata even when they still exist in your library.
-- The app is unsigned, so Windows SmartScreen may warn on early releases.
+Repressurizer is backup-first software. It stores its own cache and settings in
+the operating system app data directory and stores Steam collection backups next
+to the Steam collection file they protect.
 
-## Safety
+Before saving collection changes:
 
-Repressurizer is designed around local files. It needs file access so it can detect Steam installs, read collection data, write collection changes, and create/restore backups. On current Steam clients it may update both `cloud-storage-namespace-1.json` and Steam's local LevelDB catalog cache. The first-run setup explains this before any save operation.
-
-Before public testing:
-
-- Close Steam before saving collection changes.
+- Close Steam.
 - Keep automatic backups enabled.
-- Use the save preview to inspect what will change.
-- Keep a manual backup if you are testing against a library you care about.
+- Read the save preview.
+- Keep a manual backup when testing against a library you care about.
 
-Diagnostics exports are redacted and should not include Steam Web API keys, Store tokens, or full Steam IDs.
-
-For local data and network behavior, see [docs/privacy.md](docs/privacy.md) and [docs/cache-and-network.md](docs/cache-and-network.md).
+Diagnostics exports are redacted and should not include Steam Web API keys,
+Store tokens, or full Steam IDs.
 
 ## Development
 
-Use Bun for JavaScript dependencies and scripts.
+Use Bun for JavaScript dependencies and project scripts.
 
 ```bash
 bun install
@@ -198,18 +196,8 @@ bun run test:e2e
 bun run build
 ```
 
-`bun run test` runs both unit tests and the Playwright browser smoke checks. Playwright attaches dashboard/settings screenshots under `test-results/` for visual review.
-
-Localization coverage is tracked in [docs/localization.md](docs/localization.md#localization-status). Use `bun run i18n:status` to print the table locally and `bun run i18n:status:write` to refresh the generated doc block.
-
-Release history is generated from tags and Conventional Commit subjects:
-
-```bash
-bun run changelog:write
-```
-
-This updates both `CHANGELOG.md` and the changelog JSON used by the in-app Info page.
-The release workflow runs the same generator before packaging, so release builds include changelog data for the tag being built.
+`bun run test` runs unit tests and Playwright browser checks. Playwright stores
+test artifacts under `test-results/`.
 
 For a local Windows build:
 
@@ -224,33 +212,35 @@ For cross-compiling a Windows portable build from Linux:
 bash build.sh
 ```
 
-Release builds are produced by GitHub Actions as:
+Release history is generated from tags and Conventional Commit subjects:
 
-- NSIS installer
-- portable Windows zip
-- CLI Windows zip
+```bash
+bun run changelog:write
+```
 
-Version tags are created from `package.json` (`v0.1.0`, `v0.2.0`, ...). Each tag triggers a GitHub Release with generated changelog notes and Windows artifacts.
-After CI passes, matching integration package tags are also created from `packages/integration/package.json` and `packages/rust/Cargo.toml` when those versions have not been released yet.
+This updates `CHANGELOG.md` and the generated changelog used by the in-app Info
+page. The release workflow runs the generator before packaging.
 
-For Steam Family setup and the optional Store `webapi_token` fallback, see [docs/steam-family.md](docs/steam-family.md).
+## Integration Packages
 
-For automation export and integration libraries, see [docs/automation-export.md](docs/automation-export.md).
+- TypeScript: [`@crimsab/repressurizer-integration`](https://www.npmjs.com/package/@crimsab/repressurizer-integration)
+- Rust: [`repressurizer-integration`](https://crates.io/crates/repressurizer-integration)
 
-For cache preparation, Steam request behavior, regional prices, and proxy routing, see [docs/cache-and-network.md](docs/cache-and-network.md).
+Registry download counts are approximate and may include CI, mirrors, bots, and
+indexers.
 
-For contribution guidelines, see [CONTRIBUTING.md](CONTRIBUTING.md). For private vulnerability reporting guidance, see [SECURITY.md](SECURITY.md).
+## Contributing
 
-## Data And Backups
-
-Repressurizer stores its own cache/settings under the operating system data directory in a `Repressurizer` folder. Steam collection backups are stored next to the Steam collection file they protect.
-
-Steam collection edits affect local Steam data. Make a backup before testing against a real library.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines and
+[SECURITY.md](SECURITY.md) for private vulnerability reporting.
 
 ## Attribution
 
-Repressurizer is inspired by Depressurizer, which is licensed under GPLv3. Repressurizer is a separate project and is not affiliated with Valve, Steam, or the Depressurizer maintainers.
+Repressurizer is inspired by Depressurizer, which is licensed under GPLv3.
+Repressurizer is a separate project and is not affiliated with Valve, Steam, or
+the Depressurizer maintainers.
 
 ## License
 
-Repressurizer is licensed under the GNU General Public License v3.0. See [LICENSE](LICENSE).
+Repressurizer is licensed under the GNU General Public License v3.0. See
+[LICENSE](LICENSE).
