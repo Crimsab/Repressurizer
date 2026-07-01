@@ -14,11 +14,7 @@ before it writes anything back to Steam's local files.
 It is inspired by Depressurizer, but rebuilt as a separate Tauri application
 with a Rust backend and a React interface.
 
-## Preview
-
 ![Repressurizer demo](docs/assets/repressurizer-demo.gif)
-
-[Open the higher-quality WebM demo](docs/assets/repressurizer-demo.webm).
 
 ## Highlights
 
