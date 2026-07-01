@@ -121,6 +121,8 @@ export interface GameDetails {
   tags?: string[];
   categories: string[];
   release_date: string | null;
+  store_release_date?: string | null;
+  store_release_date_fetched_at?: number | null;
   metacritic_score: number | null;
   developers: string[];
   publishers: string[];
@@ -147,6 +149,11 @@ export interface GamePriceSnapshot {
 
 export interface GamePriceOverview extends GamePriceSnapshot {
   app_id: number;
+}
+
+export interface StoreReleaseDateResult {
+  app_id: number;
+  release_date: string | null;
 }
 
 export interface SteamReviewSummary {

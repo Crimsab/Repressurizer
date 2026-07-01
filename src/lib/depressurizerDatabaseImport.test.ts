@@ -88,11 +88,52 @@ describe("Depressurizer database merge", () => {
     expect(result.details).toHaveLength(1);
     expect(result.details[0].categories).toEqual(["Steam Cloud"]);
     expect(result.details[0].release_date).toBe("1 Nov, 2000");
+    expect(result.details[0].store_release_date).toBe("Nov 1, 2000");
     expect(result.details[0].tags).toEqual(["Classic", "FPS"]);
     expect(result.details[0].platforms).toEqual({ windows: true, mac: false, linux: false });
     expect(result.hltb[10]?.main_story).toBe(25.5);
     expect(result.steamReviews).toHaveLength(1);
     expect(result.stats).toMatchObject({ detailsMerged: 1, hltbAdded: 1, steamReviewsAdded: 1 });
+  });
+
+  it("treats blank cached release dates as missing during database import", () => {
+    const imported: DepressurizerDatabaseImport = {
+      sourcePath: null,
+      names: {},
+      details: [
+        details(260730, {
+          release_date: "23 Jul, 2001",
+        }),
+      ],
+      hltb: {},
+      steamReviews: [],
+      stats: {
+        databaseEntries: 1,
+        requestedAppIds: 1,
+        matchedEntries: 1,
+        names: 0,
+        details: 1,
+        hltb: 0,
+        steamReviews: 0,
+        entriesWithTags: 0,
+        entriesWithAchievements: 0,
+      },
+    };
+
+    const result = prepareDepressurizerDatabaseMerge({
+      imported,
+      currentDetails: {
+        260730: details(260730, {
+          release_date: "",
+          store_release_date: "",
+        }),
+      },
+      currentHltb: {},
+      currentSteamReviews: {},
+    });
+
+    expect(result.details[0].release_date).toBe("23 Jul, 2001");
+    expect(result.details[0].store_release_date).toBe("23 Jul, 2001");
   });
 
   it("fills missing HLTB fields without replacing local values and skips existing reviews", () => {

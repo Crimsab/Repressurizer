@@ -309,6 +309,8 @@ mod tests {
             tags: Vec::new(),
             categories: vec!["Single-player".to_string(), "Steam Cloud".to_string()],
             release_date: None,
+            store_release_date: None,
+            store_release_date_fetched_at: None,
             metacritic_score: None,
             developers: vec!["Valve".to_string()],
             publishers: vec!["Valve".to_string(), "Sierra".to_string()],

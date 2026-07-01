@@ -26,6 +26,21 @@ fn extract_year(date_str: &str) -> Option<u32> {
         .find(|&y| y >= 1970 && y <= 2100)
 }
 
+fn release_date_for_year(game: &GameDetails) -> Option<&str> {
+    game.store_release_date
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+        .or_else(|| {
+            if game.store_release_date_fetched_at.is_some() {
+                game.release_date
+                    .as_deref()
+                    .filter(|value| !value.trim().is_empty())
+            } else {
+                None
+            }
+        })
+}
+
 pub fn categorize_by_year(
     games: &[GameDetails],
     config: &YearConfig,
@@ -34,7 +49,7 @@ pub fn categorize_by_year(
     let mut games_categorized = 0u64;
 
     for game in games {
-        let year = game.release_date.as_deref().and_then(extract_year);
+        let year = release_date_for_year(game).and_then(extract_year);
 
         let cat_name = match year {
             Some(y) => {
@@ -82,5 +97,85 @@ pub fn categorize_by_year(
         games_processed: games.len() as u64,
         games_categorized,
         assignments,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::steam::api::PlatformSupport;
+
+    fn details(app_id: u64, release_date: Option<&str>, store_release_date: Option<&str>) -> GameDetails {
+        GameDetails {
+            app_id,
+            name: format!("Game {app_id}"),
+            genres: Vec::new(),
+            tags: Vec::new(),
+            categories: Vec::new(),
+            release_date: release_date.map(str::to_string),
+            store_release_date: store_release_date.map(str::to_string),
+            store_release_date_fetched_at: store_release_date.map(|_| 1),
+            metacritic_score: None,
+            developers: Vec::new(),
+            publishers: Vec::new(),
+            supported_languages: Vec::new(),
+            platforms: PlatformSupport::default(),
+            header_image: None,
+            capsule_image: None,
+            price_initial: None,
+            price_final: None,
+            price_currency: None,
+            price_country_code: None,
+            is_free: false,
+        }
+    }
+
+    #[test]
+    fn prefers_store_release_date_over_api_release_date() {
+        let result = categorize_by_year(
+            &[details(260730, Some("20 Nov, 2013"), Some("23 Jul, 2001"))],
+            &YearConfig {
+                prefix: Some("Released - ".to_string()),
+                grouping: YearGrouping::None,
+                include_unknown: false,
+                unknown_text: None,
+            },
+        );
+
+        assert_eq!(result.assignments["Released - 2001"], vec![260730]);
+    }
+
+    #[test]
+    fn skips_unchecked_api_release_date_to_preserve_existing_categories() {
+        let result = categorize_by_year(
+            &[details(260730, Some("20 Nov, 2013"), None)],
+            &YearConfig {
+                prefix: None,
+                grouping: YearGrouping::None,
+                include_unknown: false,
+                unknown_text: None,
+            },
+        );
+
+        assert!(result.assignments.is_empty());
+        assert_eq!(result.games_categorized, 0);
+    }
+
+    #[test]
+    fn falls_back_to_api_release_date_after_store_page_was_checked() {
+        let mut checked = details(123, Some("5 Dec, 2020"), None);
+        checked.store_release_date_fetched_at = Some(1);
+
+        let result = categorize_by_year(
+            &[checked],
+            &YearConfig {
+                prefix: None,
+                grouping: YearGrouping::None,
+                include_unknown: false,
+                unknown_text: None,
+            },
+        );
+
+        assert_eq!(result.assignments["2020"], vec![123]);
     }
 }

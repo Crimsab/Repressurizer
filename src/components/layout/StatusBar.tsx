@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { detailsCacheNeedsRefresh, useGameStore } from "../../stores/gameStore";
+import { detailsCacheNeedsRefresh, isDetailsCacheCurrent, useGameStore } from "../../stores/gameStore";
 import { useCategoryStore } from "../../stores/categoryStore";
 import { useStatusStore, STATUS_META, type GameStatus } from "../../stores/statusStore";
 import { useBackgroundFetchStore } from "../../stores/backgroundFetchStore";
@@ -9,6 +9,7 @@ import { useHltbStore } from "../../stores/hltbStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useSteamRatingsStore } from "../../stores/steamRatingsStore";
 import { detailsPriceNeedsCurrencyRefresh } from "../../lib/prices";
+import { storeReleaseDateNeedsRefresh } from "../../lib/releaseDates";
 import { steamRatingIdsNeedingFetch } from "../../lib/steamRatings";
 import { Circle, X, FolderSimplePlus, Spinner, FolderMinus, Robot } from "@phosphor-icons/react";
 import { useT, type TranslationKey } from "../../lib/i18n";
@@ -27,7 +28,7 @@ function FetchPopover({
   currentName, recentNames, coolingDown, cooldownSecs,
   onStop, onClose,
 }: {
-  title: string; color: "amber" | "sky" | "violet";
+  title: string; color: "amber" | "sky" | "violet" | "emerald";
   fetched: number; total: number;
   succeeded?: number; failed?: number;
   currentName: string; recentNames: string[];
@@ -37,9 +38,9 @@ function FetchPopover({
   const t = useT();
   const remaining = total - fetched;
   const percent = total > 0 ? Math.round((fetched / total) * 100) : 0;
-  const barColor = color === "amber" ? "bg-amber-500" : color === "violet" ? "bg-violet-500" : "bg-sky-500";
-  const textColor = color === "amber" ? "text-amber-400" : color === "violet" ? "text-violet-400" : "text-sky-400";
-  const borderColor = color === "amber" ? "border-amber-500/20" : color === "violet" ? "border-violet-500/20" : "border-sky-500/20";
+  const barColor = color === "amber" ? "bg-amber-500" : color === "violet" ? "bg-violet-500" : color === "emerald" ? "bg-emerald-500" : "bg-sky-500";
+  const textColor = color === "amber" ? "text-amber-400" : color === "violet" ? "text-violet-400" : color === "emerald" ? "text-emerald-400" : "text-sky-400";
+  const borderColor = color === "amber" ? "border-amber-500/20" : color === "violet" ? "border-violet-500/20" : color === "emerald" ? "border-emerald-500/20" : "border-sky-500/20";
 
   return (
     <div
@@ -172,6 +173,15 @@ export function StatusBar() {
   const ratingsCooldownSecs = useBackgroundFetchStore((s) => s.ratingsCooldownSecs);
   const stopRatingsFetch = useBackgroundFetchStore((s) => s.stopRatingsFetch);
   const startRatingsFetch = useBackgroundFetchStore((s) => s.startRatingsFetch);
+  const releaseDatesRunning = useBackgroundFetchStore((s) => s.releaseDatesRunning);
+  const releaseDatesFetched = useBackgroundFetchStore((s) => s.releaseDatesFetched);
+  const releaseDatesTotal = useBackgroundFetchStore((s) => s.releaseDatesTotal);
+  const releaseDatesSucceeded = useBackgroundFetchStore((s) => s.releaseDatesSucceeded);
+  const releaseDatesFailed = useBackgroundFetchStore((s) => s.releaseDatesFailed);
+  const releaseDatesCurrentName = useBackgroundFetchStore((s) => s.releaseDatesCurrentName);
+  const releaseDatesRecentNames = useBackgroundFetchStore((s) => s.releaseDatesRecentNames);
+  const stopStoreReleaseDateFetch = useBackgroundFetchStore((s) => s.stopStoreReleaseDateFetch);
+  const startStoreReleaseDateFetch = useBackgroundFetchStore((s) => s.startStoreReleaseDateFetch);
 
   const collections = useCategoryStore((s) => s.collections);
   const activeCategory = useCategoryStore((s) => s.activeCategory);
@@ -189,6 +199,7 @@ export function StatusBar() {
   const [showHltbPopover, setShowHltbPopover] = useState(false);
   const [showAchievementsPopover, setShowAchievementsPopover] = useState(false);
   const [showRatingsPopover, setShowRatingsPopover] = useState(false);
+  const [showReleaseDatesPopover, setShowReleaseDatesPopover] = useState(false);
 
   const selectedCount = Object.keys(selectedGameIds).length;
   const selectedIds = Object.keys(selectedGameIds).map(Number);
@@ -201,10 +212,13 @@ export function StatusBar() {
   const fetchableHltbIds = gameIds.filter(
     (id) => !hltbData[id] && (ignoredHltbFails[id] ?? 0) < HLTB_MAX_FAILS
   );
+  const fetchableStoreReleaseDateIds = gameIds.filter((id) =>
+    isDetailsCacheCurrent(details[id]) && storeReleaseDateNeedsRefresh(details[id])
+  );
   const missingRatingIds = ratingsHydrated ? steamRatingIdsNeedingFetch(games, ratings) : [];
   const cachePreparationMissing =
-    fetchableDetailIds.length + fetchableHltbIds.length + missingRatingIds.length;
-  const cachePreparationRunning = detailsRunning || hltbRunning || ratingsRunning;
+    fetchableDetailIds.length + fetchableStoreReleaseDateIds.length + fetchableHltbIds.length + missingRatingIds.length;
+  const cachePreparationRunning = detailsRunning || releaseDatesRunning || hltbRunning || ratingsRunning;
   const showPrepareCache =
     gameCount > 0 && cachePreparationMissing > 0 && !cachePreparationRunning;
 
@@ -228,6 +242,9 @@ export function StatusBar() {
     if (!hltbRunning && fetchableHltbIds.length > 0) {
       startHltbFetch(fetchableHltbIds.map((appId) => ({ appId, name: games[appId]?.name ?? `#${appId}` })));
     }
+    if (!releaseDatesRunning && fetchableStoreReleaseDateIds.length > 0) {
+      startStoreReleaseDateFetch(fetchableStoreReleaseDateIds.map((appId) => ({ appId, name: games[appId]?.name ?? `#${appId}` })));
+    }
     if (!ratingsRunning) {
       if (!useSteamRatingsStore.getState().hydrated) {
         await hydrateRatingsCache();
@@ -244,7 +261,7 @@ export function StatusBar() {
   return (
     <footer
       className="flex items-center gap-4 border-t border-repressurizer-border-subtle bg-repressurizer-surface/50 px-4 py-1 text-[11px] text-repressurizer-text-faint font-mono tabular-nums"
-      onMouseDown={() => { setShowDetailsPopover(false); setShowHltbPopover(false); setShowAchievementsPopover(false); setShowRatingsPopover(false); }}
+      onMouseDown={() => { setShowDetailsPopover(false); setShowHltbPopover(false); setShowAchievementsPopover(false); setShowRatingsPopover(false); setShowReleaseDatesPopover(false); }}
     >
       <span>{t("statusbar.games", { count: gameCount })}</span>
       <span>{t("statusbar.categories", { count: categoryCount })}</span>
@@ -355,7 +372,7 @@ export function StatusBar() {
         <div className="relative">
           <button
             onMouseDown={(e) => e.stopPropagation()}
-            onClick={(e) => { e.stopPropagation(); setShowHltbPopover(false); setShowAchievementsPopover(false); setShowRatingsPopover(false); setShowDetailsPopover((v) => !v); }}
+            onClick={(e) => { e.stopPropagation(); setShowHltbPopover(false); setShowAchievementsPopover(false); setShowRatingsPopover(false); setShowReleaseDatesPopover(false); setShowDetailsPopover((v) => !v); }}
             className="inline-flex items-center gap-1.5 text-amber-400 hover:text-amber-300 transition-colors"
           >
             <Spinner size={9} className={detailsCoolingDown ? "shrink-0" : "animate-spin shrink-0"} />
@@ -384,11 +401,38 @@ export function StatusBar() {
         </div>
       )}
 
+      {releaseDatesRunning && (
+        <div className="relative">
+          <button
+            onMouseDown={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); setShowDetailsPopover(false); setShowHltbPopover(false); setShowAchievementsPopover(false); setShowRatingsPopover(false); setShowReleaseDatesPopover((v) => !v); }}
+            className="inline-flex items-center gap-1.5 text-emerald-400 hover:text-emerald-300 transition-colors"
+          >
+            <Spinner size={9} className="animate-spin shrink-0" />
+            <span>{t("statusbar.releaseDatesProgress", { fetched: releaseDatesFetched, total: releaseDatesTotal })}</span>
+          </button>
+          {showReleaseDatesPopover && (
+            <FetchPopover
+              title={t("fetch.releaseDates")}
+              color="emerald"
+              fetched={releaseDatesFetched}
+              total={releaseDatesTotal}
+              succeeded={releaseDatesSucceeded}
+              failed={releaseDatesFailed}
+              currentName={releaseDatesCurrentName}
+              recentNames={releaseDatesRecentNames}
+              onStop={stopStoreReleaseDateFetch}
+              onClose={() => setShowReleaseDatesPopover(false)}
+            />
+          )}
+        </div>
+      )}
+
       {hltbRunning && (
         <div className="relative">
           <button
             onMouseDown={(e) => e.stopPropagation()}
-            onClick={(e) => { e.stopPropagation(); setShowDetailsPopover(false); setShowAchievementsPopover(false); setShowRatingsPopover(false); setShowHltbPopover((v) => !v); }}
+            onClick={(e) => { e.stopPropagation(); setShowDetailsPopover(false); setShowAchievementsPopover(false); setShowRatingsPopover(false); setShowReleaseDatesPopover(false); setShowHltbPopover((v) => !v); }}
             className="inline-flex items-center gap-1.5 text-sky-400 hover:text-sky-300 transition-colors"
           >
             <Spinner size={9} className="animate-spin shrink-0" />
@@ -413,7 +457,7 @@ export function StatusBar() {
         <div className="relative">
           <button
             onMouseDown={(e) => e.stopPropagation()}
-            onClick={(e) => { e.stopPropagation(); setShowDetailsPopover(false); setShowHltbPopover(false); setShowRatingsPopover(false); setShowAchievementsPopover((v) => !v); }}
+            onClick={(e) => { e.stopPropagation(); setShowDetailsPopover(false); setShowHltbPopover(false); setShowRatingsPopover(false); setShowReleaseDatesPopover(false); setShowAchievementsPopover((v) => !v); }}
             className="inline-flex items-center gap-1.5 text-violet-400 hover:text-violet-300 transition-colors"
           >
             <Spinner size={9} className="animate-spin shrink-0" />
@@ -438,7 +482,7 @@ export function StatusBar() {
         <div className="relative">
           <button
             onMouseDown={(e) => e.stopPropagation()}
-            onClick={(e) => { e.stopPropagation(); setShowDetailsPopover(false); setShowHltbPopover(false); setShowAchievementsPopover(false); setShowRatingsPopover((v) => !v); }}
+            onClick={(e) => { e.stopPropagation(); setShowDetailsPopover(false); setShowHltbPopover(false); setShowAchievementsPopover(false); setShowReleaseDatesPopover(false); setShowRatingsPopover((v) => !v); }}
             className="inline-flex items-center gap-1.5 text-violet-400 hover:text-violet-300 transition-colors"
           >
             <Spinner size={9} className={ratingsCoolingDown ? "shrink-0" : "animate-spin shrink-0"} />

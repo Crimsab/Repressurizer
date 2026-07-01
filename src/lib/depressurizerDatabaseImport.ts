@@ -115,6 +115,8 @@ function mergeImportedDetails(
       normalized.genres = [];
       normalized.categories = [];
       normalized.release_date = null;
+      normalized.store_release_date = null;
+      normalized.store_release_date_fetched_at = null;
       normalized.metacritic_score = null;
       normalized.developers = [];
       normalized.publishers = [];
@@ -143,7 +145,17 @@ function mergeImportedDetails(
         : unionArray(existing.tags ?? [], incoming.tags ?? [])
       : existing.tags,
     categories: options.includeDetails ? mergeArray(existing.categories, incoming.categories, options.overwriteDetails) : existing.categories,
-    release_date: options.includeDetails && options.overwriteDetails ? incoming.release_date : existing.release_date ?? (options.includeDetails ? incoming.release_date : null),
+    release_date: mergeNullableText(existing.release_date, incoming.release_date, options.includeDetails, options.overwriteDetails),
+    store_release_date: mergeNullableText(
+      existing.store_release_date,
+      incoming.store_release_date ?? incoming.release_date,
+      options.includeDetails,
+      options.overwriteDetails
+    ),
+    store_release_date_fetched_at:
+      options.includeDetails && (options.overwriteDetails || !existing.store_release_date_fetched_at)
+        ? incoming.store_release_date_fetched_at ?? existing.store_release_date_fetched_at ?? Date.now()
+        : existing.store_release_date_fetched_at,
     metacritic_score: options.includeDetails && options.overwriteDetails ? incoming.metacritic_score : existing.metacritic_score ?? (options.includeDetails ? incoming.metacritic_score : null),
     developers: options.includeDetails ? mergeArray(existing.developers, incoming.developers, options.overwriteDetails) : existing.developers,
     publishers: options.includeDetails ? mergeArray(existing.publishers, incoming.publishers, options.overwriteDetails) : existing.publishers,
@@ -163,11 +175,15 @@ function mergeImportedDetails(
 }
 
 function normalizeIncomingDetails(details: GameDetails): GameDetails {
+  const releaseDate = cleanText(details.release_date);
   return {
     ...details,
     genres: details.genres ?? [],
     tags: details.tags ?? [],
     categories: details.categories ?? [],
+    release_date: releaseDate,
+    store_release_date: cleanText(details.store_release_date) ?? releaseDate,
+    store_release_date_fetched_at: details.store_release_date_fetched_at ?? Date.now(),
     developers: details.developers ?? [],
     publishers: details.publishers ?? [],
     supported_languages: details.supported_languages ?? [],
@@ -205,6 +221,23 @@ function cleanArray(values: string[] | undefined): string[] {
   return (values ?? []).map((value) => value.trim()).filter(Boolean);
 }
 
+function cleanText(value: string | null | undefined): string | null {
+  const text = String(value ?? "").trim();
+  return text.length > 0 ? text : null;
+}
+
+function mergeNullableText(
+  existing: string | null | undefined,
+  incoming: string | null | undefined,
+  include: boolean,
+  overwrite: boolean
+): string | null {
+  const existingText = cleanText(existing);
+  const incomingText = include ? cleanText(incoming) : null;
+  if (overwrite) return incomingText;
+  return existingText ?? incomingText;
+}
+
 function hasAnyPlatform(platforms: GameDetails["platforms"] | undefined): boolean {
   return !!platforms && (platforms.windows || platforms.mac || platforms.linux);
 }
@@ -218,6 +251,7 @@ function hasImportableDetails(details: GameDetails): boolean {
     cleanArray(details.publishers).length > 0 ||
     cleanArray(details.supported_languages).length > 0 ||
     !!details.release_date ||
+    !!details.store_release_date ||
     details.metacritic_score != null ||
     hasAnyPlatform(details.platforms)
   );

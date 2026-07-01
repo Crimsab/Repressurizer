@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { fetchGameDetails, fetchGamePriceOverviews, fetchHltb, fetchAchievementsSummary, fetchSteamReviewSummary, currencyToCountryCode } from "../lib/tauri";
+import { fetchGameDetails, fetchGamePriceOverviews, fetchHltb, fetchAchievementsSummary, fetchSteamReviewSummary, fetchStoreReleaseDates, currencyToCountryCode } from "../lib/tauri";
 import { isDetailsCacheCurrent, useGameStore } from "./gameStore";
 import { useHltbStore } from "./hltbStore";
 import { useAchievementsStore } from "./achievementsStore";
@@ -9,9 +9,10 @@ import { useHltbIgnoredStore } from "./hltbIgnoredStore";
 import { useSettingsStore } from "./settingsStore";
 import { extractReleaseYear } from "../lib/search";
 import { detailsPriceNeedsCurrencyRefresh } from "../lib/prices";
+import { bestAvailableReleaseDate, storeReleaseDateNeedsRefresh } from "../lib/releaseDates";
 import { isSteamRatingFresh, isSteamReviewRateLimitedError } from "../lib/steamRatings";
 import { getHltbHours } from "../lib/hltb";
-import type { GameDetails, GamePriceOverview } from "../lib/types";
+import type { GameDetails, GamePriceOverview, StoreReleaseDateResult } from "../lib/types";
 
 // ── Config ────────────────────────────────────────────────────────────────────
 const DEFAULT_DETAILS_BASE_DELAY_MS = 1200;    // base delay between Steam requests (~1 req/sec)
@@ -26,6 +27,8 @@ const DETAILS_SLOWDOWN_THRESHOLD_MS = 3_000; // when to show "slowing down" indi
 const DEFAULT_HLTB_BATCH_DELAY_MS = 500;
 const DEFAULT_ACHIEVEMENTS_BATCH_DELAY_MS = 300;
 const DEFAULT_RATINGS_BASE_DELAY_MS = 1200;
+const DEFAULT_STORE_RELEASE_DATE_DELAY_MS = 1600;
+const DEFAULT_STORE_RELEASE_DATE_BATCH_SIZE = 50;
 const DEFAULT_RATINGS_RATE_LIMIT_COOLDOWN_MINUTES = 5;
 const MIN_FETCH_DELAY_MS = 100;
 
@@ -73,6 +76,8 @@ let _achievementsRunning = false;
 let _achievementsAbort = false;
 let _ratingsRunning = false;
 let _ratingsAbort = false;
+let _releaseDatesRunning = false;
+let _releaseDatesAbort = false;
 // Adaptive per-request extra delay (only grows for unexpected failures)
 let _extraDelayMs = 0;
 
@@ -113,6 +118,15 @@ interface BackgroundFetchState {
   ratingsCoolingDown: boolean;
   ratingsCooldownSecs: number;
 
+  // Store/original release dates
+  releaseDatesRunning: boolean;
+  releaseDatesFetched: number;
+  releaseDatesTotal: number;
+  releaseDatesSucceeded: number;
+  releaseDatesFailed: number;
+  releaseDatesCurrentName: string;
+  releaseDatesRecentNames: string[];
+
   startDetailsFetch: (missingIds: number[]) => void;
   stopDetailsFetch: () => void;
   startHltbFetch: (items: Array<{ appId: number; name: string }>) => void;
@@ -121,6 +135,8 @@ interface BackgroundFetchState {
   stopAchievementsFetch: () => void;
   startRatingsFetch: (items: Array<{ appId: number; name: string }>) => void;
   stopRatingsFetch: () => void;
+  startStoreReleaseDateFetch: (items: Array<{ appId: number; name: string }>) => void;
+  stopStoreReleaseDateFetch: () => void;
 }
 
 let _setState: (partial: Partial<BackgroundFetchState>) => void = () => {};
@@ -161,6 +177,13 @@ export const useBackgroundFetchStore = create<BackgroundFetchState>((set, get) =
     ratingsRecentNames: [],
     ratingsCoolingDown: false,
     ratingsCooldownSecs: 0,
+    releaseDatesRunning: false,
+    releaseDatesFetched: 0,
+    releaseDatesTotal: 0,
+    releaseDatesSucceeded: 0,
+    releaseDatesFailed: 0,
+    releaseDatesCurrentName: "",
+    releaseDatesRecentNames: [],
 
     startDetailsFetch: (missingIds) => {
       if (_detailsRunning || missingIds.length === 0) return;
@@ -279,6 +302,34 @@ export const useBackgroundFetchStore = create<BackgroundFetchState>((set, get) =
       _ratingsRunning = false;
       set({ ratingsRunning: false, ratingsCurrentName: "", ratingsCoolingDown: false, ratingsCooldownSecs: 0 });
     },
+
+    startStoreReleaseDateFetch: (items) => {
+      if (_releaseDatesRunning || items.length === 0) return;
+      const details = useGameStore.getState().details;
+      const filtered = items.filter((item) =>
+        isDetailsCacheCurrent(details[item.appId]) && storeReleaseDateNeedsRefresh(details[item.appId])
+      );
+      if (filtered.length === 0) return;
+
+      _releaseDatesRunning = true;
+      _releaseDatesAbort = false;
+      set({
+        releaseDatesRunning: true,
+        releaseDatesFetched: 0,
+        releaseDatesTotal: filtered.length,
+        releaseDatesSucceeded: 0,
+        releaseDatesFailed: 0,
+        releaseDatesCurrentName: "",
+        releaseDatesRecentNames: [],
+      });
+      _runStoreReleaseDateLoop(filtered);
+    },
+
+    stopStoreReleaseDateFetch: () => {
+      _releaseDatesAbort = true;
+      _releaseDatesRunning = false;
+      set({ releaseDatesRunning: false, releaseDatesCurrentName: "" });
+    },
   };
 });
 
@@ -288,7 +339,7 @@ function sleep(ms: number) {
   return new Promise<void>((r) => setTimeout(r, ms));
 }
 
-function addToRecent(key: "detailsRecentNames" | "hltbRecentNames" | "achievementsRecentNames" | "ratingsRecentNames", label: string) {
+function addToRecent(key: "detailsRecentNames" | "hltbRecentNames" | "achievementsRecentNames" | "ratingsRecentNames" | "releaseDatesRecentNames", label: string) {
   const prev = _getState()[key];
   _setState({ [key]: [label, ...prev.filter((item) => item !== label)].slice(0, MAX_RECENT) } as Partial<BackgroundFetchState>);
 }
@@ -321,6 +372,7 @@ function onDetailsSuccess() {
 async function _runDetailsLoop(missingIds: number[]) {
   const buffer: GameDetails[] = [];
   const retryQueue: number[] = [];
+  const successfulDetailIds = new Set<number>();
   let fetched = 0;
   let succeeded = 0;
   const currency = useSettingsStore.getState().currency ?? "EUR";
@@ -382,6 +434,7 @@ async function _runDetailsLoop(missingIds: number[]) {
     try {
       const detail = await fetchGameDetails(id, cc);
       buffer.push(detail);
+      successfulDetailIds.add(id);
       addToRecent("detailsRecentNames", `✓ ${name}`);
       console.log(`[Details] ✓ ${name} (${id})`);
       onDetailsSuccess();
@@ -443,6 +496,7 @@ async function _runDetailsLoop(missingIds: number[]) {
       try {
         const detail = await fetchGameDetails(id, cc);
         buffer.push(detail);
+        successfulDetailIds.add(id);
         addToRecent("detailsRecentNames", `✓ ${name}`);
         console.log(`[Details] ✓ retry ${name} (${id})`);
         onDetailsSuccess();
@@ -486,6 +540,88 @@ async function _runDetailsLoop(missingIds: number[]) {
     detailsFetched: missingIds.length,
     detailsSucceeded: succeeded,
   });
+
+  const detailsAfterFetch = useGameStore.getState().details;
+  const releaseDateItems = [...successfulDetailIds]
+    .filter((id) => isDetailsCacheCurrent(detailsAfterFetch[id]) && storeReleaseDateNeedsRefresh(detailsAfterFetch[id]))
+    .map((appId) => ({ appId, name: useGameStore.getState().games[appId]?.name ?? `#${appId}` }));
+  if (releaseDateItems.length > 0 && !_releaseDatesRunning) {
+    _getState().startStoreReleaseDateFetch(releaseDateItems);
+  }
+}
+
+async function _runStoreReleaseDateLoop(items: Array<{ appId: number; name: string }>) {
+  const buffer: StoreReleaseDateResult[] = [];
+  let fetched = 0;
+  let succeeded = 0;
+  let failed = 0;
+
+  console.log(`[ReleaseDates] Starting fetch for ${items.length} games`);
+
+  for (let batchStart = 0; batchStart < items.length; batchStart += DEFAULT_STORE_RELEASE_DATE_BATCH_SIZE) {
+    if (_releaseDatesAbort) break;
+
+    const batch = items.slice(batchStart, batchStart + DEFAULT_STORE_RELEASE_DATE_BATCH_SIZE);
+    const batchEnd = batchStart + batch.length;
+    _setState({
+      releaseDatesCurrentName:
+        batch.length === 1
+          ? batch[0].name
+          : `${batch[0].name} +${batch.length - 1}`,
+    });
+
+    try {
+      const results = await fetchStoreReleaseDates(batch.map((item) => item.appId));
+      const resultsById = new Map(results.map((result) => [result.app_id, result]));
+
+      for (const { appId, name } of batch) {
+        const result = resultsById.get(appId);
+        if (!result) {
+          failed++;
+          addToRecent("releaseDatesRecentNames", `⚠ ${name} (retry later)`);
+          console.warn(`[ReleaseDates] ✗ ${name} (${appId}): no result returned`);
+          continue;
+        }
+
+        buffer.push(result);
+        const label = result.release_date ? `${name} · ${result.release_date}` : `${name} · no Store date`;
+        addToRecent("releaseDatesRecentNames", label);
+        console.log(`[ReleaseDates] ✓ ${name} (${appId}): ${result.release_date ?? "no Store date"}`);
+        succeeded++;
+      }
+    } catch (e) {
+      failed += batch.length;
+      addToRecent("releaseDatesRecentNames", `⚠ Batch ${batchStart + 1}-${batchEnd} failed`);
+      console.warn(`[ReleaseDates] ✗ batch ${batchStart + 1}-${batchEnd}: ${e}`);
+    }
+
+    fetched += batch.length;
+    _setState({
+      releaseDatesFetched: Math.min(fetched, items.length),
+      releaseDatesSucceeded: succeeded,
+      releaseDatesFailed: failed,
+    });
+
+    if (buffer.length >= DEFAULT_STORE_RELEASE_DATE_BATCH_SIZE || batchEnd >= items.length) {
+      if (buffer.length > 0) {
+        useGameStore.getState().setBulkStoreReleaseDates([...buffer]);
+        buffer.length = 0;
+      }
+    }
+
+    if (!_releaseDatesAbort && batchEnd < items.length) {
+      await sleep(DEFAULT_STORE_RELEASE_DATE_DELAY_MS);
+    }
+  }
+
+  _releaseDatesRunning = false;
+  _setState({
+    releaseDatesRunning: false,
+    releaseDatesCurrentName: "",
+    releaseDatesFetched: fetched,
+    releaseDatesSucceeded: succeeded,
+    releaseDatesFailed: failed,
+  });
 }
 
 // ── HLTB loop (concurrent requests, count from settings) ─────────────────────
@@ -507,7 +643,7 @@ async function _runHltbLoop(items: Array<{ appId: number; name: string }>) {
     await Promise.all(batch.map(async ({ name, appId }) => {
       try {
         const details = useGameStore.getState().details[appId];
-        const releaseYear = extractReleaseYear(details?.release_date);
+        const releaseYear = extractReleaseYear(bestAvailableReleaseDate(details));
         const result = await fetchHltb(name, appId, releaseYear);
         if (result) {
           useHltbStore.getState().setData(appId, result);

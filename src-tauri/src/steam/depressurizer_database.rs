@@ -353,16 +353,19 @@ fn entry_to_details(entry: &DepressurizerDatabaseEntry) -> Option<GameDetails> {
         categories.push("Steam Achievements".to_string());
     }
 
+    let release_date = entry
+        .steam_release_date
+        .as_deref()
+        .and_then(clean_optional_string);
     let details = GameDetails {
         app_id: entry.app_id,
         name: clean_optional_string(&entry.name).unwrap_or_else(|| format!("App {}", entry.app_id)),
         genres: clean_strings(&entry.genres),
         tags: clean_strings(&entry.tags),
         categories,
-        release_date: entry
-            .steam_release_date
-            .as_deref()
-            .and_then(clean_optional_string),
+        release_date: release_date.clone(),
+        store_release_date: release_date,
+        store_release_date_fetched_at: Some(entry.last_store_scrape.saturating_mul(1000)),
         metacritic_score: None,
         developers: clean_strings(&entry.developers),
         publishers: clean_strings(&entry.publishers),

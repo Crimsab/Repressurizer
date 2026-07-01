@@ -19,6 +19,11 @@ import { MAX_FAIL_RUNS, useFailedGamesStore } from "../../stores/failedGamesStor
 import { HLTB_MAX_FAILS, useHltbIgnoredStore } from "../../stores/hltbIgnoredStore";
 import { detailsPriceNeedsCurrencyRefresh } from "../../lib/prices";
 import {
+  storeReleaseDateNeedsRefresh,
+  yearCategorizationReleaseDate,
+} from "../../lib/releaseDates";
+import { extractReleaseYear } from "../../lib/search";
+import {
   applyAutoCategorizeAssignments,
   withExpectedAutoCategories,
 } from "../../lib/autoCategorizeApply";
@@ -110,6 +115,7 @@ type CategorizerType =
   | "platform"
   | "name";
 type Step = "choose" | "configure" | "fetch" | "preview" | "done";
+type FetchKind = "details" | "ratings" | "releaseDates";
 
 const CATEGORIZERS: {
   value: CategorizerType;
@@ -236,12 +242,23 @@ function sortValues(values: string[]): string[] {
 
 function detailNeedsFetchForType(type: CategorizerType, detail: GameDetails | undefined): boolean {
   if (!categorizerNeedsDetails(type)) return false;
-  return detailsCacheNeedsRefresh(detail);
+  if (detailsCacheNeedsRefresh(detail)) return true;
+  if (type === "year") return storeReleaseDateNeedsRefresh(detail);
+  return false;
+}
+
+function detailNeedsBaseFetchForType(type: CategorizerType, detail: GameDetails | undefined): boolean {
+  return categorizerNeedsDetails(type) && detailsCacheNeedsRefresh(detail);
+}
+
+function detailNeedsReleaseDateFetchForType(type: CategorizerType, detail: GameDetails | undefined): boolean {
+  return type === "year" && isDetailsCacheCurrent(detail) && storeReleaseDateNeedsRefresh(detail);
 }
 
 function detailHasDataForType(type: CategorizerType, detail: GameDetails | undefined): boolean {
   if (!categorizerNeedsDetails(type)) return true;
   if (!detail || !isDetailsCacheCurrent(detail)) return false;
+  if (type === "year") return extractReleaseYear(yearCategorizationReleaseDate(detail)) != null;
   if (type === "genre") return (detail.genres ?? []).length > 0;
   if (type === "tags") return (detail.tags ?? []).length > 0 || (detail.categories ?? []).length > 0;
   if (type === "flags") return (detail.categories ?? []).length > 0;
@@ -265,6 +282,26 @@ function detailIdsNeedingFetchForType(
   return Object.keys(games)
     .map(Number)
     .filter((id) => detailNeedsFetchForType(type, details[id]));
+}
+
+function detailIdsNeedingBaseFetchForType(
+  type: CategorizerType,
+  games: Record<number, OwnedGame>,
+  details: Record<number, GameDetails>
+): number[] {
+  return Object.keys(games)
+    .map(Number)
+    .filter((id) => detailNeedsBaseFetchForType(type, details[id]));
+}
+
+function detailIdsNeedingReleaseDateFetchForType(
+  type: CategorizerType,
+  games: Record<number, OwnedGame>,
+  details: Record<number, GameDetails>
+): number[] {
+  return Object.keys(games)
+    .map(Number)
+    .filter((id) => detailNeedsReleaseDateFetchForType(type, details[id]));
 }
 
 function detailIdsReadyForType(
@@ -298,6 +335,34 @@ function missingDetailIdsForPresets(
       presets
         .filter((preset) => categorizerNeedsDetails(preset.type))
         .flatMap((preset) => detailIdsNeedingFetchForType(preset.type, games, details))
+    ),
+  ];
+}
+
+function missingBaseDetailIdsForPresets(
+  presets: AutoCategorizePreset[],
+  games: Record<number, OwnedGame>,
+  details: Record<number, GameDetails>
+): number[] {
+  return [
+    ...new Set(
+      presets
+        .filter((preset) => categorizerNeedsDetails(preset.type))
+        .flatMap((preset) => detailIdsNeedingBaseFetchForType(preset.type, games, details))
+    ),
+  ];
+}
+
+function missingReleaseDateIdsForPresets(
+  presets: AutoCategorizePreset[],
+  games: Record<number, OwnedGame>,
+  details: Record<number, GameDetails>
+): number[] {
+  return [
+    ...new Set(
+      presets
+        .filter((preset) => preset.type === "year")
+        .flatMap((preset) => detailIdsNeedingReleaseDateFetchForType(preset.type, games, details))
     ),
   ];
 }
@@ -412,11 +477,15 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
   const ratingsTotal = useBackgroundFetchStore((s) => s.ratingsTotal);
   const ratingsCoolingDown = useBackgroundFetchStore((s) => s.ratingsCoolingDown);
   const ratingsCooldownSecs = useBackgroundFetchStore((s) => s.ratingsCooldownSecs);
-  const { startDetailsFetch, startRatingsFetch } = useBackgroundFetchStore.getState();
+  const releaseDatesRunning = useBackgroundFetchStore((s) => s.releaseDatesRunning);
+  const releaseDatesFetched = useBackgroundFetchStore((s) => s.releaseDatesFetched);
+  const releaseDatesTotal = useBackgroundFetchStore((s) => s.releaseDatesTotal);
+  const { startDetailsFetch, startRatingsFetch, startStoreReleaseDateFetch } = useBackgroundFetchStore.getState();
 
   // Local step — "fetch" isn't persisted; "done" resets to "choose" on reopen
   const [step, setStep] = useState<Step>(() => {
     if (useBackgroundFetchStore.getState().detailsRunning) return "fetch";
+    if (useBackgroundFetchStore.getState().releaseDatesRunning) return "fetch";
     if (useBackgroundFetchStore.getState().ratingsRunning) return "fetch";
     if (persist.lastStep === "done") return "choose";
     return persist.lastStep;
@@ -444,11 +513,12 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
   // Whether we're waiting for a details fetch to complete before running categorizer
   const [waitingForFetch, setWaitingForFetch] = useState(() => {
     const background = useBackgroundFetchStore.getState();
-    return background.detailsRunning || background.ratingsRunning;
+    return background.detailsRunning || background.ratingsRunning || background.releaseDatesRunning;
   });
-  const [fetchKind, setFetchKind] = useState<"details" | "ratings" | null>(() => {
+  const [fetchKind, setFetchKind] = useState<FetchKind | null>(() => {
     const background = useBackgroundFetchStore.getState();
     if (background.ratingsRunning) return "ratings";
+    if (background.releaseDatesRunning) return "releaseDates";
     if (background.detailsRunning) return "details";
     return null;
   });
@@ -470,23 +540,34 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
   useEffect(() => {
     const activeFetchDone =
       (fetchKind === "details" && !detailsRunning) ||
+      (fetchKind === "releaseDates" && !releaseDatesRunning) ||
       (fetchKind === "ratings" && !ratingsRunning);
     if (waitingForFetch && activeFetchDone) {
+      if (fetchKind !== "releaseDates" && categorizerNeedsDetails(type)) {
+        const missingReleaseDates = detailIdsNeedingReleaseDateFetchForType(type, games, details);
+        if (missingReleaseDates.length > 0) {
+          setFetchKind("releaseDates");
+          if (!releaseDatesRunning) {
+            startStoreReleaseDateFetch(fetchItemsForIds(missingReleaseDates));
+          }
+          return;
+        }
+      }
       setWaitingForFetch(false);
       setFetchKind(null);
       runCategorizer();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [detailsRunning, ratingsRunning, waitingForFetch, fetchKind]);
+  }, [detailsRunning, ratingsRunning, releaseDatesRunning, waitingForFetch, fetchKind, details, games, type]);
 
   useEffect(() => {
-    if (!pendingPresetRun || detailsRunning || ratingsRunning) return;
+    if (!pendingPresetRun || detailsRunning || ratingsRunning || releaseDatesRunning) return;
     const queue = pendingPresetRun;
     if (startMissingPresetFetch(queue)) return;
     setPendingPresetRun(null);
     runPresetSequence(queue);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [detailsRunning, ratingsRunning, pendingPresetRun, details, ratings]);
+  }, [detailsRunning, ratingsRunning, releaseDatesRunning, pendingPresetRun, details, ratings]);
 
   // Helper to sync step to store (skip "fetch")
   const gotoStep = (s: Step) => {
@@ -577,7 +658,7 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
   }, [ensureSteamRatingsHydrated, step, type]);
 
   const startMissingPresetFetch = useCallback((presets: AutoCategorizePreset[]): boolean => {
-    const missingDetails = missingDetailIdsForPresets(presets, games, details);
+    const missingDetails = missingBaseDetailIdsForPresets(presets, games, details);
 
     if (missingDetails.length > 0) {
       setFetchError("");
@@ -585,6 +666,17 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
       setFetchKind("details");
       setPendingPresetRun(presets);
       if (!detailsRunning) startDetailsFetch(missingDetails);
+      return true;
+    }
+
+    const missingReleaseDates = missingReleaseDateIdsForPresets(presets, games, details);
+
+    if (missingReleaseDates.length > 0) {
+      setFetchError("");
+      setStep("fetch");
+      setFetchKind("releaseDates");
+      setPendingPresetRun(presets);
+      if (!releaseDatesRunning) startStoreReleaseDateFetch(fetchItemsForIds(missingReleaseDates));
       return true;
     }
 
@@ -608,9 +700,11 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
     detailsRunning,
     fetchItemsForIds,
     games,
+    releaseDatesRunning,
     ratingsRunning,
     startDetailsFetch,
     startRatingsFetch,
+    startStoreReleaseDateFetch,
     t,
   ]);
 
@@ -717,7 +811,7 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
     }
 
     if (categorizer.needsDetails) {
-      const missing = detailIdsNeedingFetchForType(type, games, details);
+      const missing = detailIdsNeedingBaseFetchForType(type, games, details);
 
       if (missing.length > 0) {
         setFetchError("");
@@ -732,6 +826,23 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
 
         // Start background fetch and wait
         startDetailsFetch(missing);
+        setWaitingForFetch(true);
+        return;
+      }
+
+      const missingReleaseDates = detailIdsNeedingReleaseDateFetchForType(type, games, details);
+
+      if (missingReleaseDates.length > 0) {
+        setFetchError("");
+        setStep("fetch");
+        setFetchKind("releaseDates");
+
+        if (releaseDatesRunning) {
+          setWaitingForFetch(true);
+          return;
+        }
+
+        startStoreReleaseDateFetch(fetchItemsForIds(missingReleaseDates));
         setWaitingForFetch(true);
         return;
       }
@@ -811,10 +922,13 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
     }
     if (runType === "year") {
       const cfg = config as YearConfig;
+      const processedIds = allDetails
+        .filter((detail) => extractReleaseYear(yearCategorizationReleaseDate(detail)) != null)
+        .map((detail) => detail.app_id);
       return withProcessedAppIds(await runYearCategorizer(allDetails, {
         ...cfg,
         prefix: cfg.prefix || undefined,
-      }), allDetails.map((detail) => detail.app_id));
+      }), processedIds);
     }
     if (runType === "devpub") {
       const cfg = config as DevPubConfig;
@@ -1070,13 +1184,31 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
           )}
           {step === "fetch" && (
             <FetchStep
-              progress={fetchKind === "ratings" ? ratingsFetched : detailsFetched}
-              total={fetchKind === "ratings" ? ratingsTotal : detailsTotal}
+              progress={
+                fetchKind === "ratings"
+                  ? ratingsFetched
+                  : fetchKind === "releaseDates"
+                    ? releaseDatesFetched
+                    : detailsFetched
+              }
+              total={
+                fetchKind === "ratings"
+                  ? ratingsTotal
+                  : fetchKind === "releaseDates"
+                    ? releaseDatesTotal
+                    : detailsTotal
+              }
               error={fetchError}
               waiting={waitingForFetch || pendingPresetRun !== null}
               coolingDown={fetchKind === "ratings" ? ratingsCoolingDown : false}
               cooldownSecs={fetchKind === "ratings" ? ratingsCooldownSecs : 0}
-              message={fetchKind === "ratings" ? t("auto.fetchingRatings") : t("auto.fetchingDetails")}
+              message={
+                fetchKind === "ratings"
+                  ? t("auto.fetchingRatings")
+                  : fetchKind === "releaseDates"
+                    ? t("fetch.releaseDates")
+                    : t("auto.fetchingDetails")
+              }
             />
           )}
           {step === "preview" && result && (
@@ -1215,6 +1347,15 @@ function ChooseStep({
   );
   const hltbIgnoredCount = missingHltbIds.length - fetchableHltbIds.length;
   const hltbCount = gameCount - missingHltbIds.length;
+  const storeReleaseDateIdsNeedingRefresh = useMemo(
+    () => gameIds.filter((id) => isDetailsCacheCurrent(details[id]) && storeReleaseDateNeedsRefresh(details[id])),
+    [details, gameIds]
+  );
+  const storeReleaseDateCount = gameIds.filter((id) =>
+    isDetailsCacheCurrent(details[id]) && !storeReleaseDateNeedsRefresh(details[id])
+  ).length;
+  const storeReleaseDatesBlockedByDetails =
+    gameCount - storeReleaseDateCount - storeReleaseDateIdsNeedingRefresh.length;
   const missingRatings = ratingsHydrated ? steamRatingIdsNeedingFetch(games, ratings) : [];
   const ratingCount = ratingsHydrated ? gameCount - missingRatings.length : 0;
   const detailsRunning = useBackgroundFetchStore((s) => s.detailsRunning);
@@ -1228,6 +1369,10 @@ function ChooseStep({
   const ratingsFetched = useBackgroundFetchStore((s) => s.ratingsFetched);
   const ratingsTotal = useBackgroundFetchStore((s) => s.ratingsTotal);
   const startRatingsFetch = useBackgroundFetchStore((s) => s.startRatingsFetch);
+  const releaseDatesRunning = useBackgroundFetchStore((s) => s.releaseDatesRunning);
+  const releaseDatesFetched = useBackgroundFetchStore((s) => s.releaseDatesFetched);
+  const releaseDatesTotal = useBackgroundFetchStore((s) => s.releaseDatesTotal);
+  const startStoreReleaseDateFetch = useBackgroundFetchStore((s) => s.startStoreReleaseDateFetch);
   const startHltbFetch = useBackgroundFetchStore((s) => s.startHltbFetch);
 
   const fetchItemsForIds = useCallback((ids: number[]) => (
@@ -1271,9 +1416,18 @@ function ChooseStep({
     setCacheNotice(t("auto.cache.ready"));
   };
 
+  const handleFetchStoreReleaseDates = () => {
+    setCacheNotice("");
+    if (storeReleaseDateIdsNeedingRefresh.length > 0) {
+      startStoreReleaseDateFetch(fetchItemsForIds(storeReleaseDateIdsNeedingRefresh));
+      return;
+    }
+    setCacheNotice(t("auto.cache.ready"));
+  };
+
   return (
     <div className="space-y-2">
-      <div className="mb-3 grid gap-2 sm:grid-cols-3">
+      <div className="mb-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
         <CacheStatusCard
           label={t("auto.cache.details")}
           cached={cachedCount}
@@ -1289,6 +1443,21 @@ function ChooseStep({
             ignoredDetailCount > 0 ? t("auto.cache.ignored", { count: ignoredDetailCount }) : "",
           ].filter(Boolean)}
           onFetch={handleFetchDetails}
+        />
+        <CacheStatusCard
+          label={t("auto.cache.releaseDates")}
+          cached={storeReleaseDateCount}
+          total={gameCount}
+          running={releaseDatesRunning}
+          progress={releaseDatesFetched}
+          progressTotal={releaseDatesTotal}
+          missing={gameCount - storeReleaseDateCount}
+          fetchable={storeReleaseDateIdsNeedingRefresh.length}
+          notes={[
+            storeReleaseDateIdsNeedingRefresh.length > 0 ? t("auto.cache.releaseDatesMissing", { count: storeReleaseDateIdsNeedingRefresh.length }) : "",
+            storeReleaseDatesBlockedByDetails > 0 ? t("auto.cache.releaseDatesNeedDetails", { count: storeReleaseDatesBlockedByDetails }) : "",
+          ].filter(Boolean)}
+          onFetch={handleFetchStoreReleaseDates}
         />
         <CacheStatusCard
           label={t("auto.cache.ratings")}

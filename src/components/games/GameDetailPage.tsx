@@ -20,6 +20,7 @@ import {
   probeSamBridge,
   runSamAchievementAction,
 } from "../../lib/tauri";
+import { bestAvailableReleaseDate } from "../../lib/releaseDates";
 import { extractReleaseYear } from "../../lib/search";
 import { detailsPriceMatchesCurrency, detailsWithPriceForCurrency } from "../../lib/prices";
 import { SteamImage } from "./SteamImage";
@@ -658,7 +659,7 @@ function InfoTab({
     setFetchingHltb(true);
     setHltbError("");
     try {
-      const data = await fetchHltb(name, game.appid, extractReleaseYear(details?.release_date));
+      const data = await fetchHltb(name, game.appid, extractReleaseYear(bestAvailableReleaseDate(details)));
       if (data) setHltbData(game.appid, data);
       else setHltbError(t("detail.hltbNotFound"));
     } catch (e) {
@@ -708,7 +709,7 @@ function InfoTab({
         />
         <StatCard
           label={t("detail.release")}
-          value={details?.release_date ?? (loading ? "..." : t("common.unknown"))}
+          value={bestAvailableReleaseDate(details) ?? (loading ? "..." : t("common.unknown"))}
           icon={<CalendarBlank size={16} weight="duotone" />}
         />
       </div>

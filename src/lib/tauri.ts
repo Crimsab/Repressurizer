@@ -16,6 +16,7 @@ import type {
   SamBackupInfo,
   ProxyProfile,
   GamePriceOverview,
+  StoreReleaseDateResult,
   HltbTimeMode,
 } from "./types";
 
@@ -211,6 +212,18 @@ export async function fetchGameDetails(
   countryCode?: string
 ): Promise<GameDetails> {
   return invoke<GameDetails>("fetch_game_details", { appId, countryCode: countryCode ?? null });
+}
+
+export async function fetchStoreReleaseDate(
+  appId: number
+): Promise<StoreReleaseDateResult> {
+  return invoke<StoreReleaseDateResult>("fetch_store_release_date", { appId });
+}
+
+export async function fetchStoreReleaseDates(
+  appIds: number[]
+): Promise<StoreReleaseDateResult[]> {
+  return invoke<StoreReleaseDateResult[]>("fetch_store_release_dates", { appIds });
 }
 
 export async function fetchGamePriceOverviews(

@@ -1,5 +1,6 @@
 import type { OwnedGame, GameDetails, SteamCollection } from "./types";
 import { isPlausibleSteamPrice, priceSnapshotForCurrency } from "./prices";
+import { bestAvailableReleaseDate } from "./releaseDates";
 
 export interface LibraryStats {
   totalGames: number;
@@ -132,8 +133,9 @@ export function computeStats(
   // Release decade distribution
   const decadeCounts = new Map<string, number>();
   for (const d of detailsList) {
-    if (d.release_date) {
-      const match = d.release_date.match(/\b(19|20)\d{2}\b/);
+    const releaseDate = bestAvailableReleaseDate(d);
+    if (releaseDate) {
+      const match = releaseDate.match(/\b(19|20)\d{2}\b/);
       if (match) {
         const year = parseInt(match[0]);
         const decade = `${Math.floor(year / 10) * 10}s`;

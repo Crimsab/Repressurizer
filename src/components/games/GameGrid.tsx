@@ -20,6 +20,7 @@ import { possibleDuplicateAppIds } from "../../lib/gameIdentity";
 import { scoreForRating } from "../../lib/steamRatings";
 import { priceSnapshotForCurrency } from "../../lib/prices";
 import { getHltbHours } from "../../lib/hltb";
+import { bestAvailableReleaseDate } from "../../lib/releaseDates";
 
 const loadGameDetailPage = () => import("./GameDetailPage").then((m) => ({ default: m.GameDetailPage }));
 const loadContextMenu = () => import("./ContextMenu").then((m) => ({ default: m.ContextMenu }));
@@ -211,7 +212,7 @@ export function GameGrid() {
 
     if (filters.minReleaseYear !== null || filters.maxReleaseYear !== null) {
       gameList = gameList.filter((g) => {
-        const year = extractReleaseYear(details[g.appid]?.release_date);
+        const year = extractReleaseYear(bestAvailableReleaseDate(details[g.appid]));
         if (year == null) return false;
         if (filters.minReleaseYear !== null && year < filters.minReleaseYear) return false;
         if (filters.maxReleaseYear !== null && year > filters.maxReleaseYear) return false;
@@ -328,7 +329,7 @@ export function GameGrid() {
           break;
         }
         case "releaseDate":
-          cmp = releaseDateSortValue(details[a.appid]?.release_date) - releaseDateSortValue(details[b.appid]?.release_date);
+          cmp = releaseDateSortValue(bestAvailableReleaseDate(details[a.appid])) - releaseDateSortValue(bestAvailableReleaseDate(details[b.appid]));
           break;
         case "price":
           cmp = priceSortValue(details[a.appid], currency) - priceSortValue(details[b.appid], currency);

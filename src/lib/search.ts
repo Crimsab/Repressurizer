@@ -3,6 +3,7 @@ import type { GameStatus } from "../stores/statusStore";
 import type { GameReview } from "../stores/reviewStore";
 import type { FamilyLibraryApp, HltbData } from "./tauri";
 import { getHltbHours } from "./hltb";
+import { bestAvailableReleaseDate } from "./releaseDates";
 
 type PlatformKey = "windows" | "mac" | "linux";
 
@@ -366,8 +367,9 @@ export function matchesFilter(
     if (!details?.publishers.some((p) => p.toLowerCase().includes(filter.pub!))) return false;
   }
 
-  if (!matchesNumeric(extractReleaseTimestamp(details?.release_date), filter.releaseDate)) return false;
-  if (!matchesNumeric(extractReleaseYear(details?.release_date), filter.releaseYear)) return false;
+  const releaseDate = bestAvailableReleaseDate(details);
+  if (!matchesNumeric(extractReleaseTimestamp(releaseDate), filter.releaseDate)) return false;
+  if (!matchesNumeric(extractReleaseYear(releaseDate), filter.releaseYear)) return false;
 
   const personalRating = reviews[game.appid]?.rating ?? 0;
   if (filter.minRating != null && personalRating < filter.minRating) return false;

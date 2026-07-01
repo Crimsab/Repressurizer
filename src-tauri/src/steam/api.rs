@@ -1,7 +1,19 @@
+use chrono::Datelike;
 use serde::{de, Deserialize, Deserializer, Serialize};
 use std::collections::{HashMap, HashSet};
 
 use crate::http_policy::{client_builder_for_scope, HttpProxyScope};
+
+const STEAM_STORE_USER_AGENT: &str =
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0";
+const STEAM_STORE_AGE_COOKIE: &str =
+    "birthtime=-473392799; mature_content=1; lastagecheckage=1-January-1955";
+const STORE_BROWSE_BATCH_SIZE: usize = 50;
+const STORE_BROWSE_GET_ITEMS_URL: &str =
+    "https://api.steampowered.com/IStoreBrowseService/GetItems/v1/";
+const STORE_RELEASE_MONTHS: [&str; 12] = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
 
 // === Achievement types ===
 
@@ -119,6 +131,10 @@ pub struct GameDetails {
     pub tags: Vec<String>,
     pub categories: Vec<String>,
     pub release_date: Option<String>,
+    #[serde(default)]
+    pub store_release_date: Option<String>,
+    #[serde(default)]
+    pub store_release_date_fetched_at: Option<u64>,
     pub metacritic_score: Option<u32>,
     pub developers: Vec<String>,
     pub publishers: Vec<String>,
@@ -155,6 +171,12 @@ pub struct GamePriceOverview {
     pub is_free: bool,
 }
 
+#[derive(Debug, Clone, Serialize)]
+pub struct StoreReleaseDateResult {
+    pub app_id: u64,
+    pub release_date: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SteamReviewSummary {
     pub app_id: u64,
@@ -184,6 +206,33 @@ struct StoreAppResponse {
 struct StorePriceAppResponse {
     success: bool,
     data: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Deserialize)]
+struct StoreBrowseGetItemsResponse {
+    response: StoreBrowseItemsResponse,
+}
+
+#[derive(Debug, Deserialize)]
+struct StoreBrowseItemsResponse {
+    #[serde(default)]
+    store_items: Vec<StoreBrowseItem>,
+}
+
+#[derive(Debug, Deserialize)]
+struct StoreBrowseItem {
+    #[serde(default)]
+    id: Option<u64>,
+    #[serde(default)]
+    appid: Option<u64>,
+    #[serde(default)]
+    release: Option<StoreBrowseRelease>,
+}
+
+#[derive(Debug, Deserialize)]
+struct StoreBrowseRelease {
+    #[serde(default)]
+    original_release_date: Option<u64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -447,9 +496,7 @@ pub async fn fetch_game_details(
     country_code: Option<String>,
 ) -> Result<GameDetails, String> {
     let client = client_builder_for_scope(HttpProxyScope::SteamStore)?
-        .user_agent(
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0",
-        )
+        .user_agent(STEAM_STORE_USER_AGENT)
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
@@ -485,6 +532,175 @@ pub async fn fetch_game_details(
 }
 
 #[tauri::command]
+pub async fn fetch_store_release_date(app_id: u64) -> Result<StoreReleaseDateResult, String> {
+    let mut results = fetch_store_release_dates(vec![app_id]).await?;
+    Ok(results.pop().unwrap_or(StoreReleaseDateResult {
+        app_id,
+        release_date: None,
+    }))
+}
+
+#[tauri::command]
+pub async fn fetch_store_release_dates(
+    app_ids: Vec<u64>,
+) -> Result<Vec<StoreReleaseDateResult>, String> {
+    if app_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let mut unique_ids = Vec::new();
+    let mut seen = HashSet::new();
+    for app_id in app_ids {
+        if seen.insert(app_id) {
+            unique_ids.push(app_id);
+        }
+    }
+
+    let api_client = client_builder_for_scope(HttpProxyScope::SteamApi)?
+        .user_agent(STEAM_STORE_USER_AGENT)
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+    let store_client = client_builder_for_scope(HttpProxyScope::SteamStore)?
+        .user_agent(STEAM_STORE_USER_AGENT)
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+
+    let mut by_app_id = HashMap::new();
+    let mut first_error: Option<String> = None;
+
+    for chunk in unique_ids.chunks(STORE_BROWSE_BATCH_SIZE) {
+        match fetch_store_browse_release_dates(&api_client, chunk).await {
+            Ok(results) => {
+                by_app_id.extend(results);
+            }
+            Err(error) => {
+                if first_error.is_none() {
+                    first_error = Some(error);
+                }
+            }
+        }
+    }
+
+    let mut output = Vec::with_capacity(unique_ids.len());
+    for app_id in unique_ids {
+        if let Some(release_date) = by_app_id.remove(&app_id) {
+            output.push(StoreReleaseDateResult {
+                app_id,
+                release_date,
+            });
+            continue;
+        }
+
+        match fetch_store_page_release_date(&store_client, app_id).await {
+            Ok(release_date) => output.push(StoreReleaseDateResult {
+                app_id,
+                release_date,
+            }),
+            Err(error) => {
+                if first_error.is_none() {
+                    first_error = Some(error);
+                }
+            }
+        }
+    }
+
+    if output.is_empty() {
+        Err(first_error.unwrap_or_else(|| "No Store release dates returned".to_string()))
+    } else {
+        Ok(output)
+    }
+}
+
+async fn fetch_store_browse_release_dates(
+    client: &reqwest::Client,
+    app_ids: &[u64],
+) -> Result<HashMap<u64, Option<String>>, String> {
+    let ids = app_ids
+        .iter()
+        .map(|app_id| serde_json::json!({ "appid": app_id }))
+        .collect::<Vec<_>>();
+    let input_json = serde_json::json!({
+        "ids": ids,
+        "context": {
+            "language": "english",
+            "country_code": "US"
+        },
+        "data_request": {
+            "include_release": true,
+            "include_basic_info": true
+        }
+    })
+    .to_string();
+
+    let response = client
+        .get(STORE_BROWSE_GET_ITEMS_URL)
+        .query(&[("input_json", input_json)])
+        .send()
+        .await
+        .map_err(|e| format!("StoreBrowse request failed: {}", e))?;
+
+    let status = response.status();
+    let text = response
+        .text()
+        .await
+        .map_err(|e| format!("Failed to read StoreBrowse response: {}", e))?;
+
+    if !status.is_success() {
+        return Err(format!(
+            "StoreBrowse returned HTTP {}: {}",
+            status.as_u16(),
+            text.chars().take(180).collect::<String>()
+        ));
+    }
+
+    let parsed: StoreBrowseGetItemsResponse =
+        serde_json::from_str(&text).map_err(|e| format!("Failed to parse StoreBrowse response: {}", e))?;
+    let mut results = HashMap::new();
+    for item in parsed.response.store_items {
+        let Some(app_id) = item.appid.or(item.id) else {
+            continue;
+        };
+        let release_date = item
+            .release
+            .and_then(|release| release.original_release_date)
+            .and_then(format_store_release_timestamp);
+        results.insert(app_id, release_date);
+    }
+
+    Ok(results)
+}
+
+async fn fetch_store_page_release_date(
+    client: &reqwest::Client,
+    app_id: u64,
+) -> Result<Option<String>, String> {
+    let response = client
+        .get(format!("https://store.steampowered.com/app/{}/", app_id))
+        .query(&[("l", "english")])
+        .header(reqwest::header::COOKIE, STEAM_STORE_AGE_COOKIE)
+        .send()
+        .await
+        .map_err(|e| format!("HTTP request failed: {}", e))?;
+
+    let status = response.status();
+    let text = response
+        .text()
+        .await
+        .map_err(|e| format!("Failed to read store page: {}", e))?;
+
+    if !status.is_success() {
+        return Err(format!(
+            "Steam store page returned HTTP {} for app {}: {}",
+            status.as_u16(),
+            app_id,
+            text.chars().take(180).collect::<String>()
+        ));
+    }
+
+    Ok(parse_store_page_release_date(&text))
+}
+
+#[tauri::command]
 pub async fn fetch_game_price_overviews(
     app_ids: Vec<u64>,
     country_code: Option<String>,
@@ -502,9 +718,7 @@ pub async fn fetch_game_price_overviews(
     }
 
     let client = client_builder_for_scope(HttpProxyScope::SteamStore)?
-        .user_agent(
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:140.0) Gecko/20100101 Firefox/140.0",
-        )
+        .user_agent(STEAM_STORE_USER_AGENT)
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
@@ -736,6 +950,8 @@ fn parse_game_details_response(
             .map(|c| c.iter().map(|x| x.description.clone()).collect())
             .unwrap_or_default(),
         release_date: data.release_date.as_ref().and_then(|r| r.date.clone()),
+        store_release_date: None,
+        store_release_date_fetched_at: None,
         metacritic_score: data.metacritic.as_ref().and_then(|m| m.score),
         developers: data.developers.clone().unwrap_or_default(),
         publishers: data.publishers.clone().unwrap_or_default(),
@@ -770,6 +986,53 @@ fn parse_game_details_response(
         price_country_code: country_code.map(|cc| cc.to_ascii_uppercase()),
         is_free: data.is_free.unwrap_or(false),
     })
+}
+
+fn parse_store_page_release_date(page: &str) -> Option<String> {
+    let marker = "class=\"release_date\"";
+    let marker_idx = page.find(marker)?;
+    let after_marker = &page[marker_idx + marker.len()..];
+    let date_marker = "class=\"date\"";
+    let date_idx = after_marker.find(date_marker)?;
+    let after_date_marker = &after_marker[date_idx + date_marker.len()..];
+    let content_start = after_date_marker.find('>')? + 1;
+    let after_content_start = &after_date_marker[content_start..];
+    let content_end = after_content_start.find("</div>")?;
+    clean_store_release_date(&after_content_start[..content_end])
+}
+
+fn format_store_release_timestamp(timestamp: u64) -> Option<String> {
+    if timestamp == 0 {
+        return None;
+    }
+
+    let date = chrono::DateTime::<chrono::Utc>::from_timestamp(timestamp as i64, 0)?;
+    let month = STORE_RELEASE_MONTHS.get(date.month0() as usize)?;
+    Some(format!("{} {}, {}", date.day(), month, date.year()))
+}
+
+fn clean_store_release_date(raw: &str) -> Option<String> {
+    let decoded = decode_minimal_html(raw)
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    let trimmed = decoded.trim();
+    if trimmed.is_empty() || trimmed.eq_ignore_ascii_case("coming soon") {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
+}
+
+fn decode_minimal_html(raw: &str) -> String {
+    raw.replace("&amp;", "&")
+        .replace("&quot;", "\"")
+        .replace("&#039;", "'")
+        .replace("&#39;", "'")
+        .replace("&apos;", "'")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&nbsp;", " ")
 }
 
 fn parse_supported_languages(raw: &str) -> Vec<String> {
@@ -1854,6 +2117,87 @@ mod tests {
             .capsule_image
             .unwrap()
             .contains("/3590/capsule_231x87.jpg"));
+    }
+
+    #[test]
+    fn parses_release_date_from_store_page_html() {
+        let raw = r#"
+            <div class="release_date">
+                <div class="subtitle column">Release Date:</div>
+                <div class="date">23 Jul, 2001</div>
+            </div>
+        "#;
+
+        assert_eq!(
+            parse_store_page_release_date(raw).as_deref(),
+            Some("23 Jul, 2001")
+        );
+    }
+
+    #[test]
+    fn formats_original_release_timestamp_like_store_pages() {
+        assert_eq!(
+            format_store_release_timestamp(992934000).as_deref(),
+            Some("19 Jun, 2001")
+        );
+        assert_eq!(
+            format_store_release_timestamp(995861400).as_deref(),
+            Some("23 Jul, 2001")
+        );
+        assert_eq!(format_store_release_timestamp(0), None);
+    }
+
+    #[test]
+    fn parses_original_release_date_from_store_browse_response() {
+        let raw = r#"{
+            "response": {
+                "store_items": [
+                    {
+                        "id": 294570,
+                        "appid": 294570,
+                        "success": 1,
+                        "release": {
+                            "steam_release_date": 1402084189,
+                            "original_release_date": 992934000
+                        }
+                    },
+                    {
+                        "id": 260730,
+                        "appid": 260730,
+                        "success": 1,
+                        "release": {
+                            "steam_release_date": 1384941060,
+                            "original_release_date": 995861400
+                        }
+                    }
+                ]
+            }
+        }"#;
+
+        let parsed: StoreBrowseGetItemsResponse = serde_json::from_str(raw).expect("store browse response");
+        let dates = parsed
+            .response
+            .store_items
+            .into_iter()
+            .filter_map(|item| {
+                let app_id = item.appid.or(item.id)?;
+                let release_date = item
+                    .release
+                    .and_then(|release| release.original_release_date)
+                    .and_then(format_store_release_timestamp);
+                Some((app_id, release_date))
+            })
+            .collect::<HashMap<_, _>>();
+
+        assert_eq!(dates[&294570].as_deref(), Some("19 Jun, 2001"));
+        assert_eq!(dates[&260730].as_deref(), Some("23 Jul, 2001"));
+    }
+
+    #[test]
+    fn returns_none_for_store_page_without_release_date_block() {
+        let raw = r#"<html><body><div class="date">20 Nov, 2013</div></body></html>"#;
+
+        assert_eq!(parse_store_page_release_date(raw), None);
     }
 
     #[test]

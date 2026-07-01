@@ -7,6 +7,7 @@ import type {
 } from "./types";
 import type { FamilyLibraryApp, HltbData, WishlistItem } from "./tauri";
 import { getCategoryColor } from "./categoryColors";
+import { bestAvailableReleaseDate } from "./releaseDates";
 
 export const LIBRARY_SNAPSHOT_SCHEMA_VERSION = "repressurizer.library-snapshot.v1" as const;
 
@@ -298,7 +299,7 @@ function toFlagsExport(
 function toDetailsExport(details?: GameDetails | null): LibrarySnapshotGame["details"] {
   if (!details) return null;
   return {
-    releaseDate: details.release_date ?? null,
+    releaseDate: bestAvailableReleaseDate(details),
     genres: [...(details.genres ?? [])].sort(compareStableStrings),
     categories: [...(details.categories ?? [])].sort(compareStableStrings),
     metacriticScore: details.metacritic_score ?? null,

@@ -2,6 +2,7 @@ import { computeStats } from "./stats";
 import { generateLibrarySnapshotJson } from "./automationExport";
 import { getCategoryColor } from "./categoryColors";
 import { getHltbHours, hltbModeLabel } from "./hltb";
+import { bestAvailableReleaseDate } from "./releaseDates";
 import type { AchievementSummary, GameDetails, HltbTimeMode, OwnedGame, SteamCollection } from "./types";
 import type { FamilyLibraryApp, HltbData, WishlistItem } from "./tauri";
 import type { GameStatus } from "../stores/statusStore";
@@ -456,7 +457,7 @@ function buildRecord(
     categories: categoryNamesForApp(game.appid, categoryCollections),
     genres: asList(details?.genres),
     features: asList(details?.categories),
-    release_date: details?.release_date ?? null,
+    release_date: bestAvailableReleaseDate(details),
     metacritic_score: details?.metacritic_score ?? null,
     developers: asList(details?.developers),
     publishers: asList(details?.publishers),

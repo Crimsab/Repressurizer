@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
-import type { OwnedGame, GameDetails, GamePriceOverview } from "../lib/types";
+import type { OwnedGame, GameDetails, GamePriceOverview, StoreReleaseDateResult } from "../lib/types";
 import type { GameStatus } from "./statusStore";
 import { displayNameFromDetails, isPlaceholderGameName } from "../lib/libraryMerge";
 import { useSteamAppIndexStore } from "./steamAppIndexStore";
@@ -32,6 +32,14 @@ function normalizeDetailsForCache(details: GameDetails): GameDetails {
       cleanDetails.price_cache && typeof cleanDetails.price_cache === "object"
         ? cleanDetails.price_cache
         : undefined,
+    store_release_date:
+      typeof cleanDetails.store_release_date === "string"
+        ? cleanDetails.store_release_date.trim() || null
+        : cleanDetails.store_release_date ?? null,
+    store_release_date_fetched_at:
+      typeof cleanDetails.store_release_date_fetched_at === "number" && Number.isFinite(cleanDetails.store_release_date_fetched_at)
+        ? cleanDetails.store_release_date_fetched_at
+        : null,
   };
 }
 
@@ -61,6 +69,7 @@ function hasUsableLegacyDetails(details: GameDetails): boolean {
     hasPlatform ||
     hasPrice ||
     !!details.release_date ||
+    !!details.store_release_date ||
     details.metacritic_score != null ||
     !!details.header_image ||
     !!details.capsule_image
@@ -188,6 +197,7 @@ interface GameState {
   setDetails: (appId: number, details: GameDetails) => void;
   setBulkDetails: (details: GameDetails[]) => void;
   setBulkPriceSnapshots: (prices: GamePriceOverview[]) => void;
+  setBulkStoreReleaseDates: (dates: StoreReleaseDateResult[]) => void;
   clearDetailsCache: () => void;
   hydrateDetailsCache: () => Promise<void>;
   setLoading: (loading: boolean) => void;
@@ -334,6 +344,34 @@ export const useGameStore = create<GameState>((set, get) => ({
           ...mergePriceSnapshotIntoDetails(existing, price, fetchedAt),
           cache_schema: existing.cache_schema,
           fetched_at: existing.fetched_at,
+        };
+        changed = true;
+      }
+
+      if (!changed) return state;
+      persistDetailsCache(next);
+      return { details: next };
+    }),
+
+  setBulkStoreReleaseDates: (dates) =>
+    set((state) => {
+      if (dates.length === 0) return state;
+
+      const next = { ...state.details };
+      const fetchedAt = Date.now();
+      let changed = false;
+
+      for (const result of dates) {
+        const existing = next[result.app_id];
+        if (!existing) continue;
+
+        const releaseDate = typeof result.release_date === "string"
+          ? result.release_date.trim() || null
+          : null;
+        next[result.app_id] = {
+          ...existing,
+          store_release_date: releaseDate,
+          store_release_date_fetched_at: fetchedAt,
         };
         changed = true;
       }
