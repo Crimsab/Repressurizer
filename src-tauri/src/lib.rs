@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use steam::api;
 use steam::collections;
+use steam::depressurizer_database;
 use steam::depressurizer_profile;
 use steam::detector;
 use steam::sam;
@@ -1175,6 +1176,7 @@ pub fn run() {
             is_steam_running,
             http_policy::configure_http_policy,
             http_policy::test_proxy_profile,
+            depressurizer_database::import_depressurizer_database,
             depressurizer_profile::import_depressurizer_profile,
             api::fetch_library,
             api::fetch_steam_app_list,

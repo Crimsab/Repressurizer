@@ -115,6 +115,8 @@ pub struct GameDetails {
     pub app_id: u64,
     pub name: String,
     pub genres: Vec<String>,
+    #[serde(default)]
+    pub tags: Vec<String>,
     pub categories: Vec<String>,
     pub release_date: Option<String>,
     pub metacritic_score: Option<u32>,
@@ -727,6 +729,7 @@ fn parse_game_details_response(
             .as_ref()
             .map(|g| g.iter().map(|x| x.description.clone()).collect())
             .unwrap_or_default(),
+        tags: Vec::new(),
         categories: data
             .categories
             .as_ref()

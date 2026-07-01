@@ -5,6 +5,7 @@ import { loadHltbCache, saveHltbCache } from "../lib/tauri";
 interface HltbState {
   data: Record<number, HltbData>;
   setData: (appId: number, hltb: HltbData) => void;
+  setBulkData: (hltb: Record<number, HltbData>) => void;
   getData: (appId: number) => HltbData | null;
   hydrateCache: () => Promise<void>;
 }
@@ -19,6 +20,13 @@ export const useHltbStore = create<HltbState>((set, get) => ({
   setData: (appId, hltb) =>
     set((state) => {
       const next = { ...state.data, [appId]: hltb };
+      saveAsync(next);
+      return { data: next };
+    }),
+
+  setBulkData: (hltb) =>
+    set((state) => {
+      const next = { ...state.data, ...hltb };
       saveAsync(next);
       return { data: next };
     }),

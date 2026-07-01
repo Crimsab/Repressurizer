@@ -306,6 +306,7 @@ mod tests {
             app_id,
             name: format!("Game {app_id}"),
             genres: Vec::new(),
+            tags: Vec::new(),
             categories: vec!["Single-player".to_string(), "Steam Cloud".to_string()],
             release_date: None,
             metacritic_score: None,

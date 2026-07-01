@@ -18,6 +18,7 @@ function normalizeDetailsForCache(details: GameDetails): GameDetails {
   return {
     ...cleanDetails,
     genres: Array.isArray(cleanDetails.genres) ? cleanDetails.genres : [],
+    tags: Array.isArray(cleanDetails.tags) ? cleanDetails.tags : [],
     categories: Array.isArray(cleanDetails.categories) ? cleanDetails.categories : [],
     developers: Array.isArray(cleanDetails.developers) ? cleanDetails.developers : [],
     publishers: Array.isArray(cleanDetails.publishers) ? cleanDetails.publishers : [],
@@ -39,6 +40,7 @@ function hasUsableLegacyDetails(details: GameDetails): boolean {
   const hasRealName = !!name && !isPlaceholderGameName(details.app_id, name);
   const hasListData =
     (details.genres ?? []).length > 0 ||
+    (details.tags ?? []).length > 0 ||
     (details.categories ?? []).length > 0 ||
     (details.developers ?? []).length > 0 ||
     (details.publishers ?? []).length > 0 ||

@@ -836,6 +836,25 @@ function InfoTab({
             </div>
           )}
 
+          {/* Steam tags */}
+          {(details.tags ?? []).length > 0 && (
+            <div>
+              <h3 className="mb-2 text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">
+                {t("detail.tags")}
+              </h3>
+              <div className="flex flex-wrap gap-1.5">
+                {(details.tags ?? []).map((tag) => (
+                  <span
+                    key={tag}
+                    className="rounded-lg bg-repressurizer-accent/10 px-2.5 py-1 text-xs text-repressurizer-accent"
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Developer / Publisher */}
           <div className="grid grid-cols-2 gap-4">
             {details.developers.length > 0 && (

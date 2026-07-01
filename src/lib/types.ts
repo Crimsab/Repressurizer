@@ -118,6 +118,7 @@ export interface GameDetails {
   cache_schema?: number;
   fetched_at?: number;
   genres: string[];
+  tags?: string[];
   categories: string[];
   release_date: string | null;
   metacritic_score: number | null;
@@ -157,6 +158,27 @@ export interface SteamReviewSummary {
   total_reviews: number;
   positive_percentage: number | null;
   fetched_at: number;
+}
+
+export interface DepressurizerDatabaseImport {
+  sourcePath: string | null;
+  names: Record<number, string>;
+  details: GameDetails[];
+  hltb: Record<number, import("./tauri").HltbData>;
+  steamReviews: SteamReviewSummary[];
+  stats: DepressurizerDatabaseImportStats;
+}
+
+export interface DepressurizerDatabaseImportStats {
+  databaseEntries: number;
+  requestedAppIds: number;
+  matchedEntries: number;
+  names: number;
+  details: number;
+  hltb: number;
+  steamReviews: number;
+  entriesWithTags: number;
+  entriesWithAchievements: number;
 }
 
 export interface PlatformSupport {

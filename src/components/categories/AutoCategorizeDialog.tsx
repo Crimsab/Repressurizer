@@ -167,10 +167,12 @@ function presetId(): string {
 interface AutoCatMetadata {
   totalDetails: number;
   flagValues: string[];
+  tagValues: string[];
   genreValues: string[];
   languageValues: string[];
   studioValues: string[];
   gamesWithFlags: number;
+  gamesWithTags: number;
   gamesWithGenres: number;
   gamesWithLanguages: number;
   gamesWithStudios: number;
@@ -178,16 +180,19 @@ interface AutoCatMetadata {
 
 function buildAutoCatMetadata(details: GameDetails[]): AutoCatMetadata {
   const flagValues = new Set<string>();
+  const tagValues = new Set<string>();
   const genreValues = new Set<string>();
   const languageValues = new Set<string>();
   const studioValues = new Set<string>();
   let gamesWithFlags = 0;
+  let gamesWithTags = 0;
   let gamesWithGenres = 0;
   let gamesWithLanguages = 0;
   let gamesWithStudios = 0;
 
   for (const detail of details) {
     if ((detail.categories ?? []).length > 0) gamesWithFlags += 1;
+    if ((detail.tags ?? []).length > 0) gamesWithTags += 1;
     if ((detail.genres ?? []).length > 0) gamesWithGenres += 1;
     if ((detail.supported_languages ?? []).length > 0) gamesWithLanguages += 1;
     if ((detail.developers ?? []).length > 0 || (detail.publishers ?? []).length > 0) {
@@ -195,6 +200,7 @@ function buildAutoCatMetadata(details: GameDetails[]): AutoCatMetadata {
     }
 
     for (const value of detail.categories ?? []) addCleanValue(flagValues, value);
+    for (const value of detail.tags ?? []) addCleanValue(tagValues, value);
     for (const value of detail.genres ?? []) addCleanValue(genreValues, value);
     for (const value of detail.supported_languages ?? []) addCleanValue(languageValues, value);
     for (const value of detail.developers ?? []) addCleanValue(studioValues, value);
@@ -204,10 +210,12 @@ function buildAutoCatMetadata(details: GameDetails[]): AutoCatMetadata {
   return {
     totalDetails: details.length,
     flagValues: sortValues([...flagValues]),
+    tagValues: sortValues(tagValues.size > 0 ? [...tagValues] : [...flagValues]),
     genreValues: sortValues([...genreValues]),
     languageValues: sortValues([...languageValues]),
     studioValues: sortValues([...studioValues]),
     gamesWithFlags,
+    gamesWithTags: gamesWithTags || gamesWithFlags,
     gamesWithGenres,
     gamesWithLanguages,
     gamesWithStudios,
@@ -235,7 +243,8 @@ function detailHasDataForType(type: CategorizerType, detail: GameDetails | undef
   if (!categorizerNeedsDetails(type)) return true;
   if (!detail || !isDetailsCacheCurrent(detail)) return false;
   if (type === "genre") return (detail.genres ?? []).length > 0;
-  if (type === "tags" || type === "flags") return (detail.categories ?? []).length > 0;
+  if (type === "tags") return (detail.tags ?? []).length > 0 || (detail.categories ?? []).length > 0;
+  if (type === "flags") return (detail.categories ?? []).length > 0;
   if (type === "language") return (detail.supported_languages ?? []).length > 0;
   if (type === "devpub") {
     return (detail.developers ?? []).length > 0 || (detail.publishers ?? []).length > 0;
@@ -1590,7 +1599,7 @@ function ConfigureStep({
 
       {type === "hours" && <HoursConfigForm config={hoursConfig} onChange={setHoursConfig} />}
       {type === "genre" && <GenreConfigForm config={genreConfig} onChange={setGenreConfig} suggestions={metadata.genreValues} />}
-      {type === "tags" && <TagsConfigForm config={tagsConfig} onChange={setTagsConfig} suggestions={metadata.flagValues} />}
+      {type === "tags" && <TagsConfigForm config={tagsConfig} onChange={setTagsConfig} suggestions={metadata.tagValues} metadata={metadata} />}
       {type === "year" && <YearConfigForm config={yearConfig} onChange={setYearConfig} />}
       {type === "hltb" && <HoursConfigForm config={hltbConfig} onChange={setHltbConfig} label={t("auto.hltbBuckets")} showHltbMode />}
       {type === "devpub" && <DevPubConfigForm config={devPubConfig} onChange={setDevPubConfig} suggestions={metadata.studioValues} metadata={metadata} />}
@@ -1775,10 +1784,12 @@ function TagsConfigForm({
   config,
   onChange,
   suggestions,
+  metadata,
 }: {
   config: TagsConfig;
   onChange: (c: TagsConfig) => void;
   suggestions: string[];
+  metadata: AutoCatMetadata;
 }) {
   const t = useT();
   const [newTag, setNewTag] = useState("");
@@ -1805,6 +1816,7 @@ function TagsConfigForm({
         onRemove={(v) => onChange({ ...config, included_tags: config.included_tags.filter((t) => t !== v) })}
         suggestions={suggestions}
       />
+      <MetadataStatus label={t("detail.tags")} valueCount={suggestions.length} gameCount={metadata.gamesWithTags} totalDetails={metadata.totalDetails} />
     </div>
   );
 }

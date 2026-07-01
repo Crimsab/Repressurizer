@@ -19,8 +19,13 @@ pub fn categorize_by_tags(
 
     for game in games {
         let mut added = 0usize;
+        let tags = if game.tags.is_empty() {
+            &game.categories
+        } else {
+            &game.tags
+        };
 
-        for category in &game.categories {
+        for category in tags {
             if !config.included_tags.is_empty()
                 && !config.included_tags.iter().any(|t| t.eq_ignore_ascii_case(category))
             {

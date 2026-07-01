@@ -1,0 +1,105 @@
+{
+  "DatabaseEntries": {
+    "10": {
+      "AppId": 10,
+      "AppType": 1,
+      "Developers": ["Valve"],
+      "Flags": ["Family Sharing", "Online PvP", "Valve Anti-Cheat enabled"],
+      "Genres": ["Action"],
+      "HltbCompletionists": 46487,
+      "HltbExtras": 5476,
+      "HltbMain": 1527,
+      "Id": 10,
+      "LanguageSupport": {
+        "FullAudio": ["English", "Italian"],
+        "Interface": ["English", "Italian"],
+        "Subtitles": []
+      },
+      "LastAppInfoUpdate": 1782864440,
+      "LastStoreScrape": 1780631889,
+      "MetacriticUrl": "counter-strike",
+      "Name": "Counter-Strike",
+      "ParentId": -1,
+      "Platforms": 7,
+      "Publishers": ["Valve"],
+      "ReviewPositivePercentage": 97,
+      "ReviewTotal": 34763,
+      "SteamReleaseDate": "Nov 1, 2000",
+      "Tags": ["Classic", "FPS", "Multiplayer"],
+      "TotalAchievements": 0,
+      "VRSupport": {
+        "Headsets": [],
+        "Input": [],
+        "PlayArea": []
+      }
+    },
+    "1946700": {
+      "AppId": 1946700,
+      "AppType": 0,
+      "Developers": [],
+      "Flags": [],
+      "Genres": [],
+      "HltbCompletionists": 1047,
+      "HltbExtras": 847,
+      "HltbMain": 574,
+      "Id": 1946700,
+      "LanguageSupport": {
+        "FullAudio": [],
+        "Interface": [],
+        "Subtitles": []
+      },
+      "LastAppInfoUpdate": 0,
+      "LastStoreScrape": 0,
+      "MetacriticUrl": null,
+      "Name": "Layers of Fear",
+      "ParentId": -1,
+      "Platforms": 0,
+      "Publishers": [],
+      "ReviewPositivePercentage": 0,
+      "ReviewTotal": 0,
+      "SteamReleaseDate": null,
+      "Tags": [],
+      "TotalAchievements": 0,
+      "VRSupport": {
+        "Headsets": [],
+        "Input": [],
+        "PlayArea": []
+      }
+    },
+    "324400": {
+      "AppId": 324400,
+      "AppType": 1,
+      "Developers": ["Bolt Creative", "Nine Tales Digital"],
+      "Flags": ["Single-player", "Steam Achievements"],
+      "Genres": ["Indie", "Strategy"],
+      "HltbCompletionists": 0,
+      "HltbExtras": 0,
+      "HltbMain": 0,
+      "Id": 324400,
+      "LanguageSupport": {
+        "FullAudio": [],
+        "Interface": ["English"],
+        "Subtitles": ["English"]
+      },
+      "LastAppInfoUpdate": 1782864440,
+      "LastStoreScrape": 1781901334,
+      "MetacriticUrl": null,
+      "Name": "Pocket God vs Desert Ashes",
+      "ParentId": -1,
+      "Platforms": 3,
+      "Publishers": ["Nine Tales Digital"],
+      "ReviewPositivePercentage": 64,
+      "ReviewTotal": 11,
+      "SteamReleaseDate": "Aug 20, 2015",
+      "Tags": ["Indie", "Strategy"],
+      "TotalAchievements": 8,
+      "VRSupport": {
+        "Headsets": [],
+        "Input": [],
+        "PlayArea": []
+      }
+    }
+  },
+  "Language": 7,
+  "LastHLTBUpdate": 1782864443
+}

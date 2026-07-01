@@ -6,6 +6,7 @@ import type {
   GameDetails,
   SteamReviewSummary,
   BackupInfo,
+  DepressurizerDatabaseImport,
   DepressurizerProfileImport,
   AchievementSummary,
   SamBridgeProbe,
@@ -170,6 +171,13 @@ export async function importDepressurizerProfile(
   path: string
 ): Promise<DepressurizerProfileImport> {
   return invoke<DepressurizerProfileImport>("import_depressurizer_profile", { path });
+}
+
+export async function importDepressurizerDatabase(
+  path: string,
+  appIds: number[]
+): Promise<DepressurizerDatabaseImport> {
+  return invoke<DepressurizerDatabaseImport>("import_depressurizer_database", { path, appIds });
 }
 
 export async function fetchLibrary(

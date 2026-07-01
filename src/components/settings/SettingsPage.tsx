@@ -19,6 +19,7 @@ import { useWishlistStore } from "../../stores/wishlistStore";
 import { useSteamAppIndexStore } from "../../stores/steamAppIndexStore";
 import { useAppNameOverrideStore } from "../../stores/appNameOverrideStore";
 import { useBackgroundFetchStore } from "../../stores/backgroundFetchStore";
+import { useSteamRatingsStore } from "../../stores/steamRatingsStore";
 import {
   useAutoCategorizeStore,
   type AutoCategorizePreset,
@@ -45,6 +46,7 @@ import {
   exportDiagnostics,
   fetchFamilyLibrary,
   importDepressurizerProfile,
+  importDepressurizerDatabase,
   loadLegacySharedConfig,
   loadLocalLicenseLibrary,
   loadShortcuts,
@@ -66,12 +68,18 @@ import {
   type SteamFamilyTokenCache,
 } from "../../lib/steamFamilyToken";
 import { depressurizerAutoCatsToPresets } from "../../lib/depressurizerAutoCats";
+import {
+  DEFAULT_DEPRESSURIZER_DATABASE_MERGE_OPTIONS,
+  prepareDepressurizerDatabaseMerge,
+  type DepressurizerDatabaseMergeOptions,
+} from "../../lib/depressurizerDatabaseImport";
 import { isPlaceholderGameName } from "../../lib/libraryMerge";
 import type {
   AppSettings,
   AutomationPublishPayloadSettings,
   AutomationPublishLogEntry,
   BackupInfo,
+  DepressurizerDatabaseImport,
   DepressurizerImportedFilter,
   DepressurizerProfileImport,
   OwnedGame,
@@ -146,8 +154,23 @@ type SettingsTab =
 type AutomationLogFilter = "all" | "success" | "failed" | "skipped";
 type AutomationLogSort = "desc" | "asc";
 
+interface DepressurizerDatabaseImportOptions extends DepressurizerDatabaseMergeOptions {
+  sourcePath: string;
+  extraAppIds: string;
+  includeNames: boolean;
+  addExtraAsCollectionOnly: boolean;
+}
+
 const LIBRARY_REFRESH_INTERVAL_OPTIONS = [15, 30, 60, 180, 360] as const;
 const UPDATE_CHECK_INTERVAL_OPTIONS = [6, 12, 24, 72, 168] as const;
+const DEFAULT_DEPRESSURIZER_DATABASE_IMPORT_OPTIONS: DepressurizerDatabaseImportOptions = {
+  ...DEFAULT_DEPRESSURIZER_DATABASE_MERGE_OPTIONS,
+  sourcePath: "",
+  extraAppIds: "",
+  includeNames: true,
+  addExtraAsCollectionOnly: true,
+};
+const DEPRESSURIZER_DATABASE_IMPORT_COLLECTION_KEY = "user-collections.dep-db-imports";
 
 interface SettingsTabItem {
   id: SettingsTab;
@@ -199,16 +222,22 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
   const [settingsSearch, setSettingsSearch] = useState("");
   const [showAutomationLogs, setShowAutomationLogs] = useState(false);
   const [showAutomationGuide, setShowAutomationGuide] = useState(false);
+  const [showDepressurizerDatabaseImport, setShowDepressurizerDatabaseImport] = useState(false);
+  const [depressurizerDatabaseOptions, setDepressurizerDatabaseOptions] =
+    useState<DepressurizerDatabaseImportOptions>(DEFAULT_DEPRESSURIZER_DATABASE_IMPORT_OPTIONS);
   const [automationLogFilter, setAutomationLogFilter] = useState<AutomationLogFilter>("all");
   const [automationLogSort, setAutomationLogSort] = useState<AutomationLogSort>("desc");
   const [cacheInfo, setCacheInfo] = useState<CacheInfo | null>(null);
   const [diagnosticsExporting, setDiagnosticsExporting] = useState(false);
   const [importingDepressurizer, setImportingDepressurizer] = useState(false);
+  const [importingDepressurizerDatabase, setImportingDepressurizerDatabase] = useState(false);
   const [importingShortcuts, setImportingShortcuts] = useState(false);
   const [importingLegacyConfig, setImportingLegacyConfig] = useState(false);
   const [importingLocalLibrary, setImportingLocalLibrary] = useState(false);
   const [lastDepressurizerImport, setLastDepressurizerImport] =
     useState<DepressurizerProfileImport | null>(null);
+  const [lastDepressurizerDatabaseImport, setLastDepressurizerDatabaseImport] =
+    useState<DepressurizerDatabaseImport | null>(null);
   const [checkingUpdates, setCheckingUpdates] = useState(false);
   const [installingUpdate, setInstallingUpdate] = useState(false);
   const [updateMessage, setUpdateMessage] = useState<{ text: string; tone: "success" | "error" } | null>(null);
@@ -506,6 +535,123 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
       setMessage(`Depressurizer import failed: ${String(e)}`);
     } finally {
       setImportingDepressurizer(false);
+    }
+  };
+
+  const handleChooseDepressurizerDatabaseFile = async () => {
+    const selected = await openDialog({
+      multiple: false,
+      filters: [
+        { name: "Depressurizer Database", extensions: ["json", "zip"] },
+        { name: "All files", extensions: ["*"] },
+      ],
+    });
+    if (!selected || Array.isArray(selected)) return;
+    setDepressurizerDatabaseOptions((current) => ({ ...current, sourcePath: selected }));
+  };
+
+  const handleImportDepressurizerDatabase = async () => {
+    setImportingDepressurizerDatabase(true);
+    setMessage("");
+    try {
+      const options = depressurizerDatabaseOptions;
+      const currentGames = useGameStore.getState().games;
+      const gameIds = Object.keys(currentGames).map(Number).filter(Number.isFinite);
+      const extraAppIds = parseAppIdList(options.extraAppIds);
+      const requestedAppIds = uniqueNumbers([...gameIds, ...extraAppIds]);
+      if (requestedAppIds.length === 0) {
+        setMessage(t("settings.depDbImport.noLibrary"));
+        return;
+      }
+      if (!options.sourcePath) {
+        setMessage(t("settings.depDbImport.noSource"));
+        return;
+      }
+
+      await useSteamRatingsStore.getState().hydrateCache();
+      await useAppNameOverrideStore.getState().hydrate();
+
+      const imported = await importDepressurizerDatabase(options.sourcePath, requestedAppIds);
+      const merge = prepareDepressurizerDatabaseMerge({
+        imported,
+        currentDetails: useGameStore.getState().details,
+        currentHltb: useHltbStore.getState().data,
+        currentSteamReviews: useSteamRatingsStore.getState().ratings,
+        options,
+      });
+
+      if (options.includeNames) {
+        useAppNameOverrideStore.getState().mergeNames(
+          Object.entries(imported.names).map(([appid, name]) => ({ appid: Number(appid), name }))
+        );
+        const namedExistingGames = Object.entries(imported.names)
+          .map(([appid, name]) => {
+            const id = Number(appid);
+            const game = currentGames[id];
+            return game ? { ...game, name } : null;
+          })
+          .filter((game): game is OwnedGame => !!game);
+        if (namedExistingGames.length > 0) {
+          useGameStore.getState().mergeGames(namedExistingGames);
+        }
+      }
+
+      let extraGamesAdded = 0;
+      if (options.addExtraAsCollectionOnly && extraAppIds.length > 0) {
+        const importedIds = depressurizerDatabaseImportedIds(imported);
+        const missingExtraIds = extraAppIds.filter((id) => !currentGames[id] && importedIds.has(id));
+        const missingGames = depressurizerDatabaseToOwnedGames(imported, missingExtraIds);
+        if (missingGames.length > 0) {
+          useGameStore.getState().mergeGames(missingGames);
+          const mergedCollections = mergeImportedCollections(
+            useCategoryStore.getState().collections,
+            [depressurizerDatabaseImportCollection(missingGames.map((game) => game.appid))]
+          );
+          applyImportedCollections(mergedCollections);
+          extraGamesAdded = missingGames.length;
+        }
+      }
+      if (merge.details.length > 0) {
+        useGameStore.getState().setBulkDetails(merge.details);
+        for (const detail of merge.details) {
+          useFailedGamesStore.getState().resetFailure(detail.app_id);
+        }
+      }
+      if (Object.keys(merge.hltb).length > 0) {
+        useHltbStore.getState().setBulkData(merge.hltb);
+        for (const appId of Object.keys(merge.hltb)) {
+          useHltbIgnoredStore.getState().resetGame(Number(appId));
+        }
+      }
+      if (merge.steamReviews.length > 0) {
+        useSteamRatingsStore.getState().setBulkRatings(merge.steamReviews);
+      }
+
+      setLastDepressurizerDatabaseImport(imported);
+      await saveAppData(
+        "depressurizer-database-import.json",
+        JSON.stringify({
+          importedAt: new Date().toISOString(),
+          sourcePath: imported.sourcePath,
+          stats: imported.stats,
+          merged: merge.stats,
+          options,
+          extraGamesAdded,
+        })
+      ).catch(() => {});
+
+      setMessage(
+        `Imported Depressurizer database: ${imported.stats.matchedEntries}/${imported.stats.requestedAppIds} requested app IDs matched; ` +
+          `${merge.stats.detailsAdded + merge.stats.detailsMerged} details, ${merge.stats.hltbAdded} HLTB entries, ` +
+          `${merge.stats.steamReviewsAdded} Steam review summaries, ${options.includeNames ? merge.stats.namesImported : 0} names merged` +
+          `${extraGamesAdded > 0 ? ` and ${extraGamesAdded} extra local-only games added.` : "."}`
+      );
+      setShowDepressurizerDatabaseImport(false);
+      setTimeout(() => setMessage(""), 7000);
+    } catch (e) {
+      setMessage(`Depressurizer database import failed: ${String(e)}`);
+    } finally {
+      setImportingDepressurizerDatabase(false);
     }
   };
 
@@ -925,7 +1071,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
         label: t("settings.maintenance"),
         keywords: [
           t("settings.diagnostics.export"),
-          "diagnostics maintenance import export depressurizer profile shortcuts non steam sharedconfig local license licensecache packageinfo categories favorites hidden filters autocat",
+          "diagnostics maintenance import export depressurizer profile database database.json json zip metadata tags hltb reviews names shortcuts non steam sharedconfig local license licensecache packageinfo categories favorites hidden filters autocat",
         ],
       },
       {
@@ -1918,6 +2064,22 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
 	                  </button>
 
 	                  <button
+	                    onClick={() => setShowDepressurizerDatabaseImport(true)}
+	                    disabled={importingDepressurizerDatabase}
+	                    className="btn-press flex items-start gap-3 rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3 text-left transition-colors hover:border-repressurizer-border disabled:opacity-50"
+	                  >
+	                    <Database size={16} weight="duotone" className="mt-0.5 text-repressurizer-accent" />
+	                    <span>
+	                      <span className="block text-sm text-repressurizer-text">
+	                        {importingDepressurizerDatabase ? "Importing Depressurizer database" : "Import Depressurizer database"}
+	                      </span>
+	                      <span className="mt-0.5 block text-xs leading-relaxed text-repressurizer-text-faint">
+	                        Fill missing metadata from database.json or zip, with optional overwrite and extra App ID controls.
+	                      </span>
+	                    </span>
+	                  </button>
+
+	                  <button
 	                    onClick={handleImportShortcuts}
 	                    disabled={importingShortcuts}
 	                    className="btn-press flex items-start gap-3 rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3 text-left transition-colors hover:border-repressurizer-border disabled:opacity-50"
@@ -1990,6 +2152,21 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
 	                          Non-Steam shortcut entries were preserved in the import metadata and will become active when shortcut support lands.
 	                        </p>
 	                      )}
+	                    </div>
+	                  )}
+
+	                  {lastDepressurizerDatabaseImport && (
+	                    <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3 md:col-span-2">
+	                      <p className="text-xs font-medium text-repressurizer-text">
+	                        Last Depressurizer database import: {lastDepressurizerDatabaseImport.stats.matchedEntries}/
+	                        {lastDepressurizerDatabaseImport.stats.requestedAppIds} library apps matched,{" "}
+	                        {lastDepressurizerDatabaseImport.stats.details} detail records,{" "}
+	                        {lastDepressurizerDatabaseImport.stats.hltb} HLTB entries,{" "}
+	                        {lastDepressurizerDatabaseImport.stats.steamReviews} Steam review summaries.
+	                      </p>
+	                      <p className="mt-1 text-xs leading-relaxed text-repressurizer-text-faint">
+	                        Existing live Steam metadata is kept; imported database values fill empty cache fields.
+	                      </p>
 	                    </div>
 	                  )}
 	                </div>
@@ -2514,6 +2691,18 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
           <AutomationGuideDialog onClose={() => setShowAutomationGuide(false)} />
         )}
 
+        {showDepressurizerDatabaseImport && (
+          <DepressurizerDatabaseImportDialog
+            options={depressurizerDatabaseOptions}
+            gameCount={gameCount}
+            importing={importingDepressurizerDatabase}
+            onChange={(patch) => setDepressurizerDatabaseOptions((current) => ({ ...current, ...patch }))}
+            onSelectFile={() => void handleChooseDepressurizerDatabaseFile()}
+            onImport={() => void handleImportDepressurizerDatabase()}
+            onClose={() => setShowDepressurizerDatabaseImport(false)}
+          />
+        )}
+
         {/* Confirmation dialog */}
         {pendingAction && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/50 rounded-2xl backdrop-blur-sm">
@@ -2884,6 +3073,64 @@ function depressurizerSpecialState(value: number): AdvancedSpecialState {
 
 function normalizeCategoryName(name: string): string {
   return name.trim().toLowerCase();
+}
+
+function parseAppIdList(input: string): number[] {
+  return uniqueNumbers(
+    input
+      .split(/[^0-9]+/)
+      .map((part) => Number(part))
+      .filter((id) => Number.isFinite(id) && id > 0)
+  );
+}
+
+function uniqueNumbers(values: number[]): number[] {
+  const seen = new Set<number>();
+  const result: number[] = [];
+  for (const value of values) {
+    const id = Math.trunc(value);
+    if (!Number.isFinite(id) || id <= 0 || seen.has(id)) continue;
+    seen.add(id);
+    result.push(id);
+  }
+  return result;
+}
+
+function depressurizerDatabaseImportedIds(imported: DepressurizerDatabaseImport): Set<number> {
+  return new Set(
+    uniqueNumbers([
+      ...Object.keys(imported.names).map(Number),
+      ...imported.details.map((detail) => detail.app_id),
+      ...Object.keys(imported.hltb).map(Number),
+      ...imported.steamReviews.map((rating) => rating.app_id),
+    ])
+  );
+}
+
+function depressurizerDatabaseToOwnedGames(imported: DepressurizerDatabaseImport, appIds: number[]): OwnedGame[] {
+  const detailsById = new Map(imported.details.map((detail) => [detail.app_id, detail]));
+  return uniqueNumbers(appIds).map((appid) => ({
+    appid,
+    name: imported.names[appid] ?? detailsById.get(appid)?.name?.trim() ?? `App ${appid}`,
+    playtime_forever: 0,
+    img_icon_url: null,
+    rtime_last_played: 0,
+    is_collection_only: true,
+  }));
+}
+
+function depressurizerDatabaseImportCollection(appIds: number[]): SteamCollection {
+  const id = "dep-db-imports";
+  return {
+    id,
+    key: DEPRESSURIZER_DATABASE_IMPORT_COLLECTION_KEY,
+    name: "Depressurizer Database Imports",
+    added: uniqueNumbers(appIds),
+    removed: [],
+    timestamp: Math.floor(Date.now() / 1000),
+    is_deleted: false,
+    is_dynamic: false,
+  };
 }
 
 function shortcutsToOwnedGames(shortcuts: SteamShortcut[]): OwnedGame[] {
@@ -3734,6 +3981,247 @@ function AutomationLogsDialog({
         </div>
       </div>
     </div>
+  );
+}
+
+function DepressurizerDatabaseImportDialog({
+  options,
+  gameCount,
+  importing,
+  onChange,
+  onSelectFile,
+  onImport,
+  onClose,
+}: {
+  options: DepressurizerDatabaseImportOptions;
+  gameCount: number;
+  importing: boolean;
+  onChange: (patch: Partial<DepressurizerDatabaseImportOptions>) => void;
+  onSelectFile: () => void;
+  onImport: () => void;
+  onClose: () => void;
+}) {
+  const t = useT();
+  const extraCount = parseAppIdList(options.extraAppIds).length;
+  const canImport = !!options.sourcePath && !importing;
+
+  return (
+    <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-black/50 p-4 backdrop-blur-sm">
+      <div className="flex w-full max-w-3xl flex-col rounded-xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_16px_48px_rgba(0,0,0,0.5)]" style={{ maxHeight: "min(720px, calc(100vh - 96px))" }}>
+        <div className="flex items-start justify-between gap-4 border-b border-repressurizer-border px-4 py-3">
+          <div className="min-w-0">
+            <h3 className="text-sm font-semibold text-repressurizer-text">{t("settings.depDbImport.title")}</h3>
+            <p className="mt-0.5 text-[11px] leading-relaxed text-repressurizer-text-faint">
+              {t("settings.depDbImport.desc")}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="btn-press flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-repressurizer-text-muted transition-colors hover:bg-repressurizer-surface-hover hover:text-white"
+            aria-label={t("common.close")}
+          >
+            <X size={15} weight="bold" />
+          </button>
+        </div>
+
+        <div className="min-h-0 flex-1 overflow-auto p-4">
+          <div className="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
+            <div className="space-y-4">
+              <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg p-3">
+                <p className="text-xs font-semibold text-repressurizer-text">{t("settings.depDbImport.source")}</p>
+                <div className="mt-3 flex gap-2">
+                  <div className="min-w-0 flex-1 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-surface px-3 py-2">
+                    <p className="truncate font-mono text-[11px] text-repressurizer-text-muted">
+                      {options.sourcePath || t("settings.depDbImport.source.empty")}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={onSelectFile}
+                    className="btn-press shrink-0 rounded-lg border border-repressurizer-border bg-repressurizer-surface px-3 py-2 text-xs font-medium text-repressurizer-text transition-colors hover:border-repressurizer-accent/50"
+                  >
+                    {t("settings.depDbImport.choose")}
+                  </button>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-xs font-semibold text-repressurizer-text">{t("settings.depDbImport.scope")}</p>
+                  <span className="rounded-full bg-repressurizer-surface px-2 py-0.5 text-[10px] text-repressurizer-text-faint">
+                    {extraCount > 0
+                      ? t("settings.depDbImport.scope.withExtra", { count: gameCount, extra: extraCount })
+                      : t("settings.depDbImport.scope.library", { count: gameCount })}
+                  </span>
+                </div>
+                <label className="mt-3 block text-[11px] uppercase tracking-wider text-repressurizer-text-faint">
+                  {t("settings.depDbImport.extraIds")}
+                </label>
+                <textarea
+                  value={options.extraAppIds}
+                  onChange={(event) => onChange({ extraAppIds: event.target.value })}
+                  placeholder="10, 20, 30"
+                  className="mt-1.5 h-20 w-full resize-none rounded-lg border border-repressurizer-border bg-repressurizer-surface px-3 py-2 font-mono text-xs text-repressurizer-text placeholder:text-repressurizer-text-faint focus:border-repressurizer-accent focus:outline-none"
+                />
+                <p className="mt-1.5 text-[11px] leading-relaxed text-repressurizer-text-faint">
+                  {t("settings.depDbImport.extraIds.desc")}
+                </p>
+                <ImportOptionToggle
+                  className="mt-3"
+                  label={t("settings.depDbImport.addExtra")}
+                  description={t("settings.depDbImport.addExtra.desc")}
+                  checked={options.addExtraAsCollectionOnly}
+                  onChange={(checked) => onChange({ addExtraAsCollectionOnly: checked })}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg p-3">
+                <p className="text-xs font-semibold text-repressurizer-text">{t("settings.depDbImport.data")}</p>
+                <div className="mt-3 space-y-2">
+                  <ImportOptionToggle
+                    label={t("settings.depDbImport.names")}
+                    description={t("settings.depDbImport.names.desc")}
+                    checked={options.includeNames}
+                    onChange={(checked) => onChange({ includeNames: checked })}
+                  />
+                  <ImportOptionToggle
+                    label={t("settings.depDbImport.details")}
+                    description={t("settings.depDbImport.details.desc")}
+                    checked={options.includeDetails}
+                    onChange={(checked) => onChange({ includeDetails: checked })}
+                  />
+                  <ImportOptionToggle
+                    label={t("settings.depDbImport.tags")}
+                    description={t("settings.depDbImport.tags.desc")}
+                    checked={options.includeTags}
+                    onChange={(checked) => onChange({ includeTags: checked })}
+                  />
+                  <ImportOptionToggle
+                    label={t("settings.depDbImport.hltb")}
+                    description={t("settings.depDbImport.hltb.desc")}
+                    checked={options.includeHltb}
+                    onChange={(checked) => onChange({ includeHltb: checked })}
+                  />
+                  <ImportOptionToggle
+                    label={t("settings.depDbImport.reviews")}
+                    description={t("settings.depDbImport.reviews.desc")}
+                    checked={options.includeSteamReviews}
+                    onChange={(checked) => onChange({ includeSteamReviews: checked })}
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg p-3">
+                <p className="text-xs font-semibold text-repressurizer-text">{t("settings.depDbImport.overwrite")}</p>
+                <div className="mt-3 space-y-2">
+                  <ImportOptionToggle
+                    label={t("settings.depDbImport.overwrite.details")}
+                    description={t("settings.depDbImport.overwrite.details.desc")}
+                    checked={options.overwriteDetails}
+                    disabled={!options.includeDetails}
+                    onChange={(checked) => onChange({ overwriteDetails: checked })}
+                  />
+                  <ImportOptionToggle
+                    label={t("settings.depDbImport.overwrite.tags")}
+                    description={t("settings.depDbImport.overwrite.tags.desc")}
+                    checked={options.overwriteTags}
+                    disabled={!options.includeTags}
+                    onChange={(checked) => onChange({ overwriteTags: checked })}
+                  />
+                  <ImportOptionToggle
+                    label={t("settings.depDbImport.overwrite.hltb")}
+                    description={t("settings.depDbImport.overwrite.hltb.desc")}
+                    checked={options.overwriteHltb}
+                    disabled={!options.includeHltb}
+                    onChange={(checked) => onChange({ overwriteHltb: checked })}
+                  />
+                  <ImportOptionToggle
+                    label={t("settings.depDbImport.overwrite.reviews")}
+                    description={t("settings.depDbImport.overwrite.reviews.desc")}
+                    checked={options.overwriteSteamReviews}
+                    disabled={!options.includeSteamReviews}
+                    onChange={(checked) => onChange({ overwriteSteamReviews: checked })}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-3 border-t border-repressurizer-border px-4 py-3">
+          <button
+            type="button"
+            onClick={() => onChange({ ...DEFAULT_DEPRESSURIZER_DATABASE_IMPORT_OPTIONS, sourcePath: options.sourcePath })}
+            className="btn-press rounded-lg px-3 py-2 text-xs text-repressurizer-text-muted transition-colors hover:bg-repressurizer-surface-hover hover:text-repressurizer-text"
+          >
+            {t("settings.depDbImport.reset")}
+          </button>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="btn-press rounded-lg px-4 py-2 text-sm text-repressurizer-text-muted transition-colors hover:bg-repressurizer-surface-hover hover:text-white"
+            >
+              {t("common.cancel")}
+            </button>
+            <button
+              type="button"
+              onClick={onImport}
+              disabled={!canImport}
+              className="btn-press rounded-lg bg-repressurizer-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-repressurizer-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {importing ? t("settings.depDbImport.importing") : t("settings.depDbImport.import")}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ImportOptionToggle({
+  label,
+  description,
+  checked,
+  disabled = false,
+  className = "",
+  onChange,
+}: {
+  label: string;
+  description: string;
+  checked: boolean;
+  disabled?: boolean;
+  className?: string;
+  onChange: (checked: boolean) => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className={`flex w-full items-start gap-3 rounded-lg border px-3 py-2 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-45 ${
+        checked
+          ? "border-repressurizer-accent/60 bg-repressurizer-accent/10"
+          : "border-repressurizer-border-subtle bg-repressurizer-surface/60 hover:border-repressurizer-border"
+      } ${className}`}
+    >
+      <span
+        className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border ${
+          checked ? "border-repressurizer-accent bg-repressurizer-accent text-white" : "border-repressurizer-border bg-repressurizer-bg"
+        }`}
+      >
+        {checked && <CheckCircle size={11} weight="fill" />}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-xs font-medium text-repressurizer-text">{label}</span>
+        <span className="mt-0.5 block text-[11px] leading-relaxed text-repressurizer-text-faint">{description}</span>
+      </span>
+    </button>
   );
 }
 
