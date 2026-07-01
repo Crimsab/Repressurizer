@@ -1,13 +1,13 @@
 name: Tag Release
 
 on:
-  workflow_run:
-    workflows:
-      - CI
+  push:
     branches:
       - main
-    types:
-      - completed
+    paths:
+      - package.json
+      - packages/integration/package.json
+      - packages/rust/Cargo.toml
   workflow_dispatch:
 
 permissions:
@@ -22,7 +22,6 @@ jobs:
   tag:
     name: Create version tag
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
 
     steps:
       - name: Checkout
@@ -33,7 +32,7 @@ jobs:
           GIT_CONFIG_VALUE_0: main
         with:
           fetch-depth: 0
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ github.sha }}
 
       - name: Read package version
         id: version
