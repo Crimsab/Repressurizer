@@ -27,6 +27,7 @@ import {
 } from "@phosphor-icons/react";
 import { useT } from "../../lib/i18n";
 import { SteamImage } from "../games/SteamImage";
+import { CollectionMetadataRefreshDialog } from "../categories/CollectionMetadataRefreshDialog";
 import {
   CATEGORY_COLOR_SWATCHES,
   categoryPillStyle,
@@ -114,6 +115,7 @@ export function Sidebar() {
   const [showMerge, setShowMerge] = useState(false);
   const [duplicateFor, setDuplicateFor] = useState<SteamCollection | null>(null);
   const [colorFor, setColorFor] = useState<SteamCollection | null>(null);
+  const [refreshCollections, setRefreshCollections] = useState<SteamCollection[] | null>(null);
   const [duplicateName, setDuplicateName] = useState("");
   const categoryAnchorRef = useRef<string | null>(null);
 
@@ -613,6 +615,14 @@ export function Sidebar() {
             openExportDialog({ initialScope: "categories_pick" });
             setContextMenu(null);
           }}
+          onRefreshCategory={(col) => {
+            setRefreshCollections([col]);
+            setContextMenu(null);
+          }}
+          onRefreshSelected={() => {
+            setRefreshCollections(collections.filter((col) => selectedCategoryKeys.includes(col.key)));
+            setContextMenu(null);
+          }}
           onMergeSelected={() => {
             preloadMergeCategoriesDialog();
             setShowMerge(true);
@@ -627,6 +637,13 @@ export function Sidebar() {
             setColorFor(col);
             setContextMenu(null);
           }}
+        />
+      )}
+
+      {refreshCollections && (
+        <CollectionMetadataRefreshDialog
+          collections={refreshCollections}
+          onClose={() => setRefreshCollections(null)}
         />
       )}
 
@@ -775,6 +792,8 @@ function CategoryContextMenu({
   onDeleteSelected,
   onExportCategory,
   onExportSelected,
+  onRefreshCategory,
+  onRefreshSelected,
   onMergeSelected,
   onDuplicate,
   onColor,
@@ -790,6 +809,8 @@ function CategoryContextMenu({
   onDeleteSelected: () => void;
   onExportCategory: (col: SteamCollection) => void;
   onExportSelected: () => void;
+  onRefreshCategory: (col: SteamCollection) => void;
+  onRefreshSelected: () => void;
   onMergeSelected: () => void;
   onDuplicate: (col: SteamCollection) => void;
   onColor: (col: SteamCollection) => void;
@@ -815,7 +836,7 @@ function CategoryContextMenu({
   const style: React.CSSProperties = {
     position: "fixed",
     left: Math.min(x, window.innerWidth - 200),
-    top: Math.min(y, window.innerHeight - (multiExportMode ? 230 : 200)),
+    top: Math.min(y, window.innerHeight - (multiExportMode ? 260 : 230)),
     zIndex: 100,
   };
 
@@ -838,6 +859,13 @@ function CategoryContextMenu({
           >
             <Export size={14} weight="bold" />
             {t("sidebar.category.exportSelected", { count: exportSelectedCount })}
+          </button>
+          <button
+            onClick={() => onRefreshSelected()}
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-repressurizer-text hover:bg-repressurizer-surface-hover transition-colors"
+          >
+            <ArrowCounterClockwise size={14} className="text-repressurizer-text-muted" />
+            {t("sidebar.category.refreshSelected")}
           </button>
           {exportSelectedCount >= 2 && (
             <button
@@ -872,6 +900,13 @@ function CategoryContextMenu({
         </p>
       </div>
       <div className="py-1">
+        <button
+          onClick={() => onRefreshCategory(collection)}
+          className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-repressurizer-text hover:bg-repressurizer-surface-hover transition-colors"
+        >
+          <ArrowCounterClockwise size={14} className="text-repressurizer-text-muted" />
+          {t("sidebar.category.refreshCache")}
+        </button>
         <button
           onClick={() => onColor(collection)}
           className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-repressurizer-text hover:bg-repressurizer-surface-hover transition-colors"

@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
 import { useGameStore } from "./gameStore";
+import { HLTB_MAX_FAILS } from "../lib/fetchGuards";
 
 const STORAGE_KEY = "repressurizer-hltb-ignored";
 
@@ -21,7 +22,7 @@ function saveIgnored(fails: Record<number, number>) {
 }
 
 /** After this many confirmed "not found" results, auto-ignore the game */
-export const HLTB_MAX_FAILS = 3;
+export { HLTB_MAX_FAILS };
 
 interface HltbIgnoredState {
   fails: Record<number, number>;

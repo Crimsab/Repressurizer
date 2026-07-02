@@ -137,8 +137,6 @@ ratings, and game status tracking.
 
 ## Documentation
 
-The README is intentionally short. Detailed behavior lives in `docs/`.
-
 | Topic | Link |
 | --- | --- |
 | Documentation index | [docs/README.md](docs/README.md) |

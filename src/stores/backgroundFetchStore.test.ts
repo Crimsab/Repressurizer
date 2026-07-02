@@ -42,6 +42,30 @@ function steamReviewSummary(appId: number) {
   };
 }
 
+function gameDetails(appId: number) {
+  return {
+    app_id: appId,
+    name: `Game ${appId}`,
+    genres: ["Action"],
+    tags: [],
+    categories: ["Single-player"],
+    release_date: "Jan 1, 2020",
+    store_release_date: null,
+    store_release_date_fetched_at: null,
+    metacritic_score: null,
+    developers: [],
+    publishers: [],
+    supported_languages: ["English"],
+    platforms: { windows: true, mac: false, linux: false },
+    header_image: null,
+    capsule_image: null,
+    price_initial: null,
+    price_final: null,
+    price_currency: "EUR",
+    is_free: false,
+  };
+}
+
 afterEach(() => {
   vi.doUnmock("@tauri-apps/api/core");
   vi.unstubAllGlobals();
@@ -49,6 +73,44 @@ afterEach(() => {
 });
 
 describe("backgroundFetchStore details fetch", () => {
+  it("force-fetches current details when requested", async () => {
+    vi.stubGlobal("localStorage", createStorage());
+    const detailCalls: number[] = [];
+    const invoke = vi.fn(async (command: string, args?: { appId?: number }) => {
+      if (command === "fetch_game_details") {
+        detailCalls.push(args?.appId ?? 0);
+        return gameDetails(args?.appId ?? 0);
+      }
+      return null;
+    });
+    vi.doMock("@tauri-apps/api/core", () => ({ invoke }));
+    vi.resetModules();
+
+    const { useBackgroundFetchStore } = await import("./backgroundFetchStore");
+    const { useGameStore } = await import("./gameStore");
+    const { useSettingsStore } = await import("./settingsStore");
+
+    useSettingsStore.getState().setSettings({ steamDetailsDelayMs: 100 });
+    useGameStore.getState().setGames([
+      {
+        appid: 1,
+        name: "Cached",
+        playtime_forever: 0,
+        img_icon_url: null,
+        rtime_last_played: 0,
+      },
+    ]);
+    useGameStore.getState().setDetails(1, gameDetails(1));
+
+    useBackgroundFetchStore.getState().startDetailsFetch([1]);
+    expect(detailCalls).toEqual([]);
+
+    useBackgroundFetchStore.getState().startDetailsFetch([1], { force: true });
+    await waitFor(() => !useBackgroundFetchStore.getState().detailsRunning, "forced details fetch completion");
+
+    expect(detailCalls).toEqual([1]);
+  });
+
   it("treats permanent Steam Store failures as unavailable without retrying or adaptive slowdown", async () => {
     vi.stubGlobal("localStorage", createStorage());
     const detailCalls: number[] = [];

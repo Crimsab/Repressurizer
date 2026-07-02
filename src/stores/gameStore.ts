@@ -6,8 +6,17 @@ import { displayNameFromDetails, isPlaceholderGameName } from "../lib/libraryMer
 import { useSteamAppIndexStore } from "./steamAppIndexStore";
 import { useAppNameOverrideStore } from "./appNameOverrideStore";
 import { mergeDetailsPriceCache, mergePriceSnapshotIntoDetails, sanitizeGameDetailsPrices } from "../lib/prices";
+import {
+  DETAILS_CACHE_SCHEMA_VERSION,
+  detailsCacheNeedsRefresh,
+  isDetailsCacheCurrent,
+} from "../lib/detailsCache";
 
-export const DETAILS_CACHE_SCHEMA_VERSION = 2;
+export {
+  DETAILS_CACHE_SCHEMA_VERSION,
+  detailsCacheNeedsRefresh,
+  isDetailsCacheCurrent,
+};
 
 function persistDetailsCache(details: Record<number, GameDetails>) {
   invoke("save_details_cache", { data: JSON.stringify(details) }).catch(() => {});
@@ -83,14 +92,6 @@ function markDetailsCacheFresh(details: GameDetails, previous?: GameDetails): Ga
     cache_schema: DETAILS_CACHE_SCHEMA_VERSION,
     fetched_at: fetchedAt,
   };
-}
-
-export function isDetailsCacheCurrent(detail: GameDetails | undefined): boolean {
-  return !!detail && detail.cache_schema === DETAILS_CACHE_SCHEMA_VERSION;
-}
-
-export function detailsCacheNeedsRefresh(detail: GameDetails | undefined): boolean {
-  return !isDetailsCacheCurrent(detail);
 }
 
 export interface FilterState {

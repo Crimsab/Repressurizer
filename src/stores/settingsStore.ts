@@ -11,6 +11,7 @@ import type {
 } from "../lib/types";
 import { isHltbTimeMode } from "../lib/hltb";
 import { normalizeCategoryColors } from "../lib/categoryColors";
+import { DEFAULT_DETAILS_CACHE_MAX_AGE_DAYS } from "../lib/detailsCache";
 
 interface SettingsState extends AppSettings {
   hydrateFromDisk: () => Promise<void>;
@@ -48,6 +49,7 @@ const defaults: AppSettings = {
   hltbConcurrency: 5,
   achievementsConcurrency: 5,
   steamDetailsDelayMs: 1200,
+  detailsCacheMaxAgeDays: DEFAULT_DETAILS_CACHE_MAX_AGE_DAYS,
   steamRatingsDelayMs: 1200,
   steamRatingsCooldownMinutes: 5,
   hltbBatchDelayMs: 500,
@@ -186,6 +188,7 @@ function normalizeSettings(raw: Partial<AppSettings>): AppSettings {
     ...defaults,
     ...raw,
     steamDetailsDelayMs: clampInteger(raw.steamDetailsDelayMs, defaults.steamDetailsDelayMs, 100, 30_000),
+    detailsCacheMaxAgeDays: clampInteger(raw.detailsCacheMaxAgeDays, defaults.detailsCacheMaxAgeDays, 0, 3650),
     steamRatingsDelayMs: clampInteger(raw.steamRatingsDelayMs, defaults.steamRatingsDelayMs, 100, 30_000),
     steamRatingsCooldownMinutes: clampInteger(raw.steamRatingsCooldownMinutes, defaults.steamRatingsCooldownMinutes, 1, 60),
     hltbBatchDelayMs: clampInteger(raw.hltbBatchDelayMs, defaults.hltbBatchDelayMs, 100, 30_000),

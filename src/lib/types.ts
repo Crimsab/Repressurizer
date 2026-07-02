@@ -404,6 +404,7 @@ export interface AppSettings {
   hltbConcurrency: number;
   achievementsConcurrency: number;
   steamDetailsDelayMs: number;
+  detailsCacheMaxAgeDays: number;
   steamRatingsDelayMs: number;
   steamRatingsCooldownMinutes: number;
   hltbBatchDelayMs: number;

@@ -179,6 +179,33 @@ describe("gameStore details cache metadata", () => {
     expect(detailsCacheNeedsRefresh(undefined)).toBe(true);
   });
 
+  it("treats current-schema details as stale after the configured age", async () => {
+    vi.stubGlobal("localStorage", createStorage());
+    vi.resetModules();
+
+    const { DETAILS_CACHE_SCHEMA_VERSION, detailsCacheNeedsRefresh } = await import("./gameStore");
+    const now = Date.now();
+    const fresh = {
+      ...makeDetails(10),
+      cache_schema: DETAILS_CACHE_SCHEMA_VERSION,
+      fetched_at: now - 29 * 24 * 60 * 60 * 1000,
+    };
+    const stale = {
+      ...makeDetails(11),
+      cache_schema: DETAILS_CACHE_SCHEMA_VERSION,
+      fetched_at: now - 31 * 24 * 60 * 60 * 1000,
+    };
+    const missingTimestamp = {
+      ...makeDetails(12),
+      cache_schema: DETAILS_CACHE_SCHEMA_VERSION,
+    };
+
+    expect(detailsCacheNeedsRefresh(fresh, 30, now)).toBe(false);
+    expect(detailsCacheNeedsRefresh(stale, 30, now)).toBe(true);
+    expect(detailsCacheNeedsRefresh(missingTimestamp, 30, now)).toBe(true);
+    expect(detailsCacheNeedsRefresh(stale, 0, now)).toBe(false);
+  });
+
   it("promotes usable legacy details during hydration but keeps empty entries stale", async () => {
     vi.stubGlobal("localStorage", createStorage());
     const emptyLegacy = {

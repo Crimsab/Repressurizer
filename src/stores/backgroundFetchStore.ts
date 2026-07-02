@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { fetchGameDetails, fetchGamePriceOverviews, fetchHltb, fetchAchievementsSummary, fetchSteamReviewSummary, fetchStoreReleaseDates, currencyToCountryCode } from "../lib/tauri";
-import { isDetailsCacheCurrent, useGameStore } from "./gameStore";
+import { detailsCacheNeedsRefresh, isDetailsCacheCurrent, useGameStore } from "./gameStore";
 import { useHltbStore } from "./hltbStore";
 import { useAchievementsStore } from "./achievementsStore";
 import { useSteamRatingsStore } from "./steamRatingsStore";
@@ -127,15 +127,15 @@ interface BackgroundFetchState {
   releaseDatesCurrentName: string;
   releaseDatesRecentNames: string[];
 
-  startDetailsFetch: (missingIds: number[]) => void;
+  startDetailsFetch: (missingIds: number[], options?: { force?: boolean }) => void;
   stopDetailsFetch: () => void;
   startHltbFetch: (items: Array<{ appId: number; name: string }>) => void;
   stopHltbFetch: () => void;
   startAchievementsFetch: (items: Array<{ appId: number; name: string }>) => void;
   stopAchievementsFetch: () => void;
-  startRatingsFetch: (items: Array<{ appId: number; name: string }>) => void;
+  startRatingsFetch: (items: Array<{ appId: number; name: string }>, options?: { force?: boolean }) => void;
   stopRatingsFetch: () => void;
-  startStoreReleaseDateFetch: (items: Array<{ appId: number; name: string }>) => void;
+  startStoreReleaseDateFetch: (items: Array<{ appId: number; name: string }>, options?: { force?: boolean }) => void;
   stopStoreReleaseDateFetch: () => void;
 }
 
@@ -185,16 +185,18 @@ export const useBackgroundFetchStore = create<BackgroundFetchState>((set, get) =
     releaseDatesCurrentName: "",
     releaseDatesRecentNames: [],
 
-    startDetailsFetch: (missingIds) => {
+    startDetailsFetch: (missingIds, options) => {
       if (_detailsRunning || missingIds.length === 0) return;
       // Filter out games already permanently failed (removed from Steam)
       const { isIgnored } = useFailedGamesStore.getState();
       const details = useGameStore.getState().details;
-      const currency = useSettingsStore.getState().currency ?? "EUR";
+      const settings = useSettingsStore.getState();
+      const currency = settings.currency ?? "EUR";
       const ids = missingIds.filter((id) => {
         if (isIgnored(id)) return false;
+        if (options?.force) return true;
         const detail = details[id];
-        return !isDetailsCacheCurrent(detail) || detailsPriceNeedsCurrencyRefresh(detail, currency);
+        return detailsCacheNeedsRefresh(detail, settings.detailsCacheMaxAgeDays) || detailsPriceNeedsCurrencyRefresh(detail, currency);
       });
       if (ids.length === 0) {
         console.log(`[Details] All ${missingIds.length} requested games are already cached or ignored`);
@@ -276,10 +278,10 @@ export const useBackgroundFetchStore = create<BackgroundFetchState>((set, get) =
       set({ achievementsRunning: false, achievementsCurrentName: "" });
     },
 
-    startRatingsFetch: (items) => {
+    startRatingsFetch: (items, options) => {
       if (_ratingsRunning || items.length === 0) return;
       const ratings = useSteamRatingsStore.getState().ratings;
-      const filtered = items.filter((item) => !isSteamRatingFresh(ratings[item.appId]));
+      const filtered = options?.force ? items : items.filter((item) => !isSteamRatingFresh(ratings[item.appId]));
       if (filtered.length === 0) return;
       _ratingsRunning = true;
       _ratingsAbort = false;
@@ -303,11 +305,11 @@ export const useBackgroundFetchStore = create<BackgroundFetchState>((set, get) =
       set({ ratingsRunning: false, ratingsCurrentName: "", ratingsCoolingDown: false, ratingsCooldownSecs: 0 });
     },
 
-    startStoreReleaseDateFetch: (items) => {
+    startStoreReleaseDateFetch: (items, options) => {
       if (_releaseDatesRunning || items.length === 0) return;
       const details = useGameStore.getState().details;
       const filtered = items.filter((item) =>
-        isDetailsCacheCurrent(details[item.appId]) && storeReleaseDateNeedsRefresh(details[item.appId])
+        isDetailsCacheCurrent(details[item.appId]) && (options?.force || storeReleaseDateNeedsRefresh(details[item.appId]))
       );
       if (filtered.length === 0) return;
 

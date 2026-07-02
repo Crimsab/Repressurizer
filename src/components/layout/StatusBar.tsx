@@ -128,6 +128,7 @@ export function StatusBar() {
   const categoryCount = useCategoryStore((s) => s.collections.length);
   const dirty = useCategoryStore((s) => s.dirty);
   const currency = useSettingsStore((s) => s.currency);
+  const detailsCacheMaxAgeDays = useSettingsStore((s) => s.detailsCacheMaxAgeDays);
   const hltbData = useHltbStore((s) => s.data);
   const ignoredDetailFails = useFailedGamesStore((s) => s.fails);
   const ignoredHltbFails = useHltbIgnoredStore((s) => s.fails);
@@ -207,7 +208,7 @@ export function StatusBar() {
   const fetchableDetailIds = gameIds.filter((id) => {
     if ((ignoredDetailFails[id] ?? 0) >= MAX_FAIL_RUNS) return false;
     const detail = details[id];
-    return detailsCacheNeedsRefresh(detail) || detailsPriceNeedsCurrencyRefresh(detail, currency);
+    return detailsCacheNeedsRefresh(detail, detailsCacheMaxAgeDays) || detailsPriceNeedsCurrencyRefresh(detail, currency);
   });
   const fetchableHltbIds = gameIds.filter(
     (id) => !hltbData[id] && (ignoredHltbFails[id] ?? 0) < HLTB_MAX_FAILS

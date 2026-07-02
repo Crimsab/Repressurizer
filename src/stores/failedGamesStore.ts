@@ -1,8 +1,9 @@
 import { create } from "zustand";
 import { loadFailedCache, saveFailedCache } from "../lib/tauri";
 import { useGameStore } from "./gameStore";
+import { MAX_FAIL_RUNS } from "../lib/fetchGuards";
 
-export const MAX_FAIL_RUNS = 3; // ignore only after repeated confirmed unavailable store responses
+export { MAX_FAIL_RUNS }; // ignore only after repeated confirmed unavailable store responses
 
 interface FailedGamesState {
   /** appId → number of permanent fetch failures across runs */

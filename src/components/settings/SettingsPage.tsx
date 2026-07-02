@@ -1055,8 +1055,10 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
           t("settings.steamAppIndex"),
           t("settings.cache"),
           t("settings.cache.desc"),
+          t("settings.detailsCacheMaxAge"),
+          t("settings.detailsCacheMaxAge.desc"),
           t("settings.clearCache"),
-          "cache index data steam apps details metadata hltb ignored failed size path clear refresh",
+          "cache index data steam apps details metadata hltb ignored failed size path clear refresh stale max age ttl days scadenza vecchi",
         ],
       },
       {
@@ -2002,6 +2004,20 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                   >
                     {t("settings.clearCache")}
                   </button>
+                </div>
+                <div className="rounded-xl bg-repressurizer-bg border border-repressurizer-border-subtle px-4 py-3">
+                  <NumberSetting
+                    label={t("settings.detailsCacheMaxAge")}
+                    value={settings.detailsCacheMaxAgeDays ?? 30}
+                    suffix={t("settings.detailsCacheMaxAge.suffix")}
+                    min={0}
+                    max={3650}
+                    step={1}
+                    onChange={(detailsCacheMaxAgeDays) => settings.setSettings({ detailsCacheMaxAgeDays })}
+                  />
+                  <p className="mt-2 text-xs leading-relaxed text-repressurizer-text-faint">
+                    {t("settings.detailsCacheMaxAge.desc")}
+                  </p>
                 </div>
                 {cacheInfo && (
                   <div className="rounded-xl bg-repressurizer-bg border border-repressurizer-border-subtle px-4 py-3 space-y-2">

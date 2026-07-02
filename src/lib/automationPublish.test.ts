@@ -28,6 +28,7 @@ const settings: AppSettings = {
   hltbTimeMode: "main_story",
   achievementsConcurrency: 5,
   steamDetailsDelayMs: 1200,
+  detailsCacheMaxAgeDays: 30,
   steamRatingsDelayMs: 1200,
   steamRatingsCooldownMinutes: 5,
   hltbBatchDelayMs: 500,

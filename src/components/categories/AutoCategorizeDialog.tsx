@@ -240,15 +240,23 @@ function sortValues(values: string[]): string[] {
   }));
 }
 
-function detailNeedsFetchForType(type: CategorizerType, detail: GameDetails | undefined): boolean {
+function detailNeedsFetchForType(
+  type: CategorizerType,
+  detail: GameDetails | undefined,
+  detailsMaxAgeDays?: number
+): boolean {
   if (!categorizerNeedsDetails(type)) return false;
-  if (detailsCacheNeedsRefresh(detail)) return true;
+  if (detailsCacheNeedsRefresh(detail, detailsMaxAgeDays)) return true;
   if (type === "year") return storeReleaseDateNeedsRefresh(detail);
   return false;
 }
 
-function detailNeedsBaseFetchForType(type: CategorizerType, detail: GameDetails | undefined): boolean {
-  return categorizerNeedsDetails(type) && detailsCacheNeedsRefresh(detail);
+function detailNeedsBaseFetchForType(
+  type: CategorizerType,
+  detail: GameDetails | undefined,
+  detailsMaxAgeDays?: number
+): boolean {
+  return categorizerNeedsDetails(type) && detailsCacheNeedsRefresh(detail, detailsMaxAgeDays);
 }
 
 function detailNeedsReleaseDateFetchForType(type: CategorizerType, detail: GameDetails | undefined): boolean {
@@ -277,21 +285,23 @@ function detailHasDataForType(type: CategorizerType, detail: GameDetails | undef
 function detailIdsNeedingFetchForType(
   type: CategorizerType,
   games: Record<number, OwnedGame>,
-  details: Record<number, GameDetails>
+  details: Record<number, GameDetails>,
+  detailsMaxAgeDays?: number
 ): number[] {
   return Object.keys(games)
     .map(Number)
-    .filter((id) => detailNeedsFetchForType(type, details[id]));
+    .filter((id) => detailNeedsFetchForType(type, details[id], detailsMaxAgeDays));
 }
 
 function detailIdsNeedingBaseFetchForType(
   type: CategorizerType,
   games: Record<number, OwnedGame>,
-  details: Record<number, GameDetails>
+  details: Record<number, GameDetails>,
+  detailsMaxAgeDays?: number
 ): number[] {
   return Object.keys(games)
     .map(Number)
-    .filter((id) => detailNeedsBaseFetchForType(type, details[id]));
+    .filter((id) => detailNeedsBaseFetchForType(type, details[id], detailsMaxAgeDays));
 }
 
 function detailIdsNeedingReleaseDateFetchForType(
@@ -328,13 +338,14 @@ function detailsReadyForType(
 function missingDetailIdsForPresets(
   presets: AutoCategorizePreset[],
   games: Record<number, OwnedGame>,
-  details: Record<number, GameDetails>
+  details: Record<number, GameDetails>,
+  detailsMaxAgeDays?: number
 ): number[] {
   return [
     ...new Set(
       presets
         .filter((preset) => categorizerNeedsDetails(preset.type))
-        .flatMap((preset) => detailIdsNeedingFetchForType(preset.type, games, details))
+        .flatMap((preset) => detailIdsNeedingFetchForType(preset.type, games, details, detailsMaxAgeDays))
     ),
   ];
 }
@@ -342,13 +353,14 @@ function missingDetailIdsForPresets(
 function missingBaseDetailIdsForPresets(
   presets: AutoCategorizePreset[],
   games: Record<number, OwnedGame>,
-  details: Record<number, GameDetails>
+  details: Record<number, GameDetails>,
+  detailsMaxAgeDays?: number
 ): number[] {
   return [
     ...new Set(
       presets
         .filter((preset) => categorizerNeedsDetails(preset.type))
-        .flatMap((preset) => detailIdsNeedingBaseFetchForType(preset.type, games, details))
+        .flatMap((preset) => detailIdsNeedingBaseFetchForType(preset.type, games, details, detailsMaxAgeDays))
     ),
   ];
 }
@@ -465,6 +477,7 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
   const steamId3 = useSettingsStore((s) => s.steamId3);
   const hltbData = useHltbStore((s) => s.data);
   const hltbTimeMode = useSettingsStore((s) => s.hltbTimeMode);
+  const detailsCacheMaxAgeDays = useSettingsStore((s) => s.detailsCacheMaxAgeDays);
 
   const persist = useAutoCategorizeStore();
 
@@ -658,7 +671,7 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
   }, [ensureSteamRatingsHydrated, step, type]);
 
   const startMissingPresetFetch = useCallback((presets: AutoCategorizePreset[]): boolean => {
-    const missingDetails = missingBaseDetailIdsForPresets(presets, games, details);
+    const missingDetails = missingBaseDetailIdsForPresets(presets, games, details, detailsCacheMaxAgeDays);
 
     if (missingDetails.length > 0) {
       setFetchError("");
@@ -765,7 +778,7 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
     await runPresetSequence(presets, {
       cachedOnly: true,
       skippedDetails:
-        missingDetailIdsForPresets(presets, games, details).length +
+      missingDetailIdsForPresets(presets, games, details, detailsCacheMaxAgeDays).length +
         missingRatingIdsForPresets(presets, games, currentRatings).length,
     });
   };
@@ -811,7 +824,7 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
     }
 
     if (categorizer.needsDetails) {
-      const missing = detailIdsNeedingBaseFetchForType(type, games, details);
+      const missing = detailIdsNeedingBaseFetchForType(type, games, details, detailsCacheMaxAgeDays);
 
       if (missing.length > 0) {
         setFetchError("");
@@ -878,7 +891,7 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
     }
 
     const skippedDetails = categorizer.needsDetails
-      ? detailIdsNeedingFetchForType(type, games, details).length
+      ? detailIdsNeedingFetchForType(type, games, details, detailsCacheMaxAgeDays).length
       : categorizer.needsRatings
         ? steamRatingIdsNeedingFetch(games, currentRatings).length
       : 0;
@@ -1165,7 +1178,7 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
                 (
                   categorizer.needsDetails &&
                   detailIdsReadyForType(type, games, details).length > 0 &&
-                  detailIdsNeedingFetchForType(type, games, details).length > 0
+                  detailIdsNeedingFetchForType(type, games, details, detailsCacheMaxAgeDays).length > 0
                 ) ||
                 (
                   categorizer.needsRatings &&
@@ -1175,7 +1188,7 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
               }
               cachedOnlyMissingCount={
                 categorizer.needsDetails
-                  ? detailIdsNeedingFetchForType(type, games, details).length
+                  ? detailIdsNeedingFetchForType(type, games, details, detailsCacheMaxAgeDays).length
                   : categorizer.needsRatings
                     ? steamRatingIdsNeedingFetch(games, ratings).length
                   : 0
@@ -1297,6 +1310,7 @@ function ChooseStep({
   const gameCount = useGameStore((s) => Object.keys(s.games).length);
   const games = useGameStore((s) => s.games);
   const details = useGameStore((s) => s.details);
+  const detailsCacheMaxAgeDays = useSettingsStore((s) => s.detailsCacheMaxAgeDays);
   const ratings = useSteamRatingsStore((s) => s.ratings);
   const ratingsHydrated = useSteamRatingsStore((s) => s.hydrated);
   const ratingsHydrating = useSteamRatingsStore((s) => s.hydrating);
@@ -1326,14 +1340,14 @@ function ChooseStep({
     [ignoredHltbFails]
   );
   const detailIdsNeedingRefresh = useMemo(
-    () => gameIds.filter((id) => detailsCacheNeedsRefresh(details[id]) || detailsPriceNeedsCurrencyRefresh(details[id], currency)),
-    [currency, details, gameIds]
+    () => gameIds.filter((id) => detailsCacheNeedsRefresh(details[id], detailsCacheMaxAgeDays) || detailsPriceNeedsCurrencyRefresh(details[id], currency)),
+    [currency, details, detailsCacheMaxAgeDays, gameIds]
   );
   const fetchableDetailIds = useMemo(
     () => detailIdsNeedingRefresh.filter((id) => !ignoredDetailsSet.has(id)),
     [detailIdsNeedingRefresh, ignoredDetailsSet]
   );
-  const staleDetailCount = gameIds.filter((id) => !!details[id] && detailsCacheNeedsRefresh(details[id])).length;
+  const staleDetailCount = gameIds.filter((id) => !!details[id] && detailsCacheNeedsRefresh(details[id], detailsCacheMaxAgeDays)).length;
   const wrongCurrencyDetailCount = gameIds.filter((id) => detailsPriceNeedsCurrencyRefresh(details[id], currency)).length;
   const ignoredDetailCount = detailIdsNeedingRefresh.length - fetchableDetailIds.length;
   const cachedCount = gameCount - detailIdsNeedingRefresh.length;
