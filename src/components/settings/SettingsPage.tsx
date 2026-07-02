@@ -2772,7 +2772,7 @@ function NumberSetting({
       <div className="mb-2 flex items-center justify-between gap-3">
         <p className="truncate text-xs text-repressurizer-text-muted">{label}</p>
         <span className="font-mono text-xs tabular-nums text-repressurizer-accent">
-          {value}{suffix}
+          {value}{suffix ? ` ${suffix}` : ""}
         </span>
       </div>
       <input
