@@ -377,6 +377,8 @@ export interface HoursConfig {
   prefix?: string;
   rules: HoursRule[];
   hltb_time_mode?: HltbTimeMode;
+  include_unknown?: boolean;
+  unknown_text?: string;
 }
 
 export interface GenreConfig {

@@ -9,6 +9,7 @@ import type {
 } from "./tauri";
 import type { SteamCollection } from "./types";
 import { expectedSteamRatingCategoryNames } from "./steamRatings";
+import { hltbUnknownCategoryName } from "./hltbCategorizer";
 
 export type AutoCategorizeApplyType =
   | "hours"
@@ -107,9 +108,13 @@ export function expectedAutoCategoryNames(
 ): string[] {
   if (type === "hours" || type === "hltb") {
     const hoursConfig = config as Partial<HoursConfig>;
-    return (hoursConfig.rules ?? [])
+    const names = (hoursConfig.rules ?? [])
       .map((rule) => prefixedName(hoursConfig.prefix, rule.name))
       .filter((name) => name.length > 0);
+    if (type === "hltb" && hoursConfig.include_unknown) {
+      names.push(hltbUnknownCategoryName(hoursConfig));
+    }
+    return names;
   }
 
   if (type === "score") {

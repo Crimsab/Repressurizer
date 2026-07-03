@@ -39,10 +39,13 @@ import {
 
 const loadGameDetailPage = () => import("../games/GameDetailPage").then((m) => ({ default: m.GameDetailPage }));
 const loadMergeCategoriesDialog = () => import("../categories/MergeCategoriesDialog").then((m) => ({ default: m.MergeCategoriesDialog }));
+const loadCollectionCompareDialog = () => import("../categories/CollectionCompareDialog").then((m) => ({ default: m.CollectionCompareDialog }));
 const GameDetailPage = lazy(loadGameDetailPage);
 const MergeCategoriesDialog = lazy(loadMergeCategoriesDialog);
+const CollectionCompareDialog = lazy(loadCollectionCompareDialog);
 const preloadGameDetailPage = () => { void loadGameDetailPage(); };
 const preloadMergeCategoriesDialog = () => { void loadMergeCategoriesDialog(); };
+const preloadCollectionCompareDialog = () => { void loadCollectionCompareDialog(); };
 
 interface CategoryContextMenuState {
   x: number;
@@ -116,6 +119,7 @@ export function Sidebar() {
   const [duplicateFor, setDuplicateFor] = useState<SteamCollection | null>(null);
   const [colorFor, setColorFor] = useState<SteamCollection | null>(null);
   const [refreshCollections, setRefreshCollections] = useState<SteamCollection[] | null>(null);
+  const [compareCollections, setCompareCollections] = useState<SteamCollection[] | null>(null);
   const [duplicateName, setDuplicateName] = useState("");
   const categoryAnchorRef = useRef<string | null>(null);
 
@@ -510,6 +514,20 @@ export function Sidebar() {
           <button
             type="button"
             onClick={() => {
+              preloadCollectionCompareDialog();
+              setCompareCollections(collections.filter((col) => selectedCategoryKeys.includes(col.key)));
+            }}
+            onPointerEnter={preloadCollectionCompareDialog}
+            onFocus={preloadCollectionCompareDialog}
+            disabled={selectedCategoryKeys.length < 2}
+            className="btn-press flex min-w-0 items-center justify-center gap-1 rounded-lg border border-repressurizer-border px-2 py-1.5 text-[11px] font-medium text-repressurizer-text hover:bg-repressurizer-surface-hover disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <Stack size={12} />
+            <span className="truncate">{t("sidebar.category.compareShort")}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
               preloadMergeCategoriesDialog();
               setShowMerge(true);
             }}
@@ -524,7 +542,7 @@ export function Sidebar() {
           <button
             type="button"
             onClick={() => setConfirmDeleteKeys([...selectedCategoryKeys])}
-            className="btn-press col-span-2 flex min-w-0 items-center justify-center gap-1 rounded-lg border border-repressurizer-danger/30 px-2 py-1.5 text-[11px] font-medium text-repressurizer-danger hover:bg-repressurizer-danger/10"
+            className="btn-press flex min-w-0 items-center justify-center gap-1 rounded-lg border border-repressurizer-danger/30 px-2 py-1.5 text-[11px] font-medium text-repressurizer-danger hover:bg-repressurizer-danger/10"
           >
             <TrashSimple size={12} />
             <span className="truncate">{t("sidebar.category.deleteSelected")}</span>
@@ -623,6 +641,16 @@ export function Sidebar() {
             setRefreshCollections(collections.filter((col) => selectedCategoryKeys.includes(col.key)));
             setContextMenu(null);
           }}
+          onCompareCategory={(col) => {
+            preloadCollectionCompareDialog();
+            setCompareCollections([col]);
+            setContextMenu(null);
+          }}
+          onCompareSelected={() => {
+            preloadCollectionCompareDialog();
+            setCompareCollections(collections.filter((col) => selectedCategoryKeys.includes(col.key)));
+            setContextMenu(null);
+          }}
           onMergeSelected={() => {
             preloadMergeCategoriesDialog();
             setShowMerge(true);
@@ -645,6 +673,16 @@ export function Sidebar() {
           collections={refreshCollections}
           onClose={() => setRefreshCollections(null)}
         />
+      )}
+
+      {compareCollections && (
+        <Suspense fallback={<div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm" />}>
+          <CollectionCompareDialog
+            initialCollections={compareCollections}
+            allCollections={collections}
+            onClose={() => setCompareCollections(null)}
+          />
+        </Suspense>
       )}
 
       {/* Delete confirmation dialog */}
@@ -794,6 +832,8 @@ function CategoryContextMenu({
   onExportSelected,
   onRefreshCategory,
   onRefreshSelected,
+  onCompareCategory,
+  onCompareSelected,
   onMergeSelected,
   onDuplicate,
   onColor,
@@ -811,6 +851,8 @@ function CategoryContextMenu({
   onExportSelected: () => void;
   onRefreshCategory: (col: SteamCollection) => void;
   onRefreshSelected: () => void;
+  onCompareCategory: (col: SteamCollection) => void;
+  onCompareSelected: () => void;
   onMergeSelected: () => void;
   onDuplicate: (col: SteamCollection) => void;
   onColor: (col: SteamCollection) => void;
@@ -836,7 +878,7 @@ function CategoryContextMenu({
   const style: React.CSSProperties = {
     position: "fixed",
     left: Math.min(x, window.innerWidth - 200),
-    top: Math.min(y, window.innerHeight - (multiExportMode ? 260 : 230)),
+    top: Math.min(y, window.innerHeight - (multiExportMode ? 300 : 270)),
     zIndex: 100,
   };
 
@@ -867,6 +909,15 @@ function CategoryContextMenu({
             <ArrowCounterClockwise size={14} className="text-repressurizer-text-muted" />
             {t("sidebar.category.refreshSelected")}
           </button>
+          {exportSelectedCount >= 2 && (
+            <button
+              onClick={() => onCompareSelected()}
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-repressurizer-text hover:bg-repressurizer-surface-hover transition-colors"
+            >
+              <Stack size={14} className="text-repressurizer-text-muted" />
+              {t("sidebar.category.compare")}
+            </button>
+          )}
           {exportSelectedCount >= 2 && (
             <button
               onClick={() => onMergeSelected()}
@@ -906,6 +957,13 @@ function CategoryContextMenu({
         >
           <ArrowCounterClockwise size={14} className="text-repressurizer-text-muted" />
           {t("sidebar.category.refreshCache")}
+        </button>
+        <button
+          onClick={() => onCompareCategory(collection)}
+          className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-repressurizer-text hover:bg-repressurizer-surface-hover transition-colors"
+        >
+          <Stack size={14} className="text-repressurizer-text-muted" />
+          {t("sidebar.category.compare")}
         </button>
         <button
           onClick={() => onColor(collection)}

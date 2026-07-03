@@ -21,6 +21,7 @@ interface CategoryState {
   clearCategorySelection: () => void;
   setSelectedCategoryKeys: (keys: string[]) => void;
   addCategory: (name: string) => void;
+  addCategoryWithGames: (name: string, appIds: number[]) => void;
   removeCategory: (key: string) => void;
   removeCategories: (keys: string[]) => void;
   renameCategory: (key: string, newName: string) => void;
@@ -121,6 +122,30 @@ export const useCategoryStore = create<CategoryState>((set, get) => ({
         },
       ],
     })),
+
+  addCategoryWithGames: (name, appIds) =>
+    set((state) => {
+      const trimmed = name.trim();
+      if (!trimmed) return state;
+      const ts = Date.now();
+      const added = [...new Set(appIds.filter((id) => Number.isFinite(id)).map((id) => Math.trunc(id)))].sort((a, b) => a - b);
+      return {
+        ...pushHistory(state),
+        collections: [
+          ...state.collections,
+          {
+            id: `uc-new-${ts}`,
+            key: `user-collections.uc-new-${ts}`,
+            name: trimmed,
+            added,
+            removed: [],
+            timestamp: Math.floor(Date.now() / 1000),
+            is_deleted: false,
+            is_dynamic: false,
+          },
+        ],
+      };
+    }),
 
   removeCategory: (key) =>
     set((state) => ({

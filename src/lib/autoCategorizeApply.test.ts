@@ -139,4 +139,14 @@ describe("expectedAutoCategoryNames", () => {
       })
     ).toEqual(["#Souls-like", "#Roguelike"]);
   });
+
+  it("adds the optional HLTB unknown bucket", () => {
+    expect(
+      expectedAutoCategoryNames("hltb", {
+        rules: [{ name: "Short", min_hours: 0, max_hours: 5 }],
+        include_unknown: true,
+        unknown_text: "HLTB: Unknown",
+      })
+    ).toEqual(["Short", "HLTB: Unknown"]);
+  });
 });

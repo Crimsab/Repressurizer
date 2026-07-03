@@ -208,6 +208,7 @@ interface GameState {
   toggleSortAsc: () => void;
   setViewMode: (mode: ViewMode) => void;
   toggleGameSelection: (appId: number) => void;
+  setSelectedGameIds: (appIds: number[]) => void;
   rangeSelectGames: (fromId: number, toId: number, orderedIds: number[]) => void;
   selectAllGames: () => void;
   clearSelection: () => void;
@@ -432,6 +433,15 @@ export const useGameStore = create<GameState>((set, get) => ({
         delete next[appId];
       } else {
         next[appId] = true;
+      }
+      return { selectedGameIds: next };
+    }),
+
+  setSelectedGameIds: (appIds) =>
+    set(() => {
+      const next: Record<number, boolean> = {};
+      for (const id of appIds) {
+        if (Number.isFinite(id)) next[Math.trunc(id)] = true;
       }
       return { selectedGameIds: next };
     }),

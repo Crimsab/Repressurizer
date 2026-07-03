@@ -38,7 +38,12 @@ import {
   isSteamRatingFresh,
   steamRatingIdsNeedingFetch,
 } from "../../lib/steamRatings";
-import { getHltbHours, hltbModeLabel, HLTB_TIME_MODES } from "../../lib/hltb";
+import { hltbModeLabel, HLTB_TIME_MODES } from "../../lib/hltb";
+import {
+  categorizeByHltb,
+  hltbModeForConfig,
+  hltbProcessedAppIds,
+} from "../../lib/hltbCategorizer";
 import {
   runHoursCategorizer,
   runGenreCategorizer,
@@ -66,7 +71,6 @@ import {
   type YearGrouping,
 } from "../../lib/tauri";
 import type { GameDetails, HltbTimeMode, OwnedGame, SteamReviewSummary } from "../../lib/types";
-import type { HltbData } from "../../lib/tauri";
 import {
   X,
   Clock,
@@ -143,6 +147,8 @@ const CATEGORIZERS: {
 const DEFAULT_HLTB_CONFIG: HoursConfig = {
   prefix: "",
   hltb_time_mode: "main_story",
+  include_unknown: false,
+  unknown_text: "HLTB: Unknown",
   rules: [
     { name: "Very Short (< 5h)", min_hours: 0, max_hours: 5 },
     { name: "Short (5–15h)", min_hours: 5, max_hours: 15 },
@@ -413,44 +419,6 @@ function missingRatingIdsForPresets(
     : [];
 }
 
-// Pure JS HLTB categorizer
-function runHltbCategorizerJs(
-  games: OwnedGame[],
-  hltbData: Record<number, HltbData>,
-  config: HoursConfig
-): CategorizeResult {
-  const assignments: Record<string, number[]> = {};
-  let categorized = 0;
-
-  for (const game of games) {
-    const hltb = hltbData[game.appid];
-    const hours = getHltbHours(hltb, hltbModeForConfig(config));
-    if (hours == null) continue;
-
-    for (const rule of config.rules) {
-      const inMin = hours >= rule.min_hours;
-      const inMax = rule.max_hours === 0 || hours < rule.max_hours;
-      if (inMin && inMax) {
-        const name = (config.prefix ?? "") + rule.name;
-        if (!assignments[name]) assignments[name] = [];
-        assignments[name].push(game.appid);
-        categorized++;
-        break;
-      }
-    }
-  }
-
-  return {
-    assignments,
-    games_processed: games.length,
-    games_categorized: categorized,
-  };
-}
-
-function hltbModeForConfig(config: Partial<HoursConfig>, fallback?: HltbTimeMode): HltbTimeMode {
-  return config.hltb_time_mode ?? fallback ?? "main_story";
-}
-
 function withProcessedAppIds(result: CategorizeResult, ids: number[]): CategorizeResult {
   return {
     ...result,
@@ -476,6 +444,7 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
   const steamPath = useSettingsStore((s) => s.steamPath);
   const steamId3 = useSettingsStore((s) => s.steamId3);
   const hltbData = useHltbStore((s) => s.data);
+  const ignoredHltbFails = useHltbIgnoredStore((s) => s.fails);
   const hltbTimeMode = useSettingsStore((s) => s.hltbTimeMode);
   const detailsCacheMaxAgeDays = useSettingsStore((s) => s.detailsCacheMaxAgeDays);
 
@@ -984,13 +953,15 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
     if (runType === "hltb") {
       const cfg = config as HoursConfig;
       const mode = hltbModeForConfig(cfg, hltbTimeMode);
-      return withProcessedAppIds(runHltbCategorizerJs(gamesForRun, hltbData, {
+      const resolvedConfig = {
         ...cfg,
         prefix: cfg.prefix || undefined,
         hltb_time_mode: mode,
-      }), gamesForRun
-        .filter((game) => getHltbHours(hltbData[game.appid], mode) != null)
-        .map((game) => game.appid));
+      };
+      return withProcessedAppIds(
+        categorizeByHltb(gamesForRun, hltbData, ignoredHltbFails, resolvedConfig),
+        hltbProcessedAppIds(gamesForRun, hltbData, ignoredHltbFails, resolvedConfig)
+      );
     }
     if (runType === "rating") {
       const cfg = config as SteamRatingConfig;
@@ -1003,7 +974,7 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
     }
 
     return withProcessedAppIds(await runScoreCategorizer(allDetails, true), allDetails.map((detail) => detail.app_id));
-  }, [games, details, hltbData, hltbTimeMode]);
+  }, [games, details, hltbData, ignoredHltbFails, hltbTimeMode]);
 
   const runCategorizer = useCallback(async (
     options: { cachedOnly?: boolean; skippedDetails?: number } = {}
@@ -1032,6 +1003,7 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
     games,
     details,
     hltbData,
+    ignoredHltbFails,
     hoursConfig,
     genreConfig,
     tagsConfig,
@@ -1784,7 +1756,7 @@ function ConfigureStep({
       {type === "genre" && <GenreConfigForm config={genreConfig} onChange={setGenreConfig} suggestions={metadata.genreValues} />}
       {type === "tags" && <TagsConfigForm config={tagsConfig} onChange={setTagsConfig} suggestions={metadata.tagValues} metadata={metadata} />}
       {type === "year" && <YearConfigForm config={yearConfig} onChange={setYearConfig} />}
-      {type === "hltb" && <HoursConfigForm config={hltbConfig} onChange={setHltbConfig} label={t("auto.hltbBuckets")} showHltbMode />}
+      {type === "hltb" && <HoursConfigForm config={hltbConfig} onChange={setHltbConfig} label={t("auto.hltbBuckets")} showHltbMode showHltbUnknown />}
       {type === "devpub" && <DevPubConfigForm config={devPubConfig} onChange={setDevPubConfig} suggestions={metadata.studioValues} metadata={metadata} />}
       {type === "flags" && <FlagsConfigForm config={flagsConfig} onChange={setFlagsConfig} suggestions={metadata.flagValues} metadata={metadata} />}
       {type === "language" && <LanguageConfigForm config={languageConfig} onChange={setLanguageConfig} suggestions={metadata.languageValues} metadata={metadata} />}
@@ -1863,11 +1835,13 @@ function HoursConfigForm({
   onChange,
   label,
   showHltbMode = false,
+  showHltbUnknown = false,
 }: {
   config: HoursConfig;
   onChange: (c: HoursConfig) => void;
   label?: string;
   showHltbMode?: boolean;
+  showHltbUnknown?: boolean;
 }) {
   const t = useT();
   const updateRule = (i: number, field: string, val: string) => {
@@ -1898,6 +1872,32 @@ function HoursConfigForm({
               label: hltbModeLabel(mode),
             }))}
           />
+        </div>
+      )}
+      {showHltbUnknown && (
+        <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg/70 p-3">
+          <label className="flex items-start gap-3">
+            <input
+              type="checkbox"
+              checked={Boolean(config.include_unknown)}
+              onChange={(e) => onChange({ ...config, include_unknown: e.target.checked })}
+              className="mt-0.5 h-4 w-4 rounded border-repressurizer-border bg-repressurizer-bg text-repressurizer-accent focus:ring-repressurizer-accent"
+            />
+            <span className="min-w-0">
+              <span className="block text-sm font-medium text-repressurizer-text">
+                {t("auto.includeUnknownHltb")}
+              </span>
+              <input
+                type="text"
+                value={config.unknown_text ?? "HLTB: Unknown"}
+                onChange={(e) => onChange({ ...config, unknown_text: e.target.value })}
+                disabled={!config.include_unknown}
+                placeholder={t("auto.unknownHltbName")}
+                className="mt-2 w-full rounded-lg border border-repressurizer-border bg-repressurizer-bg px-3 py-1.5 text-sm text-repressurizer-text placeholder:text-repressurizer-text-faint focus:border-repressurizer-accent focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                aria-label={t("auto.unknownHltbName")}
+              />
+            </span>
+          </label>
         </div>
       )}
       <div>
