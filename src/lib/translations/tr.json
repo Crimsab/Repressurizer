@@ -91,6 +91,8 @@
   "collectionCompare.newCategory": "Sonuç kategorisi",
   "collectionCompare.selectGames": "Oyunları seç",
   "collectionCompare.create": "Kategori oluştur",
+  "collectionCompare.openDetails": "Ayrıntıları aç",
+  "collectionCompare.openDetailsFor": "{name} ayrıntılarını aç",
   "filter.title": "Filtreler",
   "filter.hours": "Saat:",
   "filter.unplayedOnly": "Yalnızca oynanmamış",

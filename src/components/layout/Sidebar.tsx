@@ -36,6 +36,10 @@ import {
   getDefaultCategoryColor,
   normalizeHexColor,
 } from "../../lib/categoryColors";
+import {
+  sidebarVisibleCollections,
+  sortCollectionsForDisplay,
+} from "../../lib/collectionSort";
 
 const loadGameDetailPage = () => import("../games/GameDetailPage").then((m) => ({ default: m.GameDetailPage }));
 const loadMergeCategoriesDialog = () => import("../categories/MergeCategoriesDialog").then((m) => ({ default: m.MergeCategoriesDialog }));
@@ -211,21 +215,8 @@ export function Sidebar() {
     return () => window.removeEventListener("keydown", onKey);
   }, [selectedCategoryKeys, clearCategorySelection]);
 
-  const visibleCollections = collections.filter(
-    (c) =>
-      c.id !== "hidden" &&
-      (c.id !== "favorite" || c.added.length > 0) &&
-      (showDynamicCategories || !c.is_dynamic)
-  );
-  const sortedCollections = [...visibleCollections].sort((a, b) => {
-    if (pinFavorites) {
-      const aFav = a.id === "favorite" || a.key === "favorite" || a.name.toLowerCase() === "favorite" || a.name.toLowerCase() === "favorites";
-      const bFav = b.id === "favorite" || b.key === "favorite" || b.name.toLowerCase() === "favorite" || b.name.toLowerCase() === "favorites";
-      if (aFav && !bFav) return -1;
-      if (!aFav && bFav) return 1;
-    }
-    return a.name.localeCompare(b.name);
-  });
+  const visibleCollections = sidebarVisibleCollections(collections, { showDynamicCategories });
+  const sortedCollections = sortCollectionsForDisplay(visibleCollections, { pinFavorites });
 
   return (
     <aside
@@ -680,6 +671,11 @@ export function Sidebar() {
           <CollectionCompareDialog
             initialCollections={compareCollections}
             allCollections={collections}
+            onOpenGame={(game) => {
+              preloadGameDetailPage();
+              setDetailGame(game);
+              setCompareCollections(null);
+            }}
             onClose={() => setCompareCollections(null)}
           />
         </Suspense>

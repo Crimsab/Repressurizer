@@ -1,13 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
-import { CheckSquare, Plus, Stack, X } from "@phosphor-icons/react";
+import { ArrowSquareOut, CheckSquare, Plus, Stack, X } from "@phosphor-icons/react";
 import { useCategoryStore } from "../../stores/categoryStore";
 import { useGameStore } from "../../stores/gameStore";
+import { useSettingsStore } from "../../stores/settingsStore";
 import {
   compareCollections,
   defaultCompareCategoryName,
   type CollectionCompareMode,
 } from "../../lib/collectionCompare";
-import type { SteamCollection } from "../../lib/types";
+import {
+  sidebarVisibleCollections,
+  sortCollectionsForDisplay,
+} from "../../lib/collectionSort";
+import type { OwnedGame, SteamCollection } from "../../lib/types";
 import { useT, type TranslationKey } from "../../lib/i18n";
 import { SelectMenu } from "../ui/SelectMenu";
 import { SteamImage } from "../games/SteamImage";
@@ -15,6 +20,7 @@ import { SteamImage } from "../games/SteamImage";
 interface CollectionCompareDialogProps {
   initialCollections: SteamCollection[];
   allCollections: SteamCollection[];
+  onOpenGame: (game: OwnedGame) => void;
   onClose: () => void;
 }
 
@@ -23,16 +29,26 @@ const MODES: CollectionCompareMode[] = ["aNotB", "bNotA", "both", "xor"];
 export function CollectionCompareDialog({
   initialCollections,
   allCollections,
+  onOpenGame,
   onClose,
 }: CollectionCompareDialogProps) {
   const t = useT();
   const games = useGameStore((s) => s.games);
   const setSelectedGameIds = useGameStore((s) => s.setSelectedGameIds);
   const addCategoryWithGames = useCategoryStore((s) => s.addCategoryWithGames);
+  const pinFavorites = useSettingsStore((s) => s.pinFavorites);
+  const showDynamicCategories = useSettingsStore((s) => s.showDynamicCategories);
 
   const collections = useMemo(
-    () => allCollections.filter((collection) => !collection.is_deleted),
-    [allCollections]
+    () =>
+      sortCollectionsForDisplay(
+        sidebarVisibleCollections(
+          allCollections.filter((collection) => !collection.is_deleted),
+          { showDynamicCategories }
+        ),
+        { pinFavorites }
+      ),
+    [allCollections, pinFavorites, showDynamicCategories]
   );
   const firstKey = initialCollections[0]?.key ?? collections[0]?.key ?? "";
   const secondKey =
@@ -63,6 +79,7 @@ export function CollectionCompareDialog({
       .map((appId) => ({
         appId,
         name: games[appId]?.name ?? `App #${appId}`,
+        game: games[appId] ?? null,
       }))
       .sort((left, right) => left.name.localeCompare(right.name) || left.appId - right.appId);
   }, [games, resultIds]);
@@ -89,6 +106,11 @@ export function CollectionCompareDialog({
     if (resultIds.length === 0) return;
     setSelectedGameIds(resultIds);
     onClose();
+  };
+
+  const handleOpenGame = (game: OwnedGame | null) => {
+    if (!game) return;
+    onOpenGame(game);
   };
 
   return (
@@ -186,9 +208,15 @@ export function CollectionCompareDialog({
               ) : (
                 <div className="space-y-2">
                   {resultGames.slice(0, 200).map((game) => (
-                    <div
+                    <button
                       key={game.appId}
-                      className="grid grid-cols-[4.5rem_minmax(0,1fr)_4.5rem] items-center gap-3 rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg/70 p-2"
+                      type="button"
+                      onClick={() => handleOpenGame(game.game)}
+                      onDoubleClick={() => handleOpenGame(game.game)}
+                      disabled={!game.game}
+                      title={game.game ? t("collectionCompare.openDetails") : undefined}
+                      aria-label={game.game ? t("collectionCompare.openDetailsFor", { name: game.name }) : game.name}
+                      className="btn-press group grid min-h-12 w-full grid-cols-[4.5rem_minmax(0,1fr)_4.5rem_1.75rem] items-center gap-3 rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg/70 p-2 text-left transition-colors hover:border-repressurizer-accent/45 hover:bg-repressurizer-surface-hover disabled:cursor-default disabled:hover:border-repressurizer-border-subtle disabled:hover:bg-repressurizer-bg/70"
                     >
                       <div className="h-8 overflow-hidden rounded-md bg-repressurizer-surface">
                         <SteamImage appId={game.appId} alt="" kind="header" className="h-full w-full object-cover" />
@@ -197,7 +225,10 @@ export function CollectionCompareDialog({
                         <p className="truncate text-sm font-medium text-repressurizer-text">{game.name}</p>
                       </div>
                       <p className="text-right font-mono text-[11px] text-repressurizer-text-faint">#{game.appId}</p>
-                    </div>
+                      <span className="flex h-7 w-7 items-center justify-center rounded-lg text-repressurizer-text-faint group-hover:text-repressurizer-accent">
+                        <ArrowSquareOut size={14} />
+                      </span>
+                    </button>
                   ))}
                   {resultGames.length > 200 && (
                     <p className="px-1 text-xs text-repressurizer-text-faint">

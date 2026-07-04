@@ -157,6 +157,33 @@ test("creates a category from the compact sidebar plus button", async ({ page })
   await expect(page.getByRole("button", { name: /Dishonored/ })).toBeVisible();
 });
 
+test("compare collections follows sidebar order and opens game details", async ({ page }) => {
+  await page.goto("/");
+
+  await page.getByRole("button", { name: /RPG/ }).click({ button: "right" });
+  await page.getByRole("button", { name: /Compare/ }).click();
+
+  const compare = page.locator(".fixed.inset-0").filter({
+    has: page.getByRole("heading", { name: "Compare Collections" }),
+  });
+  await expect(compare).toBeVisible();
+
+  await compare.getByRole("button", { name: /Collection B:/ }).click();
+  const options = page.getByRole("option");
+  await expect(options.nth(0)).toContainText("Favorites (2)");
+  await expect(options.nth(1)).toContainText("RPG (4)");
+  await page.keyboard.press("Escape");
+
+  await compare.getByRole("button", { name: /Open details for Disco Elysium/ }).click();
+  await expect(compare).toBeHidden();
+
+  const details = page.locator(".fixed.inset-0").filter({
+    has: page.getByRole("heading", { name: "Disco Elysium - The Final Cut" }),
+  });
+  await expect(details).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+});
+
 test("play history shows tracked deltas instead of lifetime playtime", async ({ page }) => {
   await page.goto("/");
 

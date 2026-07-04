@@ -91,6 +91,8 @@
   "collectionCompare.newCategory": "结果分类",
   "collectionCompare.selectGames": "选择游戏",
   "collectionCompare.create": "创建分类",
+  "collectionCompare.openDetails": "打开详情",
+  "collectionCompare.openDetailsFor": "打开 {name} 的详情",
   "filter.title": "筛选",
   "filter.hours": "时长：",
   "filter.unplayedOnly": "仅未游玩",

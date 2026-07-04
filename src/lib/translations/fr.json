@@ -91,6 +91,8 @@
   "collectionCompare.newCategory": "Catégorie résultat",
   "collectionCompare.selectGames": "Sélectionner les jeux",
   "collectionCompare.create": "Créer la catégorie",
+  "collectionCompare.openDetails": "Ouvrir les détails",
+  "collectionCompare.openDetailsFor": "Ouvrir les détails de {name}",
   "filter.title": "Filtres",
   "filter.hours": "Heures :",
   "filter.unplayedOnly": "Non joués uniquement",
