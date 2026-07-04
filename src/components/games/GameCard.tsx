@@ -6,9 +6,11 @@ import { useTagsStore } from "../../stores/tagsStore";
 import { useFamilyStore } from "../../stores/familyStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import type { OwnedGame } from "../../lib/types";
-import { X, Clock, UsersThree } from "@phosphor-icons/react";
+import { Clock, UsersThree } from "@phosphor-icons/react";
 import { SteamImage } from "./SteamImage";
-import { categoryPillStyle, getCategoryColor } from "../../lib/categoryColors";
+import { getCategoryColor } from "../../lib/categoryColors";
+import { CategoryChip } from "../ui/CategoryChip";
+import { useT } from "../../lib/i18n";
 
 interface GameCardProps {
   game: OwnedGame;
@@ -25,11 +27,13 @@ export function GameCard({ game, onContextMenu, onDoubleClick, onIntent, onShift
   const clearSelection = useGameStore((s) => s.clearSelection);
   const collections = useCategoryStore((s) => s.collections);
   const categoryColors = useSettingsStore((s) => s.categoryColors ?? {});
+  const categoryChipStyle = useSettingsStore((s) => s.categoryChipStyle);
   const removeGameFromCategory = useCategoryStore((s) => s.removeGameFromCategory);
   const status = useStatusStore((s) => s.statuses[game.appid] ?? "none");
   const statusMeta = STATUS_META[status];
   const isFamilyShared = useFamilyStore((s) => s.isFamilyShared(game.appid));
   const lastClickTime = useRef(0);
+  const t = useT();
 
   const categories = useMemo(
     () => collections.filter((c) => c.added.includes(game.appid) && !c.is_dynamic),
@@ -136,27 +140,22 @@ export function GameCard({ game, onContextMenu, onDoubleClick, onIntent, onShift
 
         {/* Category chips */}
         <div
-          className="mt-1.5 flex items-center gap-1 overflow-hidden h-[18px]"
+          className="mt-1.5 flex items-center gap-1 overflow-hidden"
+          style={{ height: categoryChipStyle.height }}
           title={categories.length > 2 ? allCatNames : undefined}
         >
           {categories.slice(0, 2).map((cat) => (
-            <span
+            <CategoryChip
               key={cat.key}
-              title={String(cat.name ?? "")}
-              style={categoryPillStyle(getCategoryColor(cat, categoryColors))}
-              className="group/badge inline-flex shrink-0 items-center rounded-md border border-transparent bg-repressurizer-accent/10 px-1.5 py-0.5 text-[10px] text-repressurizer-accent/80"
-            >
-              <span className="max-w-[80px] truncate">{String(cat.name ?? "")}</span>
-              <button
-                onClick={(e) => {
+              name={String(cat.name ?? "")}
+              color={getCategoryColor(cat, categoryColors)}
+              settings={categoryChipStyle}
+              removeLabel={t("statusbar.removeFrom", { name: String(cat.name ?? "") })}
+              onRemove={(e) => {
                   e.stopPropagation();
                   removeGameFromCategory(cat.key, game.appid);
-                }}
-                className="ml-0.5 hidden text-repressurizer-danger group-hover/badge:inline"
-              >
-                <X size={8} weight="bold" />
-              </button>
-            </span>
+              }}
+            />
           ))}
           {categories.length > 2 && (
             <span className="shrink-0 text-[10px] text-repressurizer-text-faint font-mono" title={allCatNames}>

@@ -1,3 +1,4 @@
+pub mod app_channel;
 pub mod automation;
 pub mod categorizer;
 pub mod hltb;
@@ -464,7 +465,7 @@ fn notify_tray_message(app: &tauri::AppHandle, level: &str, message: &str, ui_vi
     if let Err(error) = app
         .notification()
         .builder()
-        .title("Repressurizer")
+        .title(app_channel::app_display_name())
         .body(message)
         .show()
     {
@@ -669,7 +670,11 @@ async fn post_json_export(input: PostJsonExportInput) -> Result<HttpPublishResul
     }
 
     let client = http_policy::client_builder_for_scope(http_policy::HttpProxyScope::Automation)?
-        .user_agent(format!("Repressurizer/{}", env!("CARGO_PKG_VERSION")))
+        .user_agent(format!(
+            "{}/{}",
+            app_channel::app_display_name(),
+            app_channel::app_version()
+        ))
         .timeout(std::time::Duration::from_secs(30))
         .build()
         .map_err(|e| e.to_string())?;
@@ -789,8 +794,8 @@ fn export_diagnostics(
     let payload = serde_json::json!({
         "generated_at": chrono::Utc::now().to_rfc3339(),
         "app": {
-            "name": "Repressurizer",
-            "version": env!("CARGO_PKG_VERSION"),
+            "name": app_channel::app_display_name(),
+            "version": app_channel::app_version(),
         },
         "system": {
             "os": std::env::consts::OS,
@@ -942,6 +947,11 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
+            if !app_channel::claim_cross_channel_instance() {
+                app.handle().exit(0);
+                return Ok(());
+            }
+
             #[cfg(desktop)]
             {
                 use tauri_plugin_autostart::MacosLauncher;
@@ -956,7 +966,9 @@ pub fn run() {
             use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
             use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 
-            let show = MenuItem::with_id(app, "show", "Open Repressurizer", true, None::<&str>)?;
+            let app_name = app_channel::app_display_name();
+            let show =
+                MenuItem::with_id(app, "show", format!("Open {app_name}"), true, None::<&str>)?;
             let settings = MenuItem::with_id(app, "settings", "Open Settings", true, None::<&str>)?;
             let check_updates = MenuItem::with_id(
                 app,
@@ -1021,7 +1033,8 @@ pub fn run() {
             let separator_two = PredefinedMenuItem::separator(app)?;
             let separator_three = PredefinedMenuItem::separator(app)?;
             let separator_four = PredefinedMenuItem::separator(app)?;
-            let quit = MenuItem::with_id(app, "quit", "Quit Repressurizer", true, None::<&str>)?;
+            let quit =
+                MenuItem::with_id(app, "quit", format!("Quit {app_name}"), true, None::<&str>)?;
             let menu = Menu::with_items(
                 app,
                 &[
@@ -1048,7 +1061,7 @@ pub fn run() {
             TrayIconBuilder::new()
                 .icon(app.default_window_icon().cloned().unwrap())
                 .menu(&menu)
-                .tooltip("Repressurizer - Steam Library Manager")
+                .tooltip(format!("{app_name} - Steam Library Manager"))
                 .on_menu_event(move |app, event| match event.id.as_ref() {
                     "show" => {
                         show_main_window(app);

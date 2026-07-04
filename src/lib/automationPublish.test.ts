@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { automationPublishDue } from "./automationPublish";
+import { DEFAULT_CATEGORY_CHIP_STYLE } from "./categoryChipStyles";
 import type { AppSettings } from "./types";
 
 const settings: AppSettings = {
@@ -55,6 +56,7 @@ const settings: AppSettings = {
   currency: "EUR",
   onboardingComplete: true,
   categoryColors: {},
+  categoryChipStyle: DEFAULT_CATEGORY_CHIP_STYLE,
   minimizeToTray: false,
   trayCloseChoiceMade: false,
   startOnLogin: false,

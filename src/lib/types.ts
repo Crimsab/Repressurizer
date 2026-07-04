@@ -376,6 +376,26 @@ export interface AutomationPublishPayloadSettings {
   includeOwnership: boolean;
 }
 
+export type CategoryChipPresetId =
+  | "softOutlineCompact"
+  | "solidReadable"
+  | "squareOutline"
+  | "roundCapsule"
+  | "dotLabel";
+
+export interface CategoryChipStyleSettings {
+  preset: CategoryChipPresetId;
+  fillOpacity: number;
+  borderOpacity: number;
+  borderWidth: number;
+  radius: number;
+  fontSize: number;
+  height: number;
+  maxWidth: number;
+  coloredText: boolean;
+  showRemoveButton: boolean;
+}
+
 export interface AppSettings {
   steamPath: string;
   steamId3: string;
@@ -391,6 +411,7 @@ export interface AppSettings {
   sidebarWidth: number;
   theme: AppTheme;
   language: AppLocale;
+  categoryChipStyle: CategoryChipStyleSettings;
   // Visibility
   showSmartLists: boolean;
   showEmptyLists: boolean;

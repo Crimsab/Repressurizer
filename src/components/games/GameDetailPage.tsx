@@ -26,7 +26,8 @@ import { detailsPriceMatchesCurrency, detailsWithPriceForCurrency } from "../../
 import { SteamImage } from "./SteamImage";
 import { SelectMenu } from "../ui/SelectMenu";
 import { useHltbStore } from "../../stores/hltbStore";
-import { categoryPillStyle, getCategoryColor } from "../../lib/categoryColors";
+import { getCategoryColor } from "../../lib/categoryColors";
+import { CategoryChip } from "../ui/CategoryChip";
 import type {
   OwnedGame,
   GameDetails,
@@ -636,6 +637,7 @@ function InfoTab({
 }) {
   const t = useT();
   const categoryColors = useSettingsStore((s) => s.categoryColors ?? {});
+  const categoryChipStyle = useSettingsStore((s) => s.categoryChipStyle);
   const gameCatKeys = new Set(gameCategories.map((c) => c.key));
   const note = useNotesStore((s) => s.notes[game.appid] ?? "");
   const setNote = useNotesStore((s) => s.setNote);
@@ -938,23 +940,24 @@ function InfoTab({
           {editableCollections.map((col) => {
             const inCat = gameCatKeys.has(col.key);
             return (
-              <button
-                key={col.key}
-                onClick={() =>
-                  inCat
-                    ? onRemoveFromCategory(col.key)
-                    : onAddToCategory(col.key)
-                }
-                style={inCat ? categoryPillStyle(getCategoryColor(col, categoryColors)) : undefined}
-                className={`btn-press inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs transition-all ${
-                  inCat
-                    ? "border-repressurizer-accent/40 bg-repressurizer-accent/10 text-repressurizer-accent"
-                    : "border-repressurizer-border text-repressurizer-text-muted hover:border-repressurizer-text-faint hover:text-repressurizer-text"
-                }`}
-              >
-                {inCat && <Check size={11} weight="bold" />}
-                {String(col.name ?? "")}
-              </button>
+              inCat ? (
+                <CategoryChip
+                  key={col.key}
+                  name={String(col.name ?? "")}
+                  color={getCategoryColor(col, categoryColors)}
+                  settings={categoryChipStyle}
+                  leading={<Check size={11} weight="bold" />}
+                  onClick={() => onRemoveFromCategory(col.key)}
+                />
+              ) : (
+                <button
+                  key={col.key}
+                  onClick={() => onAddToCategory(col.key)}
+                  className="btn-press inline-flex items-center gap-1 rounded-lg border border-repressurizer-border px-3 py-1.5 text-xs text-repressurizer-text-muted transition-all hover:border-repressurizer-text-faint hover:text-repressurizer-text"
+                >
+                  {String(col.name ?? "")}
+                </button>
+              )
             );
           })}
         </div>

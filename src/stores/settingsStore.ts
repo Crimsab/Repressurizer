@@ -11,6 +11,7 @@ import type {
 } from "../lib/types";
 import { isHltbTimeMode } from "../lib/hltb";
 import { normalizeCategoryColors } from "../lib/categoryColors";
+import { DEFAULT_CATEGORY_CHIP_STYLE, normalizeCategoryChipStyle } from "../lib/categoryChipStyles";
 import { DEFAULT_DETAILS_CACHE_MAX_AGE_DAYS } from "../lib/detailsCache";
 
 interface SettingsState extends AppSettings {
@@ -38,6 +39,7 @@ const defaults: AppSettings = {
   sidebarWidth: 224,
   theme: "dark",
   language: detectSystemLanguage(),
+  categoryChipStyle: DEFAULT_CATEGORY_CHIP_STYLE,
   showSmartLists: true,
   showEmptyLists: false,
   showNowPlaying: true,
@@ -195,6 +197,7 @@ function normalizeSettings(raw: Partial<AppSettings>): AppSettings {
     achievementsBatchDelayMs: clampInteger(raw.achievementsBatchDelayMs, defaults.achievementsBatchDelayMs, 100, 30_000),
     hltbTimeMode: isHltbTimeMode(raw.hltbTimeMode) ? raw.hltbTimeMode as HltbTimeMode : defaults.hltbTimeMode,
     categoryColors: normalizeCategoryColors(raw.categoryColors),
+    categoryChipStyle: normalizeCategoryChipStyle(raw.categoryChipStyle),
     automationPublishPayload: normalizeAutomationPublishPayload(raw.automationPublishPayload),
     proxySettings: {
       ...defaults.proxySettings,

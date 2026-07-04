@@ -1,0 +1,26 @@
+{
+  "productName": "Repressurizer Preview",
+  "identifier": "com.repressurizer.preview",
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "create": false,
+        "title": "Repressurizer Preview - Steam Library Manager",
+        "width": 1280,
+        "height": 800,
+        "resizable": true,
+        "fullscreen": false,
+        "minWidth": 900,
+        "minHeight": 600
+      }
+    ]
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://github.com/Crimsab/Repressurizer/releases/download/preview/latest-preview.json"
+      ]
+    }
+  }
+}

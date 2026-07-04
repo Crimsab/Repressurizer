@@ -5,5 +5,6 @@ fn main() {
         std::process::exit(exit_code);
     }
 
+    repressurizer_lib::app_channel::delay_preview_autostart_if_needed();
     repressurizer_lib::run()
 }

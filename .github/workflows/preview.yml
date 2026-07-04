@@ -1,0 +1,170 @@
+name: Preview
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: preview-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    name: Windows preview installer
+    runs-on: windows-2025-vs2026
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        env:
+          GIT_CONFIG_COUNT: 1
+          GIT_CONFIG_KEY_0: init.defaultBranch
+          GIT_CONFIG_VALUE_0: main
+        with:
+          fetch-depth: 0
+
+      - name: Read preview version
+        id: version
+        shell: pwsh
+        run: |
+          $previewNumber = "${{ github.run_number }}"
+          $previewVersion = "0.0.0-preview.$previewNumber"
+          $previewLabel = "Preview.$previewNumber"
+          $shortSha = "${{ github.sha }}".Substring(0, 7)
+          "version=$previewVersion" >> $env:GITHUB_OUTPUT
+          "number=$previewNumber" >> $env:GITHUB_OUTPUT
+          "label=$previewLabel" >> $env:GITHUB_OUTPUT
+          "short_sha=$shortSha" >> $env:GITHUB_OUTPUT
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Restore Bun cache
+        uses: actions/cache/restore@v5
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install NSIS
+        run: choco install nsis -y --no-progress
+
+      - name: Restore Rust cache
+        uses: actions/cache/restore@v5
+        with:
+          path: |
+            ~/.cargo/git
+            ~/.cargo/registry
+          key: ${{ runner.os }}-windows-preview-rust-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-windows-preview-rust-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck
+        run: bun run check
+
+      - name: Build preview bundles
+        env:
+          GITHUB_RUN_NUMBER: ${{ github.run_number }}
+          REPRESSURIZER_PREVIEW_NUMBER: ${{ steps.version.outputs.number }}
+          REPRESSURIZER_PREVIEW_VERSION: ${{ steps.version.outputs.version }}
+          REPRESSURIZER_PREVIEW_LABEL: ${{ steps.version.outputs.label }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: bun run build:preview
+
+      - name: Collect preview artifacts
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path artifacts
+          $label = "${{ steps.version.outputs.label }}"
+          $shortSha = "${{ steps.version.outputs.short_sha }}"
+          $installer = Get-ChildItem src-tauri\target\release\bundle\nsis -Filter "*.exe" | Select-Object -First 1
+          if (-not $installer) {
+            throw "Could not find preview NSIS installer"
+          }
+
+          $signaturePath = "$($installer.FullName).sig"
+          if (-not (Test-Path $signaturePath)) {
+            throw "Could not find updater signature for $($installer.Name)"
+          }
+
+          $portableName = "Repressurizer-$label-portable.exe"
+          $zipName = "Repressurizer-$label-portable-windows-x64.zip"
+          $installerName = "Repressurizer-$label-windows-x64-setup.exe"
+
+          Copy-Item src-tauri\target\release\repressurizer.exe "artifacts\$portableName"
+          Compress-Archive -Path "artifacts\$portableName" -DestinationPath "artifacts\$zipName" -Force
+          Copy-Item $installer.FullName "artifacts\$installerName"
+          Copy-Item $signaturePath "artifacts\$installerName.sig"
+          Get-ChildItem artifacts | ForEach-Object { "$($_.Name) $($_.Length) bytes" }
+
+      - name: Create preview updater manifest
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem artifacts -Filter "Repressurizer-${{ steps.version.outputs.label }}-windows-x64-setup.exe" | Select-Object -First 1
+          if (-not $installer) {
+            throw "Could not find preview NSIS installer"
+          }
+
+          $signaturePath = "$($installer.FullName).sig"
+          if (-not (Test-Path $signaturePath)) {
+            throw "Could not find updater signature for $($installer.Name)"
+          }
+
+          $assetName = [System.Uri]::EscapeDataString($installer.Name)
+          $assetUrl = "https://github.com/${{ github.repository }}/releases/download/preview/$assetName"
+          $manifest = [ordered]@{
+            version = "${{ steps.version.outputs.version }}"
+            notes = "Repressurizer ${{ steps.version.outputs.label }} from ${{ steps.version.outputs.short_sha }}."
+            pub_date = (Get-Date).ToUniversalTime().ToString("o")
+            platforms = [ordered]@{
+              "windows-x86_64" = [ordered]@{
+                signature = (Get-Content $signaturePath -Raw).Trim()
+                url = $assetUrl
+              }
+            }
+          }
+
+          $manifest | ConvertTo-Json -Depth 8 | Set-Content -Path artifacts\latest-preview.json -Encoding utf8
+
+      - name: Publish preview release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git tag -f preview "${{ github.sha }}"
+          git push origin preview --force
+
+          $notes = "Repressurizer ${{ steps.version.outputs.label }} from ${{ steps.version.outputs.short_sha }} (${{ github.sha }})."
+          $releaseExists = $true
+          gh release view preview *> $null
+          if ($LASTEXITCODE -ne 0) {
+            $releaseExists = $false
+          }
+
+          if ($releaseExists) {
+            gh release edit preview --title "Repressurizer ${{ steps.version.outputs.label }}" --notes "$notes" --prerelease
+            $assets = gh release view preview --json assets --jq '.assets[].name'
+            foreach ($asset in $assets) {
+              if ($asset) {
+                gh release delete-asset preview "$asset" --yes
+              }
+            }
+          } else {
+            gh release create preview --title "Repressurizer ${{ steps.version.outputs.label }}" --notes "$notes" --prerelease --latest=false
+          }
+          gh release upload preview artifacts/* --clobber
