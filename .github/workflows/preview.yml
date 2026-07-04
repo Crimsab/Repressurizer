@@ -31,8 +31,33 @@ jobs:
       - name: Read preview version
         id: version
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          $previewNumber = "${{ github.run_number }}"
+          $ErrorActionPreference = "Stop"
+
+          $previousPreviewSha = ""
+          git fetch --force origin "refs/tags/preview:refs/tags/preview" 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            $previousPreviewSha = (git rev-parse "refs/tags/preview^{commit}").Trim()
+          } else {
+            $global:LASTEXITCODE = 0
+          }
+
+          $releaseBody = ""
+          gh release view preview --json body --jq ".body" *> release-body.txt
+          if ($LASTEXITCODE -eq 0) {
+            $releaseBody = Get-Content release-body.txt -Raw
+          } else {
+            $global:LASTEXITCODE = 0
+          }
+
+          $previousNumber = 0
+          if ($releaseBody -match '<!--\s*preview-number:\s*(\d+)\s*-->') {
+            $previousNumber = [int]$Matches[1]
+          }
+
+          $previewNumber = $previousNumber + 1
           $previewVersion = "0.0.0-preview.$previewNumber"
           $previewLabel = "Preview.$previewNumber"
           $shortSha = "${{ github.sha }}".Substring(0, 7)
@@ -40,6 +65,7 @@ jobs:
           "number=$previewNumber" >> $env:GITHUB_OUTPUT
           "label=$previewLabel" >> $env:GITHUB_OUTPUT
           "short_sha=$shortSha" >> $env:GITHUB_OUTPUT
+          "previous_sha=$previousPreviewSha" >> $env:GITHUB_OUTPUT
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -76,9 +102,22 @@ jobs:
       - name: Typecheck
         run: bun run check
 
+      - name: Create preview release notes
+        shell: pwsh
+        run: |
+          bun scripts/preview-release-notes.ts `
+            --repo "${{ github.repository }}" `
+            --label "${{ steps.version.outputs.label }}" `
+            --from "${{ steps.version.outputs.previous_sha }}" `
+            --to "${{ github.sha }}" `
+            --out preview-release-notes.md
+
+          $notes = Get-Content preview-release-notes.md -Raw
+          $body = "<!-- preview-number: ${{ steps.version.outputs.number }} -->`n$notes"
+          Set-Content -Path preview-release-body.md -Value $body -Encoding utf8
+
       - name: Build preview bundles
         env:
-          GITHUB_RUN_NUMBER: ${{ github.run_number }}
           REPRESSURIZER_PREVIEW_NUMBER: ${{ steps.version.outputs.number }}
           REPRESSURIZER_PREVIEW_VERSION: ${{ steps.version.outputs.version }}
           REPRESSURIZER_PREVIEW_LABEL: ${{ steps.version.outputs.label }}
@@ -127,9 +166,10 @@ jobs:
 
           $assetName = [System.Uri]::EscapeDataString($installer.Name)
           $assetUrl = "https://github.com/${{ github.repository }}/releases/download/preview/$assetName"
+          $notes = (Get-Content preview-release-notes.md -Raw).Trim()
           $manifest = [ordered]@{
             version = "${{ steps.version.outputs.version }}"
-            notes = "Repressurizer ${{ steps.version.outputs.label }} from ${{ steps.version.outputs.short_sha }}."
+            notes = $notes
             pub_date = (Get-Date).ToUniversalTime().ToString("o")
             platforms = [ordered]@{
               "windows-x86_64" = [ordered]@{
@@ -149,7 +189,6 @@ jobs:
           git tag -f preview "${{ github.sha }}"
           git push origin preview --force
 
-          $notes = "Repressurizer ${{ steps.version.outputs.label }} from ${{ steps.version.outputs.short_sha }} (${{ github.sha }})."
           $releaseExists = $true
           gh release view preview *> $null
           if ($LASTEXITCODE -ne 0) {
@@ -157,7 +196,7 @@ jobs:
           }
 
           if ($releaseExists) {
-            gh release edit preview --title "Repressurizer ${{ steps.version.outputs.label }}" --notes "$notes" --prerelease
+            gh release edit preview --title "Repressurizer ${{ steps.version.outputs.label }}" --notes-file preview-release-body.md --prerelease
             $assets = gh release view preview --json assets --jq '.assets[].name'
             foreach ($asset in $assets) {
               if ($asset) {
@@ -165,6 +204,6 @@ jobs:
               }
             }
           } else {
-            gh release create preview --title "Repressurizer ${{ steps.version.outputs.label }}" --notes "$notes" --prerelease --latest=false
+            gh release create preview --title "Repressurizer ${{ steps.version.outputs.label }}" --notes-file preview-release-body.md --prerelease --latest=false
           }
           gh release upload preview artifacts/* --clobber

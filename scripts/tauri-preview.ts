@@ -9,7 +9,7 @@ if (!["build", "dev"].includes(command)) {
 }
 const extraArgs = Bun.argv.slice(3);
 
-const previewNumber = Bun.env.REPRESSURIZER_PREVIEW_NUMBER ?? Bun.env.GITHUB_RUN_NUMBER ?? "0";
+const previewNumber = Bun.env.REPRESSURIZER_PREVIEW_NUMBER ?? "1";
 const previewVersion =
   Bun.env.REPRESSURIZER_PREVIEW_VERSION ??
   `0.0.0-preview.${previewNumber}`;
