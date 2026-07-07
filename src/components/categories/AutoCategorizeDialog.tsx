@@ -466,9 +466,6 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
 
   // Local step — "fetch" isn't persisted; "done" resets to "choose" on reopen
   const [step, setStep] = useState<Step>(() => {
-    if (useBackgroundFetchStore.getState().detailsRunning) return "fetch";
-    if (useBackgroundFetchStore.getState().releaseDatesRunning) return "fetch";
-    if (useBackgroundFetchStore.getState().ratingsRunning) return "fetch";
     if (persist.lastStep === "done") return "choose";
     return persist.lastStep;
   });
@@ -493,17 +490,8 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
   const [loadedPresetId, setLoadedPresetId] = useState<string | null>(null);
 
   // Whether we're waiting for a details fetch to complete before running categorizer
-  const [waitingForFetch, setWaitingForFetch] = useState(() => {
-    const background = useBackgroundFetchStore.getState();
-    return background.detailsRunning || background.ratingsRunning || background.releaseDatesRunning;
-  });
-  const [fetchKind, setFetchKind] = useState<FetchKind | null>(() => {
-    const background = useBackgroundFetchStore.getState();
-    if (background.ratingsRunning) return "ratings";
-    if (background.releaseDatesRunning) return "releaseDates";
-    if (background.detailsRunning) return "details";
-    return null;
-  });
+  const [waitingForFetch, setWaitingForFetch] = useState(false);
+  const [fetchKind, setFetchKind] = useState<FetchKind | null>(null);
   const [pendingPresetRun, setPendingPresetRun] = useState<AutoCategorizePreset[] | null>(null);
 
   const [fetchError, setFetchError] = useState("");

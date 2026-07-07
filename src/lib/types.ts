@@ -315,6 +315,7 @@ export interface SamAchievementActionResult {
 export type AppTheme = "dark" | "dim" | "light";
 export type AppLocale = string;
 export type AppStartupMode = "tray" | "window";
+export type LibraryRefreshCacheMode = "none" | "basic" | "full";
 export type AutomationPublishLogStatus = "success" | "failed" | "skipped";
 export type AutomationPublishCategoryMode = "all" | "custom";
 export type ProxyType = "http" | "https" | "socks5";
@@ -433,6 +434,7 @@ export interface AppSettings {
   hltbTimeMode: HltbTimeMode;
   autoFetchDetailsOnRefresh: boolean;
   autoFetchHltbOnRefresh: boolean;
+  libraryRefreshCacheMode: LibraryRefreshCacheMode;
   proxySettings: ProxySettings;
   // Steam Tools lab
   steamToolsEnabled: boolean;

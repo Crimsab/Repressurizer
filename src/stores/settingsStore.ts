@@ -5,6 +5,7 @@ import type {
   AppTheme,
   AutomationPublishPayloadSettings,
   HltbTimeMode,
+  LibraryRefreshCacheMode,
   ProxyProfile,
   ProxyRotationMode,
   ProxyType,
@@ -59,6 +60,7 @@ const defaults: AppSettings = {
   hltbTimeMode: "main_story",
   autoFetchDetailsOnRefresh: true,
   autoFetchHltbOnRefresh: true,
+  libraryRefreshCacheMode: "full",
   proxySettings: {
     enabled: false,
     mode: "roundRobin",
@@ -119,6 +121,7 @@ const defaults: AppSettings = {
 
 const PROXY_TYPES: ProxyType[] = ["http", "https", "socks5"];
 const PROXY_MODES: ProxyRotationMode[] = ["fixed", "roundRobin", "batch", "random"];
+const LIBRARY_REFRESH_CACHE_MODES: LibraryRefreshCacheMode[] = ["none", "basic", "full"];
 
 function clampInteger(value: unknown, fallback: number, min: number, max: number): number {
   const n = Math.trunc(Number(value));
@@ -172,6 +175,14 @@ function normalizeAutomationPublishPayload(raw: Partial<AutomationPublishPayload
   };
 }
 
+function normalizeLibraryRefreshCacheMode(raw: Partial<AppSettings>): LibraryRefreshCacheMode {
+  if (LIBRARY_REFRESH_CACHE_MODES.includes(raw.libraryRefreshCacheMode as LibraryRefreshCacheMode)) {
+    return raw.libraryRefreshCacheMode as LibraryRefreshCacheMode;
+  }
+  if (raw.autoFetchDetailsOnRefresh === false && raw.autoFetchHltbOnRefresh === false) return "none";
+  return defaults.libraryRefreshCacheMode;
+}
+
 function loadFromStorage(): AppSettings {
   try {
     const raw = localStorage.getItem("repressurizer-settings");
@@ -196,6 +207,7 @@ function normalizeSettings(raw: Partial<AppSettings>): AppSettings {
     hltbBatchDelayMs: clampInteger(raw.hltbBatchDelayMs, defaults.hltbBatchDelayMs, 100, 30_000),
     achievementsBatchDelayMs: clampInteger(raw.achievementsBatchDelayMs, defaults.achievementsBatchDelayMs, 100, 30_000),
     hltbTimeMode: isHltbTimeMode(raw.hltbTimeMode) ? raw.hltbTimeMode as HltbTimeMode : defaults.hltbTimeMode,
+    libraryRefreshCacheMode: normalizeLibraryRefreshCacheMode(raw),
     categoryColors: normalizeCategoryColors(raw.categoryColors),
     categoryChipStyle: normalizeCategoryChipStyle(raw.categoryChipStyle),
     automationPublishPayload: normalizeAutomationPublishPayload(raw.automationPublishPayload),

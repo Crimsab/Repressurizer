@@ -83,6 +83,7 @@ import type {
   DepressurizerDatabaseImport,
   DepressurizerImportedFilter,
   DepressurizerProfileImport,
+  LibraryRefreshCacheMode,
   OwnedGame,
   ProxyProfile,
   ProxyRotationMode,
@@ -171,6 +172,27 @@ interface DepressurizerDatabaseImportOptions extends DepressurizerDatabaseMergeO
 
 const LIBRARY_REFRESH_INTERVAL_OPTIONS = [15, 30, 60, 180, 360] as const;
 const UPDATE_CHECK_INTERVAL_OPTIONS = [6, 12, 24, 72, 168] as const;
+const LIBRARY_REFRESH_CACHE_OPTIONS: Array<{
+  value: LibraryRefreshCacheMode;
+  labelKey: "settings.libraryRefreshCacheMode.none" | "settings.libraryRefreshCacheMode.basic" | "settings.libraryRefreshCacheMode.full";
+  descriptionKey: "settings.libraryRefreshCacheMode.none.desc" | "settings.libraryRefreshCacheMode.basic.desc" | "settings.libraryRefreshCacheMode.full.desc";
+}> = [
+  {
+    value: "full",
+    labelKey: "settings.libraryRefreshCacheMode.full",
+    descriptionKey: "settings.libraryRefreshCacheMode.full.desc",
+  },
+  {
+    value: "basic",
+    labelKey: "settings.libraryRefreshCacheMode.basic",
+    descriptionKey: "settings.libraryRefreshCacheMode.basic.desc",
+  },
+  {
+    value: "none",
+    labelKey: "settings.libraryRefreshCacheMode.none",
+    descriptionKey: "settings.libraryRefreshCacheMode.none.desc",
+  },
+];
 const CATEGORY_CHIP_FALLBACK_PREVIEW_SAMPLES = [
   { name: "Example", color: "#38BDF8" },
   { name: "Planning", color: "#EF4444" },
@@ -1040,8 +1062,9 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
           t("settings.steamRatingsCooldown"),
           t("settings.hltbBatchDelay"),
           t("settings.achievementsBatchDelay"),
-          t("settings.autoFetchDetailsOnRefresh"),
-          t("settings.autoFetchHltbOnRefresh"),
+          t("settings.libraryRefreshCacheMode"),
+          t("settings.libraryRefreshCacheMode.full"),
+          t("settings.libraryRefreshCacheMode.basic"),
           t("settings.proxyRouting"),
           t("settings.proxyRouting.desc"),
           t("settings.proxyRotationMode"),
@@ -1058,7 +1081,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
           t("settings.proxyBatch.title"),
           t("settings.proxy.test"),
           t("settings.proxy.add"),
-          "hltb achievements speed concurrency requests delay cooldown throttle batch details ratings reviews auto fetch refresh proxy proxies http https socks socks5 rotation round robin per request random fixed profile validator test host port username password scope steam store automation",
+          "hltb achievements speed concurrency requests delay cooldown throttle batch details ratings reviews auto fetch refresh prepare cache proxy proxies http https socks socks5 rotation round robin per request random fixed profile validator test host port username password scope steam store automation",
         ],
       },
       {
@@ -1774,24 +1797,45 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                       onChange={(achievementsBatchDelayMs) => settings.setSettings({ achievementsBatchDelayMs })}
                     />
                   </div>
-                  <label className="flex items-center justify-between gap-3 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-surface px-3 py-2">
-                    <span className="text-sm text-repressurizer-text">{t("settings.autoFetchDetailsOnRefresh")}</span>
-                    <input
-                      type="checkbox"
-                      checked={settings.autoFetchDetailsOnRefresh !== false}
-                      onChange={(e) => settings.setSettings({ autoFetchDetailsOnRefresh: e.target.checked })}
-                      className="h-4 w-4 accent-repressurizer-accent"
-                    />
-                  </label>
-                  <label className="flex items-center justify-between gap-3 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-surface px-3 py-2">
-                    <span className="text-sm text-repressurizer-text">{t("settings.autoFetchHltbOnRefresh")}</span>
-                    <input
-                      type="checkbox"
-                      checked={settings.autoFetchHltbOnRefresh !== false}
-                      onChange={(e) => settings.setSettings({ autoFetchHltbOnRefresh: e.target.checked })}
-                      className="h-4 w-4 accent-repressurizer-accent"
-                    />
-                  </label>
+                  <div className="rounded-lg border border-repressurizer-border-subtle bg-repressurizer-surface px-3 py-3">
+                    <div className="mb-3 flex items-start gap-3">
+                      <CloudArrowDown size={15} weight="duotone" className="mt-0.5 shrink-0 text-repressurizer-accent" />
+                      <div className="min-w-0">
+                        <p className="text-sm text-repressurizer-text">{t("settings.libraryRefreshCacheMode")}</p>
+                        <p className="mt-0.5 text-xs leading-relaxed text-repressurizer-text-faint">
+                          {t("settings.libraryRefreshCacheMode.desc")}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-3">
+                      {LIBRARY_REFRESH_CACHE_OPTIONS.map((option) => {
+                        const active = (settings.libraryRefreshCacheMode ?? "full") === option.value;
+                        return (
+                          <button
+                            key={option.value}
+                            type="button"
+                            onClick={() => settings.setSettings({
+                              libraryRefreshCacheMode: option.value,
+                              autoFetchDetailsOnRefresh: option.value !== "none",
+                              autoFetchHltbOnRefresh: option.value !== "none",
+                            })}
+                            className={`btn-press rounded-lg border px-3 py-2 text-left transition-colors ${
+                              active
+                                ? "border-repressurizer-accent bg-repressurizer-accent/10"
+                                : "border-repressurizer-border-subtle bg-repressurizer-bg hover:border-repressurizer-border"
+                            }`}
+                          >
+                            <span className={`block text-xs font-medium ${active ? "text-repressurizer-accent" : "text-repressurizer-text"}`}>
+                              {t(option.labelKey)}
+                            </span>
+                            <span className="mt-1 block text-[10px] leading-snug text-repressurizer-text-faint">
+                              {t(option.descriptionKey)}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
                 <div className="rounded-xl bg-repressurizer-bg border border-repressurizer-border-subtle px-4 py-3 space-y-3">
                   <div className="flex items-center justify-between gap-3">

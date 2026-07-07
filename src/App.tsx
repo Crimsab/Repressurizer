@@ -7,7 +7,6 @@ import { useSettingsStore, applyAccentColor, applyTheme } from "./stores/setting
 import { useGameStore } from "./stores/gameStore";
 import { useCategoryStore } from "./stores/categoryStore";
 import { useHltbStore } from "./stores/hltbStore";
-import { useBackgroundFetchStore } from "./stores/backgroundFetchStore";
 import { useFailedGamesStore } from "./stores/failedGamesStore";
 import { useFriendsStore } from "./stores/friendsStore";
 import { useWishlistStore } from "./stores/wishlistStore";
@@ -32,6 +31,7 @@ import {
   publishAutomationSnapshot,
 } from "./lib/automationPublish";
 import { appLog } from "./lib/appLog";
+import { startCachePreparation } from "./lib/cachePreparation";
 import { notifyDesktop } from "./lib/desktopNotifications";
 import { useT } from "./lib/i18n";
 import { Header } from "./components/layout/Header";
@@ -401,19 +401,11 @@ function AppContent() {
         createManualBackup(currentSettings.steamPath, currentSettings.steamId3, "Auto-backup on startup").catch(() => {});
       }
 
-      const { startDetailsFetch, startHltbFetch } = useBackgroundFetchStore.getState();
-      const cachedHltb = useHltbStore.getState().data;
-
-      if (currentSettings.apiKey && currentSettings.autoFetchDetailsOnRefresh !== false) {
-        const missingDetails = mergedGames.map((g) => g.appid).filter((id) => !cachedDetails[id]);
-        startDetailsFetch(missingDetails);
-      }
-
-      if (currentSettings.autoFetchHltbOnRefresh !== false) {
-        const missingHltb = mergedGames
-          .filter((g) => !cachedHltb[g.appid])
-          .map((g) => ({ appId: g.appid, name: g.name }));
-        startHltbFetch(missingHltb);
+      const cacheMode = currentSettings.libraryRefreshCacheMode ?? "full";
+      if (cacheMode !== "none") {
+        void startCachePreparation(cacheMode).catch((error) => {
+          console.warn("[Library] Cache preparation after refresh failed:", error);
+        });
       }
 
       if (notify) toast.getState().success("Steam library refreshed.");
@@ -652,13 +644,18 @@ function AppContent() {
       </Suspense>
     );
   }
-  if (reloading) return <LoadingScreen />;
+  if (reloading && gameCount === 0) return <LoadingScreen />;
   if (reloadError) return <ErrorScreen error={reloadError} onReset={() => settings.reset()} />;
 
   return (
     <>
       <div className="flex h-screen flex-col bg-repressurizer-bg text-repressurizer-text">
-        <Header />
+        <Header
+          refreshingLibrary={reloading}
+          onRefreshLibrary={() => {
+            void reloadLibraryRef.current(true).catch(() => {});
+          }}
+        />
         <div className="flex flex-1 overflow-hidden">
           <Sidebar />
           <main className="flex flex-1 flex-col overflow-hidden">

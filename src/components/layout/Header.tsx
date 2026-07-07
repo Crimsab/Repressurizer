@@ -34,6 +34,7 @@ import {
   CalendarBlank,
   CaretDown,
   Clock,
+  ArrowClockwise,
   Sparkle,
   Star,
   Hourglass,
@@ -42,6 +43,7 @@ import {
   Warning,
   ChartLineUp,
   CurrencyDollar,
+  Spinner,
 } from "@phosphor-icons/react";
 
 const loadSettingsPage = () => import("../settings/SettingsPage").then((m) => ({ default: m.SettingsPage }));
@@ -88,7 +90,12 @@ const SORT_OPTIONS: { value: SortBy; labelKey: TranslationKey; icon: React.React
   { value: "status",       labelKey: "sort.status",        icon: <Tag size={12} /> },
 ];
 
-export function Header() {
+interface HeaderProps {
+  refreshingLibrary: boolean;
+  onRefreshLibrary: () => void;
+}
+
+export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
   const searchQuery = useGameStore((s) => s.searchQuery);
   const setSearchQuery = useGameStore((s) => s.setSearchQuery);
   const viewMode = useGameStore((s) => s.viewMode);
@@ -368,6 +375,26 @@ export function Header() {
                 <Check size={14} weight="bold" />
                 {t("header.saved")}
               </>
+            )}
+          </button>
+
+          {/* Refresh Steam library */}
+          <button
+            type="button"
+            onClick={onRefreshLibrary}
+            disabled={refreshingLibrary}
+            title={t("toolbar.refreshLibrary")}
+            aria-label={t("toolbar.refreshLibrary")}
+            className={`btn-press flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${
+              refreshingLibrary
+                ? "bg-repressurizer-accent/10 text-repressurizer-accent"
+                : "text-repressurizer-text-muted hover:bg-repressurizer-surface-hover hover:text-white"
+            } disabled:cursor-wait`}
+          >
+            {refreshingLibrary ? (
+              <Spinner size={16} className="animate-spin" />
+            ) : (
+              <ArrowClockwise size={16} />
             )}
           </button>
 

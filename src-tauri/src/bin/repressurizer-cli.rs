@@ -675,6 +675,7 @@ fn settings_network_summary(settings: &Value) -> Value {
             "achievementsBatchDelayMs": setting_u64_default(settings, "achievementsBatchDelayMs", 300),
             "autoFetchDetailsOnRefresh": setting_bool_default(settings, "autoFetchDetailsOnRefresh", true),
             "autoFetchHltbOnRefresh": setting_bool_default(settings, "autoFetchHltbOnRefresh", true),
+            "libraryRefreshCacheMode": value_str_default(settings, "libraryRefreshCacheMode", "full"),
         },
         "proxy": {
             "enabled": value_bool_default(proxy_settings, "enabled", false),
@@ -868,6 +869,7 @@ mod tests {
             "achievementsBatchDelayMs": 650,
             "autoFetchDetailsOnRefresh": false,
             "autoFetchHltbOnRefresh": true,
+            "libraryRefreshCacheMode": "basic",
             "proxySettings": {
                 "enabled": true,
                 "mode": "batch",
@@ -912,6 +914,7 @@ mod tests {
         assert_eq!(summary["fetch"]["steamDetailsDelayMs"], 1500);
         assert_eq!(summary["fetch"]["steamRatingsCooldownMinutes"], 7);
         assert_eq!(summary["fetch"]["autoFetchDetailsOnRefresh"], false);
+        assert_eq!(summary["fetch"]["libraryRefreshCacheMode"], "basic");
         assert_eq!(summary["proxy"]["enabled"], true);
         assert_eq!(summary["proxy"]["mode"], "batch");
         assert_eq!(summary["proxy"]["activeProfileConfigured"], true);

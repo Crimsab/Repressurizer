@@ -36,6 +36,7 @@ const settings: AppSettings = {
   achievementsBatchDelayMs: 300,
   autoFetchDetailsOnRefresh: true,
   autoFetchHltbOnRefresh: true,
+  libraryRefreshCacheMode: "full",
   proxySettings: {
     enabled: false,
     mode: "roundRobin",

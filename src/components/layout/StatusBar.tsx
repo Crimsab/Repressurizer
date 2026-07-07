@@ -11,6 +11,7 @@ import { useSteamRatingsStore } from "../../stores/steamRatingsStore";
 import { detailsPriceNeedsCurrencyRefresh } from "../../lib/prices";
 import { storeReleaseDateNeedsRefresh } from "../../lib/releaseDates";
 import { steamRatingIdsNeedingFetch } from "../../lib/steamRatings";
+import { startCachePreparation } from "../../lib/cachePreparation";
 import { Circle, X, FolderSimplePlus, Spinner, FolderMinus, Robot } from "@phosphor-icons/react";
 import { useT, type TranslationKey } from "../../lib/i18n";
 
@@ -134,7 +135,6 @@ export function StatusBar() {
   const ignoredHltbFails = useHltbIgnoredStore((s) => s.fails);
   const ratings = useSteamRatingsStore((s) => s.ratings);
   const ratingsHydrated = useSteamRatingsStore((s) => s.hydrated);
-  const hydrateRatingsCache = useSteamRatingsStore((s) => s.hydrateCache);
 
   const detailsRunning = useBackgroundFetchStore((s) => s.detailsRunning);
   const detailsFetched = useBackgroundFetchStore((s) => s.detailsFetched);
@@ -146,7 +146,6 @@ export function StatusBar() {
   const detailsCoolingDown = useBackgroundFetchStore((s) => s.detailsCoolingDown);
   const detailsCooldownSecs = useBackgroundFetchStore((s) => s.detailsCooldownSecs);
   const stopDetailsFetch = useBackgroundFetchStore((s) => s.stopDetailsFetch);
-  const startDetailsFetch = useBackgroundFetchStore((s) => s.startDetailsFetch);
 
   const hltbRunning = useBackgroundFetchStore((s) => s.hltbRunning);
   const hltbFetched = useBackgroundFetchStore((s) => s.hltbFetched);
@@ -154,7 +153,6 @@ export function StatusBar() {
   const hltbCurrentName = useBackgroundFetchStore((s) => s.hltbCurrentName);
   const hltbRecentNames = useBackgroundFetchStore((s) => s.hltbRecentNames);
   const stopHltbFetch = useBackgroundFetchStore((s) => s.stopHltbFetch);
-  const startHltbFetch = useBackgroundFetchStore((s) => s.startHltbFetch);
 
   const achievementsRunning = useBackgroundFetchStore((s) => s.achievementsRunning);
   const achievementsFetched = useBackgroundFetchStore((s) => s.achievementsFetched);
@@ -173,7 +171,6 @@ export function StatusBar() {
   const ratingsCoolingDown = useBackgroundFetchStore((s) => s.ratingsCoolingDown);
   const ratingsCooldownSecs = useBackgroundFetchStore((s) => s.ratingsCooldownSecs);
   const stopRatingsFetch = useBackgroundFetchStore((s) => s.stopRatingsFetch);
-  const startRatingsFetch = useBackgroundFetchStore((s) => s.startRatingsFetch);
   const releaseDatesRunning = useBackgroundFetchStore((s) => s.releaseDatesRunning);
   const releaseDatesFetched = useBackgroundFetchStore((s) => s.releaseDatesFetched);
   const releaseDatesTotal = useBackgroundFetchStore((s) => s.releaseDatesTotal);
@@ -182,7 +179,6 @@ export function StatusBar() {
   const releaseDatesCurrentName = useBackgroundFetchStore((s) => s.releaseDatesCurrentName);
   const releaseDatesRecentNames = useBackgroundFetchStore((s) => s.releaseDatesRecentNames);
   const stopStoreReleaseDateFetch = useBackgroundFetchStore((s) => s.stopStoreReleaseDateFetch);
-  const startStoreReleaseDateFetch = useBackgroundFetchStore((s) => s.startStoreReleaseDateFetch);
 
   const collections = useCategoryStore((s) => s.collections);
   const activeCategory = useCategoryStore((s) => s.activeCategory);
@@ -237,26 +233,7 @@ export function StatusBar() {
   };
 
   const handlePrepareCache = async () => {
-    if (!detailsRunning && fetchableDetailIds.length > 0) {
-      startDetailsFetch(fetchableDetailIds);
-    }
-    if (!hltbRunning && fetchableHltbIds.length > 0) {
-      startHltbFetch(fetchableHltbIds.map((appId) => ({ appId, name: games[appId]?.name ?? `#${appId}` })));
-    }
-    if (!releaseDatesRunning && fetchableStoreReleaseDateIds.length > 0) {
-      startStoreReleaseDateFetch(fetchableStoreReleaseDateIds.map((appId) => ({ appId, name: games[appId]?.name ?? `#${appId}` })));
-    }
-    if (!ratingsRunning) {
-      if (!useSteamRatingsStore.getState().hydrated) {
-        await hydrateRatingsCache();
-      }
-      const currentRatings = useSteamRatingsStore.getState().ratings;
-      const missing = steamRatingIdsNeedingFetch(useGameStore.getState().games, currentRatings);
-      if (missing.length > 0) {
-        const currentGames = useGameStore.getState().games;
-        startRatingsFetch(missing.map((appId) => ({ appId, name: currentGames[appId]?.name ?? `#${appId}` })));
-      }
-    }
+    await startCachePreparation("full");
   };
 
   return (
