@@ -861,6 +861,8 @@
   "auto.rememberSave": "Değişiklikleri korumak için kaydetmeyi unutma.",
   "auto.close": "Kapat",
   "auto.backupName": "Otomatik kategorize öncesi",
+  "auto.backupFailed": "Yedekleme başarısız oldu; hiçbir kategori değiştirilmedi: {error}",
+  "auto.backupUnavailable": "Steam yolu veya hesap kimliği bulunamadığı için güvenlik yedeği oluşturulamıyor. Hiçbir kategori değiştirilmedi.",
   "auto.presets.saved": "Kaydedilmiş AutoCat'ler",
   "auto.presets.runAll": "Tümünü çalıştır",
   "auto.presets.runCached": "Run cached",

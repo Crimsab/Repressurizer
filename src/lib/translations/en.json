@@ -861,6 +861,8 @@
   "auto.rememberSave": "Remember to save to keep the changes.",
   "auto.close": "Close",
   "auto.backupName": "Pre-auto-categorize",
+  "auto.backupFailed": "Backup failed; no categories were changed: {error}",
+  "auto.backupUnavailable": "A safety backup cannot be created because the Steam path or account ID is unavailable. No categories were changed.",
   "auto.presets.saved": "Saved AutoCats",
   "auto.presets.runAll": "Run all",
   "auto.presets.runCached": "Run cached",

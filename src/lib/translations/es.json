@@ -861,6 +861,8 @@
   "auto.rememberSave": "Recuerda guardar para conservar los cambios.",
   "auto.close": "Cerrar",
   "auto.backupName": "Antes de autocategorizar",
+  "auto.backupFailed": "La copia de seguridad falló; no se modificó ninguna categoría: {error}",
+  "auto.backupUnavailable": "No se puede crear la copia de seguridad porque falta la ruta de Steam o el ID de la cuenta. No se modificó ninguna categoría.",
   "auto.presets.saved": "AutoCats guardados",
   "auto.presets.runAll": "Ejecutar todos",
   "auto.presets.runCached": "Run cached",

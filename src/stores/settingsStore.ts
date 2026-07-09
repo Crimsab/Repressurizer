@@ -200,6 +200,8 @@ function normalizeSettings(raw: Partial<AppSettings>): AppSettings {
   return {
     ...defaults,
     ...raw,
+    hltbConcurrency: clampInteger(raw.hltbConcurrency, defaults.hltbConcurrency, 1, 10),
+    achievementsConcurrency: clampInteger(raw.achievementsConcurrency, defaults.achievementsConcurrency, 1, 10),
     steamDetailsDelayMs: clampInteger(raw.steamDetailsDelayMs, defaults.steamDetailsDelayMs, 100, 30_000),
     detailsCacheMaxAgeDays: clampInteger(raw.detailsCacheMaxAgeDays, defaults.detailsCacheMaxAgeDays, 0, 3650),
     steamRatingsDelayMs: clampInteger(raw.steamRatingsDelayMs, defaults.steamRatingsDelayMs, 100, 30_000),

@@ -861,6 +861,8 @@
   "auto.rememberSave": "Pensez à enregistrer pour conserver les modifications.",
   "auto.close": "Fermer",
   "auto.backupName": "Avant classement automatique",
+  "auto.backupFailed": "La sauvegarde a échoué ; aucune catégorie n’a été modifiée : {error}",
+  "auto.backupUnavailable": "La sauvegarde de sécurité ne peut pas être créée car le chemin Steam ou l’identifiant du compte est indisponible. Aucune catégorie n’a été modifiée.",
   "auto.presets.saved": "AutoCats enregistrés",
   "auto.presets.runAll": "Tout exécuter",
   "auto.presets.runCached": "Run cached",

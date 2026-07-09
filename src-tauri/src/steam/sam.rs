@@ -135,6 +135,13 @@ pub struct SamAchievementActionResult {
     pub message: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SamLocalWritePermission {
+    Allowed,
+    Protected,
+    Unknown,
+}
+
 #[tauri::command]
 pub fn probe_sam_bridge(steam_path: String, app_id: u64) -> SamBridgeProbe {
     let bridge_path = std::env::current_exe().ok();
@@ -579,18 +586,14 @@ fn perform_bridge_achievement_action(
     let mut bridge = SamSteamBridge::connect(&input.steam_path, input.app_id)?;
     let active_app_id = bridge.active_app_id();
     let initial_stats_requested = bridge.prepare_user_stats();
-    let schema_items = load_sam_achievement_schema_items(&input.steam_path, input.app_id)
-        .unwrap_or_else(|_| Vec::new());
-    let schema_permissions: HashMap<String, SamAchievementSchemaItem> = schema_items
-        .into_iter()
-        .map(|item| (item.api_name.clone(), item))
-        .collect();
+    let schema_permissions = load_required_schema_permissions(&input.steam_path, input.app_id)?;
 
     let available_names = bridge.achievement_names().unwrap_or_default();
     if ids.is_empty() {
         ids = available_names.clone();
     }
     ids = dedupe_strings(ids);
+    ensure_verified_target_permissions(&schema_permissions, &ids)?;
 
     let backup_names = if available_names.is_empty() {
         ids.clone()
@@ -600,7 +603,7 @@ fn perform_bridge_achievement_action(
     let before_states = bridge.capture_states(&backup_names);
     let before_backup =
         build_achievement_backup(input.app_id, &input.action, "before", before_states);
-    let before_backup_path = save_achievement_backup(&before_backup).ok();
+    let before_backup_path = require_pre_change_backup(save_achievement_backup(&before_backup))?;
 
     let mut failed = Vec::new();
     let mut diagnostics = vec![
@@ -614,18 +617,23 @@ fn perform_bridge_achievement_action(
     let target_set: HashSet<String> = ids.iter().cloned().collect();
     let mut desired_states: HashMap<String, bool> = HashMap::new();
     let mut protected_blocked = Vec::new();
+    let mut unverified_blocked = Vec::new();
 
     let mut apply_achievement =
         |bridge: &SamSteamBridge, failed: &mut Vec<String>, id: &str, achieved: bool| -> bool {
             desired_states.insert(id.to_string(), achieved);
-            if schema_permissions
-                .get(id)
-                .map(|item| item.protected_achievement)
-                .unwrap_or(false)
-            {
-                protected_blocked.push(id.to_string());
-                failed.push(id.to_string());
-                return false;
+            match local_write_permission(&schema_permissions, id) {
+                SamLocalWritePermission::Allowed => {}
+                SamLocalWritePermission::Protected => {
+                    protected_blocked.push(id.to_string());
+                    failed.push(id.to_string());
+                    return false;
+                }
+                SamLocalWritePermission::Unknown => {
+                    unverified_blocked.push(id.to_string());
+                    failed.push(id.to_string());
+                    return false;
+                }
             }
             if bridge.set_achievement(id, achieved) {
                 true
@@ -685,6 +693,17 @@ fn perform_bridge_achievement_action(
         ));
         diagnostics.push(
             "SAM and SteamUtility mark achievements with permission & 3 != 0 as protected; Repressurizer does not send write requests for them."
+                .to_string(),
+        );
+    }
+    unverified_blocked = dedupe_strings(unverified_blocked);
+    if !unverified_blocked.is_empty() {
+        diagnostics.push(format!(
+            "sam_unverified_achievements_skipped={}",
+            unverified_blocked.join(",")
+        ));
+        diagnostics.push(
+            "Repressurizer does not send achievement writes when the local Steam schema has no permission entry for the target."
                 .to_string(),
         );
     }
@@ -748,7 +767,8 @@ fn perform_bridge_achievement_action(
     }
 
     let after_backup = build_achievement_backup(input.app_id, &input.action, "after", after_states);
-    let after_backup_path = save_achievement_backup(&after_backup).ok();
+    let after_backup_path =
+        record_post_change_backup(save_achievement_backup(&after_backup), &mut diagnostics);
     let unapplied = unapplied_target_states(&after_backup.achievements, &desired_states);
     for id in &unapplied {
         if !failed.iter().any(|failed_id| failed_id == id) {
@@ -778,7 +798,12 @@ fn perform_bridge_achievement_action(
                 .unwrap_or("backup path unavailable")
         ));
     }
-    let message = if !protected_blocked.is_empty()
+    let mut message = if !unverified_blocked.is_empty() && attempted == 0 {
+        format!(
+            "Repressurizer blocked {} achievement change(s) because their write permissions could not be verified in the local Steam schema.",
+            unverified_blocked.len()
+        )
+    } else if !protected_blocked.is_empty()
         && attempted == 0
         && unapplied
             .iter()
@@ -806,6 +831,9 @@ fn perform_bridge_achievement_action(
             unexpected_changes.len()
         )
     };
+    if after_backup_path.is_none() {
+        message.push_str(" The achievement change completed, but the post-change diagnostic backup could not be saved; see diagnostics for details.");
+    }
 
     Ok(SamAchievementActionResult {
         app_id: input.app_id,
@@ -840,6 +868,54 @@ fn load_sam_achievement_schema_items(
     parse_sam_achievement_schema(&bytes, app_id)
 }
 
+fn load_required_schema_permissions(
+    steam_path: &str,
+    app_id: u64,
+) -> Result<HashMap<String, SamAchievementSchemaItem>, String> {
+    load_sam_achievement_schema_items(steam_path, app_id)
+        .map(|items| {
+            items
+                .into_iter()
+                .map(|item| (item.api_name.clone(), item))
+                .collect()
+        })
+        .map_err(|error| {
+            format!(
+                "Could not verify SAM achievement permissions, so no achievements were changed: {error}"
+            )
+        })
+}
+
+fn local_write_permission(
+    permissions: &HashMap<String, SamAchievementSchemaItem>,
+    achievement_id: &str,
+) -> SamLocalWritePermission {
+    match permissions.get(achievement_id) {
+        Some(item) if item.protected_achievement => SamLocalWritePermission::Protected,
+        Some(_) => SamLocalWritePermission::Allowed,
+        None => SamLocalWritePermission::Unknown,
+    }
+}
+
+fn ensure_verified_target_permissions(
+    permissions: &HashMap<String, SamAchievementSchemaItem>,
+    achievement_ids: &[String],
+) -> Result<(), String> {
+    let unknown = achievement_ids
+        .iter()
+        .filter(|id| local_write_permission(permissions, id) == SamLocalWritePermission::Unknown)
+        .cloned()
+        .collect::<Vec<_>>();
+    if unknown.is_empty() {
+        Ok(())
+    } else {
+        Err(format!(
+            "Could not verify local Steam write permissions for {}; no achievements were changed.",
+            unknown.join(",")
+        ))
+    }
+}
+
 fn sam_schema_path(steam_path: &str, app_id: u64) -> PathBuf {
     PathBuf::from(steam_path.trim())
         .join("appcache")
@@ -872,10 +948,10 @@ fn parse_sam_achievement_schema(
                 if api_name.is_empty() {
                     continue;
                 }
-                let permission = bit
-                    .child("permission")
-                    .and_then(BinaryKeyValue::as_i32)
-                    .unwrap_or(0);
+                let Some(permission) = bit.child("permission").and_then(BinaryKeyValue::as_i32)
+                else {
+                    continue;
+                };
                 items.push(SamAchievementSchemaItem {
                     api_name,
                     permission,
@@ -1227,6 +1303,27 @@ fn save_achievement_backup(backup: &SamAchievementBackup) -> Result<String, Stri
     let json = serde_json::to_string_pretty(backup).map_err(|error| error.to_string())?;
     fs::write(&path, json).map_err(|error| format!("Failed to write SAM backup: {error}"))?;
     Ok(path_to_string(path))
+}
+
+fn require_pre_change_backup(result: Result<String, String>) -> Result<Option<String>, String> {
+    result.map(Some).map_err(|error| {
+        format!(
+            "Could not create the required pre-change SAM backup; no achievements were changed: {error}"
+        )
+    })
+}
+
+fn record_post_change_backup(
+    result: Result<String, String>,
+    diagnostics: &mut Vec<String>,
+) -> Option<String> {
+    match result {
+        Ok(path) => Some(path),
+        Err(error) => {
+            diagnostics.push(format!("after_backup_error={error}"));
+            None
+        }
+    }
 }
 
 fn sam_backup_base_dir(app_id: u64) -> Result<PathBuf, String> {
@@ -2007,6 +2104,54 @@ mod tests {
     }
 
     #[test]
+    fn sam_writes_fail_closed_when_schema_permissions_are_unavailable() {
+        let missing_root = temp_dir("sam_missing_schema");
+        let error =
+            load_required_schema_permissions(&missing_root.to_string_lossy(), 39140).unwrap_err();
+
+        assert!(error.contains("no achievements were changed"));
+        assert!(error.contains("schema was not found"));
+
+        let mut permissions = HashMap::new();
+        permissions.insert(
+            "KNOWN".to_string(),
+            SamAchievementSchemaItem {
+                api_name: "KNOWN".to_string(),
+                permission: 0,
+                protected_achievement: false,
+                flags: Vec::new(),
+            },
+        );
+        assert_eq!(
+            local_write_permission(&permissions, "KNOWN"),
+            SamLocalWritePermission::Allowed
+        );
+        assert_eq!(
+            local_write_permission(&permissions, "UNKNOWN"),
+            SamLocalWritePermission::Unknown
+        );
+        let error = ensure_verified_target_permissions(
+            &permissions,
+            &["KNOWN".to_string(), "UNKNOWN".to_string()],
+        )
+        .unwrap_err();
+        assert!(error.contains("UNKNOWN"));
+        assert!(error.contains("no achievements were changed"));
+    }
+
+    #[test]
+    fn pre_change_backup_is_required_but_post_change_backup_is_diagnostic() {
+        let before_error = require_pre_change_backup(Err("disk full".to_string())).unwrap_err();
+        assert!(before_error.contains("required pre-change SAM backup"));
+        assert!(before_error.contains("no achievements were changed"));
+
+        let mut diagnostics = Vec::new();
+        let after_path = record_post_change_backup(Err("disk full".to_string()), &mut diagnostics);
+        assert_eq!(after_path, None);
+        assert_eq!(diagnostics, vec!["after_backup_error=disk full"]);
+    }
+
+    #[test]
     fn ignores_normal_app_launch_args() {
         assert_eq!(run_embedded_bridge(["repressurizer"]), None);
     }
@@ -2178,6 +2323,34 @@ mod tests {
             by_id["ACH_UNKNOWN"].flags,
             vec!["UnknownPermission".to_string()]
         );
+    }
+
+    #[test]
+    fn schema_entries_without_permissions_are_not_treated_as_writable() {
+        let mut schema = Vec::new();
+        kv_scope(&mut schema, "614910", |bytes| {
+            kv_scope(bytes, "stats", |bytes| {
+                kv_scope(bytes, "0", |bytes| {
+                    kv_scope(bytes, "bits", |bytes| {
+                        kv_scope(bytes, "0", |bytes| {
+                            kv_string(bytes, "name", "ACH_UNVERIFIED");
+                        });
+                    });
+                });
+            });
+        });
+        schema.push(8);
+
+        let items = parse_sam_achievement_schema(&schema, 614910).unwrap();
+        let permissions = items
+            .into_iter()
+            .map(|item| (item.api_name.clone(), item))
+            .collect::<HashMap<_, _>>();
+        let error =
+            ensure_verified_target_permissions(&permissions, &["ACH_UNVERIFIED".to_string()])
+                .unwrap_err();
+        assert!(error.contains("ACH_UNVERIFIED"));
+        assert!(error.contains("no achievements were changed"));
     }
 
     #[test]

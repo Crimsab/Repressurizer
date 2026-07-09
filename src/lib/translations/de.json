@@ -861,6 +861,8 @@
   "auto.rememberSave": "Denk daran zu speichern, um die Änderungen zu behalten.",
   "auto.close": "Schließen",
   "auto.backupName": "Vor Auto-Kategorisierung",
+  "auto.backupFailed": "Sicherung fehlgeschlagen; es wurden keine Kategorien geändert: {error}",
+  "auto.backupUnavailable": "Die Sicherheitssicherung kann nicht erstellt werden, weil der Steam-Pfad oder die Konto-ID fehlt. Es wurden keine Kategorien geändert.",
   "auto.presets.saved": "Gespeicherte AutoCats",
   "auto.presets.runAll": "Alle ausführen",
   "auto.presets.runCached": "Run cached",

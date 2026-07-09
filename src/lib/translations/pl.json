@@ -861,6 +861,8 @@
   "auto.rememberSave": "Pamiętaj, aby zapisać zmiany.",
   "auto.close": "Zamknij",
   "auto.backupName": "Przed automatyczną kategoryzacją",
+  "auto.backupFailed": "Tworzenie kopii zapasowej nie powiodło się; nie zmieniono żadnej kategorii: {error}",
+  "auto.backupUnavailable": "Nie można utworzyć kopii bezpieczeństwa, ponieważ brakuje ścieżki Steam lub identyfikatora konta. Nie zmieniono żadnej kategorii.",
   "auto.presets.saved": "Zapisane AutoCats",
   "auto.presets.runAll": "Uruchom wszystkie",
   "auto.presets.runCached": "Run cached",

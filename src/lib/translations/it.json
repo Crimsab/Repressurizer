@@ -861,6 +861,8 @@
   "auto.rememberSave": "Ricorda di salvare per mantenere le modifiche.",
   "auto.close": "Chiudi",
   "auto.backupName": "Pre-auto-categorizzazione",
+  "auto.backupFailed": "Backup non riuscito; nessuna categoria è stata modificata: {error}",
+  "auto.backupUnavailable": "Impossibile creare il backup di sicurezza perché il percorso Steam o l’ID account non è disponibile. Nessuna categoria è stata modificata.",
   "auto.presets.saved": "AutoCat salvati",
   "auto.presets.runAll": "Esegui tutti",
   "auto.presets.runCached": "Esegui cached",

@@ -173,11 +173,62 @@ test("AutoCat custom rule creates one category from a title condition", async ({
   await expect(dialog.getByText("Preview sort")).toBeVisible();
   await expect(dialog.getByText("Hades Custom")).toBeVisible();
   await expect(dialog.getByText("1 games")).toBeVisible();
-  await dialog.getByRole("button", { name: "Apply" }).click();
+  await dialog.getByRole("button", { name: "Apply", exact: true }).click();
   await dialog.getByText("Close", { exact: true }).click();
 
   await expect(page.getByRole("button", { name: /Hades Custom/ })).toBeVisible();
   await expectNoHorizontalOverflow(page);
+});
+
+test("AutoCat does not apply categories when its safety backup fails", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(() => {
+    const target = window as unknown as {
+      __TAURI_INTERNALS__: {
+        invoke: (command: string, args?: Record<string, unknown>) => Promise<unknown>;
+      };
+    };
+    const originalInvoke = target.__TAURI_INTERNALS__.invoke;
+    target.__TAURI_INTERNALS__.invoke = (command, args) => {
+      if (command === "create_manual_backup") {
+        return Promise.reject(new Error("mock backup unavailable"));
+      }
+      return originalInvoke(command, args);
+    };
+  });
+
+  await page.getByTitle(/Auto-Categorize/).click();
+  const dialog = page.locator(".fixed.inset-0").filter({
+    has: page.getByRole("heading", { name: "Auto-Categorize" }),
+  });
+  await dialog.getByRole("button", { name: /Custom rule/ }).click();
+  await dialog.getByPlaceholder("Short RPG not in Backlog").fill("Blocked Apply");
+  await dialog.getByRole("button", { name: "Title starts" }).click();
+  await dialog.locator('input[value="A"]').fill("Hades");
+  await dialog.getByRole("button", { name: "Run" }).click();
+  await dialog.getByRole("button", { name: "Apply", exact: true }).click();
+
+  await expect(dialog.getByRole("alert")).toContainText("Backup failed; no categories were changed");
+  await expect(dialog.getByText("Preview sort")).toBeVisible();
+  await dialog.locator('button[aria-label="Close"]').click();
+  await expect(page.getByRole("button", { name: /Blocked Apply/ })).toHaveCount(0);
+
+  await page.evaluate(async () => {
+    const modulePath = "/src/stores/settingsStore.ts";
+    const settingsModule = await import(modulePath);
+    settingsModule.useSettingsStore.getState().setSettings({ steamPath: "" });
+  });
+  await page.getByTitle(/Auto-Categorize/).click();
+  const missingPrerequisiteDialog = page.locator(".fixed.inset-0").filter({
+    has: page.getByRole("heading", { name: "Auto-Categorize" }),
+  });
+  await expect(missingPrerequisiteDialog.getByText("Preview sort")).toBeVisible();
+  await missingPrerequisiteDialog.getByRole("button", { name: "Apply", exact: true }).click();
+  await expect(missingPrerequisiteDialog.getByRole("alert")).toContainText(
+    "Steam path or account ID is unavailable"
+  );
+  await missingPrerequisiteDialog.locator('button[aria-label="Close"]').click();
+  await expect(page.getByRole("button", { name: /Blocked Apply/ })).toHaveCount(0);
 });
 
 test("creates a category from the compact sidebar plus button", async ({ page }) => {
@@ -726,6 +777,16 @@ test("opens organized settings tabs, automation logs, and Steam controls without
   const dataPath = testInfo.outputPath("settings-data.png");
   await page.screenshot({ path: dataPath, fullPage: true });
   await testInfo.attach("settings-data", { path: dataPath, contentType: "image/png" });
+
+  await settingsDialog.getByRole("button", { name: "Import Depressurizer database" }).click();
+  const databaseImportDialog = settingsDialog.getByRole("dialog", { name: "Import Depressurizer database" });
+  await expect(databaseImportDialog.getByText("Source", { exact: true })).toBeVisible();
+  await expect(databaseImportDialog.getByText("Extra App IDs", { exact: true })).toBeVisible();
+  await databaseImportDialog.getByRole("button", { name: "Cancel" }).click();
+
+  await settingsDialog.getByRole("button", { name: "Ignored", exact: true }).click();
+  await expect(settingsDialog.getByRole("heading", { name: /Steam Details/ })).toBeVisible();
+  await expect(settingsDialog.getByRole("heading", { name: /HLTB/ })).toBeVisible();
 
   await settingsDialog.getByRole("button", { name: "About", exact: true }).click();
   await expect(settingsDialog.getByText(/Repressurizer v/)).toBeVisible();

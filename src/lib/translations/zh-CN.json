@@ -861,6 +861,8 @@
   "auto.rememberSave": "请记得保存以保留更改。",
   "auto.close": "关闭",
   "auto.backupName": "自动分类前",
+  "auto.backupFailed": "备份失败；未更改任何类别：{error}",
+  "auto.backupUnavailable": "由于 Steam 路径或账户 ID 不可用，无法创建安全备份。未更改任何类别。",
   "auto.presets.saved": "已保存 AutoCat",
   "auto.presets.runAll": "全部运行",
   "auto.presets.runCached": "Run cached",

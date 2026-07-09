@@ -12,6 +12,7 @@ import { detailsPriceNeedsCurrencyRefresh } from "../lib/prices";
 import { bestAvailableReleaseDate, storeReleaseDateNeedsRefresh } from "../lib/releaseDates";
 import { isSteamRatingFresh, isSteamReviewRateLimitedError } from "../lib/steamRatings";
 import { getHltbHours } from "../lib/hltb";
+import { abortableDelay, createRunGate, type RunGate, type RunToken } from "../lib/runGate";
 import type { GameDetails, GamePriceOverview, StoreReleaseDateResult } from "../lib/types";
 
 // ── Config ────────────────────────────────────────────────────────────────────
@@ -59,6 +60,10 @@ function achievementsBatchDelayMs() {
   return clampMs(useSettingsStore.getState().achievementsBatchDelayMs, DEFAULT_ACHIEVEMENTS_BATCH_DELAY_MS, MIN_FETCH_DELAY_MS, 30_000);
 }
 
+function fetchConcurrency(value: number | undefined) {
+  return clampMs(value, 5, 1, 10);
+}
+
 /** True when the error is a permanent "game not on Steam" failure (not a network issue) */
 function isPermanentError(e: unknown): boolean {
   const msg = String(e);
@@ -67,17 +72,13 @@ function isPermanentError(e: unknown): boolean {
 
 const MAX_RECENT = 8;
 
-// Module-level flags — persist across React component lifecycles
-let _detailsRunning = false;
-let _detailsAbort = false;
-let _hltbRunning = false;
-let _hltbAbort = false;
-let _achievementsRunning = false;
-let _achievementsAbort = false;
-let _ratingsRunning = false;
-let _ratingsAbort = false;
-let _releaseDatesRunning = false;
-let _releaseDatesAbort = false;
+// Module-level run gates persist across React component lifecycles. Each run
+// owns a distinct token so stop -> start cannot revive the previous worker.
+const _detailsRun = createRunGate();
+const _hltbRun = createRunGate();
+const _achievementsRun = createRunGate();
+const _ratingsRun = createRunGate();
+const _releaseDatesRun = createRunGate();
 // Adaptive per-request extra delay (only grows for unexpected failures)
 let _extraDelayMs = 0;
 
@@ -142,6 +143,26 @@ interface BackgroundFetchState {
 let _setState: (partial: Partial<BackgroundFetchState>) => void = () => {};
 let _getState: () => BackgroundFetchState = () => ({} as BackgroundFetchState);
 
+function launchRun(
+  label: string,
+  gate: RunGate,
+  token: RunToken,
+  task: () => Promise<void>,
+  resetRunningState: () => void
+) {
+  void (async () => {
+    try {
+      await token.ready;
+      if (!gate.isCurrent(token)) return;
+      await task();
+    } catch (error) {
+      if (gate.isCurrent(token)) console.error(`[${label}] Worker stopped unexpectedly:`, error);
+    } finally {
+      if (gate.finish(token)) resetRunningState();
+    }
+  })();
+}
+
 export const useBackgroundFetchStore = create<BackgroundFetchState>((set, get) => {
   _setState = set;
   _getState = get;
@@ -186,7 +207,7 @@ export const useBackgroundFetchStore = create<BackgroundFetchState>((set, get) =
     releaseDatesRecentNames: [],
 
     startDetailsFetch: (missingIds, options) => {
-      if (_detailsRunning || missingIds.length === 0) return;
+      if (_detailsRun.running || missingIds.length === 0) return;
       // Filter out games already permanently failed (removed from Steam)
       const { isIgnored } = useFailedGamesStore.getState();
       const details = useGameStore.getState().details;
@@ -205,8 +226,8 @@ export const useBackgroundFetchStore = create<BackgroundFetchState>((set, get) =
       const skipped = missingIds.length - ids.length;
       if (skipped > 0) console.log(`[Details] Skipping ${skipped} cached/ignored games, fetching ${ids.length}`);
 
-      _detailsRunning = true;
-      _detailsAbort = false;
+      const run = _detailsRun.start();
+      if (!run) return;
       _extraDelayMs = 0;
       set({
         detailsRunning: true,
@@ -219,18 +240,20 @@ export const useBackgroundFetchStore = create<BackgroundFetchState>((set, get) =
         detailsCoolingDown: false,
         detailsCooldownSecs: 0,
       });
-      _runDetailsLoop(ids);
+      launchRun("Details", _detailsRun, run, () => _runDetailsLoop(ids, run), () => {
+        _extraDelayMs = 0;
+        _setState({ detailsRunning: false, detailsCurrentName: "", detailsCoolingDown: false, detailsCooldownSecs: 0 });
+      });
     },
 
     stopDetailsFetch: () => {
-      _detailsAbort = true;
-      _detailsRunning = false;
+      _detailsRun.stop();
       _extraDelayMs = 0;
       set({ detailsRunning: false, detailsCurrentName: "", detailsCoolingDown: false, detailsCooldownSecs: 0 });
     },
 
     startHltbFetch: (items) => {
-      if (_hltbRunning || items.length === 0) return;
+      if (_hltbRun.running || items.length === 0) return;
       // Filter out HLTB-ignored games
       const { isIgnored } = useHltbIgnoredStore.getState();
       const filtered = items.filter((it) => !isIgnored(it.appId));
@@ -240,8 +263,8 @@ export const useBackgroundFetchStore = create<BackgroundFetchState>((set, get) =
         console.log(`[HLTB] All ${items.length} games are already ignored or cached`);
         return;
       }
-      _hltbRunning = true;
-      _hltbAbort = false;
+      const run = _hltbRun.start();
+      if (!run) return;
       set({
         hltbRunning: true,
         hltbFetched: 0,
@@ -249,19 +272,20 @@ export const useBackgroundFetchStore = create<BackgroundFetchState>((set, get) =
         hltbCurrentName: "",
         hltbRecentNames: [],
       });
-      _runHltbLoop(filtered);
+      launchRun("HLTB", _hltbRun, run, () => _runHltbLoop(filtered, run), () => {
+        _setState({ hltbRunning: false, hltbCurrentName: "" });
+      });
     },
 
     stopHltbFetch: () => {
-      _hltbAbort = true;
-      _hltbRunning = false;
+      _hltbRun.stop();
       set({ hltbRunning: false, hltbCurrentName: "" });
     },
 
     startAchievementsFetch: (items) => {
-      if (_achievementsRunning || items.length === 0) return;
-      _achievementsRunning = true;
-      _achievementsAbort = false;
+      if (_achievementsRun.running || items.length === 0) return;
+      const run = _achievementsRun.start();
+      if (!run) return;
       set({
         achievementsRunning: true,
         achievementsFetched: 0,
@@ -269,22 +293,23 @@ export const useBackgroundFetchStore = create<BackgroundFetchState>((set, get) =
         achievementsCurrentName: "",
         achievementsRecentNames: [],
       });
-      _runAchievementsLoop(items);
+      launchRun("Achievements", _achievementsRun, run, () => _runAchievementsLoop(items, run), () => {
+        _setState({ achievementsRunning: false, achievementsCurrentName: "" });
+      });
     },
 
     stopAchievementsFetch: () => {
-      _achievementsAbort = true;
-      _achievementsRunning = false;
+      _achievementsRun.stop();
       set({ achievementsRunning: false, achievementsCurrentName: "" });
     },
 
     startRatingsFetch: (items, options) => {
-      if (_ratingsRunning || items.length === 0) return;
+      if (_ratingsRun.running || items.length === 0) return;
       const ratings = useSteamRatingsStore.getState().ratings;
       const filtered = options?.force ? items : items.filter((item) => !isSteamRatingFresh(ratings[item.appId]));
       if (filtered.length === 0) return;
-      _ratingsRunning = true;
-      _ratingsAbort = false;
+      const run = _ratingsRun.start();
+      if (!run) return;
       set({
         ratingsRunning: true,
         ratingsFetched: 0,
@@ -296,25 +321,26 @@ export const useBackgroundFetchStore = create<BackgroundFetchState>((set, get) =
         ratingsCoolingDown: false,
         ratingsCooldownSecs: 0,
       });
-      _runRatingsLoop(filtered);
+      launchRun("Ratings", _ratingsRun, run, () => _runRatingsLoop(filtered, run), () => {
+        _setState({ ratingsRunning: false, ratingsCurrentName: "", ratingsCoolingDown: false, ratingsCooldownSecs: 0 });
+      });
     },
 
     stopRatingsFetch: () => {
-      _ratingsAbort = true;
-      _ratingsRunning = false;
+      _ratingsRun.stop();
       set({ ratingsRunning: false, ratingsCurrentName: "", ratingsCoolingDown: false, ratingsCooldownSecs: 0 });
     },
 
     startStoreReleaseDateFetch: (items, options) => {
-      if (_releaseDatesRunning || items.length === 0) return;
+      if (_releaseDatesRun.running || items.length === 0) return;
       const details = useGameStore.getState().details;
       const filtered = items.filter((item) =>
         isDetailsCacheCurrent(details[item.appId]) && (options?.force || storeReleaseDateNeedsRefresh(details[item.appId]))
       );
       if (filtered.length === 0) return;
 
-      _releaseDatesRunning = true;
-      _releaseDatesAbort = false;
+      const run = _releaseDatesRun.start();
+      if (!run) return;
       set({
         releaseDatesRunning: true,
         releaseDatesFetched: 0,
@@ -324,22 +350,19 @@ export const useBackgroundFetchStore = create<BackgroundFetchState>((set, get) =
         releaseDatesCurrentName: "",
         releaseDatesRecentNames: [],
       });
-      _runStoreReleaseDateLoop(filtered);
+      launchRun("ReleaseDates", _releaseDatesRun, run, () => _runStoreReleaseDateLoop(filtered, run), () => {
+        _setState({ releaseDatesRunning: false, releaseDatesCurrentName: "" });
+      });
     },
 
     stopStoreReleaseDateFetch: () => {
-      _releaseDatesAbort = true;
-      _releaseDatesRunning = false;
+      _releaseDatesRun.stop();
       set({ releaseDatesRunning: false, releaseDatesCurrentName: "" });
     },
   };
 });
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-function sleep(ms: number) {
-  return new Promise<void>((r) => setTimeout(r, ms));
-}
 
 function addToRecent(key: "detailsRecentNames" | "hltbRecentNames" | "achievementsRecentNames" | "ratingsRecentNames" | "releaseDatesRecentNames", label: string) {
   const prev = _getState()[key];
@@ -371,7 +394,8 @@ function onDetailsSuccess() {
 
 // ── Steam details loop ────────────────────────────────────────────────────────
 
-async function _runDetailsLoop(missingIds: number[]) {
+async function _runDetailsLoop(missingIds: number[], run: RunToken) {
+  const isCurrent = () => _detailsRun.isCurrent(run);
   const buffer: GameDetails[] = [];
   const retryQueue: number[] = [];
   const successfulDetailIds = new Set<number>();
@@ -390,10 +414,11 @@ async function _runDetailsLoop(missingIds: number[]) {
 
   console.log(`[Details] Starting fetch for ${missingIds.length} games`);
 
-  if (priceOnlyIds.length > 0 && !_detailsAbort) {
+  if (priceOnlyIds.length > 0 && isCurrent()) {
     _setState({ detailsCurrentName: `Price batch (${priceOnlyIds.length})` });
     try {
       const prices = await fetchGamePriceOverviews(priceOnlyIds, cc);
+      if (!isCurrent()) return;
       const pricesById = new Set(prices.map((price) => price.app_id));
       const unavailablePrices: GamePriceOverview[] = priceOnlyIds
         .filter((id) => !pricesById.has(id))
@@ -416,6 +441,7 @@ async function _runDetailsLoop(missingIds: number[]) {
       );
       console.log(`[Details] ✓ price batch: ${prices.length}/${priceOnlyIds.length} prices refreshed`);
     } catch (e) {
+      if (!isCurrent()) return;
       console.warn(`[Details] ✗ price batch (${priceOnlyIds.length}): ${e}`);
       addToRecent("detailsRecentNames", `⚠ Price batch failed`);
       onDetailsFail(priceOnlyIds[0] ?? 0);
@@ -425,7 +451,7 @@ async function _runDetailsLoop(missingIds: number[]) {
 
   // ---- Pass 1: main pass ----
   for (let i = 0; i < fullDetailIds.length; i++) {
-    if (_detailsAbort) break;
+    if (!isCurrent()) return;
 
     const id = fullDetailIds[i];
     const games = useGameStore.getState().games;
@@ -435,6 +461,7 @@ async function _runDetailsLoop(missingIds: number[]) {
     let ok = false;
     try {
       const detail = await fetchGameDetails(id, cc);
+      if (!isCurrent()) return;
       buffer.push(detail);
       successfulDetailIds.add(id);
       addToRecent("detailsRecentNames", `✓ ${name}`);
@@ -443,6 +470,7 @@ async function _runDetailsLoop(missingIds: number[]) {
       ok = true;
       succeeded++;
     } catch (e) {
+      if (!isCurrent()) return;
       if (isPermanentError(e)) {
         const failed = _getState().detailsFailed + 1;
         _setState({ detailsFailed: failed });
@@ -471,24 +499,24 @@ async function _runDetailsLoop(missingIds: number[]) {
 
     if (!ok) {
       // Small delay on failure (just the adaptive portion if any)
-      if (!_detailsAbort && i < fullDetailIds.length - 1 && _extraDelayMs > 0) {
-        await sleep(Math.min(_extraDelayMs, 3000)); // cap wait-on-fail at 3s
+      if (isCurrent() && i < fullDetailIds.length - 1 && _extraDelayMs > 0) {
+        if (!await abortableDelay(Math.min(_extraDelayMs, 3000), run.signal)) return; // cap wait-on-fail at 3s
       }
       continue;
     }
 
-    if (!_detailsAbort && i < fullDetailIds.length - 1) {
-      await sleep(detailsBaseDelayMs() + _extraDelayMs);
+    if (isCurrent() && i < fullDetailIds.length - 1) {
+      if (!await abortableDelay(detailsBaseDelayMs() + _extraDelayMs, run.signal)) return;
     }
   }
 
   // ---- Pass 2: retry failed games ----
-  if (!_detailsAbort && retryQueue.length > 0) {
+  if (isCurrent() && retryQueue.length > 0) {
     console.log(`[Details] Pass 2: retrying ${retryQueue.length} failed games`);
     addToRecent("detailsRecentNames", `↻ Retrying ${retryQueue.length} failed games…`);
 
     for (let i = 0; i < retryQueue.length; i++) {
-      if (_detailsAbort) break;
+      if (!isCurrent()) return;
 
       const id = retryQueue[i];
       const games = useGameStore.getState().games;
@@ -497,6 +525,7 @@ async function _runDetailsLoop(missingIds: number[]) {
 
       try {
         const detail = await fetchGameDetails(id, cc);
+        if (!isCurrent()) return;
         buffer.push(detail);
         successfulDetailIds.add(id);
         addToRecent("detailsRecentNames", `✓ ${name}`);
@@ -505,6 +534,7 @@ async function _runDetailsLoop(missingIds: number[]) {
         succeeded++;
         _setState({ detailsSucceeded: succeeded });
       } catch (e) {
+        if (!isCurrent()) return;
         const failed = _getState().detailsFailed + 1;
         _setState({ detailsFailed: failed });
         if (isPermanentError(e)) {
@@ -525,15 +555,18 @@ async function _runDetailsLoop(missingIds: number[]) {
         }
       }
 
-      if (!_detailsAbort && i < retryQueue.length - 1) {
-        await sleep(Math.max(DETAILS_RETRY_DELAY_MS, detailsBaseDelayMs()) + Math.min(_extraDelayMs, 3000));
+      if (isCurrent() && i < retryQueue.length - 1) {
+        if (!await abortableDelay(
+          Math.max(DETAILS_RETRY_DELAY_MS, detailsBaseDelayMs()) + Math.min(_extraDelayMs, 3000),
+          run.signal
+        )) return;
       }
     }
   }
 
+  if (!_detailsRun.finish(run)) return;
   console.log(`[Details] Done: ${succeeded} succeeded, ${_getState().detailsFailed} permanently failed`);
 
-  _detailsRunning = false;
   _setState({
     detailsRunning: false,
     detailsCurrentName: "",
@@ -547,12 +580,13 @@ async function _runDetailsLoop(missingIds: number[]) {
   const releaseDateItems = [...successfulDetailIds]
     .filter((id) => isDetailsCacheCurrent(detailsAfterFetch[id]) && storeReleaseDateNeedsRefresh(detailsAfterFetch[id]))
     .map((appId) => ({ appId, name: useGameStore.getState().games[appId]?.name ?? `#${appId}` }));
-  if (releaseDateItems.length > 0 && !_releaseDatesRunning) {
+  if (releaseDateItems.length > 0 && !_releaseDatesRun.running) {
     _getState().startStoreReleaseDateFetch(releaseDateItems);
   }
 }
 
-async function _runStoreReleaseDateLoop(items: Array<{ appId: number; name: string }>) {
+async function _runStoreReleaseDateLoop(items: Array<{ appId: number; name: string }>, run: RunToken) {
+  const isCurrent = () => _releaseDatesRun.isCurrent(run);
   const buffer: StoreReleaseDateResult[] = [];
   let fetched = 0;
   let succeeded = 0;
@@ -561,7 +595,7 @@ async function _runStoreReleaseDateLoop(items: Array<{ appId: number; name: stri
   console.log(`[ReleaseDates] Starting fetch for ${items.length} games`);
 
   for (let batchStart = 0; batchStart < items.length; batchStart += DEFAULT_STORE_RELEASE_DATE_BATCH_SIZE) {
-    if (_releaseDatesAbort) break;
+    if (!isCurrent()) return;
 
     const batch = items.slice(batchStart, batchStart + DEFAULT_STORE_RELEASE_DATE_BATCH_SIZE);
     const batchEnd = batchStart + batch.length;
@@ -574,6 +608,7 @@ async function _runStoreReleaseDateLoop(items: Array<{ appId: number; name: stri
 
     try {
       const results = await fetchStoreReleaseDates(batch.map((item) => item.appId));
+      if (!isCurrent()) return;
       const resultsById = new Map(results.map((result) => [result.app_id, result]));
 
       for (const { appId, name } of batch) {
@@ -592,6 +627,7 @@ async function _runStoreReleaseDateLoop(items: Array<{ appId: number; name: stri
         succeeded++;
       }
     } catch (e) {
+      if (!isCurrent()) return;
       failed += batch.length;
       addToRecent("releaseDatesRecentNames", `⚠ Batch ${batchStart + 1}-${batchEnd} failed`);
       console.warn(`[ReleaseDates] ✗ batch ${batchStart + 1}-${batchEnd}: ${e}`);
@@ -611,12 +647,12 @@ async function _runStoreReleaseDateLoop(items: Array<{ appId: number; name: stri
       }
     }
 
-    if (!_releaseDatesAbort && batchEnd < items.length) {
-      await sleep(DEFAULT_STORE_RELEASE_DATE_DELAY_MS);
+    if (isCurrent() && batchEnd < items.length) {
+      if (!await abortableDelay(DEFAULT_STORE_RELEASE_DATE_DELAY_MS, run.signal)) return;
     }
   }
 
-  _releaseDatesRunning = false;
+  if (!_releaseDatesRun.finish(run)) return;
   _setState({
     releaseDatesRunning: false,
     releaseDatesCurrentName: "",
@@ -628,16 +664,17 @@ async function _runStoreReleaseDateLoop(items: Array<{ appId: number; name: stri
 
 // ── HLTB loop (concurrent requests, count from settings) ─────────────────────
 
-async function _runHltbLoop(items: Array<{ appId: number; name: string }>) {
+async function _runHltbLoop(items: Array<{ appId: number; name: string }>, run: RunToken) {
+  const isCurrent = () => _hltbRun.isCurrent(run);
   console.log(`[HLTB] Starting fetch for ${items.length} games`);
   let fetched = 0;
   let batchStart = 0;
 
   while (batchStart < items.length) {
-    if (_hltbAbort) break;
+    if (!isCurrent()) return;
 
     // Read concurrency on each batch so settings changes apply immediately
-    const concurrency = useSettingsStore.getState().hltbConcurrency ?? 5;
+    const concurrency = fetchConcurrency(useSettingsStore.getState().hltbConcurrency);
     const batch = items.slice(batchStart, batchStart + concurrency);
     _setState({ hltbCurrentName: batch[0]?.name ?? "" });
     console.log(`[HLTB] Batch ${batchStart + 1}–${batchStart + batch.length} of ${items.length} (${concurrency} concurrent)`);
@@ -647,6 +684,7 @@ async function _runHltbLoop(items: Array<{ appId: number; name: string }>) {
         const details = useGameStore.getState().details[appId];
         const releaseYear = extractReleaseYear(bestAvailableReleaseDate(details));
         const result = await fetchHltb(name, appId, releaseYear);
+        if (!isCurrent()) return;
         if (result) {
           useHltbStore.getState().setData(appId, result);
           const selectedHours =
@@ -662,32 +700,34 @@ async function _runHltbLoop(items: Array<{ appId: number; name: string }>) {
           useHltbIgnoredStore.getState().recordNotFound(appId);
         }
       } catch (e) {
+        if (!isCurrent()) return;
         console.error(`[HLTB] Error "${name}":`, e);
       }
     }));
 
+    if (!isCurrent()) return;
     fetched += batch.length;
     batchStart += concurrency;
     _setState({ hltbFetched: Math.min(fetched, items.length) });
 
-    if (!_hltbAbort && batchStart < items.length) {
-      await sleep(hltbBatchDelayMs());
+    if (isCurrent() && batchStart < items.length) {
+      if (!await abortableDelay(hltbBatchDelayMs(), run.signal)) return;
     }
   }
 
+  if (!_hltbRun.finish(run)) return;
   console.log(`[HLTB] Done: ${fetched} processed`);
-  _hltbRunning = false;
   _setState({ hltbRunning: false, hltbCurrentName: "", hltbFetched: items.length });
 }
 
 // ── Achievements loop (concurrent batches, like HLTB) ─────────────────────────
 
-async function _runAchievementsLoop(items: Array<{ appId: number; name: string }>) {
+async function _runAchievementsLoop(items: Array<{ appId: number; name: string }>, run: RunToken) {
+  const isCurrent = () => _achievementsRun.isCurrent(run);
   const { apiKey, steamId64 } = useSettingsStore.getState();
   if (!apiKey || !steamId64) {
     console.warn("[Achievements] No API key or Steam ID, aborting");
-    _achievementsRunning = false;
-    _setState({ achievementsRunning: false });
+    if (_achievementsRun.finish(run)) _setState({ achievementsRunning: false });
     return;
   }
 
@@ -696,50 +736,54 @@ async function _runAchievementsLoop(items: Array<{ appId: number; name: string }
   let batchStart = 0;
 
   while (batchStart < items.length) {
-    if (_achievementsAbort) break;
+    if (!isCurrent()) return;
 
     // Read concurrency on each batch so settings changes apply immediately
-    const concurrency = useSettingsStore.getState().achievementsConcurrency ?? 5;
+    const concurrency = fetchConcurrency(useSettingsStore.getState().achievementsConcurrency);
     const batch = items.slice(batchStart, batchStart + concurrency);
     _setState({ achievementsCurrentName: batch[0]?.name ?? "" });
 
     await Promise.all(batch.map(async ({ appId, name }) => {
       try {
         const [total, achieved] = await fetchAchievementsSummary(apiKey, steamId64, appId);
+        if (!isCurrent()) return;
         useAchievementsStore.getState().setSummary(appId, { total, achieved, achievements: [] });
         const label = total > 0 ? `${name} · ${achieved}/${total}` : `${name} · no achievements`;
         addToRecent("achievementsRecentNames", `✓ ${label}`);
         console.log(`[Achievements] ✓ ${name}: ${achieved}/${total}`);
       } catch (e) {
+        if (!isCurrent()) return;
         console.warn(`[Achievements] ✗ ${name} (${appId}): ${e}`);
         addToRecent("achievementsRecentNames", `✗ ${name}`);
       }
     }));
 
+    if (!isCurrent()) return;
     fetched += batch.length;
     batchStart += concurrency;
     _setState({ achievementsFetched: Math.min(fetched, items.length) });
 
-    if (!_achievementsAbort && batchStart < items.length) {
-      await sleep(achievementsBatchDelayMs());
+    if (isCurrent() && batchStart < items.length) {
+      if (!await abortableDelay(achievementsBatchDelayMs(), run.signal)) return;
     }
   }
 
+  if (!_achievementsRun.finish(run)) return;
   console.log(`[Achievements] Done: ${fetched} processed`);
-  _achievementsRunning = false;
   _setState({ achievementsRunning: false, achievementsCurrentName: "", achievementsFetched: items.length });
 }
 
 // ── Steam ratings loop (sequential to avoid hammering Steam Store) ─────────────
 
-async function _runRatingsLoop(items: Array<{ appId: number; name: string }>) {
+async function _runRatingsLoop(items: Array<{ appId: number; name: string }>, run: RunToken) {
+  const isCurrent = () => _ratingsRun.isCurrent(run);
   console.log(`[Ratings] Starting fetch for ${items.length} games`);
   let fetched = 0;
   let succeeded = 0;
   let failed = 0;
 
   for (let i = 0; i < items.length; i++) {
-    if (_ratingsAbort) break;
+    if (!isCurrent()) return;
 
     const { appId, name } = items[i];
     _setState({ ratingsCurrentName: name });
@@ -747,9 +791,10 @@ async function _runRatingsLoop(items: Array<{ appId: number; name: string }>) {
     let processed = false;
     let rateLimitRetries = 0;
 
-    while (!_ratingsAbort && !processed) {
+    while (isCurrent() && !processed) {
       try {
         const summary = await fetchSteamReviewSummary(appId);
+        if (!isCurrent()) return;
         useSteamRatingsStore.getState().setRating(appId, summary);
         const label = summary.total_reviews > 0
           ? `${name} · ${summary.review_score_desc || `${summary.positive_percentage ?? 0}%`}`
@@ -759,6 +804,7 @@ async function _runRatingsLoop(items: Array<{ appId: number; name: string }>) {
         succeeded++;
         processed = true;
       } catch (e) {
+        if (!isCurrent()) return;
         if (isSteamReviewRateLimitedError(e)) {
           console.warn(`[Ratings] rate-limited while fetching ${name} (${appId}): ${e}`);
           rateLimitRetries++;
@@ -769,7 +815,7 @@ async function _runRatingsLoop(items: Array<{ appId: number; name: string }>) {
               ? `⏳ Steam rate limit; waiting ${cooldownMinutes}m`
               : `⏳ Steam still rate-limited; waiting ${cooldownMinutes}m (${rateLimitRetries})`
           );
-          const shouldContinue = await waitRatingsCooldown(cooldownMinutes * 60 * 1000);
+          const shouldContinue = await waitRatingsCooldown(cooldownMinutes * 60 * 1000, run);
           if (!shouldContinue) break;
           _setState({ ratingsCurrentName: `[retry] ${name}` });
           continue;
@@ -784,18 +830,18 @@ async function _runRatingsLoop(items: Array<{ appId: number; name: string }>) {
 
     if (!processed) break;
 
-    if (_ratingsAbort && failed > 0) break;
+    if (!isCurrent()) return;
 
     fetched++;
     _setState({ ratingsFetched: fetched, ratingsSucceeded: succeeded, ratingsFailed: failed });
 
-    if (!_ratingsAbort && i < items.length - 1) {
-      await sleep(ratingsBaseDelayMs());
+    if (isCurrent() && i < items.length - 1) {
+      if (!await abortableDelay(ratingsBaseDelayMs(), run.signal)) return;
     }
   }
 
+  if (!_ratingsRun.finish(run)) return;
   console.log(`[Ratings] Done: ${fetched} processed`);
-  _ratingsRunning = false;
   _setState({
     ratingsRunning: false,
     ratingsCurrentName: "",
@@ -807,21 +853,23 @@ async function _runRatingsLoop(items: Array<{ appId: number; name: string }>) {
   });
 }
 
-async function waitRatingsCooldown(totalMs: number): Promise<boolean> {
+async function waitRatingsCooldown(totalMs: number, run: RunToken): Promise<boolean> {
+  const isCurrent = () => _ratingsRun.isCurrent(run);
   const deadline = Date.now() + totalMs;
   _setState({
     ratingsCoolingDown: true,
     ratingsCooldownSecs: Math.ceil(totalMs / 1000),
   });
 
-  while (!_ratingsAbort) {
+  while (isCurrent()) {
     const remainingMs = deadline - Date.now();
     if (remainingMs <= 0) break;
 
     _setState({ ratingsCooldownSecs: Math.ceil(remainingMs / 1000) });
-    await sleep(Math.min(1000, remainingMs));
+    if (!await abortableDelay(Math.min(1000, remainingMs), run.signal)) return false;
   }
 
+  if (!isCurrent()) return false;
   _setState({ ratingsCoolingDown: false, ratingsCooldownSecs: 0 });
-  return !_ratingsAbort;
+  return true;
 }

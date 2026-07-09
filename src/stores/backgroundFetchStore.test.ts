@@ -208,3 +208,90 @@ describe("backgroundFetchStore ratings fetch", () => {
     });
   });
 });
+
+describe("backgroundFetchStore run lifecycle", () => {
+  it("does not revive a stopped HLTB worker when a replacement run starts", async () => {
+    vi.stubGlobal("localStorage", createStorage());
+    const hltbCalls: number[] = [];
+    const invoke = vi.fn(async (command: string, args?: { appId?: number }) => {
+      if (command === "fetch_hltb") {
+        hltbCalls.push(args?.appId ?? 0);
+        return null;
+      }
+      return null;
+    });
+    vi.doMock("@tauri-apps/api/core", () => ({ invoke }));
+    vi.resetModules();
+
+    const { useBackgroundFetchStore } = await import("./backgroundFetchStore");
+    const { useSettingsStore } = await import("./settingsStore");
+
+    useSettingsStore.getState().setSettings({ hltbConcurrency: 1, hltbBatchDelayMs: 100 });
+    useBackgroundFetchStore.getState().startHltbFetch([
+      { appId: 1, name: "Old one" },
+      { appId: 2, name: "Old two" },
+    ]);
+    await waitFor(() => useBackgroundFetchStore.getState().hltbFetched === 1, "first HLTB batch");
+
+    useBackgroundFetchStore.getState().stopHltbFetch();
+    useBackgroundFetchStore.getState().startHltbFetch([{ appId: 3, name: "Replacement" }]);
+    await waitFor(() => !useBackgroundFetchStore.getState().hltbRunning, "replacement HLTB run");
+    await new Promise((resolve) => setTimeout(resolve, 150));
+
+    expect(hltbCalls).toEqual([1, 3]);
+    expect(useBackgroundFetchStore.getState()).toMatchObject({
+      hltbRunning: false,
+      hltbFetched: 1,
+      hltbTotal: 1,
+    });
+  });
+
+  it("waits for an in-flight stopped worker before starting its replacement", async () => {
+    vi.stubGlobal("localStorage", createStorage());
+    const hltbCalls: number[] = [];
+    let resolveFirst: ((value: null) => void) | undefined;
+    const firstRequest = new Promise<null>((resolve) => {
+      resolveFirst = resolve;
+    });
+    const invoke = vi.fn(async (command: string, args?: { appId?: number }) => {
+      if (command !== "fetch_hltb") return null;
+      const appId = args?.appId ?? 0;
+      hltbCalls.push(appId);
+      return appId === 10 ? firstRequest : null;
+    });
+    vi.doMock("@tauri-apps/api/core", () => ({ invoke }));
+    vi.resetModules();
+
+    const { useBackgroundFetchStore } = await import("./backgroundFetchStore");
+    useBackgroundFetchStore.getState().startHltbFetch([{ appId: 10, name: "Retiring" }]);
+    await waitFor(() => hltbCalls.length === 1, "first in-flight HLTB request");
+
+    useBackgroundFetchStore.getState().stopHltbFetch();
+    useBackgroundFetchStore.getState().startHltbFetch([{ appId: 20, name: "Replacement" }]);
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(hltbCalls).toEqual([10]);
+
+    resolveFirst?.(null);
+    await waitFor(() => hltbCalls.length === 2, "replacement HLTB request");
+    await waitFor(() => !useBackgroundFetchStore.getState().hltbRunning, "replacement completion");
+    expect(hltbCalls).toEqual([10, 20]);
+  });
+
+  it("clamps persisted batch concurrency to the supported range", async () => {
+    vi.stubGlobal("localStorage", createStorage());
+    const invoke = vi.fn(async () => null);
+    vi.doMock("@tauri-apps/api/core", () => ({ invoke }));
+    vi.resetModules();
+
+    const { useSettingsStore } = await import("./settingsStore");
+    useSettingsStore.getState().setSettings({
+      hltbConcurrency: 0,
+      achievementsConcurrency: Number.MAX_SAFE_INTEGER,
+    });
+
+    expect(useSettingsStore.getState()).toMatchObject({
+      hltbConcurrency: 1,
+      achievementsConcurrency: 10,
+    });
+  });
+});
