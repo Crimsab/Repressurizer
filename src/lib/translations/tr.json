@@ -745,6 +745,8 @@
   "stats.categoriesBySize": "Boyuta göre kategoriler (ilk 10)",
   "stats.noDetailsHint": "Tür, platform, yayıncı, Metacritic ve kütüphane değeri istatistiklerini açmak için oyun ayrıntılarını getir (Otomatik Kategorize Et ile).",
   "auto.title": "Otomatik kategorize et",
+  "auto.byCustom": "Custom rule",
+  "auto.byCustom.desc": "Build one category from combined filters like HLTB, title, playtime, and categories",
   "auto.byName": "Ada göre",
   "auto.byName.desc": "Oyun adlarından alfabetik gruplar oluştur",
   "auto.byPlaytime": "Oynama süresine göre",

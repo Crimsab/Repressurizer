@@ -139,6 +139,29 @@ test("AutoCat shows cached metadata suggestions and preview sorting controls", a
   await dialog.getByRole("button", { name: "Natural" }).click();
 });
 
+test("AutoCat custom rule creates one category from a title condition", async ({ page }) => {
+  await page.goto("/");
+  await page.getByTitle(/Auto-Categorize/).click();
+
+  const dialog = page.locator(".fixed.inset-0").filter({
+    has: page.getByRole("heading", { name: "Auto-Categorize" }),
+  });
+  await dialog.getByRole("button", { name: /Custom rule/ }).click();
+  await dialog.getByPlaceholder("Short RPG not in Backlog").fill("Hades Custom");
+  await dialog.getByRole("button", { name: "Title starts with" }).click();
+  await dialog.locator('input[value="A"]').fill("Hades");
+  await dialog.getByRole("button", { name: "Run" }).click();
+
+  await expect(dialog.getByText("Preview sort")).toBeVisible();
+  await expect(dialog.getByText("Hades Custom")).toBeVisible();
+  await expect(dialog.getByText("1 games")).toBeVisible();
+  await dialog.getByRole("button", { name: "Apply" }).click();
+  await dialog.getByRole("button", { name: "Close" }).click();
+
+  await expect(page.getByRole("button", { name: /Hades Custom/ })).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+});
+
 test("creates a category from the compact sidebar plus button", async ({ page }) => {
   await page.addInitScript(() => {
     const raw = window.localStorage.getItem("repressurizer-settings");

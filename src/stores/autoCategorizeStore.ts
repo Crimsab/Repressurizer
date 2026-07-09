@@ -1,4 +1,9 @@
 import { create } from "zustand";
+import {
+  cloneDefaultCustomConfig,
+  normalizeCustomAutoCatConfig,
+  type CustomAutoCatConfigV1,
+} from "../lib/customAutoCategorize";
 import type {
   HoursConfig,
   GenreConfig,
@@ -26,7 +31,8 @@ export type CategorizerType =
   | "flags"
   | "language"
   | "platform"
-  | "name";
+  | "name"
+  | "custom";
 export type PersistStep = "choose" | "configure" | "preview" | "done";
 
 export type AutoCategorizePresetConfig =
@@ -40,6 +46,7 @@ export type AutoCategorizePresetConfig =
   | PlatformConfig
   | NameConfig
   | SteamRatingConfig
+  | CustomAutoCatConfigV1
   | Record<string, never>;
 
 export interface AutoCategorizePreset {
@@ -64,6 +71,7 @@ interface AutoCategorizeState {
   platformConfig: PlatformConfig;
   nameConfig: NameConfig;
   ratingConfig: SteamRatingConfig;
+  customConfig: CustomAutoCatConfigV1;
   presets: AutoCategorizePreset[];
   lastResult: CategorizeResult | null;
   set: (patch: Partial<Omit<AutoCategorizeState, "set">>) => void;
@@ -153,6 +161,7 @@ const defaults: Omit<AutoCategorizeState, "set"> = {
   platformConfig: DEFAULT_PLATFORM_CONFIG,
   nameConfig: DEFAULT_NAME_CONFIG,
   ratingConfig: DEFAULT_STEAM_RATING_CONFIG,
+  customConfig: cloneDefaultCustomConfig(),
   presets: [],
   lastResult: null,
 };
@@ -160,9 +169,54 @@ const defaults: Omit<AutoCategorizeState, "set"> = {
 function load(): Omit<AutoCategorizeState, "set"> {
   try {
     const raw = localStorage.getItem("repressurizer-autocategorize");
-    if (raw) return { ...defaults, ...JSON.parse(raw) };
+    if (raw) return normalizeLoadedState(JSON.parse(raw));
   } catch {}
   return defaults;
+}
+
+function normalizeLoadedState(raw: Partial<Omit<AutoCategorizeState, "set">>): Omit<AutoCategorizeState, "set"> {
+  const lastType = isCategorizerType(raw.lastType) ? raw.lastType : defaults.lastType;
+  return {
+    ...defaults,
+    ...raw,
+    lastType,
+    customConfig: normalizeCustomAutoCatConfig(raw.customConfig),
+    presets: Array.isArray(raw.presets)
+      ? raw.presets.map(normalizePreset).filter((preset): preset is AutoCategorizePreset => !!preset)
+      : [],
+  };
+}
+
+function normalizePreset(raw: unknown): AutoCategorizePreset | null {
+  if (!raw || typeof raw !== "object") return null;
+  const preset = raw as Partial<AutoCategorizePreset>;
+  if (!isCategorizerType(preset.type)) return null;
+  return {
+    id: String(preset.id || `preset-${Date.now()}`),
+    name: String(preset.name || preset.type),
+    type: preset.type,
+    config: preset.type === "custom" ? normalizeCustomAutoCatConfig(preset.config) : (preset.config ?? {}),
+    createdAt: Number(preset.createdAt || Date.now()),
+    updatedAt: Number(preset.updatedAt || Date.now()),
+  };
+}
+
+function isCategorizerType(value: unknown): value is CategorizerType {
+  return (
+    value === "hours" ||
+    value === "genre" ||
+    value === "tags" ||
+    value === "year" ||
+    value === "score" ||
+    value === "rating" ||
+    value === "hltb" ||
+    value === "devpub" ||
+    value === "flags" ||
+    value === "language" ||
+    value === "platform" ||
+    value === "name" ||
+    value === "custom"
+  );
 }
 
 function save(state: Omit<AutoCategorizeState, "set">) {

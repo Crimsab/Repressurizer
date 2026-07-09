@@ -745,6 +745,8 @@
   "stats.categoriesBySize": "按大小排列类别（前 10）",
   "stats.noDetailsHint": "获取游戏详情（通过自动分类）以解锁类型、平台、发行商、Metacritic 和游戏库价值统计。",
   "auto.title": "自动分类",
+  "auto.byCustom": "Custom rule",
+  "auto.byCustom.desc": "Build one category from combined filters like HLTB, title, playtime, and categories",
   "auto.byName": "按名称",
   "auto.byName.desc": "根据游戏标题创建字母分段",
   "auto.byPlaytime": "按游玩时间",

@@ -745,6 +745,8 @@
   "stats.categoriesBySize": "Categorie per dimensione (top 10)",
   "stats.noDetailsHint": "Recupera i dettagli dei giochi (tramite Auto-categorizza) per sbloccare statistiche su genere, piattaforma, editore, Metacritic e valore della libreria.",
   "auto.title": "Auto-categorizza",
+  "auto.byCustom": "Regola custom",
+  "auto.byCustom.desc": "Crea una categoria combinando filtri come HLTB, titolo, ore e categorie",
   "auto.byName": "Per nome",
   "auto.byName.desc": "Crea fasce alfabetiche dai titoli dei giochi",
   "auto.byPlaytime": "Per ore giocate",

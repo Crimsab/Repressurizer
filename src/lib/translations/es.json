@@ -745,6 +745,8 @@
   "stats.categoriesBySize": "Categorías por tamaño (top 10)",
   "stats.noDetailsHint": "Obtén detalles de juegos (con Autocategorizar) para desbloquear estadísticas de género, plataforma, editor, Metacritic y valor de biblioteca.",
   "auto.title": "Autocategorizar",
+  "auto.byCustom": "Custom rule",
+  "auto.byCustom.desc": "Build one category from combined filters like HLTB, title, playtime, and categories",
   "auto.byName": "Por nombre",
   "auto.byName.desc": "Crea tramos alfabéticos a partir de los títulos",
   "auto.byPlaytime": "Por tiempo de juego",

@@ -138,6 +138,11 @@ describe("expectedAutoCategoryNames", () => {
         included_tags: ["Souls-like", "Roguelike"],
       })
     ).toEqual(["#Souls-like", "#Roguelike"]);
+    expect(
+      expectedAutoCategoryNames("custom", {
+        output: { categoryName: "Short RPG not Backlog" },
+      })
+    ).toEqual(["Short RPG not Backlog"]);
   });
 
   it("adds the optional HLTB unknown bucket", () => {

@@ -365,6 +365,7 @@ export interface CategorizeResult {
   games_processed: number;
   games_categorized: number;
   processed_app_ids?: number[];
+  custom_diagnostics?: import("./customAutoCategorize").CustomRuleDiagnostics;
 }
 
 export interface HoursRule {

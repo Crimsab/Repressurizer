@@ -7,6 +7,7 @@ import type {
   TagsConfig,
   SteamRatingConfig,
 } from "./tauri";
+import type { CustomAutoCatConfigV1 } from "./customAutoCategorize";
 import type { SteamCollection } from "./types";
 import { expectedSteamRatingCategoryNames } from "./steamRatings";
 import { hltbUnknownCategoryName } from "./hltbCategorizer";
@@ -23,7 +24,8 @@ export type AutoCategorizeApplyType =
   | "flags"
   | "language"
   | "platform"
-  | "name";
+  | "name"
+  | "custom";
 
 interface AutoCategorizeApplyOptions {
   processedAppIds?: Iterable<number>;
@@ -153,6 +155,12 @@ export function expectedAutoCategoryNames(
     return (languageConfig.included_languages ?? [])
       .map((name) => prefixedName(languageConfig.prefix, name))
       .filter((name) => name.length > 0);
+  }
+
+  if (type === "custom") {
+    const customConfig = config as Partial<CustomAutoCatConfigV1>;
+    const name = customConfig.output?.categoryName?.trim();
+    return name ? [name] : [];
   }
 
   return [];

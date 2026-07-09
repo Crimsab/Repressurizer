@@ -38,6 +38,17 @@ import {
   isSteamRatingFresh,
   steamRatingIdsNeedingFetch,
 } from "../../lib/steamRatings";
+import {
+  customDetailIdsNeedingFetch,
+  customRatingIdsNeedingFetch,
+  customReleaseDateIdsNeedingFetch,
+  customNeedsDetails,
+  customNeedsRatings,
+  evaluateCustomAutoCat,
+  normalizeCustomAutoCatConfig,
+  type CustomAutoCatConfigV1,
+  type CustomRuleDiagnostics,
+} from "../../lib/customAutoCategorize";
 import { hltbModeLabel, HLTB_TIME_MODES } from "../../lib/hltb";
 import {
   categorizeByHltb,
@@ -70,7 +81,8 @@ import {
   type SteamRatingRule,
   type YearGrouping,
 } from "../../lib/tauri";
-import type { GameDetails, HltbTimeMode, OwnedGame, SteamReviewSummary } from "../../lib/types";
+import type { GameDetails, HltbTimeMode, OwnedGame, SteamCollection, SteamReviewSummary } from "../../lib/types";
+import { CustomRuleBuilder } from "./CustomRuleBuilder";
 import {
   X,
   Clock,
@@ -97,6 +109,7 @@ import {
   ArrowUp,
   ArrowDown,
   CopySimple,
+  Funnel,
 } from "@phosphor-icons/react";
 import { useT, type TranslationKey } from "../../lib/i18n";
 import { SelectMenu } from "../ui/SelectMenu";
@@ -117,7 +130,8 @@ type CategorizerType =
   | "flags"
   | "language"
   | "platform"
-  | "name";
+  | "name"
+  | "custom";
 type Step = "choose" | "configure" | "fetch" | "preview" | "done";
 type FetchKind = "details" | "ratings" | "releaseDates";
 
@@ -130,6 +144,7 @@ const CATEGORIZERS: {
   needsRatings: boolean;
   icon: typeof Clock;
 }[] = [
+  { value: "custom", labelKey: "auto.byCustom", descriptionKey: "auto.byCustom.desc", needsDetails: false, needsHltb: false, needsRatings: false, icon: Funnel },
   { value: "name", labelKey: "auto.byName", descriptionKey: "auto.byName.desc", needsDetails: false, needsHltb: false, needsRatings: false, icon: TextAa },
   { value: "genre", labelKey: "auto.byGenre", descriptionKey: "auto.byGenre.desc", needsDetails: true, needsHltb: false, needsRatings: false, icon: Tag },
   { value: "year", labelKey: "auto.byYear", descriptionKey: "auto.byYear.desc", needsDetails: true, needsHltb: false, needsRatings: false, icon: Calendar },
@@ -164,11 +179,13 @@ function categorizerLabel(type: CategorizerType, t: ReturnType<typeof useT>): st
   return t(option.labelKey);
 }
 
-function categorizerNeedsDetails(type: CategorizerType): boolean {
+function categorizerNeedsDetails(type: CategorizerType, config?: AutoCategorizePresetConfig): boolean {
+  if (type === "custom") return customNeedsDetails(normalizeCustomAutoCatConfig(config));
   return CATEGORIZERS.find((item) => item.value === type)?.needsDetails ?? false;
 }
 
-function categorizerNeedsRatings(type: CategorizerType): boolean {
+function categorizerNeedsRatings(type: CategorizerType, config?: AutoCategorizePresetConfig): boolean {
+  if (type === "custom") return customNeedsRatings(normalizeCustomAutoCatConfig(config));
   return CATEGORIZERS.find((item) => item.value === type)?.needsRatings ?? false;
 }
 
@@ -249,9 +266,10 @@ function sortValues(values: string[]): string[] {
 function detailNeedsFetchForType(
   type: CategorizerType,
   detail: GameDetails | undefined,
-  detailsMaxAgeDays?: number
+  detailsMaxAgeDays?: number,
+  config?: AutoCategorizePresetConfig
 ): boolean {
-  if (!categorizerNeedsDetails(type)) return false;
+  if (!categorizerNeedsDetails(type, config)) return false;
   if (detailsCacheNeedsRefresh(detail, detailsMaxAgeDays)) return true;
   if (type === "year") return storeReleaseDateNeedsRefresh(detail);
   return false;
@@ -260,17 +278,23 @@ function detailNeedsFetchForType(
 function detailNeedsBaseFetchForType(
   type: CategorizerType,
   detail: GameDetails | undefined,
-  detailsMaxAgeDays?: number
+  detailsMaxAgeDays?: number,
+  config?: AutoCategorizePresetConfig
 ): boolean {
-  return categorizerNeedsDetails(type) && detailsCacheNeedsRefresh(detail, detailsMaxAgeDays);
+  return categorizerNeedsDetails(type, config) && detailsCacheNeedsRefresh(detail, detailsMaxAgeDays);
 }
 
-function detailNeedsReleaseDateFetchForType(type: CategorizerType, detail: GameDetails | undefined): boolean {
+function detailNeedsReleaseDateFetchForType(
+  type: CategorizerType,
+  detail: GameDetails | undefined,
+  _config?: AutoCategorizePresetConfig
+): boolean {
+  if (type === "custom") return false;
   return type === "year" && isDetailsCacheCurrent(detail) && storeReleaseDateNeedsRefresh(detail);
 }
 
-function detailHasDataForType(type: CategorizerType, detail: GameDetails | undefined): boolean {
-  if (!categorizerNeedsDetails(type)) return true;
+function detailHasDataForType(type: CategorizerType, detail: GameDetails | undefined, config?: AutoCategorizePresetConfig): boolean {
+  if (!categorizerNeedsDetails(type, config)) return true;
   if (!detail || !isDetailsCacheCurrent(detail)) return false;
   if (type === "year") return extractReleaseYear(yearCategorizationReleaseDate(detail)) != null;
   if (type === "genre") return (detail.genres ?? []).length > 0;
@@ -292,51 +316,71 @@ function detailIdsNeedingFetchForType(
   type: CategorizerType,
   games: Record<number, OwnedGame>,
   details: Record<number, GameDetails>,
-  detailsMaxAgeDays?: number
+  detailsMaxAgeDays?: number,
+  config?: AutoCategorizePresetConfig
 ): number[] {
+  if (type === "custom") {
+    const customConfig = normalizeCustomAutoCatConfig(config);
+    return [
+      ...new Set([
+        ...customDetailIdsNeedingFetch(customConfig, games, details, detailsMaxAgeDays),
+        ...customReleaseDateIdsNeedingFetch(customConfig, games, details),
+      ]),
+    ];
+  }
   return Object.keys(games)
     .map(Number)
-    .filter((id) => detailNeedsFetchForType(type, details[id], detailsMaxAgeDays));
+    .filter((id) => detailNeedsFetchForType(type, details[id], detailsMaxAgeDays, config));
 }
 
 function detailIdsNeedingBaseFetchForType(
   type: CategorizerType,
   games: Record<number, OwnedGame>,
   details: Record<number, GameDetails>,
-  detailsMaxAgeDays?: number
+  detailsMaxAgeDays?: number,
+  config?: AutoCategorizePresetConfig
 ): number[] {
+  if (type === "custom") {
+    return customDetailIdsNeedingFetch(normalizeCustomAutoCatConfig(config), games, details, detailsMaxAgeDays);
+  }
   return Object.keys(games)
     .map(Number)
-    .filter((id) => detailNeedsBaseFetchForType(type, details[id], detailsMaxAgeDays));
+    .filter((id) => detailNeedsBaseFetchForType(type, details[id], detailsMaxAgeDays, config));
 }
 
 function detailIdsNeedingReleaseDateFetchForType(
   type: CategorizerType,
   games: Record<number, OwnedGame>,
-  details: Record<number, GameDetails>
+  details: Record<number, GameDetails>,
+  config?: AutoCategorizePresetConfig
 ): number[] {
+  if (type === "custom") {
+    return customReleaseDateIdsNeedingFetch(normalizeCustomAutoCatConfig(config), games, details);
+  }
   return Object.keys(games)
     .map(Number)
-    .filter((id) => detailNeedsReleaseDateFetchForType(type, details[id]));
+    .filter((id) => detailNeedsReleaseDateFetchForType(type, details[id], config));
 }
 
 function detailIdsReadyForType(
   type: CategorizerType,
   games: Record<number, OwnedGame>,
-  details: Record<number, GameDetails>
+  details: Record<number, GameDetails>,
+  config?: AutoCategorizePresetConfig
 ): number[] {
-  if (!categorizerNeedsDetails(type)) return [];
+  if (!categorizerNeedsDetails(type, config)) return [];
   return Object.keys(games)
     .map(Number)
-    .filter((id) => detailHasDataForType(type, details[id]));
+    .filter((id) => detailHasDataForType(type, details[id], config));
 }
 
 function detailsReadyForType(
   type: CategorizerType,
   games: Record<number, OwnedGame>,
-  details: Record<number, GameDetails>
+  details: Record<number, GameDetails>,
+  config?: AutoCategorizePresetConfig
 ): GameDetails[] {
-  return detailIdsReadyForType(type, games, details)
+  return detailIdsReadyForType(type, games, details, config)
     .map((id) => details[id])
     .filter((detail): detail is GameDetails => !!detail);
 }
@@ -350,8 +394,8 @@ function missingDetailIdsForPresets(
   return [
     ...new Set(
       presets
-        .filter((preset) => categorizerNeedsDetails(preset.type))
-        .flatMap((preset) => detailIdsNeedingFetchForType(preset.type, games, details, detailsMaxAgeDays))
+        .filter((preset) => categorizerNeedsDetails(preset.type, preset.config))
+        .flatMap((preset) => detailIdsNeedingFetchForType(preset.type, games, details, detailsMaxAgeDays, preset.config))
     ),
   ];
 }
@@ -365,8 +409,8 @@ function missingBaseDetailIdsForPresets(
   return [
     ...new Set(
       presets
-        .filter((preset) => categorizerNeedsDetails(preset.type))
-        .flatMap((preset) => detailIdsNeedingBaseFetchForType(preset.type, games, details, detailsMaxAgeDays))
+        .filter((preset) => categorizerNeedsDetails(preset.type, preset.config))
+        .flatMap((preset) => detailIdsNeedingBaseFetchForType(preset.type, games, details, detailsMaxAgeDays, preset.config))
     ),
   ];
 }
@@ -379,8 +423,8 @@ function missingReleaseDateIdsForPresets(
   return [
     ...new Set(
       presets
-        .filter((preset) => preset.type === "year")
-        .flatMap((preset) => detailIdsNeedingReleaseDateFetchForType(preset.type, games, details))
+        .filter((preset) => preset.type === "year" || preset.type === "custom")
+        .flatMap((preset) => detailIdsNeedingReleaseDateFetchForType(preset.type, games, details, preset.config))
     ),
   ];
 }
@@ -392,11 +436,11 @@ function canRunPresetsWithCache(
   ratings: Record<number, SteamReviewSummary>
 ): boolean {
   return presets.some((preset) => {
-    if (categorizerNeedsRatings(preset.type)) {
+    if (categorizerNeedsRatings(preset.type, preset.config)) {
       return ratingIdsReady(games, ratings).length > 0;
     }
-    if (!categorizerNeedsDetails(preset.type)) return true;
-    return detailIdsReadyForType(preset.type, games, details).length > 0;
+    if (!categorizerNeedsDetails(preset.type, preset.config)) return true;
+    return detailIdsReadyForType(preset.type, games, details, preset.config).length > 0;
   });
 }
 
@@ -414,9 +458,17 @@ function missingRatingIdsForPresets(
   games: Record<number, OwnedGame>,
   ratings: Record<number, SteamReviewSummary>
 ): number[] {
-  return presets.some((preset) => categorizerNeedsRatings(preset.type))
-    ? steamRatingIdsNeedingFetch(games, ratings)
-    : [];
+  return [
+    ...new Set(
+      presets.flatMap((preset) =>
+        preset.type === "custom"
+          ? customRatingIdsNeedingFetch(normalizeCustomAutoCatConfig(preset.config), games, ratings)
+          : categorizerNeedsRatings(preset.type, preset.config)
+            ? steamRatingIdsNeedingFetch(games, ratings)
+            : []
+      )
+    ),
+  ];
 }
 
 function withProcessedAppIds(result: CategorizeResult, ids: number[]): CategorizeResult {
@@ -424,6 +476,20 @@ function withProcessedAppIds(result: CategorizeResult, ids: number[]): Categoriz
     ...result,
     processed_app_ids: [...new Set(ids.filter((id) => Number.isFinite(id)).map((id) => Math.trunc(id)))],
   };
+}
+
+function customDiagnosticsNotice(diagnostics: CustomRuleDiagnostics): string {
+  if (diagnostics.invalidMessages.length > 0) return diagnostics.invalidMessages.join(" ");
+  const skipped: string[] = [];
+  if (diagnostics.skippedMissingHltb > 0) skipped.push(`${diagnostics.skippedMissingHltb} skipped missing HLTB`);
+  if (diagnostics.skippedMissingDetails > 0) skipped.push(`${diagnostics.skippedMissingDetails} skipped missing details`);
+  if (diagnostics.skippedMissingRatings > 0) skipped.push(`${diagnostics.skippedMissingRatings} skipped missing Steam reviews`);
+  if (diagnostics.staleCategoryRefs.length > 0) {
+    skipped.push(`Remove missing categories: ${diagnostics.staleCategoryRefs.map((item) => item.nameSnapshot || item.key).join(", ")}`);
+  }
+  return skipped.length > 0
+    ? `${skipped.join(" · ")}. Skipped games are preserved on Apply.`
+    : "";
 }
 
 // ============================================================
@@ -482,6 +548,9 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
   const [ratingConfig, setRatingConfig] = useState<SteamRatingConfig>(
     persist.ratingConfig ?? DEFAULT_STEAM_RATING_CONFIG
   );
+  const [customConfig, setCustomConfig] = useState<CustomAutoCatConfigV1>(
+    normalizeCustomAutoCatConfig(persist.customConfig)
+  );
   const [hltbConfig, setHltbConfig] = useState<HoursConfig>({
     ...DEFAULT_HLTB_CONFIG,
     hltb_time_mode: hltbTimeMode,
@@ -500,7 +569,6 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
   const [previewNotice, setPreviewNotice] = useState("");
   const [runError, setRunError] = useState("");
 
-  const categorizer = CATEGORIZERS.find((c) => c.value === type)!;
   const metadata = useMemo(
     () => buildAutoCatMetadata(Object.values(details).filter(isDetailsCacheCurrent)),
     [details]
@@ -513,8 +581,9 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
       (fetchKind === "releaseDates" && !releaseDatesRunning) ||
       (fetchKind === "ratings" && !ratingsRunning);
     if (waitingForFetch && activeFetchDone) {
-      if (fetchKind !== "releaseDates" && categorizerNeedsDetails(type)) {
-        const missingReleaseDates = detailIdsNeedingReleaseDateFetchForType(type, games, details);
+      const config = currentConfig();
+      if (fetchKind !== "releaseDates" && categorizerNeedsDetails(type, config)) {
+        const missingReleaseDates = detailIdsNeedingReleaseDateFetchForType(type, games, details, config);
         if (missingReleaseDates.length > 0) {
           setFetchKind("releaseDates");
           if (!releaseDatesRunning) {
@@ -566,8 +635,9 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
     if (type === "name") return nameConfig;
     if (type === "rating") return ratingConfig;
     if (type === "hltb") return hltbConfig;
+    if (type === "custom") return customConfig;
     return {};
-  }, [type, hoursConfig, genreConfig, tagsConfig, yearConfig, devPubConfig, flagsConfig, languageConfig, platformConfig, nameConfig, ratingConfig, hltbConfig]);
+  }, [type, hoursConfig, genreConfig, tagsConfig, yearConfig, devPubConfig, flagsConfig, languageConfig, platformConfig, nameConfig, ratingConfig, hltbConfig, customConfig]);
 
   const applyPresetConfig = (preset: AutoCategorizePreset) => {
     const config = preset.config as Record<string, unknown>;
@@ -582,6 +652,7 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
     if (preset.type === "name") setNameConfig(config as unknown as NameConfig);
     if (preset.type === "rating") setRatingConfig(config as unknown as SteamRatingConfig);
     if (preset.type === "hltb") setHltbConfig(config as unknown as HoursConfig);
+    if (preset.type === "custom") setCustomConfig(normalizeCustomAutoCatConfig(preset.config));
   };
 
   const handleLoadPreset = (preset: AutoCategorizePreset) => {
@@ -622,10 +693,10 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
   }, []);
 
   useEffect(() => {
-    if (step === "configure" && categorizerNeedsRatings(type)) {
+    if (step === "configure" && categorizerNeedsRatings(type, currentConfig())) {
       ensureSteamRatingsHydrated().catch(() => {});
     }
-  }, [ensureSteamRatingsHydrated, step, type]);
+  }, [currentConfig, ensureSteamRatingsHydrated, step, type]);
 
   const startMissingPresetFetch = useCallback((presets: AutoCategorizePreset[]): boolean => {
     const missingDetails = missingBaseDetailIdsForPresets(presets, games, details, detailsCacheMaxAgeDays);
@@ -651,9 +722,7 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
     }
 
     const currentRatings = useSteamRatingsStore.getState().ratings;
-    const missingRatings = presets.some((preset) => categorizerNeedsRatings(preset.type))
-      ? steamRatingIdsNeedingFetch(games, currentRatings)
-      : [];
+    const missingRatings = missingRatingIdsForPresets(presets, games, currentRatings);
 
     if (missingRatings.length > 0) {
       setFetchError("");
@@ -707,7 +776,7 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
     setFetchError("");
     setWaitingForFetch(false);
 
-    if (presets.some((preset) => categorizerNeedsRatings(preset.type))) {
+    if (presets.some((preset) => categorizerNeedsRatings(preset.type, preset.config))) {
       await ensureSteamRatingsHydrated();
     }
 
@@ -719,7 +788,7 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
   const handleRunPresetsCachedOnly = async () => {
     const presets = [...persist.presets];
     if (presets.length === 0) return;
-    const currentRatings = presets.some((preset) => categorizerNeedsRatings(preset.type))
+    const currentRatings = presets.some((preset) => categorizerNeedsRatings(preset.type, preset.config))
       ? await ensureSteamRatingsHydrated()
       : ratings;
 
@@ -753,6 +822,7 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
       platformConfig,
       nameConfig,
       ratingConfig,
+      customConfig,
     });
 
     // HLTB categorizer: no fetch needed, runs directly
@@ -761,9 +831,13 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
       return;
     }
 
-    if (type === "rating") {
+    const config = currentConfig();
+
+    if (type === "rating" || categorizerNeedsRatings(type, config)) {
       const currentRatings = await ensureSteamRatingsHydrated();
-      const missing = steamRatingIdsNeedingFetch(games, currentRatings);
+      const missing = type === "custom"
+        ? customRatingIdsNeedingFetch(normalizeCustomAutoCatConfig(config), games, currentRatings)
+        : steamRatingIdsNeedingFetch(games, currentRatings);
       if (missing.length > 0) {
         setFetchError("");
         setStep("fetch");
@@ -780,8 +854,8 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
       }
     }
 
-    if (categorizer.needsDetails) {
-      const missing = detailIdsNeedingBaseFetchForType(type, games, details, detailsCacheMaxAgeDays);
+    if (categorizerNeedsDetails(type, config)) {
+      const missing = detailIdsNeedingBaseFetchForType(type, games, details, detailsCacheMaxAgeDays, config);
 
       if (missing.length > 0) {
         setFetchError("");
@@ -800,7 +874,7 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
         return;
       }
 
-      const missingReleaseDates = detailIdsNeedingReleaseDateFetchForType(type, games, details);
+      const missingReleaseDates = detailIdsNeedingReleaseDateFetchForType(type, games, details, config);
 
       if (missingReleaseDates.length > 0) {
         setFetchError("");
@@ -833,24 +907,31 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
       platformConfig,
       nameConfig,
       ratingConfig,
+      customConfig,
     });
 
-    if (categorizer.needsDetails && detailIdsReadyForType(type, games, details).length === 0) {
+    const config = currentConfig();
+    const needsDetails = categorizerNeedsDetails(type, config);
+    const needsRatings = categorizerNeedsRatings(type, config);
+
+    if (needsDetails && detailIdsReadyForType(type, games, details, config).length === 0) {
       setRunError(t("auto.cachedOnlyNoMetadata"));
       return;
     }
-    const currentRatings = categorizer.needsRatings
+    const currentRatings = needsRatings
       ? await ensureSteamRatingsHydrated()
       : ratings;
-    if (categorizer.needsRatings && ratingIdsReady(games, currentRatings).length === 0) {
+    if (needsRatings && ratingIdsReady(games, currentRatings).length === 0) {
       setRunError(t("auto.cachedOnlyNoMetadata"));
       return;
     }
 
-    const skippedDetails = categorizer.needsDetails
-      ? detailIdsNeedingFetchForType(type, games, details, detailsCacheMaxAgeDays).length
-      : categorizer.needsRatings
-        ? steamRatingIdsNeedingFetch(games, currentRatings).length
+    const skippedDetails = needsDetails
+      ? detailIdsNeedingFetchForType(type, games, details, detailsCacheMaxAgeDays, config).length
+      : needsRatings
+        ? (type === "custom"
+          ? customRatingIdsNeedingFetch(normalizeCustomAutoCatConfig(config), games, currentRatings).length
+          : steamRatingIdsNeedingFetch(games, currentRatings).length)
       : 0;
     await runCategorizer({ cachedOnly: true, skippedDetails });
   };
@@ -862,12 +943,25 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
   ): Promise<CategorizeResult> => {
     const allGames = Object.values(games);
     const ratingsForRun = useSteamRatingsStore.getState().ratings;
-    const gamesForRun = options.cachedOnly && categorizerNeedsRatings(runType)
+    const gamesForRun = options.cachedOnly && categorizerNeedsRatings(runType, config)
       ? allGames.filter((game) => isSteamRatingFresh(ratingsForRun[game.appid]))
       : allGames;
-    const allDetails = options.cachedOnly && categorizerNeedsDetails(runType)
-      ? detailsReadyForType(runType, games, details)
+    const allDetails = options.cachedOnly && categorizerNeedsDetails(runType, config)
+      ? detailsReadyForType(runType, games, details, config)
       : Object.values(details);
+
+    if (runType === "custom") {
+      return evaluateCustomAutoCat({
+        config: normalizeCustomAutoCatConfig(config),
+        games,
+        details,
+        collections,
+        hltbData,
+        ratings: ratingsForRun,
+        hltbTimeMode,
+        detailsCacheMaxAgeDays,
+      });
+    }
 
     if (runType === "hours") {
       const cfg = config as HoursConfig;
@@ -962,7 +1056,7 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
     }
 
     return withProcessedAppIds(await runScoreCategorizer(allDetails, true), allDetails.map((detail) => detail.app_id));
-  }, [games, details, hltbData, ignoredHltbFails, hltbTimeMode]);
+  }, [collections, details, detailsCacheMaxAgeDays, games, hltbData, ignoredHltbFails, hltbTimeMode]);
 
   const runCategorizer = useCallback(async (
     options: { cachedOnly?: boolean; skippedDetails?: number } = {}
@@ -977,9 +1071,12 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
 
       setResult(res);
       setPreviewContext({ type, config });
+      const customNotice = rawResult.custom_diagnostics
+        ? customDiagnosticsNotice(rawResult.custom_diagnostics)
+        : "";
       setPreviewNotice(options.cachedOnly
-        ? t("auto.cachedOnlyNotice", { count: options.skippedDetails ?? 0 })
-        : "");
+        ? [t("auto.cachedOnlyNotice", { count: options.skippedDetails ?? 0 }), customNotice].filter(Boolean).join(" ")
+        : customNotice);
       persist.set({ lastResult: res });
       gotoStep("preview");
     } catch (e) {
@@ -1016,12 +1113,16 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
     try {
       const assignmentSets = new Map<string, Set<number>>();
       const categorizedIds = new Set<number>();
+      const processedIds = new Set<number>();
 
       for (const preset of presets) {
         const rawPresetResult = await runCategorizerConfig(preset.type, preset.config, options);
         const presetResult = options.cachedOnly
           ? rawPresetResult
           : withExpectedAutoCategories(rawPresetResult, preset.type, preset.config);
+        for (const id of presetResult.processed_app_ids ?? []) {
+          processedIds.add(id);
+        }
         for (const [category, ids] of Object.entries(presetResult.assignments)) {
           const bucket = assignmentSets.get(category) ?? new Set<number>();
           for (const id of ids) {
@@ -1039,8 +1140,9 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
       );
       const res: CategorizeResult = {
         assignments,
-        games_processed: Object.keys(games).length,
+        games_processed: processedIds.size || Object.keys(games).length,
         games_categorized: categorizedIds.size,
+        processed_app_ids: processedIds.size > 0 ? [...processedIds].sort((a, b) => a - b) : undefined,
       };
 
       setResult(res);
@@ -1076,6 +1178,14 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
 
     gotoStep("done");
   };
+
+  const activeConfig = currentConfig();
+  const activeNeedsDetails = categorizerNeedsDetails(type, activeConfig);
+  const activeNeedsRatings = categorizerNeedsRatings(type, activeConfig);
+  const activeMissingDetails = detailIdsNeedingFetchForType(type, games, details, detailsCacheMaxAgeDays, activeConfig);
+  const activeMissingRatings = type === "custom"
+    ? customRatingIdsNeedingFetch(normalizeCustomAutoCatConfig(activeConfig), games, ratings)
+    : steamRatingIdsNeedingFetch(games, ratings);
 
   return (
     <div
@@ -1125,6 +1235,8 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
               nameConfig={nameConfig} setNameConfig={setNameConfig}
               ratingConfig={ratingConfig} setRatingConfig={setRatingConfig}
               hltbConfig={hltbConfig} setHltbConfig={setHltbConfig}
+              customConfig={customConfig} setCustomConfig={setCustomConfig}
+              collections={collections}
               metadata={metadata}
               presetName={presetName}
               setPresetName={setPresetName}
@@ -1136,21 +1248,21 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
               onCachedOnly={handleConfigureCachedOnly}
               cachedOnlyAvailable={
                 (
-                  categorizer.needsDetails &&
-                  detailIdsReadyForType(type, games, details).length > 0 &&
-                  detailIdsNeedingFetchForType(type, games, details, detailsCacheMaxAgeDays).length > 0
+                  activeNeedsDetails &&
+                  detailIdsReadyForType(type, games, details, activeConfig).length > 0 &&
+                  activeMissingDetails.length > 0
                 ) ||
                 (
-                  categorizer.needsRatings &&
+                  activeNeedsRatings &&
                   ratingIdsReady(games, ratings).length > 0 &&
-                  steamRatingIdsNeedingFetch(games, ratings).length > 0
+                  activeMissingRatings.length > 0
                 )
               }
               cachedOnlyMissingCount={
-                categorizer.needsDetails
-                  ? detailIdsNeedingFetchForType(type, games, details, detailsCacheMaxAgeDays).length
-                  : categorizer.needsRatings
-                    ? steamRatingIdsNeedingFetch(games, ratings).length
+                activeNeedsDetails
+                  ? activeMissingDetails.length
+                  : activeNeedsRatings
+                    ? activeMissingRatings.length
                   : 0
               }
             />
@@ -1680,7 +1792,7 @@ function ConfigureStep({
   languageConfig, setLanguageConfig,
   platformConfig, setPlatformConfig, nameConfig, setNameConfig,
   ratingConfig, setRatingConfig,
-  hltbConfig, setHltbConfig, metadata, presetName, setPresetName, onSavePreset,
+  hltbConfig, setHltbConfig, customConfig, setCustomConfig, collections, metadata, presetName, setPresetName, onSavePreset,
   loadedPresetId, error, onBack, onNext, onCachedOnly, cachedOnlyAvailable, cachedOnlyMissingCount,
 }: {
   type: CategorizerType;
@@ -1695,6 +1807,8 @@ function ConfigureStep({
   nameConfig: NameConfig; setNameConfig: (c: NameConfig) => void;
   ratingConfig: SteamRatingConfig; setRatingConfig: (c: SteamRatingConfig) => void;
   hltbConfig: HoursConfig; setHltbConfig: (c: HoursConfig) => void;
+  customConfig: CustomAutoCatConfigV1; setCustomConfig: (c: CustomAutoCatConfigV1) => void;
+  collections: SteamCollection[];
   metadata: AutoCatMetadata;
   presetName: string;
   setPresetName: (name: string) => void;
@@ -1751,6 +1865,7 @@ function ConfigureStep({
       {type === "platform" && <PlatformConfigForm config={platformConfig} onChange={setPlatformConfig} />}
       {type === "name" && <NameConfigForm config={nameConfig} onChange={setNameConfig} />}
       {type === "rating" && <SteamRatingConfigForm config={ratingConfig} onChange={setRatingConfig} />}
+      {type === "custom" && <CustomRuleBuilder config={customConfig} onChange={setCustomConfig} collections={collections} />}
       {type === "score" && (
         <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg p-4 text-sm text-repressurizer-text-muted">
           <p className="font-medium text-repressurizer-text mb-2">{t("auto.metacriticBuckets")}</p>

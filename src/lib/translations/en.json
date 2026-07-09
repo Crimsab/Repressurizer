@@ -745,6 +745,8 @@
   "stats.categoriesBySize": "Categories by Size (top 10)",
   "stats.noDetailsHint": "Fetch game details (via Auto-Categorize) to unlock genre, platform, publisher, metacritic, and library value statistics.",
   "auto.title": "Auto-Categorize",
+  "auto.byCustom": "Custom rule",
+  "auto.byCustom.desc": "Build one category from combined filters like HLTB, title, playtime, and categories",
   "auto.byName": "By Name",
   "auto.byName.desc": "Create alphabet buckets from game titles",
   "auto.byPlaytime": "By Playtime",
