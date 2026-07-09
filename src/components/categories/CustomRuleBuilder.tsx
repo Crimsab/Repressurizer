@@ -1,5 +1,5 @@
-import { useMemo } from "react";
-import { Trash, CopySimple, Funnel, Warning } from "@phosphor-icons/react";
+import { useMemo, type ReactNode } from "react";
+import { Trash, CopySimple, Funnel, Warning, Plus } from "@phosphor-icons/react";
 import {
   customConditionId,
   type CategoryRef,
@@ -34,6 +34,7 @@ type AddConditionKind =
   | "metadataText"
   | "platform"
   | "metadataNumber";
+type AddConditionMenuValue = AddConditionKind | "__add";
 
 const ADD_CONDITION_OPTIONS: Array<{ value: AddConditionKind; label: string; description: string }> = [
   { value: "category", label: "Category membership", description: "In, require, or exclude user categories" },
@@ -44,6 +45,10 @@ const ADD_CONDITION_OPTIONS: Array<{ value: AddConditionKind; label: string; des
   { value: "metadataText", label: "Store metadata", description: "Genre, tag, flag, language, studio" },
   { value: "platform", label: "Platform support", description: "Windows, macOS, Linux" },
   { value: "metadataNumber", label: "Numeric metadata", description: "Year, Metacritic, Steam reviews" },
+];
+const ADD_CONDITION_MENU_OPTIONS: Array<{ value: AddConditionMenuValue; label: string; description?: string; disabled?: boolean }> = [
+  { value: "__add", label: "Add condition", disabled: true },
+  ...ADD_CONDITION_OPTIONS,
 ];
 
 export function CustomRuleBuilder({ config, onChange, collections }: CustomRuleBuilderProps) {
@@ -119,63 +124,68 @@ export function CustomRuleBuilder({ config, onChange, collections }: CustomRuleB
   };
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg p-4">
-        <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-repressurizer-text-faint">
-          Result category
-        </label>
-        <input
-          value={config.output.categoryName}
-          onChange={(event) => updateOutputName(event.target.value)}
-          placeholder="Short RPG not in Backlog"
-          className="w-full rounded-lg border border-repressurizer-border bg-repressurizer-surface px-3 py-2 text-sm text-repressurizer-text placeholder:text-repressurizer-text-faint focus:border-repressurizer-accent focus:outline-none"
-        />
-        <p className="mt-1.5 text-xs text-repressurizer-text-faint">
-          Apply will create or replace this user category. Games skipped because cache is missing are preserved.
+    <div className="space-y-3">
+      <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg p-3">
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+          <div>
+            <label className="mb-1.5 block text-[11px] font-medium uppercase tracking-wider text-repressurizer-text-faint">
+              Result category
+            </label>
+            <input
+              value={config.output.categoryName}
+              onChange={(event) => updateOutputName(event.target.value)}
+              placeholder="Short RPG not in Backlog"
+              className="h-9 w-full rounded-lg border border-repressurizer-border bg-repressurizer-surface px-3 text-sm text-repressurizer-text placeholder:text-repressurizer-text-faint focus:border-repressurizer-accent focus:outline-none"
+            />
+          </div>
+          <div className="min-w-0">
+            <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-repressurizer-text-faint">
+              Quick starts
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {([
+                ["short", "Short HLTB"],
+                ["category", "In / not in"],
+                ["uncategorized", "Uncategorized short"],
+                ["title", "Title starts"],
+              ] as const).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => applyTemplate(value)}
+                  className="btn-press rounded-md border border-repressurizer-border-subtle bg-repressurizer-surface px-2 py-1 text-xs text-repressurizer-text-muted transition-colors hover:border-repressurizer-accent hover:text-repressurizer-accent"
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+        <p className="mt-2 text-xs text-repressurizer-text-faint">
+          Apply replaces only this category; games skipped because cache is missing are preserved.
         </p>
       </div>
 
-      <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg p-4">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+      <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg p-3">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-sm font-medium text-repressurizer-text">Templates</p>
-            <p className="text-xs text-repressurizer-text-faint">Start from a common rule and tune it.</p>
+            <p className="text-sm font-medium text-repressurizer-text">Conditions</p>
+            <p className="text-xs text-repressurizer-text-faint">All enabled rows must match.</p>
           </div>
-          <div className="flex flex-wrap gap-1.5">
-            {([
-              ["short", "Short HLTB"],
-              ["category", "In category, not other"],
-              ["uncategorized", "Uncategorized short"],
-              ["title", "Title starts with"],
-            ] as const).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => applyTemplate(value)}
-                className="btn-press rounded-lg border border-repressurizer-border-subtle bg-repressurizer-surface px-2.5 py-1 text-xs text-repressurizer-text-muted transition-colors hover:border-repressurizer-accent hover:text-repressurizer-accent"
-              >
-                {label}
-              </button>
-            ))}
+          <div className="flex items-center gap-2">
+            <Plus size={14} weight="bold" className="text-repressurizer-accent" />
+            <SelectMenu<AddConditionMenuValue>
+              value="__add"
+              options={ADD_CONDITION_MENU_OPTIONS}
+              onChange={(kind) => {
+                if (kind !== "__add") addCondition(kind);
+              }}
+              ariaLabel="Add custom condition"
+              size="sm"
+              align="right"
+              buttonClassName="min-w-40 border-repressurizer-accent/40 bg-repressurizer-accent/10 text-repressurizer-accent"
+            />
           </div>
-        </div>
-      </div>
-
-      <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg p-4">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-sm font-medium text-repressurizer-text">Match games where all conditions are true</p>
-            <p className="text-xs text-repressurizer-text-faint">Add focused rows instead of scanning a wall of settings.</p>
-          </div>
-          <SelectMenu<AddConditionKind>
-            value="category"
-            options={ADD_CONDITION_OPTIONS}
-            onChange={addCondition}
-            ariaLabel="Add custom condition"
-            size="sm"
-            align="right"
-            buttonClassName="border-repressurizer-accent/40 bg-repressurizer-accent/10 text-repressurizer-accent"
-          />
         </div>
 
         {staleRefs.length > 0 && (
@@ -223,9 +233,9 @@ function ConditionRow({
   onRemove: () => void;
 }) {
   return (
-    <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-surface p-3">
-      <div className="mb-3 flex items-center gap-2">
-        <span className="rounded-md bg-repressurizer-accent/10 px-2 py-0.5 text-[11px] font-medium text-repressurizer-accent">
+    <div className="rounded-lg border border-repressurizer-border-subtle bg-repressurizer-surface px-3 py-2.5">
+      <div className="mb-2 flex items-center gap-2">
+        <span className="rounded-md bg-repressurizer-accent/10 px-2 py-0.5 text-[11px] font-semibold text-repressurizer-accent">
           {conditionLabel(condition.kind)}
         </span>
         <label className="ml-auto flex items-center gap-1.5 text-[11px] text-repressurizer-text-faint">
@@ -235,7 +245,7 @@ function ConditionRow({
             onChange={(event) => onChange({ ...condition, enabled: event.target.checked } as CustomRuleConditionV1)}
             className="h-3.5 w-3.5 accent-repressurizer-accent"
           />
-          enabled
+          Enabled
         </label>
         <button type="button" onClick={onDuplicate} className="btn-press flex h-7 w-7 items-center justify-center rounded-lg text-repressurizer-text-faint hover:bg-repressurizer-surface-hover hover:text-repressurizer-text" title="Duplicate">
           <CopySimple size={13} />
@@ -291,32 +301,36 @@ function CategoryConditionEditor({
     onChange({ ...condition, categories });
   };
   return (
-    <div className="space-y-3">
+    <div className="grid items-start gap-2 lg:grid-cols-[180px_minmax(0,1fr)]">
       <SelectMenu<CustomCategoryCondition["mode"]>
+        label="Match"
         value={condition.mode}
         options={[
-          { value: "inAny", label: "is in any of" },
-          { value: "inAll", label: "is in all of" },
-          { value: "notIn", label: "is not in" },
+          { value: "inAny", label: "in any of" },
+          { value: "inAll", label: "in all of" },
+          { value: "notIn", label: "not in" },
         ]}
         onChange={(mode) => onChange({ ...condition, mode })}
         size="sm"
       />
-      <div className="flex max-h-28 flex-wrap gap-1.5 overflow-auto rounded-lg border border-repressurizer-border-subtle bg-repressurizer-bg p-2">
-        {categories.map((category) => (
-          <button
-            key={category.key}
-            type="button"
-            onClick={() => toggle(category)}
-            className={`btn-press rounded-md border px-2 py-1 text-xs transition-colors ${
-              selected.has(category.key)
-                ? "border-repressurizer-accent bg-repressurizer-accent/10 text-repressurizer-accent"
-                : "border-repressurizer-border-subtle text-repressurizer-text-muted hover:border-repressurizer-border hover:text-repressurizer-text"
-            }`}
-          >
-            {category.name}
-          </button>
-        ))}
+      <div>
+        <FieldLabel>Categories</FieldLabel>
+        <div className="flex min-h-8 max-h-24 flex-wrap content-start gap-1.5 overflow-auto rounded-lg border border-repressurizer-border bg-repressurizer-bg px-2 py-1.5">
+          {categories.map((category) => (
+            <button
+              key={category.key}
+              type="button"
+              onClick={() => toggle(category)}
+              className={`btn-press rounded-md border px-2 py-0.5 text-xs transition-colors ${
+                selected.has(category.key)
+                  ? "border-repressurizer-accent bg-repressurizer-accent/10 text-repressurizer-accent"
+                  : "border-repressurizer-border-subtle text-repressurizer-text-muted hover:border-repressurizer-border hover:text-repressurizer-text"
+              }`}
+            >
+              {category.name}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -395,7 +409,7 @@ function RangeConditionEditor<T extends CustomPlaytimeCondition>({
   return (
     <div className="grid gap-2 sm:grid-cols-2">
       <NumberInput label={`${label} min h`} value={condition.minHours} onChange={(minHours) => onChange({ ...condition, minHours })} />
-      <NumberInput label={`${label} max h`} value={condition.maxHoursExclusive} onChange={(maxHoursExclusive) => onChange({ ...condition, maxHoursExclusive })} />
+      <NumberInput label={`${label} max h (<)`} value={condition.maxHoursExclusive} onChange={(maxHoursExclusive) => onChange({ ...condition, maxHoursExclusive })} />
     </div>
   );
 }
@@ -408,8 +422,9 @@ function HltbConditionEditor({
   onChange: (condition: CustomRuleConditionV1) => void;
 }) {
   return (
-    <div className="grid gap-2 sm:grid-cols-[180px_minmax(0,1fr)]">
+    <div className="grid items-start gap-2 sm:grid-cols-[180px_minmax(0,1fr)]">
       <SelectMenu<HltbTimeMode>
+        label="Time"
         value={condition.mode}
         options={HLTB_TIME_MODES.map((mode) => ({ value: mode, label: hltbModeLabel(mode) }))}
         onChange={(mode) => onChange({ ...condition, mode })}
@@ -417,7 +432,7 @@ function HltbConditionEditor({
       />
       <div className="grid gap-2 sm:grid-cols-2">
         <NumberInput label="min h" value={condition.minHours} onChange={(minHours) => onChange({ ...condition, minHours })} />
-        <NumberInput label="max h" value={condition.maxHoursExclusive} onChange={(maxHoursExclusive) => onChange({ ...condition, maxHoursExclusive })} />
+        <NumberInput label="max h (<)" value={condition.maxHoursExclusive} onChange={(maxHoursExclusive) => onChange({ ...condition, maxHoursExclusive })} />
       </div>
     </div>
   );
@@ -555,7 +570,7 @@ function MetadataNumberConditionEditor({
 function NumberInput({ label, value, onChange }: { label: string; value?: number; onChange: (value: number | undefined) => void }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-[10px] uppercase tracking-wider text-repressurizer-text-faint">{label}</span>
+      <FieldLabel>{label}</FieldLabel>
       <input
         type="number"
         value={value ?? ""}
@@ -563,6 +578,14 @@ function NumberInput({ label, value, onChange }: { label: string; value?: number
         className="h-8 w-full rounded-lg border border-repressurizer-border bg-repressurizer-bg px-2.5 text-xs text-repressurizer-text focus:border-repressurizer-accent focus:outline-none"
       />
     </label>
+  );
+}
+
+function FieldLabel({ children }: { children: ReactNode }) {
+  return (
+    <span className="mb-1 block text-[10px] font-medium uppercase tracking-wider text-repressurizer-text-faint">
+      {children}
+    </span>
   );
 }
 

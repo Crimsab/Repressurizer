@@ -47,9 +47,10 @@ import {
   evaluateCustomAutoCat,
   normalizeCustomAutoCatConfig,
   type CustomAutoCatConfigV1,
+  type CustomHltbCondition,
   type CustomRuleDiagnostics,
 } from "../../lib/customAutoCategorize";
-import { hltbModeLabel, HLTB_TIME_MODES } from "../../lib/hltb";
+import { getHltbHours, hltbModeLabel, HLTB_TIME_MODES } from "../../lib/hltb";
 import {
   categorizeByHltb,
   hltbModeForConfig,
@@ -80,6 +81,7 @@ import {
   type SteamRatingConfig,
   type SteamRatingRule,
   type YearGrouping,
+  type HltbData,
 } from "../../lib/tauri";
 import type { GameDetails, HltbTimeMode, OwnedGame, SteamCollection, SteamReviewSummary } from "../../lib/types";
 import { CustomRuleBuilder } from "./CustomRuleBuilder";
@@ -2771,12 +2773,19 @@ function PreviewStep({ result, context, notice, onBack, onApply }: {
 }) {
   const t = useT();
   const games = useGameStore((s) => s.games);
+  const hltbData = useHltbStore((s) => s.data);
   const [sortMode, setSortMode] = useState<PreviewSortMode>("count");
   const entries = useMemo(
     () => sortAutoCategorizePreviewEntries(result.assignments, sortMode, context),
     [context, result.assignments, sortMode]
   );
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [expanded, setExpanded] = useState<Set<string>>(
+    () => new Set(entries.length === 1 ? [entries[0][0]] : [])
+  );
+
+  useEffect(() => {
+    if (entries.length === 1) setExpanded(new Set([entries[0][0]]));
+  }, [entries]);
 
   const toggle = (name: string) => {
     setExpanded((prev) => {
@@ -2854,10 +2863,21 @@ function PreviewStep({ result, context, notice, onBack, onApply }: {
                 <div className="ml-8 mb-1 space-y-0.5">
                   {ids.map((id) => {
                     const g = games[id];
+                    const note = customPreviewGameNote(context, id, hltbData);
                     return (
-                      <p key={id} className="text-[11px] text-repressurizer-text-muted truncate px-2 py-0.5">
-                        {g ? String(g.name ?? "") : `#${id}`}
-                      </p>
+                      <div key={id} className="flex items-center gap-2 px-2 py-0.5 text-[11px]">
+                        <span className="min-w-0 flex-1 truncate text-repressurizer-text-muted">
+                          {g ? String(g.name ?? "") : `#${id}`}
+                        </span>
+                        {note && (
+                          <span
+                            title={note.title}
+                            className="shrink-0 rounded-md bg-repressurizer-accent/10 px-1.5 py-0.5 font-mono text-[10px] tabular-nums text-repressurizer-accent"
+                          >
+                            {note.label}
+                          </span>
+                        )}
+                      </div>
                     );
                   })}
                 </div>
@@ -2881,6 +2901,49 @@ function PreviewStep({ result, context, notice, onBack, onApply }: {
       </div>
     </div>
   );
+}
+
+interface CustomPreviewGameNote {
+  label: string;
+  title: string;
+}
+
+function customPreviewGameNote(
+  context: PreviewSortContext | null,
+  appId: number,
+  hltbData: Record<number, HltbData>
+): CustomPreviewGameNote | null {
+  if (context?.type !== "custom") return null;
+  const config = normalizeCustomAutoCatConfig(context.config);
+  const hltbConditions = config.logic.conditions.filter(
+    (condition): condition is CustomHltbCondition => condition.kind === "hltb" && condition.enabled !== false
+  );
+  if (hltbConditions.length === 0) return null;
+
+  const hltb = hltbData[appId];
+  const label = hltbConditions
+    .map((condition) => {
+      const hours = getHltbHours(hltb, condition.mode);
+      if (hours == null) return "";
+      return `${hltbModeLabel(condition.mode)}: ${formatPreviewHours(hours)}`;
+    })
+    .filter(Boolean)
+    .join(" · ");
+  if (!label) return null;
+
+  const match = [
+    hltb?.game_name ? `HLTB match: ${hltb.game_name}` : "",
+    hltb?.confidence != null ? `confidence: ${hltb.confidence}%` : "",
+  ].filter(Boolean).join(" · ");
+
+  return {
+    label,
+    title: match || label,
+  };
+}
+
+function formatPreviewHours(hours: number): string {
+  return `${Number.isInteger(hours) ? hours : hours.toFixed(1)}h`;
 }
 
 // ============================================================

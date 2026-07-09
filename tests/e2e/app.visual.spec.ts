@@ -148,7 +148,7 @@ test("AutoCat custom rule creates one category from a title condition", async ({
   });
   await dialog.getByRole("button", { name: /Custom rule/ }).click();
   await dialog.getByPlaceholder("Short RPG not in Backlog").fill("Hades Custom");
-  await dialog.getByRole("button", { name: "Title starts with" }).click();
+  await dialog.getByRole("button", { name: "Title starts" }).click();
   await dialog.locator('input[value="A"]').fill("Hades");
   await dialog.getByRole("button", { name: "Run" }).click();
 

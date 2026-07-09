@@ -133,6 +133,28 @@ describe("evaluateCustomAutoCat", () => {
     });
   });
 
+  it("treats the HLTB max hour as an exclusive upper bound", () => {
+    const result = evaluateCustomAutoCat({
+      config: config("Under 10h", [
+        { id: "hltb", kind: "hltb", mode: "main_story", minHours: 1, maxHoursExclusive: 10 },
+      ]),
+      games: {
+        10: game(10, "Nine Hours", 0),
+        11: game(11, "Exactly Ten", 0),
+      },
+      details: {},
+      collections: [],
+      hltbData: {
+        10: { main_story: 9.9, main_extra: null, completionist: null },
+        11: { main_story: 10, main_extra: null, completionist: null },
+      },
+      ratings: {},
+      hltbTimeMode: "main_story",
+    });
+
+    expect(result.assignments["Under 10h"]).toEqual([10]);
+  });
+
   it("matches uncategorized games while ignoring the custom output category itself", () => {
     const result = evaluateCustomAutoCat({
       config: config("Uncategorized short", [

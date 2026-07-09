@@ -380,7 +380,7 @@ export async function installTauriMock(page: Page) {
           case "load_wishlist_cache":
             return null;
           case "load_hltb_cache":
-            return JSON.stringify({
+            return window.localStorage.getItem("repressurizer-mock-hltb-cache") ?? JSON.stringify({
               10: { main_story: 22, main_extra: 32, completionist: 55 },
               1426210: { main_story: 14, main_extra: 16, completionist: 20 },
               632470: { main_story: 22, main_extra: 32, completionist: 55 },
