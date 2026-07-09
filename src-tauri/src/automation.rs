@@ -1076,7 +1076,7 @@ fn stable_stringify(value: &Value) -> String {
         ),
         Value::Object(map) => {
             let mut entries = map.iter().collect::<Vec<_>>();
-            entries.sort_by(|(a, _), (b, _)| a.cmp(b));
+            entries.sort_by_key(|(key, _)| *key);
             format!(
                 "{{{}}}",
                 entries
