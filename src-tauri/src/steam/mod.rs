@@ -1,9 +1,9 @@
-pub mod collections;
-pub mod detector;
 pub mod api;
-pub mod sam;
+pub mod collections;
 pub mod depressurizer_database;
 pub mod depressurizer_profile;
-pub mod shortcuts;
+pub mod detector;
 pub mod legacy_sharedconfig;
 pub mod local_library;
+pub mod sam;
+pub mod shortcuts;

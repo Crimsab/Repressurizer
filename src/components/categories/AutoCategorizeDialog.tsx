@@ -32,6 +32,7 @@ import {
   type PreviewSortContext,
   type PreviewSortMode,
 } from "../../lib/autoCategorizePreview";
+import { DialogOverlay } from "../ui/DialogOverlay";
 import {
   categorizeBySteamRating,
   defaultSteamRatingRules,
@@ -1190,7 +1191,9 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
     : steamRatingIdsNeedingFetch(games, ratings);
 
   return (
-    <div
+    <DialogOverlay
+      label={t("auto.title")}
+      onClose={onClose}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
@@ -1201,7 +1204,7 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
             <Robot size={18} weight="duotone" className="text-repressurizer-accent" />
             <h2 className="text-base font-semibold text-white tracking-tight">{t("auto.title")}</h2>
           </div>
-          <button onClick={onClose} className="btn-press flex items-center justify-center w-7 h-7 rounded-lg text-repressurizer-text-muted transition-colors hover:text-white hover:bg-repressurizer-surface-hover">
+          <button onClick={onClose} aria-label={t("common.close")} className="btn-press flex items-center justify-center w-7 h-7 rounded-lg text-repressurizer-text-muted transition-colors hover:text-white hover:bg-repressurizer-surface-hover">
             <X size={16} weight="bold" />
           </button>
         </div>
@@ -1312,7 +1315,7 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
           )}
         </div>
       </div>
-    </div>
+    </DialogOverlay>
   );
 }
 

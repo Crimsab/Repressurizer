@@ -25,6 +25,7 @@ import { extractReleaseYear } from "../../lib/search";
 import { detailsPriceMatchesCurrency, detailsWithPriceForCurrency } from "../../lib/prices";
 import { SteamImage } from "./SteamImage";
 import { SelectMenu } from "../ui/SelectMenu";
+import { DialogOverlay } from "../ui/DialogOverlay";
 import { useHltbStore } from "../../stores/hltbStore";
 import { getCategoryColor } from "../../lib/categoryColors";
 import { CategoryChip } from "../ui/CategoryChip";
@@ -461,7 +462,9 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
   }, [game.appid]);
 
   return createPortal(
-    <div
+    <DialogOverlay
+      label={String(game.name ?? game.appid)}
+      onClose={onClose}
       className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/70 p-4 backdrop-blur-sm"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
@@ -506,6 +509,7 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
           </div>
           <button
             onClick={onClose}
+            aria-label={t("common.close")}
             className="btn-press absolute right-4 top-4 flex items-center justify-center w-8 h-8 rounded-lg bg-black/40 text-white/70 transition-colors hover:bg-black/60 hover:text-white"
           >
             <X size={16} weight="bold" />
@@ -607,7 +611,7 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
           onOpenFolder={handleOpenSamBackupFolder}
         />
       )}
-    </div>,
+    </DialogOverlay>,
     document.body
   );
 }
@@ -1657,7 +1661,9 @@ function SamBackupViewerDialog({
   }, [actionFilter, appId, backups, dayFilter, gameName, phaseFilter, query, sortMode]);
 
   return (
-    <div
+    <DialogOverlay
+      label={t("detail.sam.backupsFor", { name: gameName })}
+      onClose={onClose}
       className="fixed inset-0 z-[60] flex items-center justify-center bg-black/65 px-4 backdrop-blur-sm"
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose();
@@ -1834,7 +1840,7 @@ function SamBackupViewerDialog({
           )}
         </div>
       </div>
-    </div>
+    </DialogOverlay>
   );
 }
 

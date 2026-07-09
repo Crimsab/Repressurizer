@@ -19,6 +19,7 @@ import {
 import { exportToDisk } from "../../lib/exportAction";
 import { useT, type TranslationKey } from "../../lib/i18n";
 import { SelectMenu, type SelectMenuOption } from "../ui/SelectMenu";
+import { DialogOverlay } from "../ui/DialogOverlay";
 import {
   X,
   FileText,
@@ -317,7 +318,9 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
   };
 
   return (
-    <div
+    <DialogOverlay
+      label={t("export.title")}
+      onClose={onClose}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
@@ -735,7 +738,7 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
           </div>
         </div>
       </div>
-    </div>
+    </DialogOverlay>
   );
 }
 

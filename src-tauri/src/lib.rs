@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Mutex, OnceLock};
 use steam::api;
 use steam::collections;
 use steam::depressurizer_database;
@@ -22,6 +23,7 @@ use tauri_plugin_shell::ShellExt;
 
 static TRAY_BACKUP_RUNNING: AtomicBool = AtomicBool::new(false);
 static TEMP_FILE_COUNTER: AtomicU64 = AtomicU64::new(0);
+static SETTINGS_FILE_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
 const HTTP_RESPONSE_PREVIEW_BYTES: usize = 16 * 1024;
 const HTTP_RESPONSE_PREVIEW_CHARS: usize = 500;
@@ -178,7 +180,11 @@ fn read_app_setting_string(key: &str) -> Option<String> {
         .map(ToString::to_string)
 }
 
-fn read_settings_json() -> Result<serde_json::Value, String> {
+fn settings_file_lock() -> &'static Mutex<()> {
+    SETTINGS_FILE_LOCK.get_or_init(|| Mutex::new(()))
+}
+
+fn read_settings_json_unlocked() -> Result<serde_json::Value, String> {
     let settings_path = settings_file_path()?;
     let data = std::fs::read_to_string(&settings_path).map_err(|error| {
         format!(
@@ -194,6 +200,13 @@ fn read_settings_json() -> Result<serde_json::Value, String> {
             error
         )
     })
+}
+
+pub(crate) fn read_settings_json() -> Result<serde_json::Value, String> {
+    let _guard = settings_file_lock()
+        .lock()
+        .map_err(|_| "Settings file lock poisoned".to_string())?;
+    read_settings_json_unlocked()
 }
 
 fn read_optional_text_file(path: &Path, description: &str) -> Result<Option<String>, String> {
@@ -328,11 +341,23 @@ fn write_text_file_atomic(
     result
 }
 
-fn write_settings_json(value: &serde_json::Value) -> Result<(), String> {
+fn write_settings_json_unlocked(value: &serde_json::Value) -> Result<(), String> {
     let settings_path = settings_file_path()?;
     let data = serde_json::to_string_pretty(value)
         .map_err(|error| format!("Failed to serialize settings: {}", error))?;
     write_text_file_atomic(&settings_path, &data, "settings file", true)
+}
+
+pub(crate) fn update_settings_json<F>(update: F) -> Result<(), String>
+where
+    F: FnOnce(&mut serde_json::Value) -> Result<(), String>,
+{
+    let _guard = settings_file_lock()
+        .lock()
+        .map_err(|_| "Settings file lock poisoned".to_string())?;
+    let mut settings = read_settings_json_unlocked()?;
+    update(&mut settings)?;
+    write_settings_json_unlocked(&settings)
 }
 
 fn launched_from_autostart() -> bool {
@@ -512,9 +537,10 @@ fn create_tray_backup(app: tauri::AppHandle) {
 }
 
 fn set_automation_enabled(enabled: bool) -> Result<(), String> {
-    let mut settings = read_settings_json()?;
-    settings["automationPublishEnabled"] = serde_json::Value::Bool(enabled);
-    write_settings_json(&settings)
+    update_settings_json(|settings| {
+        settings["automationPublishEnabled"] = serde_json::Value::Bool(enabled);
+        Ok(())
+    })
 }
 
 fn automation_status_message() -> Result<String, String> {
@@ -630,6 +656,36 @@ fn redact_tail(value: &str) -> String {
     format!("***{}", tail)
 }
 
+const AUTOMATION_STATUS_KEYS: &[&str] = &[
+    "automationPublishLastAttemptedAt",
+    "automationPublishLastStatus",
+    "automationPublishLastMessage",
+    "automationPublishLastHttpStatus",
+    "automationPublishLastChecksum",
+    "automationPublishLastPublishedAt",
+    "automationPublishLogs",
+];
+
+fn preserve_newer_automation_status(incoming: &mut serde_json::Value, current: &serde_json::Value) {
+    let incoming_timestamp = incoming
+        .get("automationPublishLastAttemptedAt")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default();
+    let current_timestamp = current
+        .get("automationPublishLastAttemptedAt")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default();
+    if current_timestamp <= incoming_timestamp {
+        return;
+    }
+
+    for key in AUTOMATION_STATUS_KEYS {
+        if let Some(value) = current.get(*key) {
+            incoming[*key] = value.clone();
+        }
+    }
+}
+
 // Generic app data persistence — any store can save/load by key
 #[tauri::command]
 fn load_app_data(_app: tauri::AppHandle, key: String) -> Result<Option<String>, String> {
@@ -640,6 +696,22 @@ fn load_app_data(_app: tauri::AppHandle, key: String) -> Result<Option<String>, 
 #[tauri::command]
 fn save_app_data(_app: tauri::AppHandle, key: String, data: String) -> Result<(), String> {
     let path = app_data_file_path(&key)?;
+    if key == "settings.json" {
+        let _guard = settings_file_lock()
+            .lock()
+            .map_err(|_| "Settings file lock poisoned".to_string())?;
+        let mut incoming = serde_json::from_str::<serde_json::Value>(&data)
+            .map_err(|error| format!("Failed to parse settings data: {error}"))?;
+        if !incoming.is_object() {
+            return Err("Settings data must contain a JSON object".to_string());
+        }
+        if let Ok(current) = read_settings_json_unlocked() {
+            preserve_newer_automation_status(&mut incoming, &current);
+        }
+        let merged = serde_json::to_string_pretty(&incoming)
+            .map_err(|error| format!("Failed to serialize settings data: {error}"))?;
+        return write_text_file_atomic(&path, &merged, "app data file", true);
+    }
     write_text_file_atomic(&path, &data, "app data file", should_sync_app_data(&key))
 }
 
@@ -694,10 +766,12 @@ async fn post_json_export(input: PostJsonExportInput) -> Result<HttpPublishResul
         request = request.bearer_auth(token);
     }
 
-    let response = request
-        .send()
-        .await
-        .map_err(|e| format!("Failed to publish automation export: {}", e))?;
+    let response = request.send().await.map_err(|error| {
+        format!(
+            "Failed to publish automation export: {}",
+            error.without_url()
+        )
+    })?;
     let status = response.status();
     let response_preview = read_response_preview(response).await;
 
@@ -715,7 +789,7 @@ async fn post_json_export(input: PostJsonExportInput) -> Result<HttpPublishResul
     })
 }
 
-async fn read_response_preview(mut response: reqwest::Response) -> String {
+pub(crate) async fn read_response_preview(mut response: reqwest::Response) -> String {
     let mut bytes = Vec::new();
 
     while bytes.len() < HTTP_RESPONSE_PREVIEW_BYTES {
@@ -1253,7 +1327,10 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::{read_optional_text_file, should_sync_app_data, validate_app_data_key};
+    use super::{
+        preserve_newer_automation_status, read_optional_text_file, should_sync_app_data,
+        validate_app_data_key,
+    };
 
     fn temp_test_path(prefix: &str) -> std::path::PathBuf {
         let unique = std::time::SystemTime::now()
@@ -1355,5 +1432,28 @@ mod tests {
         let _ = std::fs::remove_file(&path);
 
         assert_eq!(result.as_deref(), Some("{\"ok\":true}"));
+    }
+
+    #[test]
+    fn settings_save_preserves_newer_automation_status() {
+        let mut incoming = serde_json::json!({
+            "theme": "light",
+            "automationPublishLastAttemptedAt": "2026-07-09T10:00:00.000Z",
+            "automationPublishLastStatus": "running",
+        });
+        let current = serde_json::json!({
+            "theme": "dark",
+            "automationPublishLastAttemptedAt": "2026-07-09T10:01:00.000Z",
+            "automationPublishLastStatus": "success",
+            "automationPublishLastMessage": "Published",
+            "automationPublishLogs": [{ "status": "success" }],
+        });
+
+        preserve_newer_automation_status(&mut incoming, &current);
+
+        assert_eq!(incoming["theme"], "light");
+        assert_eq!(incoming["automationPublishLastStatus"], "success");
+        assert_eq!(incoming["automationPublishLastMessage"], "Published");
+        assert_eq!(incoming["automationPublishLogs"][0]["status"], "success");
     }
 }

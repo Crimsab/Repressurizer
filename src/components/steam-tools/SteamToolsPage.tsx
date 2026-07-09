@@ -11,6 +11,7 @@ import {
   Wrench,
   X,
 } from "@phosphor-icons/react";
+import { DialogOverlay } from "../ui/DialogOverlay";
 
 interface SteamToolsPageProps {
   onClose: () => void;
@@ -24,28 +25,32 @@ export function SteamToolsPage({ onClose, onOpenAchievements }: SteamToolsPagePr
   const games = useGameStore((s) => s.games);
   const details = useGameStore((s) => s.details);
   const summaries = useAchievementsStore((s) => s.summaries);
-  const settings = useSettingsStore();
+  const steamPath = useSettingsStore((s) => s.steamPath);
+  const steamToolsEnabled = useSettingsStore((s) => s.steamToolsEnabled);
+  const steamToolsAchievementWritesEnabled = useSettingsStore(
+    (s) => s.steamToolsAchievementWritesEnabled
+  );
   const [samProbe, setSamProbe] = useState<SamBridgeProbe | null>(null);
   const [samChecking, setSamChecking] = useState(false);
   const samEnabled =
-    settings.steamToolsEnabled && settings.steamToolsAchievementWritesEnabled;
+    steamToolsEnabled && steamToolsAchievementWritesEnabled;
 
   const refreshSamProbe = useCallback(async () => {
     setSamChecking(true);
     try {
-      const probe = await probeSamBridge(settings.steamPath, 0);
+      const probe = await probeSamBridge(steamPath, 0);
       setSamProbe(probe);
     } catch {
       setSamProbe(null);
     } finally {
       setSamChecking(false);
     }
-  }, [settings.steamPath]);
+  }, [steamPath]);
 
   useEffect(() => {
     let cancelled = false;
     setSamChecking(true);
-    probeSamBridge(settings.steamPath, 0)
+    probeSamBridge(steamPath, 0)
       .then((probe) => {
         if (!cancelled) setSamProbe(probe);
       })
@@ -58,7 +63,7 @@ export function SteamToolsPage({ onClose, onOpenAchievements }: SteamToolsPagePr
     return () => {
       cancelled = true;
     };
-  }, [settings.steamPath]);
+  }, [steamPath]);
 
   const stats = useMemo(() => {
     const gameValues = Object.values(games);
@@ -87,7 +92,9 @@ export function SteamToolsPage({ onClose, onOpenAchievements }: SteamToolsPagePr
   }, [details, games, summaries]);
 
   return (
-    <div
+    <DialogOverlay
+      label={t("steamTools.title")}
+      onClose={onClose}
       className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 px-4 py-8 backdrop-blur-sm"
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose();
@@ -188,7 +195,7 @@ export function SteamToolsPage({ onClose, onOpenAchievements }: SteamToolsPagePr
           </div>
         </div>
       </div>
-    </div>
+    </DialogOverlay>
   );
 }
 

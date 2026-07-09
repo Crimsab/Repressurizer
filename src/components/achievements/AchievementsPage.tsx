@@ -6,6 +6,7 @@ import type { OwnedGame } from "../../lib/types";
 import { X, Trophy, ArrowsClockwise } from "@phosphor-icons/react";
 import { SteamImage } from "../games/SteamImage";
 import { useT } from "../../lib/i18n";
+import { DialogOverlay } from "../ui/DialogOverlay";
 
 interface AchievementsPageProps {
   onClose: () => void;
@@ -63,7 +64,9 @@ export function AchievementsPage({ onClose, onOpenGame }: AchievementsPageProps)
   const noDetails = achievementGames.length === 0 && Object.keys(details).length === 0;
 
   return (
-    <div
+    <DialogOverlay
+      label={t("achievements.title")}
+      onClose={onClose}
       className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-sm pt-16 pb-8 px-4"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
@@ -116,6 +119,7 @@ export function AchievementsPage({ onClose, onOpenGame }: AchievementsPageProps)
 
             <button
               onClick={onClose}
+              aria-label={t("common.close")}
               className="flex h-7 w-7 items-center justify-center rounded-lg text-repressurizer-text-muted transition-colors hover:bg-repressurizer-surface-hover hover:text-white"
             >
               <X size={16} weight="bold" />
@@ -202,6 +206,6 @@ export function AchievementsPage({ onClose, onOpenGame }: AchievementsPageProps)
           )}
         </div>
       </div>
-    </div>
+    </DialogOverlay>
   );
 }

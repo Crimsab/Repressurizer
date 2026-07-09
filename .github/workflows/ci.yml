@@ -104,6 +104,15 @@ jobs:
       - name: Rust check
         run: cargo check --manifest-path src-tauri/Cargo.toml
 
+      - name: Rust formatting
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
+
+      - name: Rust lint
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+
+      - name: Rust app tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+
   rust-integration-check:
     name: Rust integration crate
     runs-on: ubuntu-latest

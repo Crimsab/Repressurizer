@@ -16,6 +16,7 @@ import type { OwnedGame, SteamCollection } from "../../lib/types";
 import { useT, type TranslationKey } from "../../lib/i18n";
 import { SelectMenu } from "../ui/SelectMenu";
 import { SteamImage } from "../games/SteamImage";
+import { DialogOverlay } from "../ui/DialogOverlay";
 
 interface CollectionCompareDialogProps {
   initialCollections: SteamCollection[];
@@ -114,7 +115,9 @@ export function CollectionCompareDialog({
   };
 
   return (
-    <div
+    <DialogOverlay
+      label={t("collectionCompare.title")}
+      onClose={onClose}
       className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose();
@@ -275,6 +278,6 @@ export function CollectionCompareDialog({
           </>
         )}
       </div>
-    </div>
+    </DialogOverlay>
   );
 }

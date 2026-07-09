@@ -3,6 +3,7 @@ import { useCategoryStore } from "../../stores/categoryStore";
 import { useT } from "../../lib/i18n";
 import { X, ArrowsMerge } from "@phosphor-icons/react";
 import { SelectMenu } from "../ui/SelectMenu";
+import { DialogOverlay } from "../ui/DialogOverlay";
 
 interface MergeCategoriesDialogProps {
   selectedKeys: string[];
@@ -46,7 +47,9 @@ export function MergeCategoriesDialog({ selectedKeys, onClose }: MergeCategories
   };
 
   return (
-    <div
+    <DialogOverlay
+      label={t("merge.title")}
+      onClose={onClose}
       className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
@@ -59,6 +62,7 @@ export function MergeCategoriesDialog({ selectedKeys, onClose }: MergeCategories
           <button
             type="button"
             onClick={onClose}
+            aria-label={t("common.close")}
             className="btn-press rounded-lg p-1.5 text-repressurizer-text-muted hover:text-white hover:bg-repressurizer-surface-hover"
           >
             <X size={18} />
@@ -139,6 +143,6 @@ export function MergeCategoriesDialog({ selectedKeys, onClose }: MergeCategories
           </button>
         </div>
       </div>
-    </div>
+    </DialogOverlay>
   );
 }

@@ -8,6 +8,7 @@ import { SteamImage } from "../games/SteamImage";
 import { useT } from "../../lib/i18n";
 import { priceSnapshotForCurrency } from "../../lib/prices";
 import type { GameDetails } from "../../lib/types";
+import { DialogOverlay } from "../ui/DialogOverlay";
 
 interface WishlistPageProps {
   onClose: () => void;
@@ -153,7 +154,9 @@ export function WishlistPage({ onClose }: WishlistPageProps) {
   }, [items, sortBy, search, details, onSaleOnly, currency]);
 
   return (
-    <div
+    <DialogOverlay
+      label={t("wishlist.title")}
+      onClose={onClose}
       className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-sm pt-16 pb-8 px-4"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
@@ -203,6 +206,7 @@ export function WishlistPage({ onClose }: WishlistPageProps) {
             </button>
             <button
               onClick={onClose}
+              aria-label={t("common.close")}
               className="flex h-7 w-7 items-center justify-center rounded-lg text-repressurizer-text-muted transition-colors hover:bg-repressurizer-surface-hover hover:text-white"
             >
               <X size={16} weight="bold" />
@@ -325,7 +329,7 @@ export function WishlistPage({ onClose }: WishlistPageProps) {
           )}
         </div>
       </div>
-    </div>
+    </DialogOverlay>
   );
 }
 

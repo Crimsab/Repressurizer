@@ -12,6 +12,7 @@ import { isSteamRunning, saveCollections, saveShortcuts } from "../../lib/tauri"
 import { buildSavePreview, type SavePreview } from "../../lib/savePreview";
 import { hasAdvancedFilters } from "../../lib/search";
 import { useT, type TranslationKey } from "../../lib/i18n";
+import { DialogOverlay } from "../ui/DialogOverlay";
 import {
   MagnifyingGlass,
   SquaresFour,
@@ -582,7 +583,11 @@ function SavePreviewDialog({
   const t = useT();
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-6 backdrop-blur-sm">
+    <DialogOverlay
+      label={t("savePreview.title")}
+      onClose={onCancel}
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-6 backdrop-blur-sm"
+    >
       <div className="w-full max-w-xl animate-fade-in rounded-2xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_24px_64px_rgba(0,0,0,0.6)]">
         <div className="border-b border-repressurizer-border px-5 py-4">
           <h2 className="text-base font-semibold tracking-tight text-white">{t("savePreview.title")}</h2>
@@ -657,7 +662,7 @@ function SavePreviewDialog({
           </button>
         </div>
       </div>
-    </div>
+    </DialogOverlay>
   );
 }
 

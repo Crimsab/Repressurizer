@@ -10,10 +10,7 @@ pub struct GenreConfig {
     pub ignored_genres: Vec<String>,
 }
 
-pub fn categorize_by_genre(
-    games: &[GameDetails],
-    config: &GenreConfig,
-) -> CategorizeResult {
+pub fn categorize_by_genre(games: &[GameDetails], config: &GenreConfig) -> CategorizeResult {
     let mut assignments: HashMap<String, Vec<u64>> = HashMap::new();
     let mut games_categorized = 0u64;
 
@@ -21,7 +18,11 @@ pub fn categorize_by_genre(
         let mut added = 0usize;
 
         for genre in &game.genres {
-            if config.ignored_genres.iter().any(|ig| ig.eq_ignore_ascii_case(genre)) {
+            if config
+                .ignored_genres
+                .iter()
+                .any(|ig| ig.eq_ignore_ascii_case(genre))
+            {
                 continue;
             }
 
@@ -36,10 +37,7 @@ pub fn categorize_by_genre(
                 None => genre.clone(),
             };
 
-            assignments
-                .entry(cat_name)
-                .or_default()
-                .push(game.app_id);
+            assignments.entry(cat_name).or_default().push(game.app_id);
 
             added += 1;
         }

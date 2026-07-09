@@ -739,9 +739,8 @@ fn perform_bridge_achievement_action(
         diagnostics.push(format!(
             "store_stats_after_non_target_restore={store_stats}"
         ));
-        let restore_store_stats_callback = bridge.wait_for_stats_stored(
-            std::time::Duration::from_millis(900),
-        );
+        let restore_store_stats_callback =
+            bridge.wait_for_stats_stored(std::time::Duration::from_millis(900));
         diagnostics.push(format!(
             "store_stats_after_non_target_restore_callback={restore_store_stats_callback}"
         ));
@@ -1622,21 +1621,13 @@ mod windows_steam {
 
         pub fn wait_for_stats_stored(&self, duration: Duration) -> bool {
             self.run_callbacks_until(duration, |message| {
-                callback_matches_app(
-                    message,
-                    USER_STATS_STORED_CALLBACK_ID,
-                    self.active_app_id,
-                )
+                callback_matches_app(message, USER_STATS_STORED_CALLBACK_ID, self.active_app_id)
             })
         }
 
         fn wait_for_user_stats(&self, duration: Duration) -> bool {
             self.run_callbacks_until(duration, |message| {
-                callback_matches_app(
-                    message,
-                    USER_STATS_RECEIVED_CALLBACK_ID,
-                    self.active_app_id,
-                )
+                callback_matches_app(message, USER_STATS_RECEIVED_CALLBACK_ID, self.active_app_id)
             })
         }
 
@@ -1840,7 +1831,10 @@ fn open_directory(path: &Path) -> Result<(), String> {
     let status = Command::new("xdg-open").arg(path).status();
 
     let status = status.map_err(|error| {
-        format!("Failed to open SAM backup directory {}: {error}", path.display())
+        format!(
+            "Failed to open SAM backup directory {}: {error}",
+            path.display()
+        )
     })?;
     if status.success() {
         Ok(())

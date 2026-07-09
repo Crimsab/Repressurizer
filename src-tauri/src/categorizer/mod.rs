@@ -1,12 +1,12 @@
 #![allow(dead_code)]
 
-pub mod genre;
-pub mod tags;
-pub mod hours;
-pub mod year;
-pub mod score;
-pub mod metadata;
 pub mod commands;
+pub mod genre;
+pub mod hours;
+pub mod metadata;
+pub mod score;
+pub mod tags;
+pub mod year;
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

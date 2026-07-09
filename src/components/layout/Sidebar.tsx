@@ -27,6 +27,7 @@ import {
 } from "@phosphor-icons/react";
 import { useT } from "../../lib/i18n";
 import { SteamImage } from "../games/SteamImage";
+import { DialogOverlay } from "../ui/DialogOverlay";
 import { CollectionMetadataRefreshDialog } from "../categories/CollectionMetadataRefreshDialog";
 import {
   CATEGORY_COLOR_SWATCHES,
@@ -709,7 +710,9 @@ export function Sidebar() {
       )}
 
       {duplicateFor && (
-        <div
+        <DialogOverlay
+          label={t("duplicate.title")}
+          onClose={() => setDuplicateFor(null)}
           className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm"
           onClick={(e) => { if (e.target === e.currentTarget) setDuplicateFor(null); }}
         >
@@ -744,7 +747,7 @@ export function Sidebar() {
               </button>
             </div>
           </div>
-        </div>
+        </DialogOverlay>
       )}
 
       {colorFor && (
@@ -1028,7 +1031,9 @@ function CategoryColorDialog({
   const normalizedDraft = normalizeHexColor(draft);
 
   return (
-    <div
+    <DialogOverlay
+      label={t("category.color.title")}
+      onClose={onClose}
       className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
@@ -1101,7 +1106,7 @@ function CategoryColorDialog({
           </div>
         </div>
       </div>
-    </div>
+    </DialogOverlay>
   );
 }
 
@@ -1117,7 +1122,11 @@ function DeleteConfirmDialog({
   const t = useT();
   const isBatch = names.length > 1;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+    <DialogOverlay
+      label={isBatch ? t("category.deleteSelectedConfirm", { count: names.length }) : t("category.deleteConfirm")}
+      onClose={onCancel}
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+    >
       <div className="w-full max-w-xs animate-fade-in rounded-xl border border-repressurizer-border bg-repressurizer-surface p-5 shadow-[0_16px_48px_rgba(0,0,0,0.5)]">
         <p className="mb-1 text-sm font-medium text-white">
           {isBatch
@@ -1144,6 +1153,6 @@ function DeleteConfirmDialog({
           </button>
         </div>
       </div>
-    </div>
+    </DialogOverlay>
   );
 }

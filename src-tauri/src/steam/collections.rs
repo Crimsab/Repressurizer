@@ -3,8 +3,9 @@ use chrono::Utc;
 use rusty_leveldb::{Options, DB};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::fs;
-use std::path::PathBuf;
+use std::fs::{self, OpenOptions};
+use std::io::{ErrorKind, Write};
+use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SteamCollection {
@@ -160,10 +161,12 @@ fn steam_leveldb_candidates(steam_path: &str) -> Vec<PathBuf> {
         .collect()
 }
 
-fn open_leveldb(path: &PathBuf) -> Result<DB, String> {
-    let mut options = Options::default();
-    options.create_if_missing = false;
-    options.paranoid_checks = true;
+fn open_leveldb(path: &Path) -> Result<DB, String> {
+    let options = Options {
+        create_if_missing: false,
+        paranoid_checks: true,
+        ..Options::default()
+    };
     DB::open(path, options)
         .map_err(|e| format!("Failed to open Steam LevelDB at {}: {}", path.display(), e))
 }
@@ -177,7 +180,7 @@ fn decode_leveldb_catalog(raw: &[u8]) -> Result<(CatalogEncoding, String), Strin
         // Chromium localStorage uses 0x00 for UTF-16 strings.
         0x00 => {
             let bytes = &raw[1..];
-            if bytes.len() % 2 != 0 {
+            if !bytes.len().is_multiple_of(2) {
                 return Err("Steam LevelDB UTF-16 catalog has an odd byte length".to_string());
             }
             let units: Vec<u16> = bytes
@@ -222,7 +225,7 @@ fn parse_catalog(content: &str) -> Result<Vec<serde_json::Value>, String> {
         .map_err(|e| format!("Failed to parse Steam collection catalog: {}", e))
 }
 
-fn read_json_catalog(path: &PathBuf) -> Result<Vec<serde_json::Value>, String> {
+fn read_json_catalog(path: &Path) -> Result<Vec<serde_json::Value>, String> {
     if !path.exists() {
         return Ok(Vec::new());
     }
@@ -463,7 +466,7 @@ fn build_catalog_with_collections(
 }
 
 fn create_catalog_backup(
-    collections_path: &PathBuf,
+    collections_path: &Path,
     timestamp: &str,
     catalog: &[serde_json::Value],
     leveldb: Option<&LevelDbCatalog>,
@@ -473,22 +476,80 @@ fn create_catalog_backup(
     let dir = collections_path.parent().ok_or("Invalid path")?;
     fs::create_dir_all(dir).map_err(|e| format!("Failed to create backup directory: {}", e))?;
 
-    let backup_name = format!("cloud-storage-namespace-1.{}-{}.json", prefix, timestamp);
-    let backup_path = dir.join(&backup_name);
     let catalog_json = serde_json::to_string(catalog)
         .map_err(|e| format!("Failed to serialize backup catalog: {}", e))?;
-    fs::write(&backup_path, catalog_json).map_err(|e| format!("Failed to create backup: {}", e))?;
 
-    if let Some(leveldb) = leveldb {
-        let leveldb_backup_path = dir.join(get_leveldb_backup_name(timestamp));
-        fs::write(&leveldb_backup_path, &leveldb.raw_value)
-            .map_err(|e| format!("Failed to create Steam LevelDB backup: {}", e))?;
+    for attempt in 0..10_000_u32 {
+        let unique_timestamp = if attempt == 0 {
+            timestamp.to_string()
+        } else {
+            format!("{timestamp}-{attempt}")
+        };
+        let backup_name = format!(
+            "cloud-storage-namespace-1.{}-{}.json",
+            prefix, unique_timestamp
+        );
+        let backup_path = dir.join(&backup_name);
+        let mut backup_file = match OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&backup_path)
+        {
+            Ok(file) => file,
+            Err(error) if error.kind() == ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(format!("Failed to create backup: {error}")),
+        };
+
+        if let Err(error) = backup_file.write_all(catalog_json.as_bytes()) {
+            let _ = fs::remove_file(&backup_path);
+            return Err(format!("Failed to create backup: {error}"));
+        }
+
+        if let Some(leveldb) = leveldb {
+            let leveldb_backup_path = dir.join(get_leveldb_backup_name(&unique_timestamp));
+            if let Err(error) = OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&leveldb_backup_path)
+                .and_then(|mut file| file.write_all(&leveldb.raw_value))
+            {
+                let _ = fs::remove_file(&backup_path);
+                let _ = fs::remove_file(&leveldb_backup_path);
+                return Err(format!("Failed to create Steam LevelDB backup: {error}"));
+            }
+        }
+
+        let desc_path = dir.join(format!("{}.desc", backup_name));
+        let _ = fs::write(&desc_path, description);
+        return Ok(backup_name);
     }
 
-    let desc_path = dir.join(format!("{}.desc", backup_name));
-    let _ = fs::write(&desc_path, description);
+    Err("Failed to allocate a unique backup filename".to_string())
+}
 
-    Ok(backup_name)
+fn validated_backup_path(dir: &Path, filename: &str) -> Result<PathBuf, String> {
+    let timestamp = filename
+        .strip_prefix("cloud-storage-namespace-1.backup-")
+        .or_else(|| filename.strip_prefix("cloud-storage-namespace-1.pre-restore-"))
+        .and_then(|value| value.strip_suffix(".json"))
+        .filter(|value| {
+            !value.is_empty()
+                && value
+                    .bytes()
+                    .all(|byte| byte.is_ascii_digit() || byte == b'_' || byte == b'-')
+        })
+        .ok_or_else(|| "Invalid backup filename".to_string())?;
+
+    if timestamp.is_empty()
+        || Path::new(filename)
+            .file_name()
+            .and_then(|name| name.to_str())
+            != Some(filename)
+    {
+        return Err("Invalid backup filename".to_string());
+    }
+
+    Ok(dir.join(filename))
 }
 
 fn deterministic_id(input: &str) -> String {
@@ -497,9 +558,7 @@ fn deterministic_id(input: &str) -> String {
     let hash = hasher.finalize();
     let encoded = base64::engine::general_purpose::STANDARD.encode(hash);
     encoded
-        .replace('+', "")
-        .replace('/', "")
-        .replace('=', "")
+        .replace(['+', '/', '='], "")
         .chars()
         .take(12)
         .collect()
@@ -681,9 +740,16 @@ pub fn restore_backup(
     steam_id3: String,
     backup_filename: String,
 ) -> Result<(), String> {
+    if super::sam::is_steam_running() {
+        return Err(
+            "Steam appears to be running. Close Steam before restoring a backup to avoid corrupting the library cache."
+                .to_string(),
+        );
+    }
+
     let collections_path = get_collections_path(&steam_path, &steam_id3);
     let dir = collections_path.parent().ok_or("Invalid path")?;
-    let backup_path = dir.join(&backup_filename);
+    let backup_path = validated_backup_path(dir, &backup_filename)?;
 
     if !backup_path.exists() {
         return Err(format!("Backup file not found: {}", backup_filename));
@@ -767,7 +833,7 @@ pub fn delete_backup(
 ) -> Result<(), String> {
     let collections_path = get_collections_path(&steam_path, &steam_id3);
     let dir = collections_path.parent().ok_or("Invalid path")?;
-    let backup_path = dir.join(&backup_filename);
+    let backup_path = validated_backup_path(dir, &backup_filename)?;
 
     if !backup_path.exists() {
         return Err(format!("Backup file not found: {}", backup_filename));
@@ -836,14 +902,14 @@ mod tests {
         ]
     }
 
-    fn write_json_catalog(steam_path: &PathBuf, steam_id3: &str, catalog: &[serde_json::Value]) {
+    fn write_json_catalog(steam_path: &Path, steam_id3: &str, catalog: &[serde_json::Value]) {
         let path = get_collections_path(&steam_path.to_string_lossy(), steam_id3);
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(path, serde_json::to_string(catalog).unwrap()).unwrap();
     }
 
     fn write_leveldb_catalog_fixture(
-        steam_path: &PathBuf,
+        steam_path: &Path,
         steam_id3: &str,
         catalog: &[serde_json::Value],
         encoding: CatalogEncoding,
@@ -998,6 +1064,67 @@ mod tests {
             && name.ends_with(".bin")));
 
         drop(db);
+        let _ = fs::remove_dir_all(steam_path);
+    }
+
+    #[test]
+    fn backup_commands_reject_paths_outside_the_backup_directory() {
+        let steam_path = temp_steam_dir("backup-path-traversal");
+        let steam_id3 = "67890";
+        write_json_catalog(&steam_path, steam_id3, &sample_catalog("RPG", vec![10]));
+
+        let victim = steam_path
+            .join("userdata")
+            .join(steam_id3)
+            .join("victim.txt");
+        fs::write(&victim, "keep me").unwrap();
+
+        let error = delete_backup(
+            steam_path.to_string_lossy().to_string(),
+            steam_id3.to_string(),
+            "../../victim.txt".to_string(),
+        )
+        .expect_err("path traversal must be rejected");
+
+        assert!(error.contains("Invalid backup filename"));
+        assert!(victim.exists());
+        let _ = fs::remove_dir_all(steam_path);
+    }
+
+    #[test]
+    fn rapid_manual_backups_do_not_overwrite_each_other() {
+        let steam_path = temp_steam_dir("backup-collision");
+        let steam_id3 = "24680";
+        write_json_catalog(&steam_path, steam_id3, &sample_catalog("RPG", vec![10]));
+
+        create_manual_backup(
+            steam_path.to_string_lossy().to_string(),
+            steam_id3.to_string(),
+            "first".to_string(),
+        )
+        .unwrap();
+        create_manual_backup(
+            steam_path.to_string_lossy().to_string(),
+            steam_id3.to_string(),
+            "second".to_string(),
+        )
+        .unwrap();
+
+        let backups = list_backups(
+            steam_path.to_string_lossy().to_string(),
+            steam_id3.to_string(),
+        )
+        .unwrap();
+        assert_eq!(backups.len(), 2);
+        let descriptions = backups
+            .iter()
+            .map(|backup| backup.description.as_str())
+            .collect::<std::collections::HashSet<_>>();
+        assert_eq!(
+            descriptions,
+            std::collections::HashSet::from(["first", "second"])
+        );
+
         let _ = fs::remove_dir_all(steam_path);
     }
 }

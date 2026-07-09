@@ -6,6 +6,7 @@ import { SteamImage } from "../games/SteamImage";
 import type { OwnedGame } from "../../lib/types";
 import { normalizeLocale, useT } from "../../lib/i18n";
 import { X, CalendarBlank, Clock, SquaresFour, List, Rows } from "@phosphor-icons/react";
+import { DialogOverlay } from "../ui/DialogOverlay";
 
 const loadGameDetailPage = () => import("../games/GameDetailPage").then((m) => ({ default: m.GameDetailPage }));
 const GameDetailPage = lazy(loadGameDetailPage);
@@ -151,7 +152,9 @@ export function PlayHistoryTimeline({ onClose }: PlayHistoryTimelineProps) {
 
   return (
     <>
-      <div
+      <DialogOverlay
+        label={t("timeline.title")}
+        onClose={onClose}
         className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-sm pt-10 pb-8 px-4"
         onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
       >
@@ -211,6 +214,7 @@ export function PlayHistoryTimeline({ onClose }: PlayHistoryTimelineProps) {
 
               <button
                 onClick={onClose}
+                aria-label={t("common.close")}
                 className="flex h-8 w-8 items-center justify-center rounded-lg text-repressurizer-text-muted transition-colors hover:bg-repressurizer-surface-hover hover:text-white"
               >
                 <X size={16} weight="bold" />
@@ -288,7 +292,7 @@ export function PlayHistoryTimeline({ onClose }: PlayHistoryTimelineProps) {
             )}
           </div>
         </div>
-      </div>
+      </DialogOverlay>
 
       {/* Game detail overlay */}
       {detailGame && (

@@ -40,6 +40,8 @@ import { GameGrid } from "./components/games/GameGrid";
 import { StatusBar } from "./components/layout/StatusBar";
 import { FilterBar } from "./components/layout/FilterBar";
 import { ToastContainer } from "./components/ui/Toast";
+import { DialogOverlay } from "./components/ui/DialogOverlay";
+import { useShallow } from "zustand/react/shallow";
 import { WarningCircle, ArrowCounterClockwise, GameController, CloudArrowDown, X } from "@phosphor-icons/react";
 
 const SetupWizard = lazy(() => import("./components/setup/SetupWizard").then((m) => ({ default: m.SetupWizard })));
@@ -138,7 +140,22 @@ function ErrorScreen({ error, onReset }: { error: string; onReset: () => void })
 }
 
 function AppContent() {
-  const settings = useSettingsStore();
+  const settings = useSettingsStore(useShallow((state) => ({
+    setupComplete: state.setupComplete,
+    apiKey: state.apiKey,
+    steamId64: state.steamId64,
+    steamPersonaName: state.steamPersonaName,
+    autoRefreshLibraryEnabled: state.autoRefreshLibraryEnabled,
+    libraryAutoRefreshIntervalMinutes: state.libraryAutoRefreshIntervalMinutes,
+    checkUpdatesOnStartup: state.checkUpdatesOnStartup,
+    updateAutoCheckIntervalHours: state.updateAutoCheckIntervalHours,
+    automationPublishEnabled: state.automationPublishEnabled,
+    automationPublishUrl: state.automationPublishUrl,
+    showFilterBar: state.showFilterBar,
+    startOnLoginMode: state.startOnLoginMode,
+    setSettings: state.setSettings,
+    reset: state.reset,
+  })));
   const t = useT();
   const gameCount = useGameStore((s) => Object.keys(s.games).length);
   const setGames = useGameStore((s) => s.setGames);
@@ -416,7 +433,6 @@ function AppContent() {
         await sendWorkflowNotification(message, true);
       }
     } catch (e) {
-      console.error("Reload error:", e);
       await appLog.error("Steam library refresh failed", { error: String(e) });
       setReloadError(String(e));
       setReloading(false);
@@ -718,7 +734,11 @@ function CloseChoiceDialog({
 }) {
   const t = useT();
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
+    <DialogOverlay
+      label={t("tray.closeChoice.title")}
+      onClose={onCancel}
+      className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+    >
       <div className="w-full max-w-sm animate-fade-in rounded-2xl border border-repressurizer-border bg-repressurizer-surface p-5 shadow-[0_24px_64px_rgba(0,0,0,0.55)]">
         <h2 className="text-base font-semibold text-white tracking-tight">{t("tray.closeChoice.title")}</h2>
         <p className="mt-2 text-sm leading-relaxed text-repressurizer-text-muted">
@@ -748,7 +768,7 @@ function CloseChoiceDialog({
           </button>
         </div>
       </div>
-    </div>
+    </DialogOverlay>
   );
 }
 

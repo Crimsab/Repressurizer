@@ -17,10 +17,7 @@ pub struct HoursConfig {
     pub rules: Vec<HoursRule>,
 }
 
-pub fn categorize_by_hours(
-    games: &[OwnedGame],
-    config: &HoursConfig,
-) -> CategorizeResult {
+pub fn categorize_by_hours(games: &[OwnedGame], config: &HoursConfig) -> CategorizeResult {
     let mut assignments: HashMap<String, Vec<u64>> = HashMap::new();
     let mut games_categorized = 0u64;
 
@@ -43,10 +40,7 @@ pub fn categorize_by_hours(
                 None => rule.name.clone(),
             };
 
-            assignments
-                .entry(cat_name)
-                .or_default()
-                .push(game.appid);
+            assignments.entry(cat_name).or_default().push(game.appid);
 
             games_categorized += 1;
         }

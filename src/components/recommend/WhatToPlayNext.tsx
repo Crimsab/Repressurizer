@@ -6,6 +6,7 @@ import { useCategoryStore } from "../../stores/categoryStore";
 import { X, Shuffle, Timer, GameController, Funnel, CaretDown, Check } from "@phosphor-icons/react";
 import { SteamImage } from "../games/SteamImage";
 import { useT } from "../../lib/i18n";
+import { DialogOverlay } from "../ui/DialogOverlay";
 
 interface WhatToPlayNextProps {
   onClose: () => void;
@@ -149,7 +150,9 @@ export function WhatToPlayNext({ onClose }: WhatToPlayNextProps) {
   };
 
   return (
-    <div
+    <DialogOverlay
+      label={t("recommend.title")}
+      onClose={onClose}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
@@ -174,6 +177,7 @@ export function WhatToPlayNext({ onClose }: WhatToPlayNextProps) {
             </button>
             <button
               onClick={onClose}
+              aria-label={t("common.close")}
               className="flex h-7 w-7 items-center justify-center rounded-lg text-repressurizer-text-muted transition-colors hover:bg-repressurizer-surface-hover hover:text-white"
             >
               <X size={16} weight="bold" />
@@ -323,7 +327,7 @@ export function WhatToPlayNext({ onClose }: WhatToPlayNextProps) {
           </p>
         </div>
       </div>
-      </div>
+    </DialogOverlay>
   );
 }
 

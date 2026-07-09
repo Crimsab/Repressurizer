@@ -4,24 +4,24 @@ use std::collections::HashMap;
 use crate::http_policy::{client_builder_for_scope, HttpProxyScope};
 
 use super::types::{FriendSummary, PlayerSummary};
+use super::utils::request_error;
 
 pub async fn resolve_vanity_url(api_key: String, vanity_url: String) -> Result<String, String> {
     let client = client_builder_for_scope(HttpProxyScope::SteamApi)?
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
-    let url = format!(
-        "https://api.steampowered.com/ISteamUser/ResolveVanityURL/v1/?key={}&vanityurl={}",
-        api_key, vanity_url
-    );
-
     let text = client
-        .get(&url)
+        .get("https://api.steampowered.com/ISteamUser/ResolveVanityURL/v1/")
+        .query(&[
+            ("key", api_key.as_str()),
+            ("vanityurl", vanity_url.as_str()),
+        ])
         .send()
         .await
-        .map_err(|e| e.to_string())?
+        .map_err(|error| request_error("Failed to resolve vanity URL", error))?
         .text()
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|error| request_error("Failed to read vanity URL response", error))?;
 
     #[derive(Deserialize)]
     struct VanityOuter {
@@ -50,19 +50,15 @@ pub async fn fetch_player_summary(
     let client = client_builder_for_scope(HttpProxyScope::SteamApi)?
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
-    let url = format!(
-        "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?key={}&steamids={}",
-        api_key, steam_id64
-    );
-
     let text = client
-        .get(&url)
+        .get("https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/")
+        .query(&[("key", api_key.as_str()), ("steamids", steam_id64.as_str())])
         .send()
         .await
-        .map_err(|e| e.to_string())?
+        .map_err(|error| request_error("Failed to fetch player summary", error))?
         .text()
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|error| request_error("Failed to read player summary", error))?;
 
     #[derive(Deserialize)]
     struct Outer {
@@ -105,19 +101,19 @@ pub async fn fetch_friend_list(
     let client = client_builder_for_scope(HttpProxyScope::SteamApi)?
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
-    let url = format!(
-        "https://api.steampowered.com/ISteamUser/GetFriendList/v1/?key={}&steamid={}&relationship=friend",
-        api_key, steam_id64
-    );
-
     let text = client
-        .get(&url)
+        .get("https://api.steampowered.com/ISteamUser/GetFriendList/v1/")
+        .query(&[
+            ("key", api_key.as_str()),
+            ("steamid", steam_id64.as_str()),
+            ("relationship", "friend"),
+        ])
         .send()
         .await
-        .map_err(|e| format!("Failed to fetch friend list: {}", e))?
+        .map_err(|error| request_error("Failed to fetch friend list", error))?
         .text()
         .await
-        .map_err(|e| format!("Failed to read friend list: {}", e))?;
+        .map_err(|error| request_error("Failed to read friend list", error))?;
 
     #[derive(Deserialize)]
     struct FriendsOuter {
@@ -187,19 +183,16 @@ async fn fetch_player_summaries_chunk(
         return Ok(Vec::new());
     }
 
-    let url = format!(
-        "https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?key={}&steamids={}",
-        api_key,
-        steam_ids.join(",")
-    );
+    let steam_ids = steam_ids.join(",");
     let text = client
-        .get(&url)
+        .get("https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/")
+        .query(&[("key", api_key), ("steamids", steam_ids.as_str())])
         .send()
         .await
-        .map_err(|e| format!("Failed to fetch player summaries: {}", e))?
+        .map_err(|error| request_error("Failed to fetch player summaries", error))?
         .text()
         .await
-        .map_err(|e| format!("Failed to read player summaries: {}", e))?;
+        .map_err(|error| request_error("Failed to read player summaries", error))?;
 
     #[derive(Deserialize)]
     struct Outer {

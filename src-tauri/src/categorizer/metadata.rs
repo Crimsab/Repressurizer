@@ -126,10 +126,7 @@ pub fn categorize_by_flags(games: &[GameDetails], config: &FlagsConfig) -> Categ
     }
 }
 
-pub fn categorize_by_language(
-    games: &[GameDetails],
-    config: &LanguageConfig,
-) -> CategorizeResult {
+pub fn categorize_by_language(games: &[GameDetails], config: &LanguageConfig) -> CategorizeResult {
     let included = normalized_filter(&config.included_languages);
     let mut assignments: HashMap<String, Vec<u64>> = HashMap::new();
     let mut games_categorized = 0u64;

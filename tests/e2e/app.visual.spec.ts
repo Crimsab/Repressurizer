@@ -54,6 +54,24 @@ test("loads the main library surface with mocked Steam data", async ({ page }, t
   await testInfo.attach("dashboard", { path: screenshotPath, contentType: "image/png" });
 });
 
+test("dialogs trap focus, close with Escape, and restore focus", async ({ page }) => {
+  await page.goto("/");
+
+  const trigger = page.getByTitle("Settings");
+  await trigger.click();
+
+  const dialog = page.getByRole("dialog", { name: "Settings" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toHaveAttribute("aria-modal", "true");
+  await expect.poll(() =>
+    page.evaluate(() => document.activeElement?.closest('[role="dialog"]') !== null)
+  ).toBe(true);
+
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await expect(trigger).toBeFocused();
+});
+
 test("supports regex search and advanced duplicate filters", async ({ page }) => {
   await page.goto("/");
 
@@ -156,7 +174,7 @@ test("AutoCat custom rule creates one category from a title condition", async ({
   await expect(dialog.getByText("Hades Custom")).toBeVisible();
   await expect(dialog.getByText("1 games")).toBeVisible();
   await dialog.getByRole("button", { name: "Apply" }).click();
-  await dialog.getByRole("button", { name: "Close" }).click();
+  await dialog.getByText("Close", { exact: true }).click();
 
   await expect(page.getByRole("button", { name: /Hades Custom/ })).toBeVisible();
   await expectNoHorizontalOverflow(page);
@@ -750,14 +768,15 @@ test("opens organized settings tabs, automation logs, and Steam controls without
   await testInfo.attach("settings-automation", { path: automationPath, contentType: "image/png" });
 
   await settingsDialog.getByRole("button", { name: "Guide" }).click();
-  await expect(settingsDialog.getByRole("heading", { name: "Automation export guide" })).toBeVisible();
-  await expect(settingsDialog.getByText("Integration libraries")).toBeVisible();
-  await expect(settingsDialog.getByRole("button", { name: "Automation docs" })).toBeVisible();
-  await expect(settingsDialog.getByRole("button", { name: "Snapshot schema" })).toBeVisible();
+  const guideDialog = settingsDialog.getByRole("dialog", { name: "Automation export guide" });
+  await expect(guideDialog.getByRole("heading", { name: "Automation export guide" })).toBeVisible();
+  await expect(guideDialog.getByText("Integration libraries")).toBeVisible();
+  await expect(guideDialog.getByRole("button", { name: "Automation docs" })).toBeVisible();
+  await expect(guideDialog.getByRole("button", { name: "Snapshot schema" })).toBeVisible();
   const guidePath = testInfo.outputPath("settings-automation-guide.png");
   await page.screenshot({ path: guidePath, fullPage: true });
   await testInfo.attach("settings-automation-guide", { path: guidePath, contentType: "image/png" });
-  await settingsDialog.getByRole("button", { name: "Close" }).click();
+  await guideDialog.getByRole("button", { name: "Close" }).click();
 
   await settingsDialog.getByRole("button", { name: "View logs" }).click();
   await expect(settingsDialog.getByRole("heading", { name: "Automation export logs" })).toBeVisible();

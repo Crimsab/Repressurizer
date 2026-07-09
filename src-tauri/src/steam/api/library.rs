@@ -3,6 +3,7 @@ use serde::Deserialize;
 use crate::http_policy::{client_builder_for_scope, HttpProxyScope};
 
 use super::types::{OwnedGame, SteamAppListItem};
+use super::utils::request_error;
 
 #[derive(Debug, Deserialize)]
 struct OwnedGamesResponse {
@@ -32,24 +33,26 @@ pub(super) struct SteamAppListInner {
 }
 
 pub async fn fetch_library(api_key: String, steam_id64: String) -> Result<Vec<OwnedGame>, String> {
-    let url = format!(
-        "https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/?key={}&steamid={}&include_appinfo=1&include_played_free_games=1&format=json",
-        api_key, steam_id64
-    );
-
     let client = client_builder_for_scope(HttpProxyScope::SteamApi)?
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
     let response = client
-        .get(&url)
+        .get("https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/")
+        .query(&[
+            ("key", api_key.as_str()),
+            ("steamid", steam_id64.as_str()),
+            ("include_appinfo", "1"),
+            ("include_played_free_games", "1"),
+            ("format", "json"),
+        ])
         .send()
         .await
-        .map_err(|e| format!("HTTP request failed: {}", e))?;
+        .map_err(|error| request_error("HTTP request failed", error))?;
 
     let data: OwnedGamesResponse = response
         .json()
         .await
-        .map_err(|e| format!("Failed to parse response: {}", e))?;
+        .map_err(|error| request_error("Failed to parse response", error))?;
 
     Ok(data
         .response
@@ -89,20 +92,16 @@ pub async fn fetch_steam_app_list(api_key: String) -> Result<Vec<SteamAppListIte
             .query(&[("last_appid", last_appid.to_string())])
             .send()
             .await
-            .map_err(|e| format!("Steam app list request failed: {}", e))?;
+            .map_err(|error| request_error("Steam app list request failed", error))?;
 
         let status = response.status();
         let text = response
             .text()
             .await
-            .map_err(|e| format!("Failed to read Steam app list response: {}", e))?;
+            .map_err(|error| request_error("Failed to read Steam app list response", error))?;
 
         if !status.is_success() {
-            return Err(format!(
-                "Steam app list returned status {}: {}",
-                status,
-                text.chars().take(180).collect::<String>()
-            ));
+            return Err(format!("Steam app list returned status {status}"));
         }
 
         let page: SteamAppListResponse = serde_json::from_str(&text)

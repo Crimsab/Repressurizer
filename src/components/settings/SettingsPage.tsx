@@ -135,6 +135,7 @@ import {
 import { getCategoryColor } from "../../lib/categoryColors";
 import { getLocaleDisplayName, getLocaleFlag, normalizeLocale, SUPPORTED_LOCALES, useT } from "../../lib/i18n";
 import type { AppStartupMode, AppTheme, HltbTimeMode } from "../../lib/types";
+import { DialogOverlay } from "../ui/DialogOverlay";
 import { automationPublishStatusPatch, publishAutomationSnapshot } from "../../lib/automationPublish";
 import { SelectMenu } from "../ui/SelectMenu";
 import { CategoryChip } from "../ui/CategoryChip";
@@ -696,12 +697,12 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
     setMessage("");
     try {
       if (!settings.steamPath || !settings.steamId3) {
-        setMessage("Steam path and user are required before importing shortcuts.");
+      setMessage(t("settings.import.shortcuts.requireSteam"));
         return;
       }
       const shortcuts = await loadShortcuts(settings.steamPath, settings.steamId3);
       if (shortcuts.length === 0) {
-        setMessage("No non-Steam shortcuts found for this Steam user.");
+      setMessage(t("settings.import.shortcuts.none"));
         return;
       }
 
@@ -728,12 +729,12 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
     setMessage("");
     try {
       if (!settings.steamPath || !settings.steamId3) {
-        setMessage("Steam path and user are required before importing legacy sharedconfig.");
+      setMessage(t("settings.import.legacy.requireSteam"));
         return;
       }
       const legacyGames = await loadLegacySharedConfig(settings.steamPath, settings.steamId3);
       if (legacyGames.length === 0) {
-        setMessage("No legacy sharedconfig categories found for this Steam user.");
+      setMessage(t("settings.import.legacy.none"));
         return;
       }
 
@@ -763,14 +764,14 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
     setMessage("");
     try {
       if (!settings.steamPath || !settings.steamId3) {
-        setMessage("Steam path and user are required before importing the local license library.");
+      setMessage(t("settings.import.licenses.requireSteam"));
         return;
       }
 
       await hydrateSteamAppIndexForNames(settings.apiKey);
       const localApps = await loadLocalLicenseLibrary(settings.steamPath, settings.steamId3);
       if (localApps.length === 0) {
-        setMessage("No local license library apps found for this Steam user.");
+      setMessage(t("settings.import.licenses.none"));
         return;
       }
 
@@ -1350,7 +1351,9 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
   }, [settingsSearchText, matchedSettingsSections, tab]);
 
   return (
-    <div
+    <DialogOverlay
+      label={t("settings.title")}
+      onClose={onClose}
       className="fixed inset-0 z-50 flex items-start justify-center overflow-auto bg-black/60 p-4 backdrop-blur-sm sm:p-6"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
@@ -1366,6 +1369,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
           <h2 className="text-base font-semibold text-white tracking-tight">{t("settings.title")}</h2>
           <button
             onClick={onClose}
+            aria-label={t("common.close")}
             className="btn-press flex items-center justify-center w-7 h-7 rounded-lg text-repressurizer-text-muted transition-colors hover:text-white hover:bg-repressurizer-surface-hover"
           >
             <X size={16} weight="bold" />
@@ -2798,7 +2802,11 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
 
         {/* Confirmation dialog */}
         {pendingAction && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/50 rounded-2xl backdrop-blur-sm">
+          <DialogOverlay
+            label={pendingAction.message}
+            onClose={() => setPendingAction(null)}
+            className="absolute inset-0 z-10 flex items-center justify-center bg-black/50 rounded-2xl backdrop-blur-sm"
+          >
             <div className="mx-6 w-full max-w-sm animate-fade-in rounded-xl border border-repressurizer-border bg-repressurizer-surface p-5 shadow-[0_16px_48px_rgba(0,0,0,0.5)]">
               <p className="text-sm text-repressurizer-text leading-relaxed">{pendingAction.message}</p>
               <div className="mt-5 flex justify-end gap-2">
@@ -2820,10 +2828,10 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                 </button>
               </div>
             </div>
-          </div>
+          </DialogOverlay>
         )}
       </div>
-    </div>
+    </DialogOverlay>
   );
 }
 
@@ -4205,7 +4213,11 @@ function AutomationLogsDialog({
   const t = useT();
 
   return (
-    <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-black/50 p-4 backdrop-blur-sm">
+    <DialogOverlay
+      label={t("settings.automationExport.logsTitle")}
+      onClose={onClose}
+      className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-black/50 p-4 backdrop-blur-sm"
+    >
       <div className="flex w-full max-w-3xl flex-col rounded-xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_16px_48px_rgba(0,0,0,0.5)]" style={{ maxHeight: "min(640px, calc(100vh - 96px))" }}>
         <div className="flex items-center justify-between border-b border-repressurizer-border px-4 py-3">
           <div>
@@ -4284,7 +4296,7 @@ function AutomationLogsDialog({
           )}
         </div>
       </div>
-    </div>
+    </DialogOverlay>
   );
 }
 
@@ -4310,7 +4322,11 @@ function DepressurizerDatabaseImportDialog({
   const canImport = !!options.sourcePath && !importing;
 
   return (
-    <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-black/50 p-4 backdrop-blur-sm">
+    <DialogOverlay
+      label={t("settings.depDbImport.title")}
+      onClose={onClose}
+      className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-black/50 p-4 backdrop-blur-sm"
+    >
       <div className="flex w-full max-w-3xl flex-col rounded-xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_16px_48px_rgba(0,0,0,0.5)]" style={{ maxHeight: "min(720px, calc(100vh - 96px))" }}>
         <div className="flex items-start justify-between gap-4 border-b border-repressurizer-border px-4 py-3">
           <div className="min-w-0">
@@ -4482,7 +4498,7 @@ function DepressurizerDatabaseImportDialog({
           </div>
         </div>
       </div>
-    </div>
+    </DialogOverlay>
   );
 }
 
@@ -4561,7 +4577,11 @@ function AutomationGuideDialog({ onClose }: { onClose: () => void }) {
   ];
 
   return (
-    <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-black/50 p-4 backdrop-blur-sm">
+    <DialogOverlay
+      label={t("settings.automationExport.guideTitle")}
+      onClose={onClose}
+      className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-black/50 p-4 backdrop-blur-sm"
+    >
       <div className="flex w-full max-w-2xl flex-col rounded-xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_16px_48px_rgba(0,0,0,0.5)]" style={{ maxHeight: "min(640px, calc(100vh - 96px))" }}>
         <div className="flex items-start justify-between gap-4 border-b border-repressurizer-border px-4 py-3">
           <div className="min-w-0">
@@ -4617,7 +4637,7 @@ function AutomationGuideDialog({ onClose }: { onClose: () => void }) {
           </div>
         </div>
       </div>
-    </div>
+    </DialogOverlay>
   );
 }
 

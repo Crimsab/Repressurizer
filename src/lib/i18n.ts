@@ -1,31 +1,21 @@
 import { useSettingsStore } from "../stores/settingsStore";
 import en from "./translations/en.json";
+import { useEffect, useSyncExternalStore } from "react";
 
 export type TranslationKey = keyof typeof en;
 export type Locale = string;
 export type TranslationCatalog = Record<TranslationKey, string>;
 
-const modules = import.meta.glob("./translations/*.json", {
-  eager: true,
+const modules = import.meta.glob(["./translations/*.json", "!./translations/en.json"], {
   import: "default",
-}) as Record<string, Record<string, string>>;
+}) as Record<string, () => Promise<Record<string, string>>>;
 
-const catalogs = Object.fromEntries(
-  Object.entries(modules)
-    .map(([path, catalog]) => {
-      const locale = path.match(/\/([^/]+)\.json$/)?.[1];
-      return locale ? [locale, catalog] : null;
-    })
-    .filter((entry): entry is [string, Record<string, string>] => entry !== null)
-) as Record<Locale, Partial<TranslationCatalog>>;
+const catalogs: Record<Locale, Partial<TranslationCatalog>> = { en };
+const pendingCatalogs = new Map<Locale, Promise<void>>();
+const catalogListeners = new Set<() => void>();
+let catalogVersion = 0;
 
 export const DEFAULT_LOCALE = "en";
-
-export const SUPPORTED_LOCALES = Object.keys(catalogs).sort((a, b) => {
-  if (a === DEFAULT_LOCALE) return -1;
-  if (b === DEFAULT_LOCALE) return 1;
-  return a.localeCompare(b);
-});
 
 const LOCALE_LABELS: Record<string, { flag: string; nativeName: string; englishName: string }> = {
   de: { flag: "🇩🇪", nativeName: "Deutsch", englishName: "German" },
@@ -38,8 +28,40 @@ const LOCALE_LABELS: Record<string, { flag: string; nativeName: string; englishN
   "zh-CN": { flag: "🇨🇳", nativeName: "简体中文", englishName: "Simplified Chinese" },
 };
 
+export const SUPPORTED_LOCALES = Object.keys(LOCALE_LABELS).sort((a, b) => {
+  if (a === DEFAULT_LOCALE) return -1;
+  if (b === DEFAULT_LOCALE) return 1;
+  return a.localeCompare(b);
+});
+
+function subscribeCatalogs(listener: () => void) {
+  catalogListeners.add(listener);
+  return () => catalogListeners.delete(listener);
+}
+
+function ensureCatalog(locale: Locale): Promise<void> {
+  if (catalogs[locale]) return Promise.resolve();
+  const pending = pendingCatalogs.get(locale);
+  if (pending) return pending;
+
+  const loader = modules[`./translations/${locale}.json`];
+  if (!loader) return Promise.resolve();
+  const request = loader()
+    .then((catalog) => {
+      catalogs[locale] = catalog;
+      catalogVersion += 1;
+      for (const listener of catalogListeners) listener();
+    })
+    .catch(() => {
+      // English remains available if a locale chunk cannot be loaded.
+    })
+    .finally(() => pendingCatalogs.delete(locale));
+  pendingCatalogs.set(locale, request);
+  return request;
+}
+
 export function isSupportedLocale(locale: string | null | undefined): boolean {
-  return !!locale && Object.prototype.hasOwnProperty.call(catalogs, locale);
+  return !!locale && Object.prototype.hasOwnProperty.call(LOCALE_LABELS, locale);
 }
 
 export function normalizeLocale(locale: string | null | undefined): Locale {
@@ -85,12 +107,17 @@ function translate(locale: Locale, key: TranslationKey, params?: Record<string, 
 /** Get a translated string by key. Supports {placeholder} substitution. */
 export function t(key: TranslationKey, params?: Record<string, string | number>): string {
   const locale = normalizeLocale(useSettingsStore.getState().language);
+  void ensureCatalog(locale);
   return translate(locale, key, params);
 }
 
 /** React hook for translations — triggers re-render on language change */
 export function useT() {
   const locale = useSettingsStore((s) => normalizeLocale(s.language));
+  useSyncExternalStore(subscribeCatalogs, () => catalogVersion, () => catalogVersion);
+  useEffect(() => {
+    void ensureCatalog(locale);
+  }, [locale]);
   return (key: TranslationKey, params?: Record<string, string | number>): string => {
     return translate(locale, key, params);
   };

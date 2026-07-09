@@ -10,10 +10,7 @@ pub struct TagsConfig {
     pub included_tags: Vec<String>,
 }
 
-pub fn categorize_by_tags(
-    games: &[GameDetails],
-    config: &TagsConfig,
-) -> CategorizeResult {
+pub fn categorize_by_tags(games: &[GameDetails], config: &TagsConfig) -> CategorizeResult {
     let mut assignments: HashMap<String, Vec<u64>> = HashMap::new();
     let mut games_categorized = 0u64;
 
@@ -27,7 +24,10 @@ pub fn categorize_by_tags(
 
         for category in tags {
             if !config.included_tags.is_empty()
-                && !config.included_tags.iter().any(|t| t.eq_ignore_ascii_case(category))
+                && !config
+                    .included_tags
+                    .iter()
+                    .any(|t| t.eq_ignore_ascii_case(category))
             {
                 continue;
             }
@@ -43,10 +43,7 @@ pub fn categorize_by_tags(
                 None => category.clone(),
             };
 
-            assignments
-                .entry(cat_name)
-                .or_default()
-                .push(game.app_id);
+            assignments.entry(cat_name).or_default().push(game.app_id);
 
             added += 1;
         }

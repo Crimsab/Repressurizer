@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use crate::http_policy::{client_builder_for_scope, HttpProxyScope};
 
 use super::types::{FamilyLibraryApp, FamilyLibraryResult, WishlistItem};
-use super::utils::steam_api_url;
+use super::utils::{request_error, steam_api_url};
 
 enum SteamFamilyAuth {
     WebApiKey(String),
@@ -197,13 +197,13 @@ pub async fn fetch_wishlist(steam_id64: String) -> Result<Vec<WishlistItem>, Str
         .get(&url)
         .send()
         .await
-        .map_err(|e| format!("Wishlist request failed: {}", e))?;
+        .map_err(|error| request_error("Wishlist request failed", error))?;
 
     let status = resp.status();
     let text = resp
         .text()
         .await
-        .map_err(|e| format!("Failed to read wishlist response: {}", e))?;
+        .map_err(|error| request_error("Failed to read wishlist response", error))?;
 
     if text.trim_start().starts_with('<') {
         return Err("Wishlist API returned HTML (private wishlist or Steam issue). Make sure your wishlist is set to Public in Steam privacy settings.".to_string());
@@ -486,20 +486,19 @@ async fn send_family_request(
     let response = request
         .send()
         .await
-        .map_err(|e| format!("{} request failed: {}", context, e))?;
+        .map_err(|error| request_error(&format!("{context} request failed"), error))?;
 
     let status = response.status();
     let text = response
         .text()
         .await
-        .map_err(|e| format!("Failed to read {} response: {}", context, e))?;
+        .map_err(|error| request_error(&format!("Failed to read {context} response"), error))?;
 
     if !status.is_success() {
         return Err(format!(
-            "{} API returned status {}: {} {}",
+            "{} API returned status {}. {}",
             context,
             status,
-            text.chars().take(220).collect::<String>(),
             auth.help_text()
         ));
     }

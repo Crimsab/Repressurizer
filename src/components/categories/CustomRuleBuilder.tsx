@@ -18,6 +18,7 @@ import {
 import { hltbModeLabel, HLTB_TIME_MODES } from "../../lib/hltb";
 import type { HltbTimeMode, SteamCollection } from "../../lib/types";
 import { SelectMenu } from "../ui/SelectMenu";
+import { useT } from "../../lib/i18n";
 
 interface CustomRuleBuilderProps {
   config: CustomAutoCatConfigV1;
@@ -52,6 +53,7 @@ const ADD_CONDITION_MENU_OPTIONS: Array<{ value: AddConditionMenuValue; label: s
 ];
 
 export function CustomRuleBuilder({ config, onChange, collections }: CustomRuleBuilderProps) {
+  const t = useT();
   const categoryOptions = useMemo(
     () => collections.filter((collection) => !collection.is_dynamic && !isSpecialCollection(collection)),
     [collections]
@@ -134,7 +136,7 @@ export function CustomRuleBuilder({ config, onChange, collections }: CustomRuleB
             <input
               value={config.output.categoryName}
               onChange={(event) => updateOutputName(event.target.value)}
-              placeholder="Short RPG not in Backlog"
+              placeholder={t("auto.custom.resultPlaceholder")}
               className="h-9 w-full rounded-lg border border-repressurizer-border bg-repressurizer-surface px-3 text-sm text-repressurizer-text placeholder:text-repressurizer-text-faint focus:border-repressurizer-accent focus:outline-none"
             />
           </div>
@@ -169,8 +171,8 @@ export function CustomRuleBuilder({ config, onChange, collections }: CustomRuleB
       <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg p-3">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-sm font-medium text-repressurizer-text">Conditions</p>
-            <p className="text-xs text-repressurizer-text-faint">All enabled rows must match.</p>
+            <p className="text-sm font-medium text-repressurizer-text">{t("auto.custom.conditions")}</p>
+            <p className="text-xs text-repressurizer-text-faint">{t("auto.custom.conditionsDesc")}</p>
           </div>
           <div className="flex items-center gap-2">
             <Plus size={14} weight="bold" className="text-repressurizer-accent" />
@@ -232,6 +234,7 @@ function ConditionRow({
   onDuplicate: () => void;
   onRemove: () => void;
 }) {
+  const t = useT();
   return (
     <div className="rounded-lg border border-repressurizer-border-subtle bg-repressurizer-surface px-3 py-2.5">
       <div className="mb-2 flex items-center gap-2">
@@ -247,10 +250,10 @@ function ConditionRow({
           />
           Enabled
         </label>
-        <button type="button" onClick={onDuplicate} className="btn-press flex h-7 w-7 items-center justify-center rounded-lg text-repressurizer-text-faint hover:bg-repressurizer-surface-hover hover:text-repressurizer-text" title="Duplicate">
+        <button type="button" onClick={onDuplicate} className="btn-press flex h-7 w-7 items-center justify-center rounded-lg text-repressurizer-text-faint hover:bg-repressurizer-surface-hover hover:text-repressurizer-text" title={t("auto.custom.duplicate")} aria-label={t("auto.custom.duplicate")}>
           <CopySimple size={13} />
         </button>
-        <button type="button" onClick={onRemove} className="btn-press flex h-7 w-7 items-center justify-center rounded-lg text-repressurizer-danger/70 hover:bg-repressurizer-danger/10 hover:text-repressurizer-danger" title="Delete">
+        <button type="button" onClick={onRemove} className="btn-press flex h-7 w-7 items-center justify-center rounded-lg text-repressurizer-danger/70 hover:bg-repressurizer-danger/10 hover:text-repressurizer-danger" title={t("auto.custom.delete")} aria-label={t("auto.custom.delete")}>
           <Trash size={13} />
         </button>
       </div>
@@ -265,7 +268,7 @@ function ConditionRow({
         <TitleConditionEditor condition={condition} onChange={onChange} />
       )}
       {condition.kind === "playtime" && (
-        <RangeConditionEditor label="Steam playtime" condition={condition} onChange={onChange} />
+        <RangeConditionEditor label={t("auto.custom.steamPlaytime")} condition={condition} onChange={onChange} />
       )}
       {condition.kind === "hltb" && (
         <HltbConditionEditor condition={condition} onChange={onChange} />
@@ -292,6 +295,7 @@ function CategoryConditionEditor({
   categories: SteamCollection[];
   onChange: (condition: CustomRuleConditionV1) => void;
 }) {
+  const t = useT();
   const selected = new Set(condition.categories.map((category) => category.key));
   const toggle = (category: SteamCollection) => {
     const ref: CategoryRef = { key: category.key, nameSnapshot: category.name };
@@ -303,7 +307,7 @@ function CategoryConditionEditor({
   return (
     <div className="grid items-start gap-2 lg:grid-cols-[180px_minmax(0,1fr)]">
       <SelectMenu<CustomCategoryCondition["mode"]>
-        label="Match"
+        label={t("auto.custom.match")}
         value={condition.mode}
         options={[
           { value: "inAny", label: "in any of" },
@@ -314,7 +318,7 @@ function CategoryConditionEditor({
         size="sm"
       />
       <div>
-        <FieldLabel>Categories</FieldLabel>
+        <FieldLabel>{t("auto.custom.categories")}</FieldLabel>
         <div className="flex min-h-8 max-h-24 flex-wrap content-start gap-1.5 overflow-auto rounded-lg border border-repressurizer-border bg-repressurizer-bg px-2 py-1.5">
           {categories.map((category) => (
             <button
@@ -421,10 +425,11 @@ function HltbConditionEditor({
   condition: CustomHltbCondition;
   onChange: (condition: CustomRuleConditionV1) => void;
 }) {
+  const t = useT();
   return (
     <div className="grid items-start gap-2 sm:grid-cols-[180px_minmax(0,1fr)]">
       <SelectMenu<HltbTimeMode>
-        label="Time"
+        label={t("auto.custom.time")}
         value={condition.mode}
         options={HLTB_TIME_MODES.map((mode) => ({ value: mode, label: hltbModeLabel(mode) }))}
         onChange={(mode) => onChange({ ...condition, mode })}
@@ -445,6 +450,7 @@ function MetadataTextConditionEditor({
   condition: CustomMetadataTextCondition;
   onChange: (condition: CustomRuleConditionV1) => void;
 }) {
+  const t = useT();
   return (
     <div className="grid gap-2 lg:grid-cols-[150px_120px_120px_minmax(0,1fr)]">
       <SelectMenu<CustomMetadataTextCondition["field"]>
@@ -482,7 +488,7 @@ function MetadataTextConditionEditor({
       <input
         value={condition.values.join(", ")}
         onChange={(event) => onChange({ ...condition, values: splitValues(event.target.value) })}
-        placeholder="RPG, Adventure"
+        placeholder={t("auto.custom.metadataPlaceholder")}
         className="h-8 rounded-lg border border-repressurizer-border bg-repressurizer-bg px-2.5 text-xs text-repressurizer-text placeholder:text-repressurizer-text-faint focus:border-repressurizer-accent focus:outline-none"
       />
     </div>

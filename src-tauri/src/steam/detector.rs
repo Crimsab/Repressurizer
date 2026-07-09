@@ -1,7 +1,7 @@
 use serde::Serialize;
 use std::collections::HashMap;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 const STEAM_ID64_BASE: u64 = 76561197960265728;
 
@@ -20,12 +20,12 @@ pub struct SteamInfo {
 }
 
 fn find_steam_path() -> Option<PathBuf> {
-    let windows_paths = vec![
+    let windows_paths = [
         PathBuf::from(r"C:\Program Files (x86)\Steam"),
         PathBuf::from(r"C:\Program Files\Steam"),
     ];
 
-    let linux_paths = vec![
+    let linux_paths = [
         dirs::home_dir().map(|h| h.join(".steam/steam")),
         dirs::home_dir().map(|h| h.join(".local/share/Steam")),
         dirs::home_dir().map(|h| h.join(".steam/debian-installation")),
@@ -37,11 +37,9 @@ fn find_steam_path() -> Option<PathBuf> {
         }
     }
 
-    for path_opt in &linux_paths {
-        if let Some(path) = path_opt {
-            if path.exists() {
-                return Some(path.clone());
-            }
+    for path in linux_paths.iter().flatten() {
+        if path.exists() {
+            return Some(path.clone());
         }
     }
 
@@ -49,7 +47,7 @@ fn find_steam_path() -> Option<PathBuf> {
 }
 
 /// Parse loginusers.vdf to get persona names mapped by SteamID64
-fn parse_login_users(steam_path: &PathBuf) -> HashMap<String, String> {
+fn parse_login_users(steam_path: &Path) -> HashMap<String, String> {
     let mut map = HashMap::new();
     let vdf_path = steam_path.join("config").join("loginusers.vdf");
 
@@ -64,7 +62,10 @@ fn parse_login_users(steam_path: &PathBuf) -> HashMap<String, String> {
         let trimmed = line.trim().trim_matches('"');
 
         // Lines like: "76561198..."
-        if trimmed.starts_with("7656") && trimmed.len() >= 17 && trimmed.chars().all(|c| c.is_ascii_digit()) {
+        if trimmed.starts_with("7656")
+            && trimmed.len() >= 17
+            && trimmed.chars().all(|c| c.is_ascii_digit())
+        {
             current_id64 = trimmed.to_string();
         }
 
@@ -90,7 +91,7 @@ fn parse_login_users(steam_path: &PathBuf) -> HashMap<String, String> {
     map
 }
 
-fn get_users(steam_path: &PathBuf) -> Vec<SteamUser> {
+fn get_users(steam_path: &Path) -> Vec<SteamUser> {
     let userdata_path = steam_path.join("userdata");
     let mut users = Vec::new();
     let login_users = parse_login_users(steam_path);
@@ -111,10 +112,7 @@ fn get_users(steam_path: &PathBuf) -> Vec<SteamUser> {
 
                     let id64 = (id3_num + STEAM_ID64_BASE).to_string();
 
-                    let persona_name = login_users
-                        .get(&id64)
-                        .cloned()
-                        .unwrap_or_default();
+                    let persona_name = login_users.get(&id64).cloned().unwrap_or_default();
 
                     let collections_path = path
                         .join("config")

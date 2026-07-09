@@ -242,14 +242,14 @@ fn strip_edition_suffix(value: &str) -> String {
     let mut out = value.trim().to_string();
     loop {
         let lower = out.to_ascii_lowercase();
-        let trimmed_lower = lower.trim_end_matches(|c: char| matches!(c, ' ' | '-' | ':' | ','));
+        let trimmed_lower = lower.trim_end_matches([' ', '-', ':', ',']);
         let mut found = false;
 
         for suffix in suffixes {
             if trimmed_lower.ends_with(suffix) {
                 let new_len = trimmed_lower.len().saturating_sub(suffix.len());
                 out = out[..new_len]
-                    .trim_end_matches(|c: char| matches!(c, ' ' | '-' | ':' | ','))
+                    .trim_end_matches([' ', '-', ':', ','])
                     .to_string();
                 found = true;
                 break;

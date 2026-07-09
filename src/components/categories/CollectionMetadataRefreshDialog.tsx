@@ -19,6 +19,7 @@ import {
   type MetadataRefreshOptions,
 } from "../../lib/metadataRefresh";
 import type { SteamCollection } from "../../lib/types";
+import { DialogOverlay } from "../ui/DialogOverlay";
 
 interface CollectionMetadataRefreshDialogProps {
   collections: SteamCollection[];
@@ -172,7 +173,9 @@ export function CollectionMetadataRefreshDialog({
       : t("metadataRefresh.scope.many", { count: collections.length });
 
   return (
-    <div
+    <DialogOverlay
+      label={t("metadataRefresh.title")}
+      onClose={onClose}
       className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
@@ -309,7 +312,7 @@ export function CollectionMetadataRefreshDialog({
           </div>
         </div>
       </div>
-    </div>
+    </DialogOverlay>
   );
 }
 

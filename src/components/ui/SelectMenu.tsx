@@ -170,6 +170,7 @@ export function SelectMenu<T extends string>({
             if (event.key === "End") focusOption(optionButtons.length - 1);
             if (event.key === "Escape") {
               event.preventDefault();
+              event.stopPropagation();
               setOpen(false);
               buttonRef.current?.focus();
             }
@@ -222,7 +223,7 @@ export function SelectMenu<T extends string>({
             );
           })}
         </div>,
-        document.body
+        buttonRef.current?.closest('[role="dialog"]') ?? document.body
       )
     : null;
 

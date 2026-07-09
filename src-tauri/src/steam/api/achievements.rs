@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use crate::http_policy::{client_builder_for_scope, HttpProxyScope};
 
 use super::types::{AchievementInfo, AchievementSummary};
+use super::utils::request_error;
 
 #[derive(Debug, Deserialize)]
 struct PlayerAchievementsResponse {
@@ -59,21 +60,18 @@ pub async fn fetch_achievements(
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
     // Fetch player achievements
-    let player_url = format!(
-        "https://api.steampowered.com/ISteamUserStats/GetPlayerAchievements/v1/?key={}&steamid={}&appid={}",
-        api_key, steam_id64, app_id
-    );
-
     let player_resp = client
-        .get(&player_url)
+        .get("https://api.steampowered.com/ISteamUserStats/GetPlayerAchievements/v1/")
+        .query(&[("key", api_key.as_str()), ("steamid", steam_id64.as_str())])
+        .query(&[("appid", app_id)])
         .send()
         .await
-        .map_err(|e| format!("Failed to fetch achievements: {}", e))?;
+        .map_err(|error| request_error("Failed to fetch achievements", error))?;
 
     let player_text = player_resp
         .text()
         .await
-        .map_err(|e| format!("Failed to read achievements response: {}", e))?;
+        .map_err(|error| request_error("Failed to read achievements response", error))?;
 
     let player_data: PlayerAchievementsResponse = serde_json::from_str(&player_text)
         .map_err(|_| "No achievements for this game".to_string())?;
@@ -92,21 +90,18 @@ pub async fn fetch_achievements(
     }
 
     // Fetch schema for names/descriptions/icons
-    let schema_url = format!(
-        "https://api.steampowered.com/ISteamUserStats/GetSchemaForGame/v2/?key={}&appid={}",
-        api_key, app_id
-    );
-
     let schema_resp = client
-        .get(&schema_url)
+        .get("https://api.steampowered.com/ISteamUserStats/GetSchemaForGame/v2/")
+        .query(&[("key", api_key.as_str())])
+        .query(&[("appid", app_id)])
         .send()
         .await
-        .map_err(|e| format!("Failed to fetch schema: {}", e))?;
+        .map_err(|error| request_error("Failed to fetch schema", error))?;
 
     let schema_text = schema_resp
         .text()
         .await
-        .map_err(|e| format!("Failed to read schema response: {}", e))?;
+        .map_err(|error| request_error("Failed to read schema response", error))?;
 
     let schema_data: SchemaResponse =
         serde_json::from_str(&schema_text).unwrap_or(SchemaResponse { game: None });
@@ -167,25 +162,22 @@ pub async fn fetch_achievements_summary(
     steam_id64: String,
     app_id: u64,
 ) -> Result<(u32, u32), String> {
-    let url = format!(
-        "https://api.steampowered.com/ISteamUserStats/GetPlayerAchievements/v1/?key={}&steamid={}&appid={}",
-        api_key, steam_id64, app_id
-    );
-
     let client = client_builder_for_scope(HttpProxyScope::SteamApi)?
         .build()
         .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
 
     let resp = client
-        .get(&url)
+        .get("https://api.steampowered.com/ISteamUserStats/GetPlayerAchievements/v1/")
+        .query(&[("key", api_key.as_str()), ("steamid", steam_id64.as_str())])
+        .query(&[("appid", app_id)])
         .send()
         .await
-        .map_err(|e| format!("Failed to fetch achievements: {}", e))?;
+        .map_err(|error| request_error("Failed to fetch achievements", error))?;
 
     let text = resp
         .text()
         .await
-        .map_err(|e| format!("Failed to read response: {}", e))?;
+        .map_err(|error| request_error("Failed to read response", error))?;
 
     let data: PlayerAchievementsResponse =
         serde_json::from_str(&text).map_err(|_| "No achievements for this game".to_string())?;

@@ -23,7 +23,7 @@ fn extract_year(date_str: &str) -> Option<u32> {
     date_str
         .split(|c: char| !c.is_ascii_digit())
         .filter_map(|s| s.parse::<u32>().ok())
-        .find(|&y| y >= 1970 && y <= 2100)
+        .find(|y| (1970..=2100).contains(y))
 }
 
 fn release_date_for_year(game: &GameDetails) -> Option<&str> {
@@ -41,10 +41,7 @@ fn release_date_for_year(game: &GameDetails) -> Option<&str> {
         })
 }
 
-pub fn categorize_by_year(
-    games: &[GameDetails],
-    config: &YearConfig,
-) -> CategorizeResult {
+pub fn categorize_by_year(games: &[GameDetails], config: &YearConfig) -> CategorizeResult {
     let mut assignments: HashMap<String, Vec<u64>> = HashMap::new();
     let mut games_categorized = 0u64;
 
@@ -85,10 +82,7 @@ pub fn categorize_by_year(
             }
         };
 
-        assignments
-            .entry(cat_name)
-            .or_default()
-            .push(game.app_id);
+        assignments.entry(cat_name).or_default().push(game.app_id);
 
         games_categorized += 1;
     }
@@ -105,7 +99,11 @@ mod tests {
     use super::*;
     use crate::steam::api::PlatformSupport;
 
-    fn details(app_id: u64, release_date: Option<&str>, store_release_date: Option<&str>) -> GameDetails {
+    fn details(
+        app_id: u64,
+        release_date: Option<&str>,
+        store_release_date: Option<&str>,
+    ) -> GameDetails {
         GameDetails {
             app_id,
             name: format!("Game {app_id}"),

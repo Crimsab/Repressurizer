@@ -13,6 +13,7 @@ import { useHltbStore } from "../../stores/hltbStore";
 import { Funnel, SlidersHorizontal, X } from "@phosphor-icons/react";
 import { useT, type TranslationKey } from "../../lib/i18n";
 import { SelectMenu } from "../ui/SelectMenu";
+import { DialogOverlay } from "../ui/DialogOverlay";
 
 const STATUS_FILTER_OPTIONS: GameStatus[] = ["playing", "beaten", "completed", "abandoned"];
 
@@ -313,7 +314,9 @@ function AdvancedFiltersDialog({
   };
 
   return (
-    <div
+    <DialogOverlay
+      label={t("filter.advanced.title")}
+      onClose={onClose}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
@@ -327,6 +330,7 @@ function AdvancedFiltersDialog({
           </div>
           <button
             onClick={onClose}
+            aria-label={t("common.close")}
             className="btn-press flex h-7 w-7 items-center justify-center rounded-lg text-repressurizer-text-muted transition-colors hover:bg-repressurizer-surface-hover hover:text-white"
           >
             <X size={15} weight="bold" />
@@ -336,7 +340,7 @@ function AdvancedFiltersDialog({
         <div className="max-h-[72vh] space-y-5 overflow-auto p-5">
           <section className="space-y-3">
             <div className="flex items-center justify-between gap-3">
-              <SectionTitle>Saved category filter</SectionTitle>
+              <SectionTitle>{t("filter.advanced.savedCategoryFilter")}</SectionTitle>
               {activeSavedFilter && (
                 <span className="rounded-md bg-repressurizer-accent/10 px-2 py-0.5 text-[10px] font-medium text-repressurizer-accent">
                   Active: {activeSavedFilter.name}
@@ -381,7 +385,7 @@ function AdvancedFiltersDialog({
                 <input
                   value={draftName}
                   onChange={(event) => setDraftName(event.target.value)}
-                  placeholder="Filter name"
+                  placeholder={t("filter.advanced.namePlaceholder")}
                   className="min-w-0 flex-1 rounded-lg border border-repressurizer-border bg-repressurizer-surface px-3 py-2 text-sm text-repressurizer-text placeholder:text-repressurizer-text-faint focus:border-repressurizer-accent focus:outline-none"
                 />
                 <button
@@ -401,8 +405,8 @@ function AdvancedFiltersDialog({
               </div>
 
               <div className="mb-3 grid gap-2 sm:grid-cols-2">
-                <StateSelect label="Hidden" value={hiddenState} onChange={setHiddenState} />
-                <StateSelect label="Uncategorized" value={uncategorizedState} onChange={setUncategorizedState} />
+                <StateSelect label={t("filter.advanced.hidden")} value={hiddenState} onChange={setHiddenState} />
+                <StateSelect label={t("filter.advanced.uncategorized")} value={uncategorizedState} onChange={setUncategorizedState} />
               </div>
 
               {collections.length > 0 ? (
@@ -559,7 +563,7 @@ function AdvancedFiltersDialog({
           </button>
         </div>
       </div>
-    </div>
+    </DialogOverlay>
   );
 }
 

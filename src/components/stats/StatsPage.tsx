@@ -11,6 +11,7 @@ import {
   CurrencyCircleDollar, Skull, Medal,
 } from "@phosphor-icons/react";
 import { useT, type TranslationKey } from "../../lib/i18n";
+import { DialogOverlay } from "../ui/DialogOverlay";
 
 const CURRENCY_SYMBOLS: Record<string, string> = {
   EUR: "€", USD: "$", GBP: "£", JPY: "¥", CAD: "C$",
@@ -85,7 +86,9 @@ export function StatsPage({ onClose }: StatsPageProps) {
   const hasDetails = Object.keys(details).length > 0;
 
   return (
-    <div
+    <DialogOverlay
+      label={t("stats.title")}
+      onClose={onClose}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
@@ -101,6 +104,7 @@ export function StatsPage({ onClose }: StatsPageProps) {
           </div>
           <button
             onClick={onClose}
+            aria-label={t("common.close")}
             className="btn-press flex items-center justify-center w-7 h-7 rounded-lg text-repressurizer-text-muted transition-colors hover:text-white hover:bg-repressurizer-surface-hover"
           >
             <X size={16} weight="bold" />
@@ -457,7 +461,7 @@ export function StatsPage({ onClose }: StatsPageProps) {
           )}
         </div>
       </div>
-    </div>
+    </DialogOverlay>
   );
 }
 

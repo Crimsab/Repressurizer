@@ -189,7 +189,9 @@ pub async fn test_proxy_profile(
 }
 
 pub fn client_builder_for_scope(scope: HttpProxyScope) -> Result<reqwest::ClientBuilder, String> {
-    let mut builder = reqwest::Client::builder();
+    let mut builder = reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(10))
+        .timeout(Duration::from_secs(30));
     if let Some(profile) = choose_proxy_profile(scope)? {
         builder = builder.proxy(profile_to_reqwest_proxy(&profile)?);
     }

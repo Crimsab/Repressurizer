@@ -26,6 +26,19 @@ export default defineConfig({
   },
   build: {
     target: "ES2022",
-    sourcemap: true,
+    sourcemap: process.env.REPRESSURIZER_SOURCEMAP === "true",
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return undefined;
+          if (id.includes("@tauri-apps")) return "vendor-tauri";
+          if (id.includes("@phosphor-icons")) return "vendor-icons";
+          if (id.includes("react") || id.includes("scheduler")) return "vendor-react";
+          if (id.includes("zustand")) return "vendor-state";
+          if (id.includes("html-to-image")) return "vendor-export";
+          return "vendor";
+        },
+      },
+    },
   },
 });

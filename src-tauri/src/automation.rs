@@ -8,12 +8,30 @@ use chrono::{SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use std::collections::{BTreeMap, HashMap, HashSet};
-use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 const SNAPSHOT_SCHEMA_VERSION: &str = "repressurizer.library-snapshot.v1";
 const STARTUP_DELAY: Duration = Duration::from_secs(10);
 const POLL_DELAY: Duration = Duration::from_secs(60);
+static AUTOMATION_PUBLISH_RUNNING: AtomicBool = AtomicBool::new(false);
+
+struct AutomationPublishGuard;
+
+impl AutomationPublishGuard {
+    fn acquire() -> Option<Self> {
+        AUTOMATION_PUBLISH_RUNNING
+            .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
+            .ok()
+            .map(|_| Self)
+    }
+}
+
+impl Drop for AutomationPublishGuard {
+    fn drop(&mut self) {
+        AUTOMATION_PUBLISH_RUNNING.store(false, Ordering::Release);
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
@@ -142,6 +160,16 @@ struct FamilyCache {
     last_fetched: Option<u64>,
 }
 
+struct SnapshotData {
+    games: Vec<SnapshotGameInput>,
+    collections: Vec<collections::SteamCollection>,
+    details: HashMap<String, api::GameDetails>,
+    hltb_data: HashMap<String, HltbData>,
+    achievements: HashMap<String, CachedAchievementSummary>,
+    wishlist: WishlistCache,
+    family: FamilyCache,
+}
+
 pub fn start_worker(_app: tauri::AppHandle) {
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(STARTUP_DELAY).await;
@@ -204,7 +232,16 @@ pub fn automation_status_from_settings() -> Result<Value, String> {
 }
 
 async fn publish_once(force: bool) -> Result<(), String> {
-    let mut settings_value = read_settings_value()?;
+    let Some(_publish_guard) = AutomationPublishGuard::acquire() else {
+        log::debug!("Ignoring automation export while another publish is running");
+        return if force {
+            Err("An automation export is already running".to_string())
+        } else {
+            Ok(())
+        };
+    };
+
+    let settings_value = read_settings_value()?;
     configure_http_policy_from_settings_value(&settings_value)?;
     let settings = parse_settings(&settings_value)?;
     if !settings.setup_complete || !settings.automation_publish_enabled {
@@ -223,7 +260,6 @@ async fn publish_once(force: bool) -> Result<(), String> {
         Ok(snapshot) => snapshot,
         Err(error) => {
             save_status(
-                &mut settings_value,
                 "failed",
                 &format!("Automation export failed: {}", error),
                 0,
@@ -246,7 +282,6 @@ async fn publish_once(force: bool) -> Result<(), String> {
 
     if game_count == 0 || collection_count == 0 {
         save_status(
-            &mut settings_value,
             "skipped",
             "Automation export skipped: no library data.",
             0,
@@ -263,7 +298,6 @@ async fn publish_once(force: bool) -> Result<(), String> {
 
     if !force && checksum == settings.automation_publish_last_checksum {
         save_status(
-            &mut settings_value,
             "skipped",
             "Automation export skipped: snapshot checksum has not changed.",
             0,
@@ -283,7 +317,6 @@ async fn publish_once(force: bool) -> Result<(), String> {
     {
         Ok(status) => {
             save_status(
-                &mut settings_value,
                 "success",
                 &format!("Automation export published with HTTP {}.", status),
                 status,
@@ -293,7 +326,6 @@ async fn publish_once(force: bool) -> Result<(), String> {
         }
         Err(error) => {
             save_status(
-                &mut settings_value,
                 "failed",
                 &format!("Automation export failed: {}", error),
                 0,
@@ -324,13 +356,15 @@ async fn build_snapshot(settings: &AutomationSettings) -> Result<Value, String> 
     let games = merge_collection_only_games(owned_games, &collections, &details);
 
     Ok(build_library_snapshot(
-        games,
-        collections,
-        details,
-        hltb_data,
-        achievements,
-        wishlist,
-        family,
+        SnapshotData {
+            games,
+            collections,
+            details,
+            hltb_data,
+            achievements,
+            wishlist,
+            family,
+        },
         settings,
     ))
 }
@@ -380,16 +414,16 @@ fn merge_collection_only_games(
     games.into_values().collect()
 }
 
-fn build_library_snapshot(
-    mut games: Vec<SnapshotGameInput>,
-    collections: Vec<collections::SteamCollection>,
-    details: HashMap<String, api::GameDetails>,
-    hltb_data: HashMap<String, HltbData>,
-    achievements: HashMap<String, CachedAchievementSummary>,
-    wishlist: WishlistCache,
-    family: FamilyCache,
-    settings: &AutomationSettings,
-) -> Value {
+fn build_library_snapshot(data: SnapshotData, settings: &AutomationSettings) -> Value {
+    let SnapshotData {
+        mut games,
+        collections,
+        details,
+        hltb_data,
+        achievements,
+        wishlist,
+        family,
+    } = data;
     let payload_settings = &settings.automation_publish_payload;
     let selected_category_keys: HashSet<String> = payload_settings
         .category_keys
@@ -797,13 +831,14 @@ async fn post_json(url: &str, body: &str, bearer_token: Option<&str>) -> Result<
         request = request.bearer_auth(token);
     }
 
-    let response = request
-        .send()
-        .await
-        .map_err(|error| format!("Failed to publish automation export: {}", error))?;
+    let response = request.send().await.map_err(|error| {
+        format!(
+            "Failed to publish automation export: {}",
+            error.without_url()
+        )
+    })?;
     let status = response.status();
-    let text = response.text().await.unwrap_or_default();
-    let response_preview = text.chars().take(500).collect::<String>();
+    let response_preview = crate::read_response_preview(response).await;
     if !status.is_success() {
         return Err(format!(
             "Automation export returned HTTP {}: {}",
@@ -831,16 +866,7 @@ fn parse_timestamp(value: &str) -> Option<chrono::DateTime<Utc>> {
 }
 
 fn read_settings_value() -> Result<Value, String> {
-    let path = settings_path().ok_or("Could not resolve Repressurizer app data directory")?;
-    let data = std::fs::read_to_string(&path)
-        .map_err(|error| format!("Failed to read settings file {}: {}", path.display(), error))?;
-    serde_json::from_str::<Value>(&data).map_err(|error| {
-        format!(
-            "Failed to parse settings file {}: {}",
-            path.display(),
-            error
-        )
-    })
+    crate::read_settings_json()
 }
 
 fn parse_settings(value: &Value) -> Result<AutomationSettings, String> {
@@ -859,42 +885,37 @@ fn configure_http_policy_from_settings_value(value: &Value) -> Result<(), String
     configure_http_policy(settings)
 }
 
-fn save_settings_value(value: &Value) -> Result<(), String> {
-    let path = settings_path().ok_or("Could not resolve Repressurizer app data directory")?;
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)
-            .map_err(|error| format!("Failed to create app data directory: {}", error))?;
-    }
-    let data = serde_json::to_string(value)
-        .map_err(|error| format!("Failed to serialize settings: {}", error))?;
-    std::fs::write(&path, data).map_err(|error| {
-        format!(
-            "Failed to write settings file {}: {}",
-            path.display(),
-            error
-        )
-    })
-}
-
-fn settings_path() -> Option<PathBuf> {
-    app_data_dir().map(|dir| dir.join("settings.json"))
-}
-
 fn save_status(
-    settings: &mut Value,
     status: &str,
     message: &str,
     http_status: u16,
     checksum: Option<String>,
 ) -> Result<(), String> {
     let timestamp = Utc::now().to_rfc3339_opts(SecondsFormat::Millis, true);
+    crate::update_settings_json(move |settings| {
+        apply_status_update(settings, status, message, http_status, checksum, &timestamp)
+    })
+}
+
+fn apply_status_update(
+    settings: &mut Value,
+    status: &str,
+    message: &str,
+    http_status: u16,
+    checksum: Option<String>,
+    timestamp: &str,
+) -> Result<(), String> {
     let entry = AutomationLogEntry {
         id: format!("{}-{}-rust", timestamp, status),
-        timestamp: timestamp.clone(),
+        timestamp: timestamp.to_string(),
         status: status.to_string(),
         message: message.to_string(),
         http_status,
     };
+
+    if !settings.is_object() {
+        return Err("Settings file must contain a JSON object".to_string());
+    }
 
     settings["automationPublishLastAttemptedAt"] = json!(timestamp);
     settings["automationPublishLastStatus"] = json!(status);
@@ -915,7 +936,7 @@ fn save_status(
     logs.truncate(100);
     settings["automationPublishLogs"] = Value::Array(logs);
 
-    save_settings_value(settings)
+    Ok(())
 }
 
 fn load_cache<T>(name: &str) -> HashMap<String, T>
@@ -1095,5 +1116,27 @@ mod tests {
     fn stable_stringify_sorts_object_keys() {
         let value = json!({ "b": 2, "a": { "d": 4, "c": 3 } });
         assert_eq!(stable_stringify(&value), r#"{"a":{"c":3,"d":4},"b":2}"#);
+    }
+
+    #[test]
+    fn status_updates_preserve_concurrent_settings_changes() {
+        let mut settings = json!({
+            "theme": "light",
+            "automationPublishLogs": [],
+        });
+
+        apply_status_update(
+            &mut settings,
+            "success",
+            "Published",
+            200,
+            Some("checksum".to_string()),
+            "2026-07-09T12:00:00.000Z",
+        )
+        .unwrap();
+
+        assert_eq!(settings["theme"], "light");
+        assert_eq!(settings["automationPublishLastStatus"], "success");
+        assert_eq!(settings["automationPublishLastChecksum"], "checksum");
     }
 }

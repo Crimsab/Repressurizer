@@ -24,6 +24,7 @@ import {
   Warning,
   Key,
 } from "@phosphor-icons/react";
+import { DialogOverlay } from "./DialogOverlay";
 
 interface OnboardingTourProps {
   onComplete: () => void;
@@ -143,7 +144,11 @@ export function OnboardingTour({ onComplete }: OnboardingTourProps) {
   };
 
   return (
-    <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/70 backdrop-blur-sm">
+    <DialogOverlay
+      label={t(current.titleKey as any)}
+      onClose={onComplete}
+      className="fixed inset-0 z-[300] flex items-center justify-center bg-black/70 backdrop-blur-sm"
+    >
       <div className="w-full max-w-md animate-fade-in rounded-2xl border border-repressurizer-border bg-repressurizer-surface p-8 shadow-[0_24px_64px_rgba(0,0,0,0.6)]">
         {/* Progress dots */}
         <div className="mb-6 flex items-center justify-center gap-2">
@@ -226,7 +231,7 @@ export function OnboardingTour({ onComplete }: OnboardingTourProps) {
                   <button
                     onClick={() => runFamilyProbe(false)}
                     disabled={familyStatus === "checking" || (!settings.apiKey && !extractStoreWebApiToken(familyToken))}
-                    className="btn-press flex-1 rounded-lg bg-sky-400 px-3 py-1.5 text-xs font-semibold text-slate-950 transition-colors hover:bg-sky-300 disabled:opacity-40"
+                    className="btn-press flex-1 rounded-lg bg-sky-400 px-3 py-1.5 text-xs font-semibold text-sky-950 transition-colors hover:bg-sky-300 disabled:opacity-40"
                   >
                     {t("onboarding.family.retryProbe")}
                   </button>
@@ -263,7 +268,7 @@ export function OnboardingTour({ onComplete }: OnboardingTourProps) {
           </div>
         </div>
       </div>
-    </div>
+    </DialogOverlay>
   );
 }
 
