@@ -49,7 +49,7 @@ import {
 
 const loadSettingsPage = () => import("../settings/SettingsPage").then((m) => ({ default: m.SettingsPage }));
 const loadExportDialog = () => import("../export/ExportDialog").then((m) => ({ default: m.ExportDialog }));
-const loadAutoCategorizeDialog = () => import("../categories/AutoCategorizeDialog").then((m) => ({ default: m.AutoCategorizeDialog }));
+const loadAutoCategorizeDialog = () => import("../categories/auto-categorize/AutoCategorizeDialog").then((m) => ({ default: m.AutoCategorizeDialog }));
 const loadStatsPage = () => import("../stats/StatsPage").then((m) => ({ default: m.StatsPage }));
 const loadAchievementsPage = () => import("../achievements/AchievementsPage").then((m) => ({ default: m.AchievementsPage }));
 const loadWishlistPage = () => import("../wishlist/WishlistPage").then((m) => ({ default: m.WishlistPage }));

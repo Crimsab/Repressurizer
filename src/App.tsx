@@ -35,7 +35,7 @@ import { startCachePreparation } from "./lib/cachePreparation";
 import { notifyDesktop } from "./lib/desktopNotifications";
 import { useT } from "./lib/i18n";
 import { Header } from "./components/layout/Header";
-import { Sidebar } from "./components/layout/Sidebar";
+import { Sidebar } from "./components/layout/sidebar/Sidebar";
 import { GameGrid } from "./components/games/GameGrid";
 import { StatusBar } from "./components/layout/StatusBar";
 import { FilterBar } from "./components/layout/FilterBar";

@@ -51,32 +51,32 @@ import {
   type SettingsTab,
   type SettingsTabItem,
 } from "./SettingsNavigation";
-import { BackupsTab, formatSize } from "./SettingsDataPanels";
+import { BackupsTab, formatSize } from "./data/SettingsDataPanels";
 import {
   type AutomationLogFilter,
   type AutomationLogSort,
-} from "./AutomationSettingsDialogs";
+} from "./automation/AutomationSettingsDialogs";
 import {
   DepressurizerDatabaseImportDialog,
-} from "./DepressurizerDatabaseImportDialog";
+} from "./data/DepressurizerDatabaseImportDialog";
 import { IgnoredSettingsTab, useIgnoredSettingsCount } from "./IgnoredSettingsTab";
 import { PerformanceSettingsSection } from "./PerformanceSettingsSection";
 import { AboutSettingsSections } from "./AboutSettingsSections";
-import { SteamFamilySettingsSection } from "./SteamFamilySettingsSection";
-import { useSteamFamilySettings } from "./useSteamFamilySettings";
-import { AutomationSettingsSection } from "./AutomationSettingsSection";
+import { SteamFamilySettingsSection } from "./steam-family/SteamFamilySettingsSection";
+import { useSteamFamilySettings } from "./steam-family/useSteamFamilySettings";
+import { AutomationSettingsSection } from "./automation/AutomationSettingsSection";
 import { CoreSettingsSection } from "./CoreSettingsSections";
-import { MaintenanceSettingsSection } from "./MaintenanceSettingsSection";
-import { useMaintenanceSettings } from "./useMaintenanceSettings";
+import { MaintenanceSettingsSection } from "./data/MaintenanceSettingsSection";
+import { useMaintenanceSettings } from "./data/useMaintenanceSettings";
 
 const AppearanceTab = lazy(() =>
   import("./AppearanceSettingsTab").then((module) => ({ default: module.AppearanceTab }))
 );
 const AutomationLogsDialog = lazy(() =>
-  import("./AutomationSettingsDialogs").then((module) => ({ default: module.AutomationLogsDialog }))
+  import("./automation/AutomationSettingsDialogs").then((module) => ({ default: module.AutomationLogsDialog }))
 );
 const AutomationGuideDialog = lazy(() =>
-  import("./AutomationSettingsDialogs").then((module) => ({ default: module.AutomationGuideDialog }))
+  import("./automation/AutomationSettingsDialogs").then((module) => ({ default: module.AutomationGuideDialog }))
 );
 
 interface SettingsPageProps {

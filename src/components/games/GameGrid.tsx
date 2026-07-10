@@ -22,7 +22,7 @@ import { priceSnapshotForCurrency } from "../../lib/prices";
 import { getHltbHours } from "../../lib/hltb";
 import { bestAvailableReleaseDate } from "../../lib/releaseDates";
 
-const loadGameDetailPage = () => import("./GameDetailPage").then((m) => ({ default: m.GameDetailPage }));
+const loadGameDetailPage = () => import("./game-detail/GameDetailPage").then((m) => ({ default: m.GameDetailPage }));
 const loadContextMenu = () => import("./ContextMenu").then((m) => ({ default: m.ContextMenu }));
 const GameDetailPage = lazy(loadGameDetailPage);
 const ContextMenu = lazy(loadContextMenu);

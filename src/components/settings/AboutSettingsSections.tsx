@@ -13,7 +13,7 @@ import { changelogEntries } from "../../lib/changelog";
 import { useT } from "../../lib/i18n";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { SelectMenu } from "../ui/SelectMenu";
-import { ChangelogPanel } from "./SettingsDataPanels";
+import { ChangelogPanel } from "./data/SettingsDataPanels";
 
 const UPDATE_CHECK_INTERVAL_OPTIONS = [6, 12, 24, 72, 168] as const;
 

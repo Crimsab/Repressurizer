@@ -8,7 +8,7 @@ import { normalizeLocale, useT } from "../../lib/i18n";
 import { X, CalendarBlank, Clock, SquaresFour, List, Rows } from "@phosphor-icons/react";
 import { DialogOverlay } from "../ui/DialogOverlay";
 
-const loadGameDetailPage = () => import("../games/GameDetailPage").then((m) => ({ default: m.GameDetailPage }));
+const loadGameDetailPage = () => import("../games/game-detail/GameDetailPage").then((m) => ({ default: m.GameDetailPage }));
 const GameDetailPage = lazy(loadGameDetailPage);
 const preloadGameDetailPage = () => { void loadGameDetailPage(); };
 
