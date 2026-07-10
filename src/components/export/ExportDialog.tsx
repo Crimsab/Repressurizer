@@ -20,6 +20,7 @@ import { exportToDisk } from "../../lib/exportAction";
 import { useT, type TranslationKey } from "../../lib/i18n";
 import { SelectMenu, type SelectMenuOption } from "../ui/SelectMenu";
 import { DialogOverlay } from "../ui/DialogOverlay";
+import { ResizableDialogPanel } from "../ui/ResizableDialogPanel";
 import {
   X,
   FileText,
@@ -324,20 +325,30 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="relative flex max-h-[92vh] w-full max-w-5xl animate-fade-in flex-col overflow-hidden rounded-2xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_24px_64px_rgba(0,0,0,0.6)]">
+      <ResizableDialogPanel
+        dialogId="export"
+        defaultSize={{ width: 1040, height: 760 }}
+        minSize={{ width: 720, height: 520 }}
+        className="relative flex min-h-0 flex-col overflow-hidden rounded-2xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_24px_64px_rgba(0,0,0,0.6)] animate-fade-in"
+      >
+        {({ sizeControls }) => (
+          <>
         <div className="flex items-center justify-between border-b border-repressurizer-border px-6 py-4">
           <div className="flex items-center gap-2">
             <Export size={18} weight="duotone" className="text-repressurizer-accent" />
             <h2 className="text-base font-semibold tracking-tight text-white">{t("export.title")}</h2>
           </div>
-          <button
-            onClick={onClose}
-            className="btn-press flex h-7 w-7 items-center justify-center rounded-lg text-repressurizer-text-muted transition-colors hover:bg-repressurizer-surface-hover hover:text-white"
-            aria-label={t("common.close")}
-            title={t("common.close")}
-          >
-            <X size={16} weight="bold" />
-          </button>
+          <div className="flex items-center gap-1">
+            {sizeControls}
+            <button
+              onClick={onClose}
+              className="btn-press flex h-7 w-7 items-center justify-center rounded-lg text-repressurizer-text-muted transition-colors hover:bg-repressurizer-surface-hover hover:text-white"
+              aria-label={t("common.close")}
+              title={t("common.close")}
+            >
+              <X size={16} weight="bold" />
+            </button>
+          </div>
         </div>
 
         <div className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto lg:grid-cols-[1fr_1.12fr]">
@@ -737,7 +748,9 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
             </button>
           </div>
         </div>
-      </div>
+          </>
+        )}
+      </ResizableDialogPanel>
     </DialogOverlay>
   );
 }

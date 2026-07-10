@@ -36,6 +36,7 @@ import {
 } from "@phosphor-icons/react";
 import { useT } from "../../lib/i18n";
 import { DialogOverlay } from "../ui/DialogOverlay";
+import { ResizableDialogPanel } from "../ui/ResizableDialogPanel";
 import { automationPublishStatusPatch, publishAutomationSnapshot } from "../../lib/automationPublish";
 import {
   normalizeSettingsSearchText,
@@ -564,23 +565,28 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
       className="fixed inset-0 z-50 flex items-start justify-center overflow-auto bg-black/60 p-4 backdrop-blur-sm sm:p-6"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div
+      <ResizableDialogPanel
+        dialogId="settings"
+        defaultSize={{ width: 1040, height: 760 }}
+        minSize={{ width: 720, height: 520 }}
+        viewportMargin={24}
         className="relative flex flex-col rounded-2xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_24px_64px_rgba(0,0,0,0.6)] animate-fade-in"
-        style={{
-          width: "min(1040px, calc(100vw - 32px))",
-          height: "min(760px, calc(100dvh - 48px))",
-        }}
       >
+        {({ sizeControls }) => (
+          <>
         {/* Header */}
         <div className="flex items-center justify-between border-b border-repressurizer-border px-6 py-4">
           <h2 className="text-base font-semibold text-white tracking-tight">{t("settings.title")}</h2>
-          <button
-            onClick={onClose}
-            aria-label={t("common.close")}
-            className="btn-press flex items-center justify-center w-7 h-7 rounded-lg text-repressurizer-text-muted transition-colors hover:text-white hover:bg-repressurizer-surface-hover"
-          >
-            <X size={16} weight="bold" />
-          </button>
+          <div className="flex items-center gap-1">
+            {sizeControls}
+            <button
+              onClick={onClose}
+              aria-label={t("common.close")}
+              className="btn-press flex items-center justify-center w-7 h-7 rounded-lg text-repressurizer-text-muted transition-colors hover:text-white hover:bg-repressurizer-surface-hover"
+            >
+              <X size={16} weight="bold" />
+            </button>
+          </div>
         </div>
 
         <div className="border-b border-repressurizer-border px-6 py-3">
@@ -926,7 +932,9 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
             </div>
           </DialogOverlay>
         )}
-      </div>
+          </>
+        )}
+      </ResizableDialogPanel>
     </DialogOverlay>
   );
 }

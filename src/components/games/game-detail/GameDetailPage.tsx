@@ -28,6 +28,7 @@ import {
 } from "./AchievementRow";
 import { GameAchievementsTab } from "./GameAchievementsTab";
 import { DialogOverlay } from "../../ui/DialogOverlay";
+import { ResizableDialogPanel } from "../../ui/ResizableDialogPanel";
 import type {
   OwnedGame,
   GameDetails,
@@ -453,7 +454,14 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
       className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/70 p-4 backdrop-blur-sm"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="flex h-[min(90vh,740px)] min-h-0 w-full max-w-4xl flex-col overflow-clip rounded-2xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_24px_64px_rgba(0,0,0,0.6)] animate-fade-in-stable">
+      <ResizableDialogPanel
+        dialogId="game-detail"
+        defaultSize={{ width: 900, height: 740 }}
+        minSize={{ width: 640, height: 480 }}
+        className="relative flex min-h-0 flex-col overflow-clip rounded-2xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_24px_64px_rgba(0,0,0,0.6)] animate-fade-in-stable"
+      >
+        {({ sizeControls }) => (
+          <>
         {/* Header image + overlay */}
         <div className="relative h-48 shrink-0 overflow-hidden bg-repressurizer-bg">
           <SteamImage
@@ -491,6 +499,9 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
                 </span>
               )}
             </div>
+          </div>
+          <div className="absolute right-14 top-4 rounded-lg bg-black/40 p-0.5 backdrop-blur-sm">
+            {sizeControls}
           </div>
           <button
             onClick={onClose}
@@ -581,7 +592,9 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
             />
           )}
         </div>
-      </div>
+          </>
+        )}
+      </ResizableDialogPanel>
       {samBackupsOpen && (
         <SamBackupViewerDialog
           gameName={String(game.name ?? "")}

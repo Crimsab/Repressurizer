@@ -12,6 +12,7 @@ import {
 } from "@phosphor-icons/react";
 import { useT, type TranslationKey } from "../../lib/i18n";
 import { DialogOverlay } from "../ui/DialogOverlay";
+import { ResizableDialogPanel } from "../ui/ResizableDialogPanel";
 
 const CURRENCY_SYMBOLS: Record<string, string> = {
   EUR: "€", USD: "$", GBP: "£", JPY: "¥", CAD: "C$",
@@ -92,23 +93,30 @@ export function StatsPage({ onClose }: StatsPageProps) {
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div
-        className="relative flex w-full max-w-4xl flex-col animate-fade-in rounded-2xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_24px_64px_rgba(0,0,0,0.6)]"
-        style={{ maxHeight: "90vh" }}
+      <ResizableDialogPanel
+        dialogId="statistics"
+        defaultSize={{ width: 900, height: 740 }}
+        minSize={{ width: 640, height: 480 }}
+        className="relative flex min-h-0 flex-col overflow-hidden rounded-2xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_24px_64px_rgba(0,0,0,0.6)] animate-fade-in"
       >
+        {({ sizeControls }) => (
+          <>
         {/* Header */}
         <div className="flex items-center justify-between border-b border-repressurizer-border px-6 py-4">
           <div className="flex items-center gap-2">
             <ChartBar size={18} weight="duotone" className="text-repressurizer-accent" />
             <h2 className="text-base font-semibold text-white tracking-tight">{t("stats.title")}</h2>
           </div>
-          <button
-            onClick={onClose}
-            aria-label={t("common.close")}
-            className="btn-press flex items-center justify-center w-7 h-7 rounded-lg text-repressurizer-text-muted transition-colors hover:text-white hover:bg-repressurizer-surface-hover"
-          >
-            <X size={16} weight="bold" />
-          </button>
+          <div className="flex items-center gap-1">
+            {sizeControls}
+            <button
+              onClick={onClose}
+              aria-label={t("common.close")}
+              className="btn-press flex items-center justify-center w-7 h-7 rounded-lg text-repressurizer-text-muted transition-colors hover:text-white hover:bg-repressurizer-surface-hover"
+            >
+              <X size={16} weight="bold" />
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-auto p-6 space-y-6">
@@ -460,7 +468,9 @@ export function StatsPage({ onClose }: StatsPageProps) {
             </div>
           )}
         </div>
-      </div>
+          </>
+        )}
+      </ResizableDialogPanel>
     </DialogOverlay>
   );
 }

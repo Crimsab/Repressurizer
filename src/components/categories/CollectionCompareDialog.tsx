@@ -17,6 +17,7 @@ import { useT, type TranslationKey } from "../../lib/i18n";
 import { SelectMenu } from "../ui/SelectMenu";
 import { SteamImage } from "../games/SteamImage";
 import { DialogOverlay } from "../ui/DialogOverlay";
+import { ResizableDialogPanel } from "../ui/ResizableDialogPanel";
 
 interface CollectionCompareDialogProps {
   initialCollections: SteamCollection[];
@@ -123,7 +124,14 @@ export function CollectionCompareDialog({
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <div className="flex max-h-[86vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-repressurizer-border bg-repressurizer-surface shadow-2xl">
+      <ResizableDialogPanel
+        dialogId="collection-compare"
+        defaultSize={{ width: 820, height: 700 }}
+        minSize={{ width: 640, height: 480 }}
+        className="relative flex min-h-0 flex-col overflow-hidden rounded-2xl border border-repressurizer-border bg-repressurizer-surface shadow-2xl"
+      >
+        {({ sizeControls }) => (
+          <>
         <div className="flex items-center justify-between border-b border-repressurizer-border px-5 py-4">
           <div className="flex min-w-0 items-center gap-3">
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-repressurizer-accent/12 text-repressurizer-accent">
@@ -138,14 +146,17 @@ export function CollectionCompareDialog({
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="btn-press flex h-9 w-9 items-center justify-center rounded-lg text-repressurizer-text-muted hover:bg-repressurizer-surface-hover hover:text-repressurizer-text"
-            aria-label={t("common.close")}
-          >
-            <X size={18} />
-          </button>
+          <div className="flex items-center gap-1">
+            {sizeControls}
+            <button
+              type="button"
+              onClick={onClose}
+              className="btn-press flex h-9 w-9 items-center justify-center rounded-lg text-repressurizer-text-muted hover:bg-repressurizer-surface-hover hover:text-repressurizer-text"
+              aria-label={t("common.close")}
+            >
+              <X size={18} />
+            </button>
+          </div>
         </div>
 
         {collections.length < 2 ? (
@@ -277,7 +288,9 @@ export function CollectionCompareDialog({
             </div>
           </>
         )}
-      </div>
+          </>
+        )}
+      </ResizableDialogPanel>
     </DialogOverlay>
   );
 }

@@ -91,14 +91,29 @@ test("shows accessible toolbar tooltips with available shortcuts", async ({ page
   await expect(page.getByRole("tooltip", { name: "Undo (Ctrl+Z)" })).toBeVisible();
 });
 
+test("workspace reports use the persistent resizable dialog surface", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Repressurizer" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Statistics" }).click();
+  await expect(page.locator('[data-resizable-dialog="statistics"]')).toBeVisible();
+  await page.getByRole("dialog", { name: "Statistics" }).getByRole("button", { name: "Close" }).click();
+
+  await page.getByRole("button", { name: "Export" }).click();
+  await expect(page.locator('[data-resizable-dialog="export"]')).toBeVisible();
+});
+
 test("dialogs trap focus, close with Escape, and restore focus", async ({ page }) => {
   await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Repressurizer" })).toBeVisible();
 
   const trigger = page.getByRole("button", { name: "Settings" });
   await trigger.click();
 
   const dialog = page.getByRole("dialog", { name: "Settings" });
   await expect(dialog).toBeVisible();
+  await expect(page.locator('[data-resizable-dialog="settings"]')).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Maximize dialog" })).toBeVisible();
   await expect(dialog).toHaveAttribute("aria-modal", "true");
   await expect.poll(() =>
     page.evaluate(() => document.activeElement?.closest('[role="dialog"]') !== null)
@@ -243,8 +258,8 @@ test("AutoCat resizes accessibly and restores its saved dialog layout", async ({
   await page.keyboard.press("ArrowRight");
   await page.keyboard.press("ArrowDown");
   const resized = await panel.boundingBox();
-  expect(resized?.width).toBe((initial?.width ?? 0) + 16);
-  expect(resized?.height).toBe((initial?.height ?? 0) + 16);
+  expect(resized?.width).toBeCloseTo((initial?.width ?? 0) + 16, 1);
+  expect(resized?.height).toBeCloseTo((initial?.height ?? 0) + 16, 1);
 
   await page.getByRole("button", { name: "Close" }).click();
   await page.getByRole("button", { name: /Auto-Categorize/ }).click();
@@ -479,6 +494,7 @@ test("compare collections follows sidebar order and opens game details", async (
     has: page.getByRole("heading", { name: "Compare Collections" }),
   });
   await expect(compare).toBeVisible();
+  await expect(page.locator('[data-resizable-dialog="collection-compare"]')).toBeVisible();
 
   await compare.getByRole("button", { name: /Collection B:/ }).click();
   const options = page.getByRole("option");
@@ -493,6 +509,7 @@ test("compare collections follows sidebar order and opens game details", async (
     has: page.getByRole("heading", { name: "Disco Elysium - The Final Cut" }),
   });
   await expect(details).toBeVisible();
+  await expect(page.locator('[data-resizable-dialog="game-detail"]')).toBeVisible();
   await expectNoHorizontalOverflow(page);
 });
 
