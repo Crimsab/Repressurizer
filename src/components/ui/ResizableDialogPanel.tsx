@@ -195,6 +195,7 @@ export function ResizableDialogPanel({
           aria-label={t("dialog.resetSize")}
           className="btn-press flex h-7 w-7 items-center justify-center rounded-lg text-repressurizer-text-muted transition-colors hover:bg-repressurizer-surface-hover hover:text-repressurizer-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-repressurizer-accent"
           data-dialog-reset-size
+          data-dialog-size-control
         >
           <ArrowCounterClockwise size={14} weight="bold" />
         </button>
@@ -206,6 +207,7 @@ export function ResizableDialogPanel({
           aria-label={t(layout.maximized ? "dialog.restore" : "dialog.maximize")}
           className="btn-press flex h-7 w-7 items-center justify-center rounded-lg text-repressurizer-text-muted transition-colors hover:bg-repressurizer-surface-hover hover:text-repressurizer-text focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-repressurizer-accent"
           data-dialog-toggle-maximize
+          data-dialog-size-control
         >
           {layout.maximized
             ? <ArrowsIn size={14} weight="bold" />
@@ -248,6 +250,7 @@ export function ResizableDialogPanel({
             onLostPointerCapture={finishResize}
             onKeyDown={handleResizeKeyDown}
             data-dialog-resize-handle
+            data-dialog-size-control
           >
             <DotsSix size={15} weight="bold" className="rotate-45" />
           </button>

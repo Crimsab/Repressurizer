@@ -247,25 +247,46 @@ test("AutoCat resizes accessibly and restores its saved dialog layout", async ({
   await page.getByRole("button", { name: /Auto-Categorize/ }).click();
 
   const panel = page.locator('[data-resizable-dialog="auto-categorize"]');
+  const autoCatDialog = page.getByRole("dialog", { name: "Auto-Categorize" });
   const resizeHandle = page.getByRole("button", { name: /Resize dialog/ });
   await expect(panel).toBeVisible();
+  await expect(
+    autoCatDialog.getByRole("button", { name: "Close", exact: true })
+  ).toBeFocused();
 
   const initial = await panel.boundingBox();
   expect(initial?.width).toBeGreaterThanOrEqual(880);
   expect(initial?.height).toBeGreaterThanOrEqual(700);
 
+  const handleBox = await resizeHandle.boundingBox();
+  expect(handleBox).not.toBeNull();
+  await page.mouse.move(
+    (handleBox?.x ?? 0) + (handleBox?.width ?? 0) / 2,
+    (handleBox?.y ?? 0) + (handleBox?.height ?? 0) / 2
+  );
+  await page.mouse.down();
+  await page.mouse.move(
+    (handleBox?.x ?? 0) + (handleBox?.width ?? 0) / 2 + 32,
+    (handleBox?.y ?? 0) + (handleBox?.height ?? 0) / 2 + 24,
+    { steps: 4 }
+  );
+  await page.mouse.up();
+  const pointerResized = await panel.boundingBox();
+  expect(pointerResized?.width).toBeCloseTo((initial?.width ?? 0) + 32, 1);
+  expect(pointerResized?.height).toBeCloseTo((initial?.height ?? 0) + 24, 1);
+
   await resizeHandle.focus();
   await page.keyboard.press("ArrowRight");
   await page.keyboard.press("ArrowDown");
   const resized = await panel.boundingBox();
-  expect(resized?.width).toBeCloseTo((initial?.width ?? 0) + 16, 1);
-  expect(resized?.height).toBeCloseTo((initial?.height ?? 0) + 16, 1);
+  expect(resized?.width).toBeCloseTo((pointerResized?.width ?? 0) + 16, 1);
+  expect(resized?.height).toBeCloseTo((pointerResized?.height ?? 0) + 16, 1);
 
-  await page.getByRole("button", { name: "Close" }).click();
+  await autoCatDialog.getByRole("button", { name: "Close", exact: true }).click();
   await page.getByRole("button", { name: /Auto-Categorize/ }).click();
   const reopened = await panel.boundingBox();
-  expect(reopened?.width).toBe(resized?.width);
-  expect(reopened?.height).toBe(resized?.height);
+  expect(reopened?.width).toBeCloseTo(resized?.width ?? 0, 1);
+  expect(reopened?.height).toBeCloseTo(resized?.height ?? 0, 1);
 
   await page.getByRole("button", { name: "Maximize dialog" }).click();
   const maximized = await panel.boundingBox();
@@ -274,8 +295,8 @@ test("AutoCat resizes accessibly and restores its saved dialog layout", async ({
 
   await page.getByRole("button", { name: "Restore dialog size" }).click();
   const restored = await panel.boundingBox();
-  expect(restored?.width).toBe(resized?.width);
-  expect(restored?.height).toBe(resized?.height);
+  expect(restored?.width).toBeCloseTo(resized?.width ?? 0, 1);
+  expect(restored?.height).toBeCloseTo(resized?.height ?? 0, 1);
 
   await page.getByRole("button", { name: "Reset dialog size" }).click();
   const reset = await panel.boundingBox();

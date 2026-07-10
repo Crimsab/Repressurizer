@@ -39,7 +39,12 @@ export function DialogOverlay({
       : null;
     const frame = requestAnimationFrame(() => {
       const dialog = dialogRef.current;
-      const firstFocusable = dialog?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
+      const focusable = Array.from(
+        dialog?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR) ?? []
+      );
+      const firstFocusable =
+        focusable.find((element) => !element.hasAttribute("data-dialog-size-control")) ??
+        focusable[0];
       (initialFocusRef?.current ?? firstFocusable ?? dialog)?.focus({ preventScroll: true });
     });
 
