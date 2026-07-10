@@ -230,7 +230,7 @@ export function ChooseStep({
 
   return (
     <div className="space-y-2">
-      <div className="mb-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="autocat-cache-grid mb-3 grid gap-2">
         <CacheStatusCard
           label={t("auto.cache.details")}
           cached={cachedCount}
@@ -400,7 +400,7 @@ export function ChooseStep({
             <Icon size={18} weight="duotone" className="shrink-0 text-repressurizer-accent" />
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-white">{label}</p>
-              <p className="mt-0.5 truncate text-xs text-repressurizer-text-faint">{description}</p>
+              <p className="mt-0.5 text-xs leading-relaxed text-repressurizer-text-faint">{description}</p>
             </div>
             {requirement && (
               <span className="shrink-0 rounded-md border border-repressurizer-border-subtle bg-repressurizer-surface px-2 py-0.5 text-[10px] font-medium text-repressurizer-text-muted">
@@ -446,7 +446,7 @@ function CacheStatusCard({
   return (
     <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-3 py-2">
       <div className="flex items-center justify-between gap-2">
-        <p className="truncate text-[11px] font-medium text-repressurizer-text-faint">
+        <p className="min-w-0 text-[11px] font-medium leading-tight text-repressurizer-text-faint">
           {label}
         </p>
         {loading ? (
@@ -479,7 +479,7 @@ function CacheStatusCard({
       {notes && notes.length > 0 && (
         <div className="mt-1 space-y-0.5">
           {notes.map((note) => (
-            <p key={note} className="truncate text-[10px] text-repressurizer-text-faint">
+            <p key={note} className="text-[10px] leading-snug text-repressurizer-text-faint">
               {note}
             </p>
           ))}

@@ -28,6 +28,7 @@ import {
   type PreviewSortContext,
 } from "../../../lib/autoCategorizePreview";
 import { DialogOverlay } from "../../ui/DialogOverlay";
+import { ResizableDialogPanel } from "../../ui/ResizableDialogPanel";
 import {
   categorizeBySteamRating,
   isSteamRatingFresh,
@@ -820,23 +821,33 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="relative flex w-full max-w-2xl flex-col animate-fade-in rounded-2xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_24px_64px_rgba(0,0,0,0.6)]" style={{ maxHeight: "85vh" }}>
+      <ResizableDialogPanel
+        dialogId="auto-categorize"
+        defaultSize={{ width: 920, height: 760 }}
+        minSize={{ width: 640, height: 480 }}
+        className="relative flex min-h-0 flex-col overflow-hidden rounded-2xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_24px_64px_rgba(0,0,0,0.6)] animate-fade-in"
+      >
+        {({ sizeControls }) => (
+          <>
         {/* Header */}
         <div className="flex items-center justify-between border-b border-repressurizer-border px-6 py-4">
           <div className="flex items-center gap-2">
             <Robot size={18} weight="duotone" className="text-repressurizer-accent" />
             <h2 className="text-base font-semibold text-white tracking-tight">{t("auto.title")}</h2>
           </div>
-          <button onClick={onClose} aria-label={t("common.close")} className="btn-press flex items-center justify-center w-7 h-7 rounded-lg text-repressurizer-text-muted transition-colors hover:text-white hover:bg-repressurizer-surface-hover">
-            <X size={16} weight="bold" />
-          </button>
+          <div className="flex items-center gap-1">
+            {sizeControls}
+            <button onClick={onClose} aria-label={t("common.close")} className="btn-press flex items-center justify-center w-7 h-7 rounded-lg text-repressurizer-text-muted transition-colors hover:text-white hover:bg-repressurizer-surface-hover">
+              <X size={16} weight="bold" />
+            </button>
+          </div>
         </div>
 
         {/* Steps indicator */}
         <StepBar step={step} />
 
         {/* Content */}
-        <div className="flex-1 overflow-auto p-6">
+        <div className="min-h-0 flex-1 overflow-auto p-6">
           {step === "choose" && (
             <ChooseStep
               presets={persist.presets}
@@ -938,7 +949,9 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
             <DoneStep result={result!} onClose={onClose} />
           )}
         </div>
-      </div>
+          </>
+        )}
+      </ResizableDialogPanel>
     </DialogOverlay>
   );
 }

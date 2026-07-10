@@ -31,6 +31,10 @@
   --font-mono: "Geist Mono Variable", ui-monospace, monospace;
 }
 
+.autocat-cache-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+}
+
 /* ── Theme: Dim ── */
 .theme-dim {
   --color-repressurizer-bg: #15161a;

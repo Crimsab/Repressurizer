@@ -227,6 +227,47 @@ test("AutoCat shows cached metadata suggestions and preview sorting controls", a
   await dialog.getByRole("button", { name: "Natural" }).click();
 });
 
+test("AutoCat resizes accessibly and restores its saved dialog layout", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: /Auto-Categorize/ }).click();
+
+  const panel = page.locator('[data-resizable-dialog="auto-categorize"]');
+  const resizeHandle = page.getByRole("button", { name: /Resize dialog/ });
+  await expect(panel).toBeVisible();
+
+  const initial = await panel.boundingBox();
+  expect(initial?.width).toBeGreaterThanOrEqual(880);
+  expect(initial?.height).toBeGreaterThanOrEqual(700);
+
+  await resizeHandle.focus();
+  await page.keyboard.press("ArrowRight");
+  await page.keyboard.press("ArrowDown");
+  const resized = await panel.boundingBox();
+  expect(resized?.width).toBe((initial?.width ?? 0) + 16);
+  expect(resized?.height).toBe((initial?.height ?? 0) + 16);
+
+  await page.getByRole("button", { name: "Close" }).click();
+  await page.getByRole("button", { name: /Auto-Categorize/ }).click();
+  const reopened = await panel.boundingBox();
+  expect(reopened?.width).toBe(resized?.width);
+  expect(reopened?.height).toBe(resized?.height);
+
+  await page.getByRole("button", { name: "Maximize dialog" }).click();
+  const maximized = await panel.boundingBox();
+  expect(maximized?.width).toBeGreaterThan(1300);
+  expect(maximized?.height).toBeGreaterThan(830);
+
+  await page.getByRole("button", { name: "Restore dialog size" }).click();
+  const restored = await panel.boundingBox();
+  expect(restored?.width).toBe(resized?.width);
+  expect(restored?.height).toBe(resized?.height);
+
+  await page.getByRole("button", { name: "Reset dialog size" }).click();
+  const reset = await panel.boundingBox();
+  expect(reset?.width).toBe(920);
+  expect(reset?.height).toBe(760);
+});
+
 test("AutoCat custom rule creates one category from a title condition", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: /Auto-Categorize/ }).click();
