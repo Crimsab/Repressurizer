@@ -10,7 +10,7 @@ import {
 import { STATUS_META, type GameStatus } from "../../stores/statusStore";
 import { useTagsStore } from "../../stores/tagsStore";
 import { useHltbStore } from "../../stores/hltbStore";
-import { Funnel, SlidersHorizontal, X } from "@phosphor-icons/react";
+import { CaretDown, Funnel, SlidersHorizontal, X } from "@phosphor-icons/react";
 import { useT, type TranslationKey } from "../../lib/i18n";
 import { SelectMenu } from "../ui/SelectMenu";
 import { DialogOverlay } from "../ui/DialogOverlay";
@@ -245,8 +245,16 @@ function AdvancedFiltersDialog({
   const [draftId, setDraftId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
   const [categoryStates, setCategoryStates] = useState<Record<string, AdvancedCategoryState>>({});
+  const [categoriesOpen, setCategoriesOpen] = useState(false);
+  const [categorySearch, setCategorySearch] = useState("");
   const [hiddenState, setHiddenState] = useState<AdvancedSpecialState>("any");
   const [uncategorizedState, setUncategorizedState] = useState<AdvancedSpecialState>("any");
+  const selectedCategoryCount = Object.keys(categoryStates).length;
+  const visibleCollections = useMemo(() => {
+    const query = categorySearch.trim().toLocaleLowerCase();
+    if (!query) return collections;
+    return collections.filter((collection) => collection.name.toLocaleLowerCase().includes(query));
+  }, [categorySearch, collections]);
 
   const togglePlatform = (platform: FilterState["platforms"][number]) => {
     setFilters({
@@ -261,6 +269,8 @@ function AdvancedFiltersDialog({
     setDraftId(null);
     setDraftName("");
     setCategoryStates({});
+    setCategoriesOpen(false);
+    setCategorySearch("");
     setHiddenState("any");
     setUncategorizedState("any");
   };
@@ -273,6 +283,8 @@ function AdvancedFiltersDialog({
     setDraftId(filter.id);
     setDraftName(filter.name);
     setCategoryStates(states);
+    setCategoriesOpen(Object.keys(states).length > 0);
+    setCategorySearch("");
     setHiddenState(filter.hidden);
     setUncategorizedState(filter.uncategorized);
   };
@@ -410,27 +422,68 @@ function AdvancedFiltersDialog({
               </div>
 
               {collections.length > 0 ? (
-                <div className="max-h-56 overflow-auto rounded-lg border border-repressurizer-border-subtle">
-                  {collections.map((collection) => (
-                    <div key={collection.key} className="flex items-center gap-3 border-b border-repressurizer-border-subtle px-3 py-2 last:border-b-0">
-                      <span className="min-w-0 flex-1 truncate text-xs text-repressurizer-text">{collection.name}</span>
-                      <SelectMenu<AdvancedCategoryState>
-                        ariaLabel={`${collection.name} category state`}
-                        value={categoryStates[collection.key] ?? "any"}
-                        onChange={(next) => setCategoryState(collection.key, next)}
-                        align="right"
-                        size="sm"
-                        className="w-28 shrink-0"
-                        buttonClassName="bg-repressurizer-surface"
-                        options={[
-                          { value: "any", label: "Any" },
-                          { value: "allow", label: "Allow" },
-                          { value: "require", label: "Require" },
-                          { value: "exclude", label: "Exclude" },
-                        ]}
-                      />
+                <div className="overflow-hidden rounded-lg border border-repressurizer-border-subtle">
+                  <button
+                    type="button"
+                    onClick={() => setCategoriesOpen((open) => !open)}
+                    aria-expanded={categoriesOpen}
+                    className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left transition-colors hover:bg-repressurizer-surface-hover/50"
+                  >
+                    <span className="min-w-0">
+                      <span className="block text-xs font-medium text-repressurizer-text">{t("auto.categories")}</span>
+                      <span className="mt-0.5 block text-[11px] text-repressurizer-text-faint">
+                        {t("export.categorySelected", { selected: selectedCategoryCount, total: collections.length })}
+                      </span>
+                    </span>
+                    <CaretDown
+                      size={14}
+                      className={`shrink-0 text-repressurizer-text-muted transition-transform ${categoriesOpen ? "rotate-180" : ""}`}
+                    />
+                  </button>
+
+                  {categoriesOpen && (
+                    <div className="border-t border-repressurizer-border-subtle p-2.5">
+                      {collections.length > 6 && (
+                        <input
+                          type="search"
+                          value={categorySearch}
+                          onChange={(event) => setCategorySearch(event.target.value)}
+                          placeholder={t("export.categorySearch")}
+                          className="mb-2.5 w-full rounded-lg border border-repressurizer-border bg-repressurizer-surface px-3 py-2 text-xs text-repressurizer-text placeholder:text-repressurizer-text-faint focus:border-repressurizer-accent focus:outline-none"
+                        />
+                      )}
+                      {visibleCollections.length > 0 ? (
+                        <div className="grid gap-1.5 sm:grid-cols-2">
+                          {visibleCollections.map((collection) => (
+                            <div key={collection.key} className="flex min-w-0 items-center gap-2 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-surface/50 px-2.5 py-1.5">
+                              <span className="min-w-0 flex-1 truncate text-xs text-repressurizer-text" title={collection.name}>
+                                {collection.name}
+                              </span>
+                              <SelectMenu<AdvancedCategoryState>
+                                ariaLabel={`${collection.name} category state`}
+                                value={categoryStates[collection.key] ?? "any"}
+                                onChange={(next) => setCategoryState(collection.key, next)}
+                                align="right"
+                                size="sm"
+                                className="w-24 shrink-0"
+                                buttonClassName="bg-repressurizer-bg"
+                                options={[
+                                  { value: "any", label: "Any" },
+                                  { value: "allow", label: "Allow" },
+                                  { value: "require", label: "Require" },
+                                  { value: "exclude", label: "Exclude" },
+                                ]}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="rounded-lg px-3 py-4 text-center text-xs text-repressurizer-text-faint">
+                          {t("common.noResults")}
+                        </p>
+                      )}
                     </div>
-                  ))}
+                  )}
                 </div>
               ) : (
                 <p className="rounded-lg border border-repressurizer-border-subtle px-3 py-2 text-xs text-repressurizer-text-faint">

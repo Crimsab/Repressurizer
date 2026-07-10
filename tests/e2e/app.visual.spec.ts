@@ -94,7 +94,7 @@ test("supports regex search and advanced duplicate filters", async ({ page }) =>
   await expect(page.locator(".game-card")).toHaveCount(1);
 
   await page.locator("[data-search-input]").fill("");
-  await page.getByRole("button", { name: "Advanced" }).click();
+  await page.getByRole("button", { name: "Advanced", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Advanced Filters" })).toBeVisible();
   await page.getByRole("button", { name: "Possible duplicates" }).click();
   await page.getByRole("button", { name: "Done", exact: true }).click();
@@ -103,6 +103,36 @@ test("supports regex search and advanced duplicate filters", async ({ page }) =>
   await expect(page.getByRole("heading", { name: "Grand Theft Auto III – The Definitive Edition", exact: true })).toBeVisible();
   await expect(page.getByText("Disco Elysium")).toBeHidden();
   await expect(page.locator(".game-card")).toHaveCount(2);
+});
+
+test("keeps advanced category filters compact and searchable", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(async () => {
+    const { useCategoryStore } = await import("/src/stores/categoryStore.ts");
+    useCategoryStore.getState().setCollections(
+      Array.from({ length: 12 }, (_, index) => ({
+        id: `advanced-${index + 1}`,
+        key: `user-collections.advanced-${index + 1}`,
+        name: `Advanced Collection ${index + 1}`,
+        added: [],
+        removed: [],
+        timestamp: 1,
+        is_deleted: false,
+        is_dynamic: false,
+      }))
+    );
+  });
+
+  await page.getByRole("button", { name: "Advanced", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Advanced Filters" });
+  const categories = dialog.getByRole("button", { name: /Categories 0\/12 selected/ });
+
+  await expect(categories).toBeVisible();
+  await expect(dialog.getByText("Advanced Collection 12", { exact: true })).toHaveCount(0);
+  await categories.click();
+  await dialog.getByPlaceholder("Search categories...").fill("Collection 12");
+  await expect(dialog.getByText("Advanced Collection 12", { exact: true })).toBeVisible();
+  await expect(dialog.getByText("Advanced Collection 1", { exact: true })).toHaveCount(0);
 });
 
 test("AutoCat shows cached metadata suggestions and preview sorting controls", async ({ page }) => {
