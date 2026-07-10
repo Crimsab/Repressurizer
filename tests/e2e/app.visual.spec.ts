@@ -339,6 +339,10 @@ test("save preview can reveal every changed collection", async ({ page }) => {
   await page.getByRole("button", { name: "Save", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Review Steam collection changes" });
 
+  await expect(dialog.getByRole("heading", { name: "Review Steam collection changes" })).toBeFocused();
+  await expect
+    .poll(() => dialog.locator("[data-save-preview-scroll]").evaluate((element) => element.scrollTop))
+    .toBe(0);
   await expect(dialog.getByText("Preview Collection 10", { exact: true })).toBeVisible();
   await expect(dialog.getByText("Preview Collection 12", { exact: true })).toHaveCount(0);
   await dialog.getByRole("button", {

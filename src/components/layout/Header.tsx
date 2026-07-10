@@ -580,6 +580,7 @@ function SavePreviewDialog({
   onConfirm: () => void;
 }) {
   const [showAllChanges, setShowAllChanges] = useState(false);
+  const titleRef = useRef<HTMLHeadingElement>(null);
   const hasDetails =
     preview.addedCollections.length > 0 ||
     preview.removedCollections.length > 0 ||
@@ -590,17 +591,20 @@ function SavePreviewDialog({
     <DialogOverlay
       label={t("savePreview.title")}
       onClose={onCancel}
+      initialFocusRef={titleRef}
       className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-6 backdrop-blur-sm"
     >
       <div className="w-full max-w-xl animate-fade-in rounded-2xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_24px_64px_rgba(0,0,0,0.6)]">
         <div className="border-b border-repressurizer-border px-5 py-4">
-          <h2 className="text-base font-semibold tracking-tight text-white">{t("savePreview.title")}</h2>
+          <h2 ref={titleRef} tabIndex={-1} className="text-base font-semibold tracking-tight text-white focus:outline-none">
+            {t("savePreview.title")}
+          </h2>
           <p className="mt-1 text-xs leading-relaxed text-repressurizer-text-faint">
             {t("savePreview.desc")}
           </p>
         </div>
 
-        <div className="max-h-[55vh] space-y-4 overflow-auto p-5">
+        <div data-save-preview-scroll className="max-h-[55vh] space-y-4 overflow-auto p-5">
           <div className="grid grid-cols-4 gap-2">
             <PreviewMetric label={t("savePreview.newCollections")} value={preview.addedCollections.length} />
             <PreviewMetric label={t("savePreview.removed")} value={preview.removedCollections.length} danger />

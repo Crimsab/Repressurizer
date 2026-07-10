@@ -4,6 +4,7 @@ import {
   type HTMLAttributes,
   type KeyboardEvent,
   type ReactNode,
+  type RefObject,
 } from "react";
 
 const FOCUSABLE_SELECTOR = [
@@ -19,6 +20,7 @@ interface DialogOverlayProps extends Omit<HTMLAttributes<HTMLDivElement>, "child
   children: ReactNode;
   label: string;
   onClose: () => void;
+  initialFocusRef?: RefObject<HTMLElement | null>;
 }
 
 export function DialogOverlay({
@@ -26,6 +28,7 @@ export function DialogOverlay({
   label,
   onClose,
   onKeyDown,
+  initialFocusRef,
   ...props
 }: DialogOverlayProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -37,14 +40,14 @@ export function DialogOverlay({
     const frame = requestAnimationFrame(() => {
       const dialog = dialogRef.current;
       const firstFocusable = dialog?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR);
-      (firstFocusable ?? dialog)?.focus();
+      (initialFocusRef?.current ?? firstFocusable ?? dialog)?.focus({ preventScroll: true });
     });
 
     return () => {
       cancelAnimationFrame(frame);
       previousFocus?.focus();
     };
-  }, []);
+  }, [initialFocusRef]);
 
   const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     onKeyDown?.(event);
