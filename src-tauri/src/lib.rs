@@ -5,12 +5,23 @@ pub mod hltb;
 pub mod http_policy;
 pub mod steam;
 
+mod app_data;
+mod runtime_cache;
+#[cfg(test)]
+use app_data::validate_app_data_key;
+pub(crate) use app_data::{
+    app_data_dir, read_app_setting_bool, read_settings_json, update_settings_json,
+};
+use app_data::{
+    app_data_file_path, read_app_setting_string, read_optional_text_file,
+    read_settings_json_unlocked, settings_file_lock, should_sync_app_data, steam_collections_path,
+    write_text_file_atomic,
+};
+
 use categorizer::commands;
 use serde::{Deserialize, Serialize};
-use std::io::Write;
-use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Mutex, OnceLock};
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use steam::api;
 use steam::collections;
 use steam::depressurizer_database;
@@ -22,19 +33,9 @@ use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_shell::ShellExt;
 
 static TRAY_BACKUP_RUNNING: AtomicBool = AtomicBool::new(false);
-static TEMP_FILE_COUNTER: AtomicU64 = AtomicU64::new(0);
-static SETTINGS_FILE_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
 
 const HTTP_RESPONSE_PREVIEW_BYTES: usize = 16 * 1024;
 const HTTP_RESPONSE_PREVIEW_CHARS: usize = 500;
-
-#[derive(Serialize)]
-struct CacheInfo {
-    path: String,
-    details_bytes: u64,
-    hltb_bytes: u64,
-    failed_bytes: u64,
-}
 
 #[derive(Serialize)]
 struct HttpPublishResult {
@@ -85,279 +86,6 @@ impl Drop for AtomicFlagGuard {
     fn drop(&mut self) {
         self.0.store(false, Ordering::Release);
     }
-}
-
-pub(crate) fn app_data_dir() -> Option<PathBuf> {
-    dirs::data_dir().map(|dir| dir.join("Repressurizer"))
-}
-
-fn validate_app_data_key(key: &str) -> Result<(), String> {
-    if key.is_empty()
-        || key.starts_with('.')
-        || key.ends_with('.')
-        || key.ends_with(' ')
-        || key.contains("..")
-        || is_windows_reserved_app_data_key(key)
-    {
-        return Err("Invalid app data key".to_string());
-    }
-
-    if !key
-        .bytes()
-        .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
-    {
-        return Err("Invalid app data key".to_string());
-    }
-
-    Ok(())
-}
-
-fn is_windows_reserved_app_data_key(key: &str) -> bool {
-    let stem = key
-        .split('.')
-        .next()
-        .unwrap_or_default()
-        .to_ascii_uppercase();
-    matches!(stem.as_str(), "CON" | "PRN" | "AUX" | "NUL")
-        || stem
-            .strip_prefix("COM")
-            .and_then(|suffix| suffix.parse::<u8>().ok())
-            .is_some_and(|number| (1..=9).contains(&number))
-        || stem
-            .strip_prefix("LPT")
-            .and_then(|suffix| suffix.parse::<u8>().ok())
-            .is_some_and(|number| (1..=9).contains(&number))
-}
-
-fn app_data_file_path(key: &str) -> Result<PathBuf, String> {
-    validate_app_data_key(key)?;
-    app_data_dir()
-        .map(|dir| dir.join(key))
-        .ok_or("Could not resolve Repressurizer app data directory".to_string())
-}
-
-fn should_sync_app_data(key: &str) -> bool {
-    !matches!(
-        key,
-        "steam_apps_index.json"
-            | "steam_ratings_cache.json"
-            | "details_cache.json"
-            | "hltb_cache.json"
-            | "failed_games.json"
-            | "achievements.json"
-            | "friends.json"
-            | "wishlist.json"
-    )
-}
-
-fn settings_file_path() -> Result<PathBuf, String> {
-    app_data_file_path("settings.json")
-}
-
-fn steam_collections_path(steam_path: &str, steam_id3: &str) -> PathBuf {
-    PathBuf::from(steam_path)
-        .join("userdata")
-        .join(steam_id3)
-        .join("config")
-        .join("cloudstorage")
-        .join("cloud-storage-namespace-1.json")
-}
-
-pub(crate) fn read_app_setting_bool(key: &str) -> Option<bool> {
-    let settings_path = settings_file_path().ok()?;
-    let data = std::fs::read_to_string(settings_path).ok()?;
-    let value = serde_json::from_str::<serde_json::Value>(&data).ok()?;
-    value.get(key).and_then(|v| v.as_bool())
-}
-
-fn read_app_setting_string(key: &str) -> Option<String> {
-    let settings_path = settings_file_path().ok()?;
-    let data = std::fs::read_to_string(settings_path).ok()?;
-    let value = serde_json::from_str::<serde_json::Value>(&data).ok()?;
-    value
-        .get(key)
-        .and_then(|v| v.as_str())
-        .map(ToString::to_string)
-}
-
-fn settings_file_lock() -> &'static Mutex<()> {
-    SETTINGS_FILE_LOCK.get_or_init(|| Mutex::new(()))
-}
-
-fn read_settings_json_unlocked() -> Result<serde_json::Value, String> {
-    let settings_path = settings_file_path()?;
-    let data = std::fs::read_to_string(&settings_path).map_err(|error| {
-        format!(
-            "Failed to read settings file {}: {}",
-            settings_path.display(),
-            error
-        )
-    })?;
-    serde_json::from_str::<serde_json::Value>(&data).map_err(|error| {
-        format!(
-            "Failed to parse settings file {}: {}",
-            settings_path.display(),
-            error
-        )
-    })
-}
-
-pub(crate) fn read_settings_json() -> Result<serde_json::Value, String> {
-    let _guard = settings_file_lock()
-        .lock()
-        .map_err(|_| "Settings file lock poisoned".to_string())?;
-    read_settings_json_unlocked()
-}
-
-fn read_optional_text_file(path: &Path, description: &str) -> Result<Option<String>, String> {
-    match std::fs::read_to_string(path) {
-        Ok(data) => Ok(Some(data)),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
-        Err(error) => Err(format!(
-            "Failed to read {} {}: {}",
-            description,
-            path.display(),
-            error
-        )),
-    }
-}
-
-fn temporary_file_path(path: &Path) -> Result<PathBuf, String> {
-    let parent = path
-        .parent()
-        .ok_or("Could not resolve target file parent directory".to_string())?;
-    let file_name = path
-        .file_name()
-        .and_then(|value| value.to_str())
-        .ok_or("Could not resolve target file name".to_string())?;
-    let counter = TEMP_FILE_COUNTER.fetch_add(1, Ordering::Relaxed);
-    Ok(parent.join(format!(
-        ".{}.{}.{}.tmp",
-        file_name,
-        std::process::id(),
-        counter
-    )))
-}
-
-#[cfg(windows)]
-fn replace_file(source: &Path, destination: &Path) -> std::io::Result<()> {
-    use std::os::windows::ffi::OsStrExt;
-    use windows_sys::Win32::Storage::FileSystem::{
-        MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
-    };
-
-    let source_wide: Vec<u16> = source
-        .as_os_str()
-        .encode_wide()
-        .chain(std::iter::once(0))
-        .collect();
-    let destination_wide: Vec<u16> = destination
-        .as_os_str()
-        .encode_wide()
-        .chain(std::iter::once(0))
-        .collect();
-
-    let result = unsafe {
-        MoveFileExW(
-            source_wide.as_ptr(),
-            destination_wide.as_ptr(),
-            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
-        )
-    };
-
-    if result == 0 {
-        Err(std::io::Error::last_os_error())
-    } else {
-        Ok(())
-    }
-}
-
-#[cfg(not(windows))]
-fn replace_file(source: &Path, destination: &Path) -> std::io::Result<()> {
-    std::fs::rename(source, destination)
-}
-
-fn write_text_file_atomic(
-    path: &Path,
-    data: &str,
-    description: &str,
-    sync_to_disk: bool,
-) -> Result<(), String> {
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(|error| {
-            format!(
-                "Failed to create {} directory {}: {}",
-                description,
-                parent.display(),
-                error
-            )
-        })?;
-    }
-
-    let temporary_path = temporary_file_path(path)?;
-    let result = (|| -> Result<(), String> {
-        let mut file = std::fs::File::create(&temporary_path).map_err(|error| {
-            format!(
-                "Failed to create temporary {} {}: {}",
-                description,
-                temporary_path.display(),
-                error
-            )
-        })?;
-        file.write_all(data.as_bytes()).map_err(|error| {
-            format!(
-                "Failed to write temporary {} {}: {}",
-                description,
-                temporary_path.display(),
-                error
-            )
-        })?;
-        if sync_to_disk {
-            file.sync_all().map_err(|error| {
-                format!(
-                    "Failed to flush temporary {} {}: {}",
-                    description,
-                    temporary_path.display(),
-                    error
-                )
-            })?;
-        }
-        drop(file);
-
-        replace_file(&temporary_path, path).map_err(|error| {
-            format!(
-                "Failed to replace {} {}: {}",
-                description,
-                path.display(),
-                error
-            )
-        })
-    })();
-
-    if result.is_err() {
-        let _ = std::fs::remove_file(&temporary_path);
-    }
-
-    result
-}
-
-fn write_settings_json_unlocked(value: &serde_json::Value) -> Result<(), String> {
-    let settings_path = settings_file_path()?;
-    let data = serde_json::to_string_pretty(value)
-        .map_err(|error| format!("Failed to serialize settings: {}", error))?;
-    write_text_file_atomic(&settings_path, &data, "settings file", true)
-}
-
-pub(crate) fn update_settings_json<F>(update: F) -> Result<(), String>
-where
-    F: FnOnce(&mut serde_json::Value) -> Result<(), String>,
-{
-    let _guard = settings_file_lock()
-        .lock()
-        .map_err(|_| "Settings file lock poisoned".to_string())?;
-    let mut settings = read_settings_json_unlocked()?;
-    update(&mut settings)?;
-    write_settings_json_unlocked(&settings)
 }
 
 fn launched_from_autostart() -> bool {
@@ -641,21 +369,6 @@ fn notify_result(app: &tauri::AppHandle, result: Result<String, String>) {
     }
 }
 
-fn redact_tail(value: &str) -> String {
-    if value.is_empty() {
-        return String::new();
-    }
-    let tail: String = value
-        .chars()
-        .rev()
-        .take(4)
-        .collect::<Vec<_>>()
-        .into_iter()
-        .rev()
-        .collect();
-    format!("***{}", tail)
-}
-
 const AUTOMATION_STATUS_KEYS: &[&str] = &[
     "automationPublishLastAttemptedAt",
     "automationPublishLastStatus",
@@ -813,176 +526,6 @@ pub(crate) async fn read_response_preview(mut response: reqwest::Response) -> St
         .chars()
         .take(HTTP_RESPONSE_PREVIEW_CHARS)
         .collect()
-}
-
-#[tauri::command]
-fn get_cache_info(_app: tauri::AppHandle) -> Option<CacheInfo> {
-    let dir = app_data_dir()?;
-    let file_size = |name: &str| -> u64 {
-        std::fs::metadata(dir.join(name))
-            .map(|m| m.len())
-            .unwrap_or(0)
-    };
-    Some(CacheInfo {
-        path: dir.to_str()?.to_string(),
-        details_bytes: file_size("details_cache.json"),
-        hltb_bytes: file_size("hltb_cache.json"),
-        failed_bytes: file_size("failed_games.json"),
-    })
-}
-
-#[tauri::command]
-fn export_diagnostics(
-    _app: tauri::AppHandle,
-    steam_path: String,
-    steam_id3: String,
-    steam_id64: String,
-) -> Result<String, String> {
-    let data_dir = app_data_dir();
-    let collections_path = steam_collections_path(&steam_path, &steam_id3);
-    let collections_size = std::fs::metadata(&collections_path).map(|m| m.len()).ok();
-    let backup_count = collections_path
-        .parent()
-        .and_then(|dir| std::fs::read_dir(dir).ok())
-        .map(|entries| {
-            entries
-                .flatten()
-                .filter(|entry| {
-                    let name = entry.file_name().to_string_lossy().to_string();
-                    (name.starts_with("cloud-storage-namespace-1.backup-")
-                        || name.starts_with("cloud-storage-namespace-1.pre-restore-"))
-                        && name.ends_with(".json")
-                })
-                .count()
-        })
-        .unwrap_or(0);
-
-    let cache_size = |name: &str| -> u64 {
-        data_dir
-            .as_ref()
-            .and_then(|dir| std::fs::metadata(dir.join(name)).ok())
-            .map(|m| m.len())
-            .unwrap_or(0)
-    };
-
-    let payload = serde_json::json!({
-        "generated_at": chrono::Utc::now().to_rfc3339(),
-        "app": {
-            "name": app_channel::app_display_name(),
-            "version": app_channel::app_version(),
-        },
-        "system": {
-            "os": std::env::consts::OS,
-            "arch": std::env::consts::ARCH,
-        },
-        "steam": {
-            "path": steam_path,
-            "steam_id3": redact_tail(&steam_id3),
-            "steam_id64": redact_tail(&steam_id64),
-            "collections_file_exists": collections_path.exists(),
-            "collections_file_size": collections_size,
-            "backup_count": backup_count,
-        },
-        "app_data": {
-            "path": data_dir.as_ref().and_then(|p| p.to_str()).unwrap_or("").to_string(),
-            "details_cache_bytes": cache_size("details_cache.json"),
-            "hltb_cache_bytes": cache_size("hltb_cache.json"),
-            "failed_games_bytes": cache_size("failed_games.json"),
-            "achievements_bytes": cache_size("achievements.json"),
-            "friends_bytes": cache_size("friends.json"),
-            "wishlist_bytes": cache_size("wishlist.json"),
-            "settings_bytes": cache_size("settings.json"),
-        },
-        "privacy": {
-            "api_key_included": false,
-            "proxy_credentials_included": false,
-            "steam_ids_redacted": true,
-        }
-    });
-
-    serde_json::to_string_pretty(&payload)
-        .map_err(|e| format!("Failed to serialize diagnostics: {}", e))
-}
-
-#[tauri::command]
-fn load_details_cache(_app: tauri::AppHandle) -> Option<String> {
-    load_named_cache("details_cache.json")
-}
-
-#[tauri::command]
-fn save_details_cache(_app: tauri::AppHandle, data: String) -> Result<(), String> {
-    save_named_cache("details_cache.json", data)
-}
-
-#[tauri::command]
-fn load_hltb_cache(_app: tauri::AppHandle) -> Option<String> {
-    load_named_cache("hltb_cache.json")
-}
-
-#[tauri::command]
-fn save_hltb_cache(_app: tauri::AppHandle, data: String) -> Result<(), String> {
-    save_named_cache("hltb_cache.json", data)
-}
-
-#[tauri::command]
-fn load_failed_cache(_app: tauri::AppHandle) -> Option<String> {
-    load_named_cache("failed_games.json")
-}
-
-#[tauri::command]
-fn save_failed_cache(_app: tauri::AppHandle, data: String) -> Result<(), String> {
-    save_named_cache("failed_games.json", data)
-}
-
-#[tauri::command]
-fn load_achievements_cache(_app: tauri::AppHandle) -> Option<String> {
-    load_named_cache("achievements.json")
-}
-
-#[tauri::command]
-fn save_achievements_cache(_app: tauri::AppHandle, data: String) -> Result<(), String> {
-    save_named_cache("achievements.json", data)
-}
-
-#[tauri::command]
-fn load_friends_cache(_app: tauri::AppHandle) -> Option<String> {
-    load_named_cache("friends.json")
-}
-
-#[tauri::command]
-fn save_friends_cache(_app: tauri::AppHandle, data: String) -> Result<(), String> {
-    save_named_cache("friends.json", data)
-}
-
-#[tauri::command]
-fn load_wishlist_cache(_app: tauri::AppHandle) -> Option<String> {
-    load_named_cache("wishlist.json")
-}
-
-#[tauri::command]
-fn save_wishlist_cache(_app: tauri::AppHandle, data: String) -> Result<(), String> {
-    save_named_cache("wishlist.json", data)
-}
-
-#[tauri::command]
-fn is_steam_running() -> bool {
-    sam::is_steam_running()
-}
-
-fn load_named_cache(name: &str) -> Option<String> {
-    let path = app_data_file_path(name).ok()?;
-    match read_optional_text_file(&path, "cache file") {
-        Ok(data) => data,
-        Err(error) => {
-            log::debug!("{}", error);
-            None
-        }
-    }
-}
-
-fn save_named_cache(name: &str, data: String) -> Result<(), String> {
-    let path = app_data_file_path(name)?;
-    write_text_file_atomic(&path, &data, "cache file", false)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -1260,7 +803,7 @@ pub fn run() {
             collections::restore_backup,
             collections::delete_backup,
             collections::create_manual_backup,
-            is_steam_running,
+            runtime_cache::is_steam_running,
             http_policy::configure_http_policy,
             http_policy::test_proxy_profile,
             depressurizer_database::import_depressurizer_database,
@@ -1299,20 +842,20 @@ pub fn run() {
             commands::run_language_categorizer,
             commands::run_platform_categorizer,
             commands::run_name_categorizer,
-            load_details_cache,
-            save_details_cache,
-            load_hltb_cache,
-            save_hltb_cache,
-            load_failed_cache,
-            save_failed_cache,
-            load_achievements_cache,
-            save_achievements_cache,
-            load_friends_cache,
-            save_friends_cache,
-            load_wishlist_cache,
-            save_wishlist_cache,
-            get_cache_info,
-            export_diagnostics,
+            runtime_cache::load_details_cache,
+            runtime_cache::save_details_cache,
+            runtime_cache::load_hltb_cache,
+            runtime_cache::save_hltb_cache,
+            runtime_cache::load_failed_cache,
+            runtime_cache::save_failed_cache,
+            runtime_cache::load_achievements_cache,
+            runtime_cache::save_achievements_cache,
+            runtime_cache::load_friends_cache,
+            runtime_cache::save_friends_cache,
+            runtime_cache::load_wishlist_cache,
+            runtime_cache::save_wishlist_cache,
+            runtime_cache::get_cache_info,
+            runtime_cache::export_diagnostics,
             hide_main_window,
             quit_app,
             get_startup_context,
@@ -1326,134 +869,4 @@ pub fn run() {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{
-        preserve_newer_automation_status, read_optional_text_file, should_sync_app_data,
-        validate_app_data_key,
-    };
-
-    fn temp_test_path(prefix: &str) -> std::path::PathBuf {
-        let unique = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        std::env::temp_dir().join(format!(
-            "repressurizer-{}-{}-{}.json",
-            prefix,
-            std::process::id(),
-            unique
-        ))
-    }
-
-    #[test]
-    fn app_data_key_accepts_existing_storage_names() {
-        for key in [
-            "settings.json",
-            "tags.json",
-            "statuses.json",
-            "reviews.json",
-            "notes.json",
-            "hltb_ignored.json",
-            "play_history.json",
-            "steam_apps_index.json",
-            "steam_family.json",
-            "steam_family_token.json",
-            "steam_ratings_cache.json",
-            "depressurizer-profile-import.json",
-            "details_cache.json",
-            "hltb_cache.json",
-            "failed_games.json",
-            "achievements.json",
-            "friends.json",
-            "wishlist.json",
-        ] {
-            assert!(validate_app_data_key(key).is_ok(), "{key} should be valid");
-        }
-    }
-
-    #[test]
-    fn app_data_key_rejects_paths_and_hidden_files() {
-        for key in [
-            "",
-            ".env",
-            "../settings.json",
-            "settings/backup.json",
-            "settings\\backup.json",
-            "settings..json",
-            "settings.",
-            "settings json",
-            "settings:json",
-            "CON",
-            "nul.json",
-            "COM1.txt",
-            "LPT9",
-        ] {
-            assert!(
-                validate_app_data_key(key).is_err(),
-                "{key} should be invalid"
-            );
-        }
-    }
-
-    #[test]
-    fn app_data_sync_policy_keeps_user_data_durable_and_skips_regenerable_caches() {
-        for key in [
-            "settings.json",
-            "notes.json",
-            "reviews.json",
-            "steam_family_token.json",
-        ] {
-            assert!(should_sync_app_data(key), "{key} should sync to disk");
-        }
-
-        for key in [
-            "steam_apps_index.json",
-            "steam_ratings_cache.json",
-            "details_cache.json",
-        ] {
-            assert!(!should_sync_app_data(key), "{key} should skip sync");
-        }
-    }
-
-    #[test]
-    fn optional_text_read_distinguishes_missing_files() {
-        let path = temp_test_path("missing");
-        let _ = std::fs::remove_file(&path);
-
-        assert_eq!(read_optional_text_file(&path, "test file").unwrap(), None);
-    }
-
-    #[test]
-    fn optional_text_read_returns_existing_file_contents() {
-        let path = temp_test_path("existing");
-        std::fs::write(&path, "{\"ok\":true}").unwrap();
-
-        let result = read_optional_text_file(&path, "test file").unwrap();
-        let _ = std::fs::remove_file(&path);
-
-        assert_eq!(result.as_deref(), Some("{\"ok\":true}"));
-    }
-
-    #[test]
-    fn settings_save_preserves_newer_automation_status() {
-        let mut incoming = serde_json::json!({
-            "theme": "light",
-            "automationPublishLastAttemptedAt": "2026-07-09T10:00:00.000Z",
-            "automationPublishLastStatus": "running",
-        });
-        let current = serde_json::json!({
-            "theme": "dark",
-            "automationPublishLastAttemptedAt": "2026-07-09T10:01:00.000Z",
-            "automationPublishLastStatus": "success",
-            "automationPublishLastMessage": "Published",
-            "automationPublishLogs": [{ "status": "success" }],
-        });
-
-        preserve_newer_automation_status(&mut incoming, &current);
-
-        assert_eq!(incoming["theme"], "light");
-        assert_eq!(incoming["automationPublishLastStatus"], "success");
-        assert_eq!(incoming["automationPublishLastMessage"], "Published");
-        assert_eq!(incoming["automationPublishLogs"][0]["status"], "success");
-    }
-}
+mod tests;
