@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AppleLogo,
   ArrowsClockwise,
@@ -52,16 +52,30 @@ export function GameInfoTab({
   const t = useT();
   const categoryColors = useSettingsStore((s) => s.categoryColors ?? {});
   const categoryChipStyle = useSettingsStore((s) => s.categoryChipStyle);
-  const gameCatKeys = new Set(gameCategories.map((c) => c.key));
+  const gameCatKeys = useMemo(
+    () => new Set(gameCategories.map((collection) => collection.key)),
+    [gameCategories]
+  );
   const note = useNotesStore((s) => s.notes[game.appid] ?? "");
   const setNote = useNotesStore((s) => s.setNote);
   const [noteText, setNoteText] = useState(note);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  useEffect(() => {
+    setNoteText(note);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    };
+  }, [game.appid, note]);
+
   const handleNoteChange = (text: string) => {
     setNoteText(text);
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => setNote(game.appid, text), 500);
+    debounceRef.current = setTimeout(() => {
+      debounceRef.current = null;
+      setNote(game.appid, text);
+    }, 500);
   };
 
   const hltbData = useHltbStore((s) => s.data[game.appid] ?? null);
@@ -91,10 +105,11 @@ export function GameInfoTab({
   const getAllTags = useTagsStore((s) => s.getAllTags);
   const [tagInput, setTagInput] = useState("");
   const allTags = getAllTags();
+  const gameTagSet = useMemo(() => new Set(gameTags), [gameTags]);
 
   const handleAddTag = () => {
     const trimmed = tagInput.trim().toLowerCase();
-    if (trimmed && !gameTags.includes(trimmed)) {
+    if (trimmed && !gameTagSet.has(trimmed)) {
       addTag(game.appid, trimmed);
     }
     setTagInput("");
@@ -411,8 +426,8 @@ export function GameInfoTab({
             className="flex-1 rounded-lg border border-repressurizer-border bg-repressurizer-bg px-3 py-1.5 text-xs text-repressurizer-text placeholder:text-repressurizer-text-faint focus:border-repressurizer-accent focus:outline-none transition-colors"
           />
           <datalist id="tag-suggestions">
-            {allTags.filter((t) => !gameTags.includes(t)).map((t) => (
-              <option key={t} value={t} />
+            {allTags.filter((tag) => !gameTagSet.has(tag)).map((tag) => (
+              <option key={tag} value={tag} />
             ))}
           </datalist>
           <button

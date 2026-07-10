@@ -16,6 +16,14 @@ export function AutomationPayloadSettings() {
         .sort((a, b) => a.name.localeCompare(b.name)),
     [collections]
   );
+  const categoryOptionKeys = useMemo(
+    () => new Set(categoryOptions.map((collection) => collection.key)),
+    [categoryOptions]
+  );
+  const selectedCategoryKeys = useMemo(
+    () => new Set(payload.categoryKeys),
+    [payload.categoryKeys]
+  );
 
   const updatePayload = (patch: Partial<AutomationPublishPayloadSettings>) => {
     setSettings({
@@ -38,14 +46,14 @@ export function AutomationPayloadSettings() {
   };
 
   const categorySelected = (key: string) =>
-    payload.categoryMode === "all" || payload.categoryKeys.includes(key);
+    payload.categoryMode === "all" || selectedCategoryKeys.has(key);
 
   const toggleCategory = (key: string) => {
     const allKeys = categoryOptions.map((collection) => collection.key);
     const current =
       payload.categoryMode === "all"
         ? allKeys
-        : payload.categoryKeys.filter((item) => allKeys.includes(item));
+        : payload.categoryKeys.filter((item) => categoryOptionKeys.has(item));
     const next = current.includes(key)
       ? current.filter((item) => item !== key)
       : [...current, key];
@@ -55,9 +63,7 @@ export function AutomationPayloadSettings() {
   const selectedCategoryCount =
     payload.categoryMode === "all"
       ? categoryOptions.length
-      : payload.categoryKeys.filter((key) =>
-          categoryOptions.some((collection) => collection.key === key)
-        ).length;
+      : payload.categoryKeys.filter((key) => categoryOptionKeys.has(key)).length;
 
   return (
     <div className="rounded-lg border border-repressurizer-border-subtle bg-repressurizer-surface/50 px-3 py-3">

@@ -128,6 +128,18 @@ export function Sidebar() {
   const [compareCollections, setCompareCollections] = useState<SteamCollection[] | null>(null);
   const [duplicateName, setDuplicateName] = useState("");
   const categoryAnchorRef = useRef<string | null>(null);
+  const selectedCategoryKeySet = useMemo(
+    () => new Set(selectedCategoryKeys),
+    [selectedCategoryKeys]
+  );
+  const collectionsByKey = useMemo(
+    () => new Map(collections.map((collection) => [collection.key, collection])),
+    [collections]
+  );
+  const selectedCollections = useMemo(
+    () => collections.filter((collection) => selectedCategoryKeySet.has(collection.key)),
+    [collections, selectedCategoryKeySet]
+  );
 
   const isRemovableCategory = useCallback(
     (key: string | null) => {
@@ -175,7 +187,7 @@ export function Sidebar() {
     e.stopPropagation();
     if (
       selectedCategoryKeys.length > 1 &&
-      !selectedCategoryKeys.includes(col.key)
+      !selectedCategoryKeySet.has(col.key)
     ) {
       clearCategorySelection();
     }
@@ -356,7 +368,7 @@ export function Sidebar() {
             ) : (
               (() => {
                 const categoryColor = getCategoryColor(col, categoryColors);
-                const selected = !col.is_dynamic && selectedCategoryKeys.includes(col.key);
+                const selected = !col.is_dynamic && selectedCategoryKeySet.has(col.key);
                 const active = activeCategory === col.key;
                 const tinted = Boolean(categoryColor && (active || selected));
                 return (
@@ -505,7 +517,7 @@ export function Sidebar() {
             type="button"
             onClick={() => {
               preloadCollectionCompareDialog();
-              setCompareCollections(collections.filter((col) => selectedCategoryKeys.includes(col.key)));
+              setCompareCollections(selectedCollections);
             }}
             onPointerEnter={preloadCollectionCompareDialog}
             onFocus={preloadCollectionCompareDialog}
@@ -595,7 +607,7 @@ export function Sidebar() {
           collection={contextMenu.collection}
           multiExportMode={
             selectedCategoryKeys.length > 1 &&
-            selectedCategoryKeys.includes(contextMenu.collection.key)
+            selectedCategoryKeySet.has(contextMenu.collection.key)
           }
           exportSelectedCount={selectedCategoryKeys.length}
           onClose={() => setContextMenu(null)}
@@ -628,7 +640,7 @@ export function Sidebar() {
             setContextMenu(null);
           }}
           onRefreshSelected={() => {
-            setRefreshCollections(collections.filter((col) => selectedCategoryKeys.includes(col.key)));
+            setRefreshCollections(selectedCollections);
             setContextMenu(null);
           }}
           onCompareCategory={(col) => {
@@ -638,7 +650,7 @@ export function Sidebar() {
           }}
           onCompareSelected={() => {
             preloadCollectionCompareDialog();
-            setCompareCollections(collections.filter((col) => selectedCategoryKeys.includes(col.key)));
+            setCompareCollections(selectedCollections);
             setContextMenu(null);
           }}
           onMergeSelected={() => {
@@ -684,7 +696,7 @@ export function Sidebar() {
       {confirmDeleteKeys && (
         <DeleteConfirmDialog
           names={confirmDeleteKeys
-            .map((key) => collections.find((c) => c.key === key)?.name)
+            .map((key) => collectionsByKey.get(key)?.name)
             .filter((name): name is string => !!name)}
           onConfirm={() => {
             if (confirmDeleteKeys.length === 1) {
