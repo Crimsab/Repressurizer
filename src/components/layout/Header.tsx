@@ -45,6 +45,7 @@ import {
   ChartLineUp,
   CurrencyDollar,
   Spinner,
+  DotsThree,
 } from "@phosphor-icons/react";
 
 const loadSettingsPage = () => import("../settings/SettingsPage").then((m) => ({ default: m.SettingsPage }));
@@ -146,16 +147,44 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
   const [showFriendCompare, setShowFriendCompare] = useState(false);
   const [showRecommend, setShowRecommend] = useState(false);
   const [showTimeline, setShowTimeline] = useState(false);
+  const [showMoreTools, setShowMoreTools] = useState(false);
   const [showSavePreview, setShowSavePreview] = useState(false);
   const [saving, setSaving] = useState(false);
   const [steamRunningForSave, setSteamRunningForSave] = useState<boolean | null>(null);
+  const moreToolsRef = useRef<HTMLDivElement>(null);
 
   const t = useT();
   const toast = useToastStore;
 
+  const secondaryTools = [
+    { key: "achievements", label: t("toolbar.achievements"), Icon: Trophy, open: () => setShowAchievements(true), loader: loadAchievementsPage },
+    { key: "wishlist", label: t("toolbar.wishlist"), Icon: BookmarkSimple, open: () => setShowWishlist(true), loader: loadWishlistPage },
+    { key: "friends", label: t("toolbar.friendCompare"), Icon: UsersThree, open: () => setShowFriendCompare(true), loader: loadFriendCompareDialog },
+    { key: "recommend", label: t("toolbar.recommend"), Icon: GameController, open: () => setShowRecommend(true), loader: loadWhatToPlayNext },
+    { key: "timeline", label: t("toolbar.timeline"), Icon: CalendarBlank, open: () => setShowTimeline(true), loader: loadPlayHistoryTimeline },
+    { key: "stats", label: t("toolbar.stats"), Icon: ChartBar, open: () => setShowStats(true), loader: loadStatsPage },
+    { key: "export", label: t("toolbar.export"), Icon: Export, open: () => openExportDialog(), loader: loadExportDialog },
+  ];
+
   useEffect(() => {
     if (exportOpenVersion > 0) setShowExport(true);
   }, [exportOpenVersion]);
+
+  useEffect(() => {
+    if (!showMoreTools) return;
+    const handlePointerDown = (event: PointerEvent) => {
+      if (!moreToolsRef.current?.contains(event.target as Node)) setShowMoreTools(false);
+    };
+    const handleKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key === "Escape") setShowMoreTools(false);
+    };
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [showMoreTools]);
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -222,7 +251,7 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
         </h1>
 
         {/* Search */}
-        <div className="relative flex-1 max-w-md group">
+        <div className="group relative min-w-0 max-w-md flex-1">
           <MagnifyingGlass
             size={15}
             weight="bold"
@@ -245,7 +274,7 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
           )}
         </div>
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex shrink-0 items-center gap-1.5">
           {/* View toggle */}
           <div className="flex rounded-lg border border-repressurizer-border overflow-hidden">
             <button
@@ -415,82 +444,56 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
             )}
           </button>
 
-          {/* Achievements */}
-          <button
-            onClick={() => setShowAchievements(true)}
-            onPointerEnter={() => preload(loadAchievementsPage)}
-            onFocus={() => preload(loadAchievementsPage)}
-            title={t("toolbar.achievements")}
-            className="btn-press flex items-center justify-center w-8 h-8 rounded-lg text-repressurizer-text-muted transition-colors hover:text-white hover:bg-repressurizer-surface-hover"
-          >
-            <Trophy size={16} />
-          </button>
+          {secondaryTools.map(({ key, label, Icon, open, loader }) => (
+            <button
+              key={key}
+              onClick={open}
+              onPointerEnter={() => preload(loader)}
+              onFocus={() => preload(loader)}
+              title={label}
+              className="btn-press hidden h-8 w-8 items-center justify-center rounded-lg text-repressurizer-text-muted transition-colors hover:bg-repressurizer-surface-hover hover:text-white min-[1120px]:flex"
+            >
+              <Icon size={16} />
+            </button>
+          ))}
 
-          {/* Wishlist */}
-          <button
-            onClick={() => setShowWishlist(true)}
-            onPointerEnter={() => preload(loadWishlistPage)}
-            onFocus={() => preload(loadWishlistPage)}
-            title={t("toolbar.wishlist")}
-            className="btn-press flex items-center justify-center w-8 h-8 rounded-lg text-repressurizer-text-muted transition-colors hover:text-white hover:bg-repressurizer-surface-hover"
-          >
-            <BookmarkSimple size={16} />
-          </button>
-
-          {/* Friend Compare */}
-          <button
-            onClick={() => setShowFriendCompare(true)}
-            onPointerEnter={() => preload(loadFriendCompareDialog)}
-            onFocus={() => preload(loadFriendCompareDialog)}
-            title={t("toolbar.friendCompare")}
-            className="btn-press flex items-center justify-center w-8 h-8 rounded-lg text-repressurizer-text-muted transition-colors hover:text-white hover:bg-repressurizer-surface-hover"
-          >
-            <UsersThree size={16} />
-          </button>
-
-          {/* What to Play Next */}
-          <button
-            onClick={() => setShowRecommend(true)}
-            onPointerEnter={() => preload(loadWhatToPlayNext)}
-            onFocus={() => preload(loadWhatToPlayNext)}
-            title={t("toolbar.recommend")}
-            className="btn-press flex items-center justify-center w-8 h-8 rounded-lg text-repressurizer-text-muted transition-colors hover:text-white hover:bg-repressurizer-surface-hover"
-          >
-            <GameController size={16} />
-          </button>
-
-          {/* Play History */}
-          <button
-            onClick={() => setShowTimeline(true)}
-            onPointerEnter={() => preload(loadPlayHistoryTimeline)}
-            onFocus={() => preload(loadPlayHistoryTimeline)}
-            title={t("toolbar.timeline")}
-            className="btn-press flex items-center justify-center w-8 h-8 rounded-lg text-repressurizer-text-muted transition-colors hover:text-white hover:bg-repressurizer-surface-hover"
-          >
-            <CalendarBlank size={16} />
-          </button>
-
-          {/* Stats */}
-          <button
-            onClick={() => setShowStats(true)}
-            onPointerEnter={() => preload(loadStatsPage)}
-            onFocus={() => preload(loadStatsPage)}
-            title={t("toolbar.stats")}
-            className="btn-press flex items-center justify-center w-8 h-8 rounded-lg text-repressurizer-text-muted transition-colors hover:text-white hover:bg-repressurizer-surface-hover"
-          >
-            <ChartBar size={16} />
-          </button>
-
-          {/* Export */}
-          <button
-            onClick={() => openExportDialog()}
-            onPointerEnter={() => preload(loadExportDialog)}
-            onFocus={() => preload(loadExportDialog)}
-            title={t("toolbar.export")}
-            className="btn-press flex items-center justify-center w-8 h-8 rounded-lg text-repressurizer-text-muted transition-colors hover:text-white hover:bg-repressurizer-surface-hover"
-          >
-            <Export size={16} />
-          </button>
+          <div ref={moreToolsRef} className="relative min-[1120px]:hidden">
+            <button
+              type="button"
+              onClick={() => setShowMoreTools((open) => !open)}
+              aria-label={t("toolbar.more")}
+              aria-haspopup="menu"
+              aria-expanded={showMoreTools}
+              className="btn-press flex h-8 w-8 items-center justify-center rounded-lg text-repressurizer-text-muted transition-colors hover:bg-repressurizer-surface-hover hover:text-white"
+            >
+              <DotsThree size={18} weight="bold" />
+            </button>
+            {showMoreTools && (
+              <div
+                role="menu"
+                aria-label={t("toolbar.more")}
+                className="absolute right-0 top-full z-50 mt-1.5 w-56 rounded-xl border border-repressurizer-border bg-repressurizer-surface p-1.5 shadow-[0_8px_32px_rgba(0,0,0,0.5)]"
+              >
+                {secondaryTools.map(({ key, label, Icon, open, loader }) => (
+                  <button
+                    key={key}
+                    type="button"
+                    role="menuitem"
+                    onClick={() => {
+                      setShowMoreTools(false);
+                      open();
+                    }}
+                    onPointerEnter={() => preload(loader)}
+                    onFocus={() => preload(loader)}
+                    className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs text-repressurizer-text transition-colors hover:bg-repressurizer-surface-hover focus:bg-repressurizer-surface-hover focus:outline-none"
+                  >
+                    <Icon size={15} className="text-repressurizer-text-muted" />
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
           {/* Settings */}
           <button

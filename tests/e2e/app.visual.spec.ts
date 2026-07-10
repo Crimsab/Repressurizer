@@ -54,6 +54,19 @@ test("loads the main library surface with mocked Steam data", async ({ page }, t
   await testInfo.attach("dashboard", { path: screenshotPath, contentType: "image/png" });
 });
 
+test("keeps every header action reachable at the minimum window size", async ({ page }) => {
+  await page.setViewportSize({ width: 900, height: 600 });
+  await page.goto("/");
+
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth))
+    .toBe(0);
+
+  await page.getByRole("button", { name: "More tools" }).click();
+  await expect(page.getByRole("menuitem", { name: "Statistics" })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "Export" })).toBeVisible();
+});
+
 test("dialogs trap focus, close with Escape, and restore focus", async ({ page }) => {
   await page.goto("/");
 
