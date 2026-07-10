@@ -300,6 +300,40 @@ test("creates a category from the compact sidebar plus button", async ({ page })
   await expect(page.getByRole("button", { name: /Dishonored/ })).toBeVisible();
 });
 
+test("save preview can reveal every changed collection", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(async () => {
+    const { useCategoryStore } = await import("/src/stores/categoryStore.ts");
+    const saved = Array.from({ length: 12 }, (_, index) => ({
+      id: `preview-${index + 1}`,
+      key: `user-collections.preview-${index + 1}`,
+      name: `Preview Collection ${index + 1}`,
+      added: [632470],
+      removed: [],
+      timestamp: 1,
+      is_deleted: false,
+      is_dynamic: false,
+    }));
+    useCategoryStore.getState().setCollections(saved);
+    useCategoryStore.getState().applyImportedCollections(
+      saved.map((collection) => ({
+        ...collection,
+        added: [...collection.added, 1145360],
+      }))
+    );
+  });
+
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Review Steam collection changes" });
+
+  await expect(dialog.getByText("Preview Collection 10", { exact: true })).toBeVisible();
+  await expect(dialog.getByText("Preview Collection 12", { exact: true })).toHaveCount(0);
+  await dialog.getByRole("button", {
+    name: "2 more changed collections are not shown.",
+  }).click();
+  await expect(dialog.getByText("Preview Collection 12", { exact: true })).toBeVisible();
+});
+
 test("compare collections follows sidebar order and opens game details", async ({ page }) => {
   await page.goto("/");
 

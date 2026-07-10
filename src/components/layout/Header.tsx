@@ -576,6 +576,7 @@ function SavePreviewDialog({
   onCancel: () => void;
   onConfirm: () => void;
 }) {
+  const [showAllChanges, setShowAllChanges] = useState(false);
   const hasDetails =
     preview.addedCollections.length > 0 ||
     preview.removedCollections.length > 0 ||
@@ -629,19 +630,26 @@ function SavePreviewDialog({
             <PreviewList title={t("savePreview.collectionsToRemove")} items={preview.removedCollections} danger />
           )}
 
-          {preview.changedCollections.slice(0, 10).map((change) => (
-            <div key={change.collection} className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3">
-              <p className="truncate text-sm font-medium text-white">{change.collection}</p>
-              <div className="mt-2 grid gap-2 text-xs md:grid-cols-2">
-                <ChangeSample label={t("savePreview.add")} items={change.added} />
-                <ChangeSample label={t("savePreview.remove")} items={change.removed} danger />
+          {preview.changedCollections
+            .slice(0, showAllChanges ? preview.changedCollections.length : 10)
+            .map((change) => (
+              <div key={change.collection} className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3">
+                <p className="truncate text-sm font-medium text-white">{change.collection}</p>
+                <div className="mt-2 grid gap-2 text-xs md:grid-cols-2">
+                  <ChangeSample label={t("savePreview.add")} items={change.added} />
+                  <ChangeSample label={t("savePreview.remove")} items={change.removed} danger />
+                </div>
               </div>
-            </div>
-          ))}
-          {preview.changedCollections.length > 10 && (
-            <p className="text-xs text-repressurizer-text-faint">
+            ))}
+          {!showAllChanges && preview.changedCollections.length > 10 && (
+            <button
+              type="button"
+              onClick={() => setShowAllChanges(true)}
+              className="btn-press flex w-full items-center justify-center gap-1.5 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-bg px-3 py-2 text-xs text-repressurizer-text-muted transition-colors hover:border-repressurizer-accent/50 hover:text-repressurizer-accent"
+            >
+              <CaretDown size={12} weight="bold" />
               {t("savePreview.moreChanged", { count: preview.changedCollections.length - 10 })}
-            </p>
+            </button>
           )}
         </div>
 
