@@ -375,6 +375,7 @@ export async function installTauriMock(page: Page) {
           case "load_details_cache":
             return window.localStorage.getItem("repressurizer-mock-details-cache");
           case "load_failed_cache":
+            return window.localStorage.getItem("repressurizer-mock-failed-cache");
           case "load_achievements_cache":
           case "load_friends_cache":
           case "load_wishlist_cache":

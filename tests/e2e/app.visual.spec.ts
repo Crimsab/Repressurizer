@@ -231,6 +231,57 @@ test("AutoCat does not apply categories when its safety backup fails", async ({ 
   await expect(page.getByRole("button", { name: /Blocked Apply/ })).toHaveCount(0);
 });
 
+test("AutoCat Run all skips permanently ignored detail gaps", async ({ page }) => {
+  await page.addInitScript(() => {
+    const ignoredIds = [
+      632470,
+      753640,
+      39140,
+      12100,
+      1546970,
+      1462040,
+      3280350,
+      2499860,
+      1643320,
+      1426210,
+    ];
+    window.localStorage.setItem(
+      "repressurizer-mock-failed-cache",
+      JSON.stringify(Object.fromEntries(ignoredIds.map((id) => [id, 3])))
+    );
+    window.localStorage.setItem(
+      "repressurizer-autocategorize",
+      JSON.stringify({
+        lastType: "flags",
+        lastStep: "choose",
+        presets: [
+          {
+            id: "ignored-details-regression",
+            name: "By Store Flags",
+            type: "flags",
+            config: { prefix: "(Flag) ", included_flags: [] },
+            createdAt: 1,
+            updatedAt: 1,
+          },
+        ],
+      })
+    );
+  });
+
+  await page.goto("/");
+  await page.getByTitle(/Auto-Categorize/).click();
+  const dialog = page.locator(".fixed.inset-0").filter({
+    has: page.getByRole("heading", { name: "Auto-Categorize" }),
+  });
+
+  await dialog.getByRole("button", { name: /Run all/ }).click();
+
+  await expect(dialog.getByText("Preview sort")).toBeVisible();
+  await expect(
+    dialog.getByRole("button", { name: /\(Flag\) Single-player 1 games/ })
+  ).toBeVisible();
+});
+
 test("creates a category from the compact sidebar plus button", async ({ page }) => {
   await page.addInitScript(() => {
     const raw = window.localStorage.getItem("repressurizer-settings");

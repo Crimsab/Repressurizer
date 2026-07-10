@@ -15,6 +15,7 @@ import { useBackgroundFetchStore } from "../../../stores/backgroundFetchStore";
 import { useHltbStore } from "../../../stores/hltbStore";
 import { useSteamRatingsStore } from "../../../stores/steamRatingsStore";
 import { useHltbIgnoredStore } from "../../../stores/hltbIgnoredStore";
+import { useFailedGamesStore } from "../../../stores/failedGamesStore";
 import {
   yearCategorizationReleaseDate,
 } from "../../../lib/releaseDates";
@@ -110,6 +111,11 @@ import { ConfigureStep } from "./AutoCategorizeConfigureStep";
 
 interface AutoCategorizeDialogProps {
   onClose: () => void;
+}
+
+function detailIdsEligibleForFetch(ids: number[]): number[] {
+  const { isIgnored } = useFailedGamesStore.getState();
+  return ids.filter((id) => !isIgnored(id));
 }
 
 export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
@@ -311,7 +317,9 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
   }, [currentConfig, ensureSteamRatingsHydrated, step, type]);
 
   const startMissingPresetFetch = useCallback((presets: AutoCategorizePreset[]): boolean => {
-    const missingDetails = missingBaseDetailIdsForPresets(presets, games, details, detailsCacheMaxAgeDays);
+    const missingDetails = detailIdsEligibleForFetch(
+      missingBaseDetailIdsForPresets(presets, games, details, detailsCacheMaxAgeDays)
+    );
 
     if (missingDetails.length > 0) {
       setFetchError("");
@@ -467,7 +475,9 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
     }
 
     if (categorizerNeedsDetails(type, config)) {
-      const missing = detailIdsNeedingBaseFetchForType(type, games, details, detailsCacheMaxAgeDays, config);
+      const missing = detailIdsEligibleForFetch(
+        detailIdsNeedingBaseFetchForType(type, games, details, detailsCacheMaxAgeDays, config)
+      );
 
       if (missing.length > 0) {
         setFetchError("");
