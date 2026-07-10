@@ -56,6 +56,8 @@ export function Tooltip({
         onMouseEnter={show}
         onMouseLeave={hide}
         onFocusCapture={show}
+        onPointerDownCapture={hide}
+        onClickCapture={hide}
         onBlurCapture={(event) => {
           if (!event.currentTarget.contains(event.relatedTarget as Node | null)) hide();
         }}

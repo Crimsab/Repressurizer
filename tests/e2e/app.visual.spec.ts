@@ -63,6 +63,7 @@ test("keeps every header action reachable at the minimum window size", async ({ 
     .toBe(0);
 
   await page.getByRole("button", { name: "More tools" }).click();
+  await expect(page.getByRole("tooltip", { name: "More tools" })).toHaveCount(0);
   await expect(page.getByRole("menuitem", { name: "Statistics" })).toBeVisible();
   await expect(page.getByRole("menuitem", { name: "Export" })).toBeVisible();
 });
