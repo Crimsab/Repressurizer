@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState, useEffect, useRef } from "react";
-import type { ReactNode } from "react";
+import type { ButtonHTMLAttributes, ReactNode } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { useGameStore } from "../../stores/gameStore";
 import type { SortBy } from "../../stores/gameStore";
@@ -13,6 +13,7 @@ import { buildSavePreview, type SavePreview } from "../../lib/savePreview";
 import { hasAdvancedFilters } from "../../lib/search";
 import { useT, type TranslationKey } from "../../lib/i18n";
 import { DialogOverlay } from "../ui/DialogOverlay";
+import { Tooltip } from "../ui/Tooltip";
 import {
   MagnifyingGlass,
   SquaresFour,
@@ -73,6 +74,28 @@ function LazyOverlay({ children }: { children: ReactNode }) {
     <Suspense fallback={<div className="fixed inset-0 z-[80] bg-black/40 backdrop-blur-sm" />}>
       {children}
     </Suspense>
+  );
+}
+
+function ToolbarIconButton({
+  label,
+  shortcut,
+  wrapperClassName = "",
+  className = "",
+  children,
+  ...props
+}: Omit<ButtonHTMLAttributes<HTMLButtonElement>, "aria-label"> & {
+  label: string;
+  shortcut?: string;
+  wrapperClassName?: string;
+}) {
+  const tooltip = shortcut ? `${label} (${shortcut})` : label;
+  return (
+    <Tooltip content={tooltip} className={`inline-flex ${wrapperClassName}`}>
+      <button {...props} aria-label={label} className={className}>
+        {children}
+      </button>
+    </Tooltip>
   );
 }
 
@@ -277,9 +300,9 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
         <div className="flex shrink-0 items-center gap-1.5">
           {/* View toggle */}
           <div className="flex rounded-lg border border-repressurizer-border overflow-hidden">
-            <button
+            <ToolbarIconButton
+              label={t("header.gridView")}
               onClick={() => setViewMode("grid")}
-              title={t("header.gridView")}
               className={`btn-press flex items-center justify-center w-8 h-8 transition-colors ${
                 viewMode === "grid"
                   ? "bg-repressurizer-accent/15 text-repressurizer-accent"
@@ -287,10 +310,10 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
               }`}
             >
               <SquaresFour size={16} weight={viewMode === "grid" ? "fill" : "regular"} />
-            </button>
-            <button
+            </ToolbarIconButton>
+            <ToolbarIconButton
+              label={t("header.listView")}
               onClick={() => setViewMode("list")}
-              title={t("header.listView")}
               className={`btn-press flex items-center justify-center w-8 h-8 border-l border-repressurizer-border transition-colors ${
                 viewMode === "list"
                   ? "bg-repressurizer-accent/15 text-repressurizer-accent"
@@ -298,7 +321,7 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
               }`}
             >
               <List size={16} weight={viewMode === "list" ? "bold" : "regular"} />
-            </button>
+            </ToolbarIconButton>
           </div>
 
           {/* Sort */}
@@ -316,13 +339,13 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
                 </span>
                 <CaretDown size={10} className={`text-repressurizer-text-faint transition-transform ${showSortMenu ? "rotate-180" : ""}`} />
               </button>
-              <button
+              <ToolbarIconButton
+                label={sortAsc ? t("header.sortAscending") : t("header.sortDescending")}
                 onClick={toggleSortAsc}
-                title={sortAsc ? t("header.sortAscending") : t("header.sortDescending")}
                 className="btn-press flex items-center justify-center w-8 h-8 border-l border-repressurizer-border text-repressurizer-text-muted transition-colors hover:text-white hover:bg-repressurizer-surface-hover"
               >
                 {sortAsc ? <SortAscending size={16} /> : <SortDescending size={16} />}
-              </button>
+              </ToolbarIconButton>
             </div>
 
             {showSortMenu && (
@@ -359,29 +382,31 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
           {/* Undo / Redo / Discard */}
           {dirty && (
             <div className="flex items-center gap-0.5">
-              <button
+              <ToolbarIconButton
+                label={t("header.undo")}
+                shortcut="Ctrl+Z"
                 onClick={undo}
                 disabled={historyLen === 0}
-                title={t("header.undo")}
                 className="btn-press flex items-center justify-center w-8 h-8 rounded-lg text-repressurizer-text-muted transition-colors hover:text-white hover:bg-repressurizer-surface-hover disabled:opacity-25 disabled:hover:text-repressurizer-text-muted disabled:hover:bg-transparent"
               >
                 <ArrowUUpLeft size={16} />
-              </button>
-              <button
+              </ToolbarIconButton>
+              <ToolbarIconButton
+                label={t("header.redo")}
+                shortcut="Ctrl+Shift+Z"
                 onClick={redo}
                 disabled={futureLen === 0}
-                title={t("header.redo")}
                 className="btn-press flex items-center justify-center w-8 h-8 rounded-lg text-repressurizer-text-muted transition-colors hover:text-white hover:bg-repressurizer-surface-hover disabled:opacity-25 disabled:hover:text-repressurizer-text-muted disabled:hover:bg-transparent"
               >
                 <ArrowUUpRight size={16} />
-              </button>
-              <button
+              </ToolbarIconButton>
+              <ToolbarIconButton
+                label={t("header.discard")}
                 onClick={discardChanges}
-                title={t("header.discard")}
                 className="btn-press flex items-center justify-center w-8 h-8 rounded-lg text-repressurizer-danger/70 transition-colors hover:text-repressurizer-danger hover:bg-repressurizer-danger/10"
               >
                 <Trash size={16} />
-              </button>
+              </ToolbarIconButton>
             </div>
           )}
 
@@ -409,12 +434,11 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
           </button>
 
           {/* Refresh Steam library */}
-          <button
+          <ToolbarIconButton
+            label={t("toolbar.refreshLibrary")}
             type="button"
             onClick={onRefreshLibrary}
             disabled={refreshingLibrary}
-            title={t("toolbar.refreshLibrary")}
-            aria-label={t("toolbar.refreshLibrary")}
             className={`btn-press flex h-8 w-8 items-center justify-center rounded-lg transition-colors ${
               refreshingLibrary
                 ? "bg-repressurizer-accent/10 text-repressurizer-accent"
@@ -426,14 +450,14 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
             ) : (
               <ArrowClockwise size={16} />
             )}
-          </button>
+          </ToolbarIconButton>
 
           {/* Auto-Categorize */}
-          <button
+          <ToolbarIconButton
+            label={`${t("toolbar.autoCategorize")} - ${cachedDetailsCount}/${gameCount} ${t("settings.cache")}`}
             onClick={() => setShowAutoCat(true)}
             onPointerEnter={() => preload(loadAutoCategorizeDialog)}
             onFocus={() => preload(loadAutoCategorizeDialog)}
-            title={`${t("toolbar.autoCategorize")} - ${cachedDetailsCount}/${gameCount} ${t("settings.cache")}`}
             className="btn-press relative flex items-center justify-center w-8 h-8 rounded-lg text-repressurizer-text-muted transition-colors hover:text-white hover:bg-repressurizer-surface-hover"
           >
             <Robot size={16} />
@@ -442,32 +466,33 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
                 !
               </span>
             )}
-          </button>
+          </ToolbarIconButton>
 
           {secondaryTools.map(({ key, label, Icon, open, loader }) => (
-            <button
+            <ToolbarIconButton
               key={key}
+              label={label}
+              wrapperClassName="hidden min-[1120px]:inline-flex"
               onClick={open}
               onPointerEnter={() => preload(loader)}
               onFocus={() => preload(loader)}
-              title={label}
-              className="btn-press hidden h-8 w-8 items-center justify-center rounded-lg text-repressurizer-text-muted transition-colors hover:bg-repressurizer-surface-hover hover:text-white min-[1120px]:flex"
+              className="btn-press flex h-8 w-8 items-center justify-center rounded-lg text-repressurizer-text-muted transition-colors hover:bg-repressurizer-surface-hover hover:text-white"
             >
               <Icon size={16} />
-            </button>
+            </ToolbarIconButton>
           ))}
 
           <div ref={moreToolsRef} className="relative min-[1120px]:hidden">
-            <button
+            <ToolbarIconButton
+              label={t("toolbar.more")}
               type="button"
               onClick={() => setShowMoreTools((open) => !open)}
-              aria-label={t("toolbar.more")}
               aria-haspopup="menu"
               aria-expanded={showMoreTools}
               className="btn-press flex h-8 w-8 items-center justify-center rounded-lg text-repressurizer-text-muted transition-colors hover:bg-repressurizer-surface-hover hover:text-white"
             >
               <DotsThree size={18} weight="bold" />
-            </button>
+            </ToolbarIconButton>
             {showMoreTools && (
               <div
                 role="menu"
@@ -496,15 +521,15 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
           </div>
 
           {/* Settings */}
-          <button
+          <ToolbarIconButton
+            label={t("toolbar.settings")}
             onClick={() => setShowSettings(true)}
             onPointerEnter={() => preload(loadSettingsPage)}
             onFocus={() => preload(loadSettingsPage)}
-            title={t("toolbar.settings")}
             className="btn-press flex items-center justify-center w-8 h-8 rounded-lg text-repressurizer-text-muted transition-colors hover:text-white hover:bg-repressurizer-surface-hover"
           >
             <GearSix size={16} />
-          </button>
+          </ToolbarIconButton>
         </div>
       </header>
 

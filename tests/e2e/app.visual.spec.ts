@@ -67,6 +67,22 @@ test("keeps every header action reachable at the minimum window size", async ({ 
   await expect(page.getByRole("menuitem", { name: "Export" })).toBeVisible();
 });
 
+test("shows accessible toolbar tooltips with available shortcuts", async ({ page }) => {
+  await page.goto("/");
+
+  const settings = page.getByRole("button", { name: "Settings" });
+  await settings.hover();
+  await expect(page.getByRole("tooltip", { name: "Settings" })).toBeVisible();
+
+  await page.evaluate(async () => {
+    const { useCategoryStore } = await import("/src/stores/categoryStore.ts");
+    useCategoryStore.getState().addCategory("Shortcut Test");
+  });
+  const undo = page.getByRole("button", { name: "Undo" });
+  await undo.focus();
+  await expect(page.getByRole("tooltip", { name: "Undo (Ctrl+Z)" })).toBeVisible();
+});
+
 test("dialogs trap focus, close with Escape, and restore focus", async ({ page }) => {
   await page.goto("/");
 
