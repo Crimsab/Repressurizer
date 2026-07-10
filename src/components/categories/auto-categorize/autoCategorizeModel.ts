@@ -46,6 +46,8 @@ export type CategorizerType =
   | "name"
   | "custom";
 
+export type CategorizerRequirement = "details" | "releaseDates" | "ratings" | "hltb";
+
 export type AutoCategorizeStep = "choose" | "configure" | "fetch" | "preview" | "done";
 export type AutoCategorizeFetchKind = "details" | "ratings" | "releaseDates";
 
@@ -88,6 +90,17 @@ export function categorizerNeedsRatings(
 ): boolean {
   if (type === "custom") return customNeedsRatings(normalizeCustomAutoCatConfig(config));
   return type === "rating";
+}
+
+export function categorizerRequirement(
+  type: CategorizerType,
+  config?: AutoCategorizePresetConfig
+): CategorizerRequirement | null {
+  if (type === "year") return "releaseDates";
+  if (type === "rating") return "ratings";
+  if (type === "hltb") return "hltb";
+  if (categorizerNeedsDetails(type, config)) return "details";
+  return null;
 }
 
 export function presetId(): string {

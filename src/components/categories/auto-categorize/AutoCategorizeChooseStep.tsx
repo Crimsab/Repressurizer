@@ -37,8 +37,8 @@ import { steamRatingIdsNeedingFetch } from "../../../lib/steamRatings";
 import type { AutoCategorizePreset } from "../../../stores/autoCategorizeStore";
 import { useT, type TranslationKey } from "../../../lib/i18n";
 import {
-  categorizerNeedsDetails,
-  categorizerNeedsRatings,
+  categorizerRequirement,
+  type CategorizerRequirement,
   type CategorizerType,
 } from "./autoCategorizeModel";
 
@@ -62,6 +62,13 @@ const CATEGORIZERS: {
   { value: "devpub", labelKey: "auto.byDevPub", descriptionKey: "auto.byDevPub.desc", icon: Buildings },
   { value: "language", labelKey: "auto.byLanguage", descriptionKey: "auto.byLanguage.desc", icon: Globe },
 ];
+
+const REQUIREMENT_LABELS: Record<CategorizerRequirement, TranslationKey> = {
+  details: "auto.needsDetails",
+  releaseDates: "auto.needsReleaseDates",
+  ratings: "auto.needsRatings",
+  hltb: "auto.needsHltb",
+};
 
 export function categorizerLabel(type: CategorizerType, t: ReturnType<typeof useT>): string {
   const option = CATEGORIZERS.find((item) => item.value === type);
@@ -383,6 +390,7 @@ export function ChooseStep({
         const Icon = c.icon;
         const label = t(c.labelKey);
         const description = t(c.descriptionKey);
+        const requirement = categorizerRequirement(c.value);
         return (
           <button
             key={c.value}
@@ -394,19 +402,9 @@ export function ChooseStep({
               <p className="text-sm font-medium text-white">{label}</p>
               <p className="mt-0.5 truncate text-xs text-repressurizer-text-faint">{description}</p>
             </div>
-            {categorizerNeedsDetails(c.value) && (
-              <span className="shrink-0 rounded-md bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-500">
-                {t("auto.needsDetails")}
-              </span>
-            )}
-            {c.value === "hltb" && (
-              <span className="shrink-0 rounded-md bg-sky-500/10 px-2 py-0.5 text-[10px] font-medium text-sky-400">
-                {t("auto.needsHltb")}
-              </span>
-            )}
-            {categorizerNeedsRatings(c.value) && (
-              <span className="shrink-0 rounded-md bg-sky-500/10 px-2 py-0.5 text-[10px] font-medium text-sky-400">
-                {t("auto.needsRatings")}
+            {requirement && (
+              <span className="shrink-0 rounded-md border border-repressurizer-border-subtle bg-repressurizer-surface px-2 py-0.5 text-[10px] font-medium text-repressurizer-text-muted">
+                {t(REQUIREMENT_LABELS[requirement])}
               </span>
             )}
             <ArrowRight size={16} className="shrink-0 text-repressurizer-text-faint" />

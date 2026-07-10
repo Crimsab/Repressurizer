@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { GameDetails } from "../../../lib/types";
 import {
   buildAutoCatMetadata,
+  categorizerRequirement,
   categorizerNeedsDetails,
   categorizerNeedsRatings,
   withProcessedAppIds,
@@ -39,6 +40,11 @@ describe("autoCategorizeModel", () => {
     expect(categorizerNeedsDetails("hours")).toBe(false);
     expect(categorizerNeedsRatings("rating")).toBe(true);
     expect(categorizerNeedsRatings("score")).toBe(false);
+    expect(categorizerRequirement("genre")).toBe("details");
+    expect(categorizerRequirement("year")).toBe("releaseDates");
+    expect(categorizerRequirement("rating")).toBe("ratings");
+    expect(categorizerRequirement("hltb")).toBe("hltb");
+    expect(categorizerRequirement("hours")).toBeNull();
   });
 
   it("builds sorted metadata suggestions and preserves tag fallback behavior", () => {

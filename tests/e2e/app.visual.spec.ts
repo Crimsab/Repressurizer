@@ -86,7 +86,7 @@ test("shows accessible toolbar tooltips with available shortcuts", async ({ page
 test("dialogs trap focus, close with Escape, and restore focus", async ({ page }) => {
   await page.goto("/");
 
-  const trigger = page.getByTitle("Settings");
+  const trigger = page.getByRole("button", { name: "Settings" });
   await trigger.click();
 
   const dialog = page.getByRole("dialog", { name: "Settings" });
@@ -195,11 +195,14 @@ test("AutoCat shows cached metadata suggestions and preview sorting controls", a
   });
 
   await page.goto("/");
-  await page.getByTitle(/Auto-Categorize/).click();
+  await page.getByRole("button", { name: /Auto-Categorize/ }).click();
 
   const dialog = page.locator(".fixed.inset-0").filter({
     has: page.getByRole("heading", { name: "Auto-Categorize" }),
   });
+  await expect(dialog.getByRole("button", { name: /By Genre/ })).toContainText("Game details");
+  await expect(dialog.getByRole("button", { name: /By Year/ })).toContainText("Store release dates");
+  await expect(dialog.getByRole("button", { name: /By Steam Reviews/ })).toContainText("Steam reviews");
   await dialog.getByRole("button", { name: /Store flags/ }).click();
 
   await expect(dialog.getByText(/Flags:\s*4/)).toBeVisible();
@@ -218,7 +221,7 @@ test("AutoCat shows cached metadata suggestions and preview sorting controls", a
 
 test("AutoCat custom rule creates one category from a title condition", async ({ page }) => {
   await page.goto("/");
-  await page.getByTitle(/Auto-Categorize/).click();
+  await page.getByRole("button", { name: /Auto-Categorize/ }).click();
 
   const dialog = page.locator(".fixed.inset-0").filter({
     has: page.getByRole("heading", { name: "Auto-Categorize" }),
@@ -256,7 +259,7 @@ test("AutoCat does not apply categories when its safety backup fails", async ({ 
     };
   });
 
-  await page.getByTitle(/Auto-Categorize/).click();
+  await page.getByRole("button", { name: /Auto-Categorize/ }).click();
   const dialog = page.locator(".fixed.inset-0").filter({
     has: page.getByRole("heading", { name: "Auto-Categorize" }),
   });
@@ -277,7 +280,7 @@ test("AutoCat does not apply categories when its safety backup fails", async ({ 
     const settingsModule = await import(modulePath);
     settingsModule.useSettingsStore.getState().setSettings({ steamPath: "" });
   });
-  await page.getByTitle(/Auto-Categorize/).click();
+  await page.getByRole("button", { name: /Auto-Categorize/ }).click();
   const missingPrerequisiteDialog = page.locator(".fixed.inset-0").filter({
     has: page.getByRole("heading", { name: "Auto-Categorize" }),
   });
@@ -328,7 +331,7 @@ test("AutoCat Run all skips permanently ignored detail gaps", async ({ page }) =
   });
 
   await page.goto("/");
-  await page.getByTitle(/Auto-Categorize/).click();
+  await page.getByRole("button", { name: /Auto-Categorize/ }).click();
   const dialog = page.locator(".fixed.inset-0").filter({
     has: page.getByRole("heading", { name: "Auto-Categorize" }),
   });
@@ -447,7 +450,7 @@ test("compare collections follows sidebar order and opens game details", async (
 test("play history shows tracked deltas instead of lifetime playtime", async ({ page }) => {
   await page.goto("/");
 
-  await page.getByTitle("Play History Timeline").click();
+  await page.getByRole("button", { name: "Play History Timeline" }).click();
 
   const timeline = page.locator(".fixed.inset-0").filter({
     has: page.getByRole("heading", { name: "Play History" }),
@@ -462,7 +465,7 @@ test("keeps Steam Tools in Settings instead of the home toolbar", async ({ page 
   await page.goto("/");
 
   await expect(page.getByTitle("Steam Tools")).toBeHidden();
-  await page.getByTitle("Settings").click();
+  await page.getByRole("button", { name: "Settings" }).click();
 
   const settingsDialog = page.locator(".fixed.inset-0").filter({
     has: page.getByRole("heading", { name: "Settings" }),
@@ -479,7 +482,7 @@ test("keeps Steam Tools in Settings instead of the home toolbar", async ({ page 
 
 test("settings search finds local-only visibility and generated changelog", async ({ page }) => {
   await page.goto("/");
-  await page.getByTitle("Settings").click();
+  await page.getByRole("button", { name: "Settings" }).click();
 
   const settingsDialog = page.locator(".fixed.inset-0").filter({
     has: page.getByRole("heading", { name: "Settings" }),
@@ -886,7 +889,7 @@ test("games without Steam achievements skip the Steam Achievement Manager panel"
 
 test("opens organized settings tabs, automation logs, and Steam controls without layout overflow", async ({ page }, testInfo) => {
   await page.goto("/");
-  await page.getByTitle("Settings").click();
+  await page.getByRole("button", { name: "Settings" }).click();
 
   await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
   const settingsDialog = page.locator(".fixed.inset-0").filter({
@@ -1023,7 +1026,7 @@ test("opens organized settings tabs, automation logs, and Steam controls without
 
 test("uses the color picker as the primary custom accent control", async ({ page }) => {
   await page.goto("/");
-  await page.getByTitle("Settings").click();
+  await page.getByRole("button", { name: "Settings" }).click();
   await page.getByRole("button", { name: "Appearance" }).click();
 
   await page.getByLabel("Pick accent color").first().click();
@@ -1054,7 +1057,7 @@ test("keeps selected appearance controls legible in light theme", async ({ page 
   });
 
   await page.goto("/");
-  await page.getByTitle("Settings").click();
+  await page.getByRole("button", { name: "Settings" }).click();
   await page.getByRole("button", { name: "Appearance" }).click();
 
   const lightButton = page.getByRole("button", { name: "Light" });
@@ -1075,7 +1078,7 @@ test("keeps selected appearance controls legible in light theme", async ({ page 
 
 test("keeps recommendation filters inside the dialog", async ({ page }, testInfo) => {
   await page.goto("/");
-  await page.getByTitle("What to Play Next").click();
+  await page.getByRole("button", { name: "What to Play Next" }).click();
 
   const dialog = page.locator(".fixed.inset-0").filter({
     has: page.getByRole("heading", { name: "What to Play Next" }),
