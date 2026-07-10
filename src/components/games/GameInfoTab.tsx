@@ -444,4 +444,3 @@ export function GameInfoTab({
     </div>
   );
 }
-

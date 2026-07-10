@@ -392,4 +392,3 @@ export function customDiagnosticsNotice(diagnostics: CustomRuleDiagnostics): str
     ? `${skipped.join(" · ")}. Skipped games are preserved on Apply.`
     : "";
 }
-

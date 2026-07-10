@@ -459,4 +459,3 @@ export function PerformanceSettingsSection() {
               </div>
   );
 }
-

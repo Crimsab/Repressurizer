@@ -431,4 +431,3 @@ function samReadinessLabel(t: ReturnType<typeof useT>, probe: SamBridgeProbe | n
   if (!probe) return t("steamTools.sam.checking");
   return t(`steamTools.sam.readiness.${probe.readiness}` as TranslationKey);
 }
-
