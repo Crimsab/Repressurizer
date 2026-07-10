@@ -57,6 +57,11 @@ test("loads the main library surface with mocked Steam data", async ({ page }, t
 test("keeps every header action reachable at the minimum window size", async ({ page }) => {
   await page.setViewportSize({ width: 900, height: 600 });
   await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Repressurizer" })).toBeVisible();
+  await page.evaluate(async () => {
+    const { useCategoryStore } = await import("/src/stores/categoryStore.ts");
+    useCategoryStore.getState().addCategory("Minimum Width Dirty State");
+  });
 
   await expect
     .poll(() => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth))
@@ -66,6 +71,8 @@ test("keeps every header action reachable at the minimum window size", async ({ 
   await expect(page.getByRole("tooltip", { name: "More tools" })).toHaveCount(0);
   await expect(page.getByRole("menuitem", { name: "Statistics" })).toBeVisible();
   await expect(page.getByRole("menuitem", { name: "Export" })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: /Auto-Categorize/ })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "Settings" })).toBeVisible();
 });
 
 test("shows accessible toolbar tooltips with available shortcuts", async ({ page }) => {

@@ -91,7 +91,7 @@ function ToolbarIconButton({
 }) {
   const tooltip = shortcut ? `${label} (${shortcut})` : label;
   return (
-    <Tooltip content={tooltip} className={`inline-flex ${wrapperClassName}`}>
+    <Tooltip content={tooltip} className={wrapperClassName || "inline-flex"}>
       <button {...props} aria-label={label} className={className}>
         {children}
       </button>
@@ -455,6 +455,7 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
           {/* Auto-Categorize */}
           <ToolbarIconButton
             label={`${t("toolbar.autoCategorize")} - ${cachedDetailsCount}/${gameCount} ${t("settings.cache")}`}
+            wrapperClassName="hidden min-[960px]:inline-flex"
             onClick={() => setShowAutoCat(true)}
             onPointerEnter={() => preload(loadAutoCategorizeDialog)}
             onFocus={() => preload(loadAutoCategorizeDialog)}
@@ -516,6 +517,38 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
                     {label}
                   </button>
                 ))}
+                <div className="my-1 border-t border-repressurizer-border-subtle min-[960px]:hidden" />
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setShowMoreTools(false);
+                    setShowAutoCat(true);
+                  }}
+                  onPointerEnter={() => preload(loadAutoCategorizeDialog)}
+                  onFocus={() => preload(loadAutoCategorizeDialog)}
+                  className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs text-repressurizer-text transition-colors hover:bg-repressurizer-surface-hover focus:bg-repressurizer-surface-hover focus:outline-none min-[960px]:hidden"
+                >
+                  <Robot size={15} className="text-repressurizer-text-muted" />
+                  <span className="min-w-0 flex-1">{t("toolbar.autoCategorize")}</span>
+                  <span className="font-mono text-[10px] text-repressurizer-text-faint tabular-nums">
+                    {cachedDetailsCount}/{gameCount}
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setShowMoreTools(false);
+                    setShowSettings(true);
+                  }}
+                  onPointerEnter={() => preload(loadSettingsPage)}
+                  onFocus={() => preload(loadSettingsPage)}
+                  className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs text-repressurizer-text transition-colors hover:bg-repressurizer-surface-hover focus:bg-repressurizer-surface-hover focus:outline-none min-[960px]:hidden"
+                >
+                  <GearSix size={15} className="text-repressurizer-text-muted" />
+                  {t("toolbar.settings")}
+                </button>
               </div>
             )}
           </div>
@@ -523,6 +556,7 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
           {/* Settings */}
           <ToolbarIconButton
             label={t("toolbar.settings")}
+            wrapperClassName="hidden min-[960px]:inline-flex"
             onClick={() => setShowSettings(true)}
             onPointerEnter={() => preload(loadSettingsPage)}
             onFocus={() => preload(loadSettingsPage)}
