@@ -13,8 +13,8 @@
 
   /* ── Text ── */
   --color-repressurizer-text: #e4e4e7;
-  --color-repressurizer-text-muted: #71717a;
-  --color-repressurizer-text-faint: #52525b;
+  --color-repressurizer-text-muted: #a1a1aa;
+  --color-repressurizer-text-faint: #85858f;
 
   /* ── Accent: Emerald ── */
   --color-repressurizer-accent: #10b981;
@@ -40,8 +40,8 @@
   --color-repressurizer-border: #363842;
   --color-repressurizer-border-subtle: #2a2c35;
   --color-repressurizer-text: #e0e0e4;
-  --color-repressurizer-text-muted: #8b8d97;
-  --color-repressurizer-text-faint: #6b6d78;
+  --color-repressurizer-text-muted: #a6a8b2;
+  --color-repressurizer-text-faint: #858793;
 }
 
 /* ── Theme: Light ── */
@@ -53,8 +53,8 @@
   --color-repressurizer-border: #d4d4d8;
   --color-repressurizer-border-subtle: #e4e4e7;
   --color-repressurizer-text: #18181b;
-  --color-repressurizer-text-muted: #71717a;
-  --color-repressurizer-text-faint: #a1a1aa;
+  --color-repressurizer-text-muted: #52525b;
+  --color-repressurizer-text-faint: #6e6e77;
 }
 
 /* Light theme: remap text-white to dark text so it's legible on light backgrounds */
