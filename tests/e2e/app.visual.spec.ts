@@ -313,6 +313,26 @@ test("creates a category from the compact sidebar plus button", async ({ page })
   await expect(page.getByRole("button", { name: /Dishonored/ })).toBeVisible();
 });
 
+test("reveals truncated category names on keyboard focus", async ({ page }) => {
+  const categoryName = "Narrative Adventure Collection With A Long Name";
+  await page.addInitScript(() => {
+    const raw = window.localStorage.getItem("repressurizer-settings");
+    if (!raw) return;
+    const settings = JSON.parse(raw);
+    settings.sidebarWidth = 160;
+    window.localStorage.setItem("repressurizer-settings", JSON.stringify(settings));
+  });
+  await page.goto("/");
+  await page.evaluate(async (name) => {
+    const { useCategoryStore } = await import("/src/stores/categoryStore.ts");
+    useCategoryStore.getState().addCategory(name);
+  }, categoryName);
+
+  const category = page.getByRole("button", { name: new RegExp(categoryName) });
+  await category.focus();
+  await expect(page.getByRole("tooltip", { name: categoryName })).toBeVisible();
+});
+
 test("save preview can reveal every changed collection", async ({ page }) => {
   await page.goto("/");
   await page.evaluate(async () => {

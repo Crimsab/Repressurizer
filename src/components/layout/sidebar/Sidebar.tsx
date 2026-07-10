@@ -24,6 +24,7 @@ import {
 import { useT } from "../../../lib/i18n";
 import { SteamImage } from "../../games/SteamImage";
 import { DialogOverlay } from "../../ui/DialogOverlay";
+import { Tooltip } from "../../ui/Tooltip";
 import { CollectionMetadataRefreshDialog } from "../../categories/CollectionMetadataRefreshDialog";
 import {
   colorWithAlpha,
@@ -372,6 +373,12 @@ export function Sidebar() {
                 const active = activeCategory === col.key;
                 const tinted = Boolean(categoryColor && (active || selected));
                 return (
+              <Tooltip
+                content={col.name}
+                className="block"
+                onlyWhenTruncated
+                overflowSelector="[data-category-name]"
+              >
               <button
                 style={
                   categoryColor
@@ -453,7 +460,7 @@ export function Sidebar() {
                     />
                   )}
                 </span>
-                <span className="min-w-0 truncate">{col.name}</span>
+                <span data-category-name className="min-w-0 truncate">{col.name}</span>
                 {categoryColor && (
                   <span
                     className="mx-auto h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-black/30"
@@ -465,6 +472,7 @@ export function Sidebar() {
                   {col.is_dynamic ? t("sidebar.auto") : col.added.length}
                 </span>
               </button>
+              </Tooltip>
                 );
               })()
             )}
