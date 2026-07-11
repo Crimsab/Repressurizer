@@ -1,7 +1,7 @@
 {
   "name": "repressurizer",
   "private": true,
-  "version": "0.5.0",
+  "version": "0.5.1",
   "license": "GPL-3.0-only",
   "type": "module",
   "workspaces": [
