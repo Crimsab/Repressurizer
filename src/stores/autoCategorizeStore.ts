@@ -34,6 +34,7 @@ export type CategorizerType =
   | "name"
   | "custom";
 export type PersistStep = "choose" | "configure" | "preview" | "done";
+export const AUTO_CATEGORIZE_RESULT_SCOPE_VERSION = 2;
 
 export type AutoCategorizePresetConfig =
   | HoursConfig
@@ -59,6 +60,7 @@ export interface AutoCategorizePreset {
 }
 
 interface AutoCategorizeState {
+  resultScopeVersion: number;
   lastType: CategorizerType;
   lastStep: PersistStep;
   hoursConfig: HoursConfig;
@@ -149,6 +151,7 @@ export const DEFAULT_STEAM_RATING_CONFIG: SteamRatingConfig = {
 };
 
 const defaults: Omit<AutoCategorizeState, "set"> = {
+  resultScopeVersion: AUTO_CATEGORIZE_RESULT_SCOPE_VERSION,
   lastType: "hours",
   lastStep: "choose",
   hoursConfig: DEFAULT_HOURS_CONFIG,
@@ -174,12 +177,20 @@ function load(): Omit<AutoCategorizeState, "set"> {
   return defaults;
 }
 
-function normalizeLoadedState(raw: Partial<Omit<AutoCategorizeState, "set">>): Omit<AutoCategorizeState, "set"> {
+export function normalizeLoadedState(
+  raw: Partial<Omit<AutoCategorizeState, "set">>
+): Omit<AutoCategorizeState, "set"> {
   const lastType = isCategorizerType(raw.lastType) ? raw.lastType : defaults.lastType;
+  const discardLegacyResult =
+    raw.lastResult != null &&
+    raw.resultScopeVersion !== AUTO_CATEGORIZE_RESULT_SCOPE_VERSION;
   return {
     ...defaults,
     ...raw,
+    resultScopeVersion: AUTO_CATEGORIZE_RESULT_SCOPE_VERSION,
     lastType,
+    lastStep: discardLegacyResult ? "choose" : (raw.lastStep ?? defaults.lastStep),
+    lastResult: discardLegacyResult ? null : (raw.lastResult ?? null),
     customConfig: normalizeCustomAutoCatConfig(raw.customConfig),
     presets: Array.isArray(raw.presets)
       ? raw.presets.map(normalizePreset).filter((preset): preset is AutoCategorizePreset => !!preset)
