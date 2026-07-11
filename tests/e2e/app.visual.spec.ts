@@ -586,6 +586,56 @@ test("save preview can reveal every changed collection", async ({ page }) => {
   await expect(dialog.getByText("Preview Collection 12", { exact: true })).toBeVisible();
 });
 
+test("save preview resolves names from cached details", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(async () => {
+    const [{ useCategoryStore }, { useGameStore }] = await Promise.all([
+      import("/src/stores/categoryStore.ts"),
+      import("/src/stores/gameStore.ts"),
+    ]);
+    const collection = {
+      id: "cached-name-preview",
+      key: "user-collections.cached-name-preview",
+      name: "Cached name preview",
+      added: [],
+      removed: [],
+      timestamp: 1,
+      is_deleted: false,
+      is_dynamic: false,
+    };
+
+    useGameStore.getState().setBulkDetails([{
+      app_id: 288220,
+      name: "Backstage Pass",
+      genres: [],
+      tags: [],
+      categories: ["Captions available"],
+      release_date: null,
+      metacritic_score: null,
+      developers: [],
+      publishers: [],
+      supported_languages: [],
+      platforms: { windows: true, mac: false, linux: false },
+      header_image: null,
+      capsule_image: null,
+      price_initial: null,
+      price_final: null,
+      price_currency: null,
+      is_free: false,
+    }]);
+    useCategoryStore.getState().setCollections([collection]);
+    useCategoryStore.getState().applyImportedCollections([{
+      ...collection,
+      added: [288220],
+    }]);
+  });
+
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Review Steam collection changes" });
+  await expect(dialog.getByText("Add: Backstage Pass", { exact: true })).toBeVisible();
+  await expect(dialog.getByText("#288220", { exact: true })).toHaveCount(0);
+});
+
 test("compare collections follows sidebar order and opens game details", async ({ page }) => {
   await page.goto("/");
 

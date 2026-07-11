@@ -1,4 +1,4 @@
-import type { OwnedGame, SteamCollection } from "./types";
+import type { GameDetails, OwnedGame, SteamCollection } from "./types";
 
 export interface CollectionChangePreview {
   collection: string;
@@ -17,13 +17,20 @@ export interface SavePreview {
 export function buildSavePreview(
   saved: SteamCollection[],
   current: SteamCollection[],
-  games: Record<number, OwnedGame>
+  games: Record<number, OwnedGame>,
+  details: Record<number, GameDetails> = {}
 ): SavePreview {
   const savedStatic = saved.filter((c) => !c.is_dynamic);
   const currentStatic = current.filter((c) => !c.is_dynamic);
   const savedByKey = new Map(savedStatic.map((c) => [c.key, c]));
   const currentByKey = new Map(currentStatic.map((c) => [c.key, c]));
-  const gameName = (id: number) => games[id]?.name ?? `#${id}`;
+  const gameName = (id: number) => {
+    const libraryName = games[id]?.name.trim();
+    if (libraryName) return libraryName;
+
+    const cachedName = details[id]?.name.trim();
+    return cachedName || `#${id}`;
+  };
 
   const addedCollections = currentStatic
     .filter((c) => !savedByKey.has(c.key))

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildSavePreview } from "./savePreview";
-import type { OwnedGame, SteamCollection } from "./types";
+import type { GameDetails, OwnedGame, SteamCollection } from "./types";
 
 function collection(
   key: string,
@@ -62,5 +62,37 @@ describe("buildSavePreview", () => {
     );
 
     expect(preview.changedCollections[0]?.added).toEqual(["#1000"]);
+  });
+
+  it("uses cached detail names before falling back to numeric app IDs", () => {
+    const cachedDetails: Record<number, GameDetails> = {
+      288220: {
+        app_id: 288220,
+        name: "Backstage Pass",
+        genres: [],
+        tags: [],
+        categories: ["Captions available"],
+        release_date: null,
+        metacritic_score: null,
+        developers: [],
+        publishers: [],
+        supported_languages: [],
+        platforms: { windows: true, mac: false, linux: false },
+        header_image: null,
+        capsule_image: null,
+        price_initial: null,
+        price_final: null,
+        price_currency: null,
+        is_free: false,
+      },
+    };
+    const preview = buildSavePreview(
+      [collection("flags", "(FLAGS) Captions available", [])],
+      [collection("flags", "(FLAGS) Captions available", [288220])],
+      {},
+      cachedDetails
+    );
+
+    expect(preview.changedCollections[0]?.added).toEqual(["Backstage Pass"]);
   });
 });

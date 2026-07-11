@@ -146,7 +146,8 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
 
   const games = useGameStore((s) => s.games);
   const gameCount = Object.keys(games).length;
-  const cachedDetailsCount = useGameStore((s) => Object.keys(s.details).length);
+  const details = useGameStore((s) => s.details);
+  const cachedDetailsCount = Object.keys(details).length;
   const ignoredCount = useFailedGamesStore((s) => s.ignoredIds().length);
   const collections = useCategoryStore((s) => s.collections);
   const savedCollections = useCategoryStore((s) => s._saved);
@@ -241,7 +242,7 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
     };
   }, [showSavePreview]);
 
-  const savePreview = buildSavePreview(savedCollections, collections, games);
+  const savePreview = buildSavePreview(savedCollections, collections, games, details);
 
   const handleSave = async () => {
     setSaving(true);
