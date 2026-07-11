@@ -82,6 +82,7 @@ import {
   categorizerNeedsDetails,
   categorizerNeedsRatings,
   customDiagnosticsNotice,
+  currentGameDetails,
   detailIdsNeedingBaseFetchForType,
   detailIdsNeedingFetchForType,
   detailIdsNeedingReleaseDateFetchForType,
@@ -571,7 +572,7 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
       : allGames;
     const allDetails = options.cachedOnly && categorizerNeedsDetails(runType, config)
       ? detailsReadyForType(runType, games, details, config)
-      : Object.values(details);
+      : currentGameDetails(games, details, detailsCacheMaxAgeDays);
 
     if (runType === "custom") {
       return evaluateCustomAutoCat({

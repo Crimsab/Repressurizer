@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
-import type { GameDetails } from "../../../lib/types";
+import type { GameDetails, OwnedGame } from "../../../lib/types";
 import {
   buildAutoCatMetadata,
   categorizerRequirement,
   categorizerNeedsDetails,
   categorizerNeedsRatings,
+  currentGameDetails,
   withProcessedAppIds,
 } from "./autoCategorizeModel";
 
@@ -30,6 +31,16 @@ function detail(appId: number, patch: Partial<GameDetails> = {}): GameDetails {
     price_currency: null,
     is_free: false,
     ...patch,
+  };
+}
+
+function game(appId: number): OwnedGame {
+  return {
+    appid: appId,
+    name: `Game ${appId}`,
+    playtime_forever: 0,
+    img_icon_url: null,
+    rtime_last_played: 0,
   };
 }
 
@@ -79,5 +90,27 @@ describe("autoCategorizeModel", () => {
     expect(withIds).not.toBe(result);
     expect(withIds.processed_app_ids).toEqual([2, 4]);
     expect(result).not.toHaveProperty("processed_app_ids");
+  });
+
+  it("excludes orphaned detail-cache entries from AutoCat runs", () => {
+    const games = { 1: game(1), 2: game(2) };
+    const details = {
+      1: detail(1),
+      2: detail(2),
+      288220: detail(288220, { name: "Backstage Pass", categories: ["Captions available"] }),
+    };
+
+    expect(currentGameDetails(games, details).map((item) => item.app_id)).toEqual([1, 2]);
+  });
+
+  it("preserves games whose details are still stale after a Run All refresh", () => {
+    const now = Date.now();
+    const games = { 1: game(1), 2: game(2) };
+    const details = {
+      1: detail(1, { fetched_at: now }),
+      2: detail(2, { fetched_at: now - 31 * 24 * 60 * 60 * 1000 }),
+    };
+
+    expect(currentGameDetails(games, details, 30).map((item) => item.app_id)).toEqual([1]);
   });
 });

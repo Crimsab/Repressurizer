@@ -299,6 +299,18 @@ export function detailsReadyForType(
     .filter((detail): detail is GameDetails => !!detail);
 }
 
+export function currentGameDetails(
+  games: Record<number, OwnedGame>,
+  details: Record<number, GameDetails>,
+  detailsMaxAgeDays?: number
+): GameDetails[] {
+  return Object.keys(games)
+    .map(Number)
+    .filter((id) => !detailsCacheNeedsRefresh(details[id], detailsMaxAgeDays))
+    .map((id) => details[id])
+    .filter((detail): detail is GameDetails => !!detail);
+}
+
 export function missingDetailIdsForPresets(
   presets: AutoCategorizePreset[],
   games: Record<number, OwnedGame>,
