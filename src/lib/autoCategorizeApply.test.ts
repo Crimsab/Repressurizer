@@ -58,6 +58,30 @@ describe("applyAutoCategorizeAssignments", () => {
     expect(next.find((item) => item.name === "RPG")?.added).toEqual([2, 4, 99]);
   });
 
+  it("uses each category's own processed scope when applying combined presets", () => {
+    const next = applyAutoCategorizeAssignments(
+      [
+        collection("user-collections.flags", "(FLAGS) Captions available", [1, 2]),
+        collection("user-collections.score", "(SCORE) Overwhelmingly Negative", [10, 20]),
+      ],
+      {
+        "(FLAGS) Captions available": [1],
+        "(SCORE) Overwhelmingly Negative": [10],
+      },
+      123,
+      {
+        processedAppIds: [1, 2, 10, 20],
+        processedAppIdsByCategory: {
+          "(FLAGS) Captions available": [1, 2],
+          "(SCORE) Overwhelmingly Negative": [10],
+        },
+      }
+    );
+
+    expect(next.find((item) => item.name === "(FLAGS) Captions available")?.added).toEqual([1]);
+    expect(next.find((item) => item.name === "(SCORE) Overwhelmingly Negative")?.added).toEqual([10, 20]);
+  });
+
   it("preserves dynamic collections and creates a static category for the assignment", () => {
     const next = applyAutoCategorizeAssignments(
       [

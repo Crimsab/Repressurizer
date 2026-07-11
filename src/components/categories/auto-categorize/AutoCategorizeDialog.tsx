@@ -24,6 +24,7 @@ import {
   applyAutoCategorizeAssignments,
   withExpectedAutoCategories,
 } from "../../../lib/autoCategorizeApply";
+import { combineAutoCategorizePresetResults } from "../../../lib/autoCategorizePresetResults";
 import {
   type PreviewSortContext,
 } from "../../../lib/autoCategorizePreview";
@@ -735,39 +736,17 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
   ) => {
     setRunError("");
     try {
-      const assignmentSets = new Map<string, Set<number>>();
-      const categorizedIds = new Set<number>();
-      const processedIds = new Set<number>();
+      const presetResults: CategorizeResult[] = [];
 
       for (const preset of presets) {
         const rawPresetResult = await runCategorizerConfig(preset.type, preset.config, options);
         const presetResult = options.cachedOnly
           ? rawPresetResult
           : withExpectedAutoCategories(rawPresetResult, preset.type, preset.config);
-        for (const id of presetResult.processed_app_ids ?? []) {
-          processedIds.add(id);
-        }
-        for (const [category, ids] of Object.entries(presetResult.assignments)) {
-          const bucket = assignmentSets.get(category) ?? new Set<number>();
-          for (const id of ids) {
-            bucket.add(id);
-            categorizedIds.add(id);
-          }
-          assignmentSets.set(category, bucket);
-        }
+        presetResults.push(presetResult);
       }
 
-      const assignments = Object.fromEntries(
-        [...assignmentSets.entries()]
-          .sort(([a], [b]) => a.localeCompare(b))
-          .map(([category, ids]) => [category, [...ids].sort((a, b) => a - b)])
-      );
-      const res: CategorizeResult = {
-        assignments,
-        games_processed: processedIds.size || Object.keys(games).length,
-        games_categorized: categorizedIds.size,
-        processed_app_ids: processedIds.size > 0 ? [...processedIds].sort((a, b) => a - b) : undefined,
-      };
+      const res = combineAutoCategorizePresetResults(presetResults, Object.keys(games).length);
 
       setResult(res);
       setPreviewContext(null);
@@ -801,6 +780,7 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
     applyImportedCollections(
       applyAutoCategorizeAssignments(collections, result.assignments, undefined, {
         processedAppIds: result.processed_app_ids,
+        processedAppIdsByCategory: result.processed_app_ids_by_category,
       })
     );
 

@@ -58,7 +58,7 @@ test("keeps every header action reachable at the minimum window size", async ({ 
   await page.setViewportSize({ width: 900, height: 600 });
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Repressurizer" })).toBeVisible();
-  await page.evaluate(async () => {
+  const setup = await page.evaluate(async () => {
     const { useCategoryStore } = await import("/src/stores/categoryStore.ts");
     useCategoryStore.getState().addCategory("Minimum Width Dirty State");
   });
@@ -427,6 +427,87 @@ test("AutoCat Run all skips permanently ignored detail gaps", async ({ page }) =
   await expect(
     dialog.getByRole("button", { name: /\(Flag\) Single-player 1 games/ })
   ).toBeVisible();
+});
+
+test("AutoCat Run all ignores orphaned detail-cache entries", async ({ page }) => {
+  await page.addInitScript(() => {
+    const settings = JSON.parse(window.localStorage.getItem("repressurizer-settings") ?? "{}");
+    settings.libraryRefreshCacheMode = "none";
+    window.localStorage.setItem("repressurizer-settings", JSON.stringify(settings));
+  });
+  await page.goto("/");
+  await expect(page.getByRole("button", { name: /All 11/ })).toBeVisible();
+  await page.evaluate(async () => {
+    const [{ useGameStore }, { useAutoCategorizeStore }, { useBackgroundFetchStore }] =
+      await Promise.all([
+        import("/src/stores/gameStore.ts"),
+        import("/src/stores/autoCategorizeStore.ts"),
+        import("/src/stores/backgroundFetchStore.ts"),
+      ]);
+
+    const now = Date.now();
+    useBackgroundFetchStore.getState().stopDetailsFetch();
+    useBackgroundFetchStore.getState().stopRatingsFetch();
+    const detailsFor = (appId: number, name: string, categories: string[]) => ({
+      app_id: appId,
+      name,
+      cache_schema: 2,
+      fetched_at: now,
+      genres: ["Adventure"],
+      tags: [],
+      categories,
+      release_date: "Jan 1, 2020",
+      metacritic_score: null,
+      developers: ["Demo Studio"],
+      publishers: ["Demo Publisher"],
+      supported_languages: ["English"],
+      platforms: { windows: true, mac: false, linux: false },
+      header_image: null,
+      capsule_image: null,
+      price_initial: null,
+      price_final: null,
+      price_currency: null,
+      is_free: false,
+    });
+
+    const games = Object.values(useGameStore.getState().games);
+    useGameStore.getState().setBulkDetails([
+      ...games.map((game) => detailsFor(game.appid, game.name, ["Single-player"])),
+      detailsFor(288220, "Backstage Pass", ["Captions available"]),
+    ]);
+
+    useAutoCategorizeStore.getState().set({
+      lastStep: "choose",
+      presets: [
+        {
+          id: "issue-24-flags",
+          name: "Store flags",
+          type: "flags",
+          config: { prefix: "(FLAGS) ", included_flags: [] },
+          createdAt: 1,
+          updatedAt: 1,
+        },
+      ],
+    });
+  });
+
+  await page.getByRole("button", { name: /Auto-Categorize/ }).click();
+  const dialog = page.getByRole("dialog", { name: "Auto-Categorize" });
+  await dialog.getByRole("button", { name: /Run all/ }).click();
+  await expect(dialog.getByText("Preview sort")).toBeVisible();
+  await expect(dialog.getByText("#288220", { exact: false })).toHaveCount(0);
+  await expect(dialog.getByText("(FLAGS) Captions available", { exact: true })).toHaveCount(0);
+
+  await dialog.getByRole("button", { name: "Apply", exact: true }).click();
+  await expect(dialog.getByText("Done!", { exact: true })).toBeVisible();
+
+  const orphanCategory = await page.evaluate(async () => {
+    const { useCategoryStore } = await import("/src/stores/categoryStore.ts");
+    return useCategoryStore.getState().collections.some(
+      (item) => item.name === "(FLAGS) Captions available"
+    );
+  });
+  expect(orphanCategory).toBe(false);
 });
 
 test("creates a category from the compact sidebar plus button", async ({ page }) => {

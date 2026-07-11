@@ -29,6 +29,7 @@ export type AutoCategorizeApplyType =
 
 interface AutoCategorizeApplyOptions {
   processedAppIds?: Iterable<number>;
+  processedAppIdsByCategory?: Record<string, Iterable<number>>;
 }
 
 export function applyAutoCategorizeAssignments(
@@ -43,6 +44,13 @@ export function applyAutoCategorizeAssignments(
   const processedAppIds = options.processedAppIds
     ? new Set([...options.processedAppIds].filter((id) => Number.isFinite(id)).map((id) => Math.trunc(id)))
     : null;
+  const processedAppIdsByCategory = new Map<string, Set<number>>();
+  for (const [name, appIds] of Object.entries(options.processedAppIdsByCategory ?? {})) {
+    processedAppIdsByCategory.set(
+      normalizeCategoryName(name),
+      new Set([...appIds].filter((id) => Number.isFinite(id)).map((id) => Math.trunc(id)))
+    );
+  }
 
   const nextCollections = collections.map((collection) => {
     if (collection.is_dynamic) return collection;
@@ -51,8 +59,10 @@ export function applyAutoCategorizeAssignments(
     if (!assignment) return collection;
 
     matchedAssignmentNames.add(assignment.normalizedName);
-    const preserved = processedAppIds
-      ? collection.added.filter((appId) => !processedAppIds.has(appId))
+    const categoryProcessedAppIds =
+      processedAppIdsByCategory.get(assignment.normalizedName) ?? processedAppIds;
+    const preserved = categoryProcessedAppIds
+      ? collection.added.filter((appId) => !categoryProcessedAppIds.has(appId))
       : [];
     return {
       ...collection,
