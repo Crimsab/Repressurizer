@@ -510,6 +510,118 @@ test("AutoCat Run all ignores orphaned detail-cache entries", async ({ page }) =
   expect(orphanCategory).toBe(false);
 });
 
+test("AutoCat preserves flag and tag memberships when metadata is incomplete", async ({ page }) => {
+  await page.addInitScript(() => {
+    const settings = JSON.parse(window.localStorage.getItem("repressurizer-settings") ?? "{}");
+    settings.libraryRefreshCacheMode = "none";
+    window.localStorage.setItem("repressurizer-settings", JSON.stringify(settings));
+  });
+  await page.goto("/");
+  await expect(page.getByRole("button", { name: /All 11/ })).toBeVisible();
+  await page.evaluate(async () => {
+    const [
+      { useGameStore },
+      { useCategoryStore },
+      { useAutoCategorizeStore },
+      { useBackgroundFetchStore },
+    ] =
+      await Promise.all([
+        import("/src/stores/gameStore.ts"),
+        import("/src/stores/categoryStore.ts"),
+        import("/src/stores/autoCategorizeStore.ts"),
+        import("/src/stores/backgroundFetchStore.ts"),
+      ]);
+
+    useBackgroundFetchStore.getState().stopDetailsFetch();
+    useBackgroundFetchStore.getState().stopRatingsFetch();
+    useGameStore.getState().mergeGames([{
+      appid: 34330,
+      name: "Total War: SHOGUN 2",
+      playtime_forever: 0,
+      img_icon_url: null,
+      rtime_last_played: 0,
+      is_collection_only: true,
+    }]);
+    const now = Date.now();
+    const games = Object.values(useGameStore.getState().games);
+    useGameStore.getState().setBulkDetails(games.map((game) => ({
+      app_id: game.appid,
+      name: game.name,
+      cache_schema: 2,
+      fetched_at: now,
+      genres: game.appid === 34330 ? ["Strategy"] : ["Adventure"],
+      tags: [],
+      categories: game.appid === 34330 ? ["Family Sharing"] : ["Single-player"],
+      release_date: game.appid === 34330 ? "Mar 15, 2011" : "Jan 1, 2020",
+      metacritic_score: game.appid === 34330 ? 90 : null,
+      developers: [game.appid === 34330 ? "CREATIVE ASSEMBLY" : "Demo Studio"],
+      publishers: [game.appid === 34330 ? "SEGA" : "Demo Publisher"],
+      supported_languages: ["English"],
+      platforms: { windows: true, mac: game.appid === 34330, linux: game.appid === 34330 },
+      header_image: null,
+      capsule_image: null,
+      price_initial: null,
+      price_final: null,
+      price_currency: null,
+      is_free: false,
+    })));
+
+    const collection = (key: string, name: string) => ({
+      id: key,
+      key: `user-collections.${key}`,
+      name,
+      added: [34330],
+      removed: [],
+      timestamp: 1,
+      is_deleted: false,
+      is_dynamic: false,
+    });
+    useCategoryStore.getState().setCollections([
+      collection("lan-coop", "(FLAGS) LAN Co-op"),
+      collection("local-coop", "(TAGS) Local Co-Op"),
+    ]);
+    useAutoCategorizeStore.getState().set({
+      lastStep: "choose",
+      presets: [
+        {
+          id: "issue-25-flags",
+          name: "Store flags",
+          type: "flags",
+          config: { prefix: "(FLAGS) ", included_flags: ["LAN Co-op"] },
+          createdAt: 1,
+          updatedAt: 1,
+        },
+        {
+          id: "issue-25-tags",
+          name: "Community tags",
+          type: "tags",
+          config: { prefix: "(TAGS) ", max_tags: 0, included_tags: ["Local Co-Op"] },
+          createdAt: 2,
+          updatedAt: 2,
+        },
+      ],
+    });
+  });
+
+  await page.getByRole("button", { name: /Auto-Categorize/ }).click();
+  const dialog = page.getByRole("dialog", { name: "Auto-Categorize" });
+  await dialog.getByRole("button", { name: /Run all/ }).click();
+  await expect(dialog.getByText("Preview sort")).toBeVisible();
+  await dialog.getByRole("button", { name: "Apply", exact: true }).click();
+  await expect(dialog.getByText("Done!", { exact: true })).toBeVisible();
+
+  const result = await page.evaluate(async () => {
+    const { useCategoryStore } = await import("/src/stores/categoryStore.ts");
+    const collections = useCategoryStore.getState().collections;
+    return {
+      flags: collections.find((item) => item.name === "(FLAGS) LAN Co-op")?.added,
+      tags: collections.find((item) => item.name === "(TAGS) Local Co-Op")?.added,
+      tagFallback: collections.some((item) => item.name === "(TAGS) Family Sharing"),
+    };
+  });
+  expect(result).toEqual({ flags: [34330], tags: [34330], tagFallback: false });
+});
+
 test("creates a category from the compact sidebar plus button", async ({ page }) => {
   await page.addInitScript(() => {
     const raw = window.localStorage.getItem("repressurizer-settings");
