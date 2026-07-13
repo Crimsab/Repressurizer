@@ -114,6 +114,23 @@ export function withExpectedAutoCategories(
   return { ...result, assignments };
 }
 
+export function withConservativeMetadataScopes(
+  result: CategorizeResult,
+  type: AutoCategorizeApplyType
+): CategorizeResult {
+  if (type !== "flags" && type !== "tags") return result;
+
+  return {
+    ...result,
+    processed_app_ids_by_category: Object.fromEntries(
+      Object.entries(result.assignments).map(([name, appIds]) => [
+        name,
+        uniqueSortedIds(appIds),
+      ])
+    ),
+  };
+}
+
 export function expectedAutoCategoryNames(
   type: AutoCategorizeApplyType,
   config: unknown

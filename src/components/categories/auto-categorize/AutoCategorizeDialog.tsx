@@ -22,6 +22,7 @@ import {
 import { extractReleaseYear } from "../../../lib/search";
 import {
   applyAutoCategorizeAssignments,
+  withConservativeMetadataScopes,
   withExpectedAutoCategories,
 } from "../../../lib/autoCategorizeApply";
 import { combineAutoCategorizePresetResults } from "../../../lib/autoCategorizePresetResults";
@@ -690,9 +691,10 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
     try {
       const config = currentConfig();
       const rawResult = await runCategorizerConfig(type, config, options);
-      const res = options.cachedOnly
+      const categorizedResult = options.cachedOnly
         ? rawResult
         : withExpectedAutoCategories(rawResult, type, config);
+      const res = withConservativeMetadataScopes(categorizedResult, type);
 
       setResult(res);
       setPreviewContext({ type, config });
@@ -740,9 +742,10 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
 
       for (const preset of presets) {
         const rawPresetResult = await runCategorizerConfig(preset.type, preset.config, options);
-        const presetResult = options.cachedOnly
+        const categorizedResult = options.cachedOnly
           ? rawPresetResult
           : withExpectedAutoCategories(rawPresetResult, preset.type, preset.config);
+        const presetResult = withConservativeMetadataScopes(categorizedResult, preset.type);
         presetResults.push(presetResult);
       }
 

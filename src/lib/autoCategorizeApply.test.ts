@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   applyAutoCategorizeAssignments,
   expectedAutoCategoryNames,
+  withConservativeMetadataScopes,
   withExpectedAutoCategories,
 } from "./autoCategorizeApply";
 import type { SteamCollection } from "./types";
@@ -80,6 +81,54 @@ describe("applyAutoCategorizeAssignments", () => {
 
     expect(next.find((item) => item.name === "(FLAGS) Captions available")?.added).toEqual([1]);
     expect(next.find((item) => item.name === "(SCORE) Overwhelmingly Negative")?.added).toEqual([10, 20]);
+  });
+
+  it("preserves existing flag memberships when Steam returns partial feature metadata", () => {
+    const result = withConservativeMetadataScopes(withExpectedAutoCategories({
+      assignments: { "(FLAGS) Family Sharing": [34330] },
+      games_processed: 1,
+      games_categorized: 1,
+      processed_app_ids: [34330],
+    }, "flags", {
+      prefix: "(FLAGS) ",
+      included_flags: ["Family Sharing", "LAN Co-op"],
+    }), "flags");
+
+    const next = applyAutoCategorizeAssignments(
+      [collection("user-collections.lan", "(FLAGS) LAN Co-op", [34330])],
+      result.assignments,
+      123,
+      {
+        processedAppIds: result.processed_app_ids,
+        processedAppIdsByCategory: result.processed_app_ids_by_category,
+      }
+    );
+
+    expect(next.find((item) => item.name === "(FLAGS) LAN Co-op")?.added).toEqual([34330]);
+  });
+
+  it("preserves existing tag memberships when a game has no real tag metadata", () => {
+    const result = withConservativeMetadataScopes(withExpectedAutoCategories({
+      assignments: { "(TAGS) Gamepad Recommended": [2] },
+      games_processed: 2,
+      games_categorized: 1,
+      processed_app_ids: [1, 2],
+    }, "tags", {
+      prefix: "(TAGS) ",
+      included_tags: ["Gamepad Recommended", "Local Co-Op"],
+    }), "tags");
+
+    const next = applyAutoCategorizeAssignments(
+      [collection("user-collections.local-coop", "(TAGS) Local Co-Op", [1])],
+      result.assignments,
+      123,
+      {
+        processedAppIds: result.processed_app_ids,
+        processedAppIdsByCategory: result.processed_app_ids_by_category,
+      }
+    );
+
+    expect(next.find((item) => item.name === "(TAGS) Local Co-Op")?.added).toEqual([1]);
   });
 
   it("preserves dynamic collections and creates a static category for the assignment", () => {
