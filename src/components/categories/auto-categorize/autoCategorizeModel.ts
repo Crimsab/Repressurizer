@@ -153,12 +153,12 @@ export function buildAutoCatMetadata(details: GameDetails[]): AutoCatMetadata {
   return {
     totalDetails: details.length,
     flagValues: sortValues([...flagValues]),
-    tagValues: sortValues(tagValues.size > 0 ? [...tagValues] : [...flagValues]),
+    tagValues: sortValues([...tagValues]),
     genreValues: sortValues([...genreValues]),
     languageValues: sortValues([...languageValues]),
     studioValues: sortValues([...studioValues]),
     gamesWithFlags,
-    gamesWithTags: gamesWithTags || gamesWithFlags,
+    gamesWithTags,
     gamesWithGenres,
     gamesWithLanguages,
     gamesWithStudios,
@@ -212,7 +212,7 @@ export function detailHasDataForType(type: CategorizerType, detail: GameDetails 
   if (!detail || !isDetailsCacheCurrent(detail)) return false;
   if (type === "year") return extractReleaseYear(yearCategorizationReleaseDate(detail)) != null;
   if (type === "genre") return (detail.genres ?? []).length > 0;
-  if (type === "tags") return (detail.tags ?? []).length > 0 || (detail.categories ?? []).length > 0;
+  if (type === "tags") return (detail.tags ?? []).length > 0;
   if (type === "flags") return (detail.categories ?? []).length > 0;
   if (type === "language") return (detail.supported_languages ?? []).length > 0;
   if (type === "devpub") {

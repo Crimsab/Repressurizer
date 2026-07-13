@@ -6,6 +6,7 @@ import {
   categorizerNeedsDetails,
   categorizerNeedsRatings,
   currentGameDetails,
+  detailHasDataForType,
   withProcessedAppIds,
 } from "./autoCategorizeModel";
 
@@ -58,7 +59,7 @@ describe("autoCategorizeModel", () => {
     expect(categorizerRequirement("hours")).toBeNull();
   });
 
-  it("builds sorted metadata suggestions and preserves tag fallback behavior", () => {
+  it("keeps Store flags out of community-tag metadata", () => {
     const metadata = buildAutoCatMetadata([
       detail(1, {
         categories: ["Steam Cloud", "Single-player"],
@@ -73,10 +74,19 @@ describe("autoCategorizeModel", () => {
       }),
     ]);
 
-    expect(metadata.tagValues).toEqual(["Co-op", "Single-player", "Steam Cloud"]);
+    expect(metadata.flagValues).toEqual(["Co-op", "Single-player", "Steam Cloud"]);
+    expect(metadata.tagValues).toEqual([]);
     expect(metadata.genreValues).toEqual(["Action", "RPG"]);
     expect(metadata.studioValues).toEqual(["Studio 2", "Studio 10"]);
-    expect(metadata.gamesWithTags).toBe(2);
+    expect(metadata.gamesWithFlags).toBe(2);
+    expect(metadata.gamesWithTags).toBe(0);
+  });
+
+  it("does not treat Store flags as usable community-tag data", () => {
+    const categoriesOnly = detail(1, { categories: ["Family Sharing"] });
+
+    expect(detailHasDataForType("flags", categoriesOnly)).toBe(true);
+    expect(detailHasDataForType("tags", categoriesOnly)).toBe(false);
   });
 
   it("normalizes processed app ids without mutating the categorizer result", () => {
