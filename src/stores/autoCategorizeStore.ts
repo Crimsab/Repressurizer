@@ -34,7 +34,7 @@ export type CategorizerType =
   | "name"
   | "custom";
 export type PersistStep = "choose" | "configure" | "preview" | "done";
-export const AUTO_CATEGORIZE_RESULT_SCOPE_VERSION = 2;
+export const AUTO_CATEGORIZE_RESULT_SCOPE_VERSION = 3;
 
 export type AutoCategorizePresetConfig =
   | HoursConfig

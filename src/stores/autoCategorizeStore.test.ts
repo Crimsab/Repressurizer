@@ -29,6 +29,23 @@ describe("normalizeLoadedState", () => {
     expect(normalized.presets).toHaveLength(1);
   });
 
+  it("discards v2 previews created before conservative metadata scopes", () => {
+    const normalized = normalizeLoadedState({
+      resultScopeVersion: 2,
+      lastStep: "preview",
+      lastResult: {
+        assignments: { "(FLAGS) LAN Co-op": [] },
+        games_processed: 1,
+        games_categorized: 0,
+        processed_app_ids: [34330],
+        processed_app_ids_by_category: { "(FLAGS) LAN Co-op": [34330] },
+      },
+    });
+
+    expect(normalized.lastStep).toBe("choose");
+    expect(normalized.lastResult).toBeNull();
+  });
+
   it("keeps previews created with the category-scoped result format", () => {
     const lastResult = {
       assignments: { "(SCORE) Very Negative": [246090] },
