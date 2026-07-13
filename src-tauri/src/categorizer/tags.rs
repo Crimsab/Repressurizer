@@ -16,13 +16,7 @@ pub fn categorize_by_tags(games: &[GameDetails], config: &TagsConfig) -> Categor
 
     for game in games {
         let mut added = 0usize;
-        let tags = if game.tags.is_empty() {
-            &game.categories
-        } else {
-            &game.tags
-        };
-
-        for category in tags {
+        for category in &game.tags {
             if !config.included_tags.is_empty()
                 && !config
                     .included_tags
@@ -32,7 +26,7 @@ pub fn categorize_by_tags(games: &[GameDetails], config: &TagsConfig) -> Categor
                 continue;
             }
 
-            if let Some(max) = config.max_tags {
+            if let Some(max) = config.max_tags.filter(|max| *max > 0) {
                 if added >= max {
                     break;
                 }
@@ -57,5 +51,76 @@ pub fn categorize_by_tags(games: &[GameDetails], config: &TagsConfig) -> Categor
         games_processed: games.len() as u64,
         games_categorized,
         assignments,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::steam::api::PlatformSupport;
+
+    fn details(tags: &[&str], categories: &[&str]) -> GameDetails {
+        GameDetails {
+            app_id: 34330,
+            name: "Total War: SHOGUN 2".to_string(),
+            genres: Vec::new(),
+            tags: tags.iter().map(|value| (*value).to_string()).collect(),
+            categories: categories
+                .iter()
+                .map(|value| (*value).to_string())
+                .collect(),
+            release_date: None,
+            store_release_date: None,
+            store_release_date_fetched_at: None,
+            metacritic_score: None,
+            developers: Vec::new(),
+            publishers: Vec::new(),
+            supported_languages: Vec::new(),
+            platforms: PlatformSupport {
+                windows: true,
+                mac: false,
+                linux: false,
+            },
+            header_image: None,
+            capsule_image: None,
+            price_initial: None,
+            price_final: None,
+            price_currency: None,
+            price_country_code: None,
+            is_free: false,
+        }
+    }
+
+    #[test]
+    fn does_not_treat_store_flags_as_community_tags() {
+        let result = categorize_by_tags(
+            &[details(&[], &["Local Co-Op"])],
+            &TagsConfig {
+                prefix: Some("(TAGS) ".to_string()),
+                max_tags: None,
+                included_tags: vec!["Local Co-Op".to_string()],
+            },
+        );
+
+        assert!(result.assignments.is_empty());
+        assert_eq!(result.games_categorized, 0);
+    }
+
+    #[test]
+    fn treats_zero_max_tags_as_unlimited_for_depressurizer_imports() {
+        let result = categorize_by_tags(
+            &[details(&["Local Co-Op", "Gamepad Recommended"], &[])],
+            &TagsConfig {
+                prefix: Some("(TAGS) ".to_string()),
+                max_tags: Some(0),
+                included_tags: Vec::new(),
+            },
+        );
+
+        assert_eq!(result.assignments["(TAGS) Local Co-Op"], vec![34330]);
+        assert_eq!(
+            result.assignments["(TAGS) Gamepad Recommended"],
+            vec![34330]
+        );
     }
 }
