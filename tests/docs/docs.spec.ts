@@ -37,5 +37,18 @@ for (const route of routes) {
       .analyze();
 
     expect(accessibility.violations, JSON.stringify(accessibility.violations, null, 2)).toEqual([]);
+
+    if (route === "/") {
+      for (const button of await page.locator(".md-button").all()) {
+        await button.hover();
+        const hoveredAccessibility = await new AxeBuilder({ page })
+          .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+          .analyze();
+        expect(
+          hoveredAccessibility.violations,
+          JSON.stringify(hoveredAccessibility.violations, null, 2),
+        ).toEqual([]);
+      }
+    }
   });
 }

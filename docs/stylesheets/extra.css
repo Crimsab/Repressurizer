@@ -166,6 +166,7 @@
 .md-typeset .md-button:not(.md-button--primary):hover,
 .md-typeset .md-button:not(.md-button--primary):focus-visible {
   border-color: var(--rp-accent);
+  background: transparent;
   color: var(--rp-accent-hover);
 }
 
