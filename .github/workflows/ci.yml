@@ -209,6 +209,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
 
       - name: Setup Python
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
@@ -217,10 +219,23 @@ jobs:
           cache: pip
           cache-dependency-path: requirements-docs.txt
 
+      - name: Install image optimizer
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends pngquant
+
       - name: Install documentation dependencies
         run: python -m pip install --requirement requirements-docs.txt
 
+      - name: Cache generated documentation media
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .cache
+          key: ${{ runner.os }}-docs-media-${{ hashFiles('docs/**', 'mkdocs.yml', 'requirements-docs.txt') }}
+
       - name: Build strict documentation site
+        env:
+          NO_MKDOCS_2_WARNING: "true"
         run: python -m mkdocs build --strict
 
       - name: Setup Bun

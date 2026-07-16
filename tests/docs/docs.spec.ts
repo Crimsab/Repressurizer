@@ -52,3 +52,27 @@ for (const route of routes) {
     }
   });
 }
+
+test("screenshots open an accessible keyboard lightbox", async ({ page }) => {
+  await page.goto("/user-guide/autocat/", { waitUntil: "networkidle" });
+
+  const trigger = page.locator(".glightbox").first();
+  await expect(trigger).toHaveAttribute("href", /\/assets\/autocat\.png$/);
+  await trigger.focus();
+  await page.keyboard.press("Enter");
+
+  const dialog = page.locator(".glightbox-container[role='dialog']");
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toHaveAttribute("aria-modal", "true");
+  await expect(dialog.locator(".gclose")).toBeFocused();
+
+  await page.waitForTimeout(500);
+  const accessibility = await new AxeBuilder({ page })
+    .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
+    .analyze();
+  expect(accessibility.violations, JSON.stringify(accessibility.violations, null, 2)).toEqual([]);
+
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+  await expect(trigger).toBeFocused();
+});

@@ -54,6 +54,23 @@ theme:
 plugins:
   - search
   - privacy
+  - social
+  - optimize:
+      enabled: !ENV [CI, false]
+  - glightbox:
+      auto_caption: true
+      auto_themed: true
+      touchNavigation: true
+      zoomable: true
+  - git-revision-date-localized:
+      type: date
+      locale: en
+      fallback_to_build_date: false
+      enable_creation_date: false
+      enable_git_follow: true
+  - redirects:
+      redirect_maps:
+        install.md: getting-started/installation.md
 
 markdown_extensions:
   - abbr

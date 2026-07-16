@@ -1,5 +1,6 @@
 (() => {
   const observed = new WeakSet();
+  let lightboxTrigger = null;
 
   const labelFor = (region) => {
     if (region.matches("code")) return "Scrollable code example";
@@ -42,11 +43,39 @@
     });
   };
 
-  if (typeof document$ !== "undefined") {
-    document$.subscribe(enhanceScrollableRegions);
-  } else if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", enhanceScrollableRegions, { once: true });
-  } else {
+  const enhanceLightbox = () => {
+    const dialog = document.querySelector(".glightbox-container[role='dialog']");
+
+    if (!dialog) {
+      if (lightboxTrigger?.isConnected) lightboxTrigger.focus();
+      lightboxTrigger = null;
+      return;
+    }
+
+    if (dialog.dataset.rpAccessible === "true") return;
+
+    const active = document.activeElement;
+    lightboxTrigger = active?.matches?.(".glightbox") ? active : null;
+    dialog.setAttribute("aria-modal", "true");
+    dialog.dataset.rpAccessible = "true";
+
+    const close = dialog.querySelector(".gclose");
+    if (close && lightboxTrigger) requestAnimationFrame(() => close.focus());
+  };
+
+  const lightboxObserver = new MutationObserver(enhanceLightbox);
+
+  const startEnhancements = () => {
     enhanceScrollableRegions();
+    enhanceLightbox();
+    lightboxObserver.observe(document.body, { childList: true });
+  };
+
+  if (typeof document$ !== "undefined") {
+    document$.subscribe(startEnhancements);
+  } else if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", startEnhancements, { once: true });
+  } else {
+    startEnhancements();
   }
 })();

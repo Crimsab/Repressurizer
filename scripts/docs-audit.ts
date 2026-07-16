@@ -41,6 +41,7 @@ const localTarget = (page: string, rawUrl: string) => {
 
 for (const page of htmlFiles) {
   const html = readHtml(page);
+  const isRedirect = /<meta\s+http-equiv=["']?refresh["']?/i.test(html);
 
   const rawIcons = html.match(/:material-[a-z0-9-]+:/gi) ?? [];
   if (rawIcons.length) record(page, `unrendered Material icon shortcode(s): ${[...new Set(rawIcons)].join(", ")}`);
@@ -53,7 +54,7 @@ for (const page of htmlFiles) {
     if (!/\salt=(?:["'][^"']*["']|[^\s>]+)/i.test(image[0])) record(page, `image without alt text: ${image[0].slice(0, 120)}`);
   }
 
-  if (page !== "404.html") {
+  if (page !== "404.html" && !isRedirect) {
     const main = html.match(/<main\b[\s\S]*?<\/main>/i)?.[0] ?? "";
     const headings = main.match(/<h1\b/gi)?.length ?? 0;
     if (headings !== 1) record(page, `expected exactly one main h1, found ${headings}`);

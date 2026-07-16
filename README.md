@@ -1,95 +1,95 @@
-# Repressurizer
+<p align="center">
+  <img src="src-tauri/icons/128x128.png" width="96" height="96" alt="Repressurizer app icon">
+</p>
 
-[![CI](https://github.com/Crimsab/Repressurizer/actions/workflows/ci.yml/badge.svg)](https://github.com/Crimsab/Repressurizer/actions/workflows/ci.yml)
-[![Latest release](https://img.shields.io/github/v/release/Crimsab/Repressurizer?sort=semver)](https://github.com/Crimsab/Repressurizer/releases/latest)
-[![Downloads](https://img.shields.io/github/downloads/Crimsab/Repressurizer/total)](https://github.com/Crimsab/Repressurizer/releases)
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
-[![Built with Tauri](https://img.shields.io/badge/Tauri-Rust%20%2B%20React-24c8db)](https://tauri.app/)
+<h1 align="center">Repressurizer</h1>
 
-Repressurizer is a modern Windows app for organizing large Steam libraries.
-It edits local Steam collections, enriches your games with cached metadata,
-builds AutoCat collections, exports clean library snapshots, and keeps backups
-before it writes anything back to Steam's local files.
+<p align="center">
+  A backup-first Windows app for organizing large Steam libraries.
+</p>
+
+<p align="center">
+  <a href="https://github.com/Crimsab/Repressurizer/actions/workflows/ci.yml"><img src="https://github.com/Crimsab/Repressurizer/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
+  <a href="https://github.com/Crimsab/Repressurizer/releases/latest"><img src="https://img.shields.io/github/v/release/Crimsab/Repressurizer?sort=semver" alt="Latest release"></a>
+  <a href="https://github.com/Crimsab/Repressurizer/releases"><img src="https://img.shields.io/github/downloads/Crimsab/Repressurizer/total" alt="Total downloads"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-GPLv3-blue.svg" alt="GPLv3 license"></a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/Crimsab/Repressurizer/releases/latest"><strong>Download Repressurizer</strong></a>
+  &nbsp;·&nbsp;
+  <a href="https://crimsab.github.io/Repressurizer/">Documentation</a>
+  &nbsp;·&nbsp;
+  <a href="https://github.com/Crimsab/Repressurizer/issues/new/choose">Report a problem</a>
+</p>
+
+<p align="center">
+  <img src=".github/assets/repressurizer-demo.gif" alt="Repressurizer library and collection workflow">
+</p>
+
+Repressurizer edits local Steam collections, enriches games with cached metadata,
+builds AutoCat collections, exports clean library snapshots, and creates backups
+before writing anything back to Steam.
 
 It is inspired by Depressurizer, but rebuilt as a separate Tauri application
 with a Rust backend and a React interface.
 
-![Repressurizer demo](docs/assets/repressurizer-demo.gif)
+## Why Repressurizer
 
-## Highlights
+| Organize | Enrich | Protect |
+| --- | --- | --- |
+| Create, rename, merge, color, and bulk-edit collections. | Cache Steam details, reviews, prices, achievements, HLTB times, and Steam Family entries. | Preview collection changes and create automatic backups before local writes. |
+| Search with text, regex, and structured filters. | Build AutoCat rules from genres, tags, year, playtime, platforms, publishers, and more. | Restore backups and export redacted diagnostics when something goes wrong. |
 
-- Edit Steam collections from a fast desktop UI.
-- Sort, search, filter, tag, rate, and track personal game status.
-- Fetch and cache Steam details, reviews, prices, achievements, wishlist data,
-  Steam Family entries, and HowLongToBeat times.
-- Generate collections with AutoCat from genres, tags, store flags, release
-  year, review rating, Metacritic, HLTB length, playtime, languages, platforms,
-  developers, publishers, and saved presets.
-- Export filtered game lists, category sets, statistics, or stable JSON
-  snapshots for other tools.
-- Publish automation snapshots to HTTP receivers, with checksum-based skips.
-- Use optional Steam Tools for integration with other tools.
+Repressurizer does not edit your Steam account remotely. Collection saves are
+local file writes. Metadata fetches and automation exports are separate network
+operations.
 
 ## Download
 
-Download the newest build from the
-[latest release page](https://github.com/Crimsab/Repressurizer/releases/latest).
+Get the current stable build from the
+[latest release](https://github.com/Crimsab/Repressurizer/releases/latest).
 
 | Asset | Use |
 | --- | --- |
-| `Repressurizer_..._x64-setup.exe` | Normal Windows install. |
+| `Repressurizer_..._x64-setup.exe` | Normal Windows installation with built-in updates. |
 | `Repressurizer-portable-windows-x64.zip` | Portable app without installation. |
-| `Repressurizer-cli-windows-x64.zip` | Scriptable diagnostics, snapshots, cache checks, and guarded Steam tooling. |
-| `latest.json` | Built-in updater metadata. |
+| `Repressurizer-cli-windows-x64.zip` | Diagnostics, snapshots, cache checks, backups, and guarded Steam tooling. |
 
-Older builds are available on the
-[releases page](https://github.com/Crimsab/Repressurizer/releases).
+Windows SmartScreen may warn because early releases are not signed with a
+commercial Windows certificate. Download only from this repository and read the
+[installation guide](https://crimsab.github.io/Repressurizer/getting-started/installation/)
+before continuing past an unfamiliar publisher warning.
 
-## First Run
+Want the newest commit instead? The rolling
+[`preview` prerelease](https://github.com/Crimsab/Repressurizer/releases/tag/preview)
+is rebuilt from every push to `main`. Use it for testing, not as your only
+recovery path.
 
-1. Install Repressurizer or unzip the portable build.
+## Quick start
+
+1. Install Repressurizer or extract the portable ZIP.
 2. Add a Steam Web API key from <https://steamcommunity.com/dev/apikey>.
-3. Load your Steam library.
-4. Prepare the metadata cache if you want sorting, filters, AutoCat, prices,
-   reviews, HLTB, and achievement data ready before browsing.
+3. Load your local Steam library.
+4. Prepare the metadata cache needed by your filters and AutoCat rules.
 5. Close Steam before saving collection changes.
 6. Review the save preview and keep backups enabled.
 
-Repressurizer does not edit your Steam account remotely. Collection saves are
-local file writes; metadata fetches and automation exports are separate network
-operations.
+The full walkthrough covers [first-run setup](https://crimsab.github.io/Repressurizer/getting-started/first-run/)
+and your [first safe save](https://crimsab.github.io/Repressurizer/getting-started/safe-first-save/).
 
-## Workflows
+## Search a large library
 
-### Organize Collections
+Plain text search ignores common punctuation differences, so `stalker` matches
+titles such as `S.T.A.L.K.E.R.`. Regex and structured filters can narrow the
+library further:
 
-Repressurizer reads Steam's modern collection catalog and, when available, the
-Steam UI LevelDB cache. You can create, rename, duplicate, merge, delete, and
-color collections; drag or bulk-move games; hide local-only collection entries;
-and save with a preview of every collection that will change.
-
-Automatic backups are created before writes, including the matching Steam
-LevelDB catalog value when present.
-
-### Browse And Filter
-
-The library supports grid and list views, Steam artwork, plain text search,
-regex search, fuzzy settings search, structured filters, and advanced library
-filters. Useful filters include playtime, HLTB length, status, local tags,
-release year, platform, Metacritic, achievements, Steam Family, duplicates,
-missing metadata, local-only games, and delisted or unavailable store entries.
-
-Examples:
-
-```text
-stalker
+```
 /final.*vii/i
-hours:>10
 playtime:2..40
 hltb:<20
 year:2013..2020
 genre:rpg
-category:achievement
 tag:backlog
 dev:"Square Enix"
 platform:windows
@@ -99,133 +99,108 @@ achievements:50..100
 family:true
 duplicate:true
 missing:true
-appid:39140
 ```
 
-Plain text search normalizes punctuation, so `stalker` matches
-`S.T.A.L.K.E.R.` titles.
+See the [search and filters reference](https://crimsab.github.io/Repressurizer/user-guide/search-and-filters/)
+for operators and metadata requirements.
 
-### Build AutoCat Collections
+## Build useful AutoCat collections
 
 AutoCat can create or update collections from local playtime, cached Steam
-metadata, HLTB data, Steam reviews, achievements, languages, platforms,
-developers, publishers, and saved presets imported from Depressurizer profiles.
-It prefers cached data, can fetch missing data in the background, and can run
-with cached-only mode when you do not want extra network requests.
+metadata, HLTB data, reviews, achievements, languages, platforms, developers,
+publishers, and imported Depressurizer presets.
+
+It prefers cached data, can fetch missing data in the background, and supports
+cached-only runs when you want no additional network requests.
 
 ![AutoCat preview](docs/assets/autocat.png)
 
-### Export And Automate
+[Read the AutoCat guide](https://crimsab.github.io/Repressurizer/user-guide/autocat/)
 
-The export dialog can write filtered TXT, Markdown, JSON, or CSV output with
-selectable fields, category inclusion, category skipping, playtime filters,
-HLTB filters, status filters, metadata requirements, and local-only handling.
+## Export and automate
 
-Automation export publishes a stable `repressurizer.library-snapshot.v1` JSON
-snapshot to a configured HTTP endpoint. Receivers can use the TypeScript or Rust
-integration libraries to validate and consume the payload.
+Interactive exports support TXT, Markdown, JSON, and CSV with selectable fields
+and filters. Automation export publishes a stable
+`repressurizer.library-snapshot.v1` payload to an HTTP receiver.
 
-![Export dialog](docs/assets/export.png)
+Consumers can validate snapshots with:
 
-### Plan What To Play
+- TypeScript: [`@crimsab/repressurizer-integration`](https://www.npmjs.com/package/@crimsab/repressurizer-integration)
+- Rust: [`repressurizer-integration`](https://crates.io/crates/repressurizer-integration)
 
-Repressurizer includes library statistics, recommendations, play history,
-wishlist view, achievements overview, friends comparison, notes, tags, personal
-ratings, and game status tracking.
+Start with the [integration overview](https://crimsab.github.io/Repressurizer/integrations/)
+or [CLI reference](https://crimsab.github.io/Repressurizer/cli/).
 
-![Repressurizer settings and maintenance](docs/assets/settings.png)
+## Safety model
 
-## Documentation
+Before saving collection changes:
 
-| Topic | Link |
-| --- | --- |
-| Documentation index | [docs/README.md](docs/README.md) |
-| Cache, Steam requests, prices, proxies | [docs/cache-and-network.md](docs/cache-and-network.md) |
-| Steam Family setup | [docs/steam-family.md](docs/steam-family.md) |
-| Automation export | [docs/automation-export.md](docs/automation-export.md) |
-| CLI usage | [docs/cli.md](docs/cli.md) |
-| Snapshot schema | [docs/integrations/repressurizer-snapshot-v1.md](docs/integrations/repressurizer-snapshot-v1.md) |
-| TypeScript package release notes | [docs/integrations/integration-package-release.md](docs/integrations/integration-package-release.md) |
-| Rust crate release notes | [docs/integrations/rust-integration-crate.md](docs/integrations/rust-integration-crate.md) |
-| Privacy and local data | [docs/privacy.md](docs/privacy.md) |
-| Localization status | [docs/localization.md](docs/localization.md) |
+- Close Steam completely, including its system tray process.
+- Keep automatic backups enabled.
+- Read the save preview, especially removed memberships.
+- Keep a manual backup when testing large AutoCat batches or imports.
+- Reopen Steam and verify a small sample before deleting older backups.
+
+Repressurizer stores settings and caches in the operating system app data
+directory. Steam collection backups are stored next to the collection file they
+protect. Read [Backups and restore](https://crimsab.github.io/Repressurizer/user-guide/backups/)
+and [Privacy](https://crimsab.github.io/Repressurizer/privacy/) for details.
+
+## Repressurizer and Depressurizer
+
+Repressurizer is a spiritual successor, not an in-place upgrade or an official
+continuation. It can import useful Depressurizer data and presets, but it has its
+own storage, interface, release process, and safety model.
+
+Keep your original database and Steam files backed up while migrating. Follow
+the [migration recipe](https://crimsab.github.io/Repressurizer/recipes/migrate-from-depressurizer/)
+before applying imported rules to a library you care about.
 
 ## Requirements
 
 - Windows 10 or Windows 11.
 - Steam installed locally.
-- WebView2 Runtime, already installed on most current Windows systems.
-- A Steam Web API key for library, achievement, wishlist, and Steam metadata.
+- WebView2 Runtime, already present on most current Windows systems.
+- A Steam Web API key for owned games, achievements, wishlist data, and related metadata.
 
-Linux and macOS support are possible later, but Windows is the supported target
-right now. The app is unsigned, so Windows SmartScreen may warn on early
-releases.
-
-## Safety Model
-
-Repressurizer is backup-first software. It stores its own cache and settings in
-the operating system app data directory and stores Steam collection backups next
-to the Steam collection file they protect.
-
-Before saving collection changes:
-
-- Close Steam.
-- Keep automatic backups enabled.
-- Read the save preview.
-- Keep a manual backup when testing against a library you care about.
+Linux and macOS are possible future targets, but Windows is the supported
+platform today.
 
 ## Development
 
 ```bash
-bun install
+bun install --frozen-lockfile
 bun run check
 bun run test:unit
 bun run test:e2e
 bun run build
 ```
 
-`bun run test` runs unit tests and Playwright browser checks. Playwright stores
-test artifacts under `test-results/`.
-
-For a local Windows build:
-
-```powershell
-bun install
-bun tauri build
-```
-
-For cross-compiling a Windows portable build from Linux:
+Rust checks live under `src-tauri/`:
 
 ```bash
-bash build.sh
+cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
+cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+cargo test --manifest-path src-tauri/Cargo.toml
 ```
 
-Release history is generated from tags and Conventional Commit subjects:
+See the [development guide](https://crimsab.github.io/Repressurizer/development/)
+and [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
 
-```bash
-bun run changelog:write
-```
+## Project links
 
-This updates `CHANGELOG.md` and the generated changelog used by the in-app Info
-page. The release workflow runs the generator before packaging.
+- [Documentation](https://crimsab.github.io/Repressurizer/)
+- [Releases](https://github.com/Crimsab/Repressurizer/releases)
+- [Roadmap](ROADMAP.md)
+- [Changelog](CHANGELOG.md)
+- [Security policy](SECURITY.md)
+- [Issue templates](https://github.com/Crimsab/Repressurizer/issues/new/choose)
 
-## Integration Packages
+## Attribution and license
 
-- TypeScript: [`@crimsab/repressurizer-integration`](https://www.npmjs.com/package/@crimsab/repressurizer-integration)
-- Rust: [`repressurizer-integration`](https://crates.io/crates/repressurizer-integration)
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines and
-[SECURITY.md](SECURITY.md) for private vulnerability reporting.
-
-## Attribution
-
-Repressurizer is inspired by Depressurizer, which is licensed under GPLv3.
-Repressurizer is a separate project and is not affiliated with Valve, Steam, or
-the Depressurizer maintainers.
-
-## License
+Repressurizer is inspired by Depressurizer, which is licensed under GPLv3. It
+is a separate project and is not affiliated with Valve, Steam, or the
+Depressurizer maintainers.
 
 Repressurizer is licensed under the GNU General Public License v3.0. See
 [LICENSE](LICENSE).

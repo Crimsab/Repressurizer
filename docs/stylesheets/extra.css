@@ -189,6 +189,11 @@
   outline-offset: 0.15rem;
 }
 
+.glightbox-container .gbtn:focus-visible {
+  outline: 0.15rem solid var(--rp-accent) !important;
+  outline-offset: 0.15rem;
+}
+
 .md-footer-meta {
   color: #d7dce0;
 }
