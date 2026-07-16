@@ -222,3 +222,11 @@ jobs:
 
       - name: Build strict documentation site
         run: python -m mkdocs build --strict
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
+
+      - name: Audit generated documentation
+        run: bun run docs:audit

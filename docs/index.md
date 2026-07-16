@@ -27,12 +27,6 @@ Repressurizer is a Windows desktop app for collections, metadata, AutoCat rules,
 
 </div>
 
-<div class="rp-trust" markdown>
-
-**Windows-first** · **Backup-first saves** · **Local collection edits** · **Open source**
-
-</div>
-
 ## Start with the job you want to do
 
 <div class="grid cards rp-paths" markdown>

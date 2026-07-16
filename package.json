@@ -15,6 +15,7 @@
     "integration:rust:check": "cargo check --manifest-path packages/rust/Cargo.toml",
     "integration:rust:test": "cargo test --manifest-path packages/rust/Cargo.toml",
     "integration:rust:publish-dry-run": "cargo publish --dry-run --manifest-path packages/rust/Cargo.toml",
+    "docs:audit": "bun scripts/docs-audit.ts",
     "i18n:check": "bun scripts/i18n-check.ts",
     "i18n:status": "bun scripts/i18n-status.ts",
     "i18n:status:write": "bun scripts/i18n-status.ts --write",
@@ -22,12 +23,14 @@
     "test": "bun run test:unit && bun run test:e2e",
     "test:unit": "vitest run src packages/integration/test",
     "test:e2e": "playwright test",
+    "test:docs": "playwright test --config playwright.docs.config.ts",
     "preview": "vite preview",
     "preview:tauri": "bun scripts/tauri-preview.ts dev",
     "build:preview": "bun scripts/tauri-preview.ts build",
     "tauri": "tauri"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.11.0",
     "@playwright/test": "^1.59.1",
     "@tailwindcss/vite": "^4.2.4",
     "@tauri-apps/cli": "^2.11.0",

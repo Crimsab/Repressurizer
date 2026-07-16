@@ -5,6 +5,8 @@ artifacts/
 out/
 playwright-report/
 test-results/
+playwright-report-docs/
+test-results-docs/
 src-tauri/gen/
 src-tauri/target/
 packages/rust/Cargo.lock

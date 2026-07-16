@@ -1,4 +1,4 @@
-site_name: Repressurizer Documentation
+site_name: Repressurizer Docs
 site_description: Organize large Steam libraries safely with Repressurizer.
 site_url: https://crimsab.github.io/Repressurizer/
 repo_url: https://github.com/Crimsab/Repressurizer
@@ -14,8 +14,9 @@ theme:
   name: material
   language: en
   font: false
+  logo: assets/repressurizer-icon.png
+  favicon: assets/repressurizer-icon.png
   icon:
-    logo: material/library-shelves
     repo: fontawesome/brands/github
   features:
     - announce.dismiss
@@ -29,7 +30,6 @@ theme:
     - navigation.instant.prefetch
     - navigation.sections
     - navigation.tabs
-    - navigation.top
     - navigation.tracking
     - search.highlight
     - search.share
@@ -38,15 +38,15 @@ theme:
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
-      primary: blue grey
-      accent: cyan
+      primary: custom
+      accent: custom
       toggle:
         icon: material/weather-night
         name: Switch to dark mode
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
-      primary: blue grey
-      accent: cyan
+      primary: custom
+      accent: custom
       toggle:
         icon: material/weather-sunny
         name: Switch to light mode
@@ -65,6 +65,9 @@ markdown_extensions:
   - toc:
       permalink: true
   - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
   - pymdownx.highlight:
       anchor_linenums: true
   - pymdownx.inlinehilite
@@ -78,6 +81,9 @@ markdown_extensions:
 
 extra_css:
   - stylesheets/extra.css
+
+extra_javascript:
+  - javascripts/accessibility.js
 
 extra:
   social:
