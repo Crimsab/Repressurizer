@@ -43,3 +43,12 @@
 - name: blocked-upstream
   color: "bfdadc"
   description: Blocked by Steam, HLTB, Tauri, or another upstream service.
+- name: dependencies
+  color: "0366d6"
+  description: Dependency update.
+- name: ci
+  color: "1d76db"
+  description: Continuous integration and release automation.
+- name: documentation
+  color: "0075ca"
+  description: Documentation and guides.

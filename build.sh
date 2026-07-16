@@ -1,6 +1,6 @@
 #!/bin/bash
 # Build Repressurizer for Windows from Linux with cargo-xwin.
-set -e
+set -euo pipefail
 
 export PATH="/root/.cargo/bin:/usr/local/bin:/usr/bin:/bin:$PATH"
 
@@ -10,7 +10,7 @@ echo "=== Building Repressurizer for Windows ==="
 VERSION="$(bun -e "console.log(JSON.parse(require('fs').readFileSync('package.json', 'utf8')).version)")"
 
 echo "→ Frontend + Rust cross-compile..."
-bunx @tauri-apps/cli build --runner cargo-xwin --target x86_64-pc-windows-msvc 2>&1 | grep -E "(Compiling repressurizer|Finished|Built|error|warning.*repressurizer)"
+bun tauri build --runner cargo-xwin --target x86_64-pc-windows-msvc
 
 TARGET_DIR="src-tauri/target/x86_64-pc-windows-msvc/release"
 EXE="$TARGET_DIR/repressurizer.exe"

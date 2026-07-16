@@ -1,6 +1,8 @@
 # Repressurizer - Windows Build Script
 # Prerequisites: Rust (rustup.rs), Bun (bun.sh), Visual Studio Build Tools
 
+$ErrorActionPreference = "Stop"
+
 Write-Host "=== Repressurizer Build ===" -ForegroundColor Cyan
 $version = (Get-Content package.json | ConvertFrom-Json).version
 
@@ -15,7 +17,14 @@ if (-not (Get-Command bun -ErrorAction SilentlyContinue)) {
 }
 
 Write-Host "Installing dependencies..." -ForegroundColor Yellow
-bun install
+bun install --frozen-lockfile
+
+Write-Host "Running project checks..." -ForegroundColor Yellow
+bun run check
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "Project checks failed!" -ForegroundColor Red
+    exit 1
+}
 
 Write-Host "Building Repressurizer..." -ForegroundColor Yellow
 bun tauri build

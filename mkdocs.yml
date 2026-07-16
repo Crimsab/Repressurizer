@@ -1,0 +1,134 @@
+site_name: Repressurizer Documentation
+site_description: Organize large Steam libraries safely with Repressurizer.
+site_url: https://crimsab.github.io/Repressurizer/
+repo_url: https://github.com/Crimsab/Repressurizer
+repo_name: Crimsab/Repressurizer
+edit_uri: edit/main/docs/
+docs_dir: docs
+site_dir: site
+strict: true
+exclude_docs: |
+  README.md
+
+theme:
+  name: material
+  language: en
+  font: false
+  icon:
+    logo: material/library-shelves
+    repo: fontawesome/brands/github
+  features:
+    - announce.dismiss
+    - content.action.edit
+    - content.code.annotate
+    - content.code.copy
+    - content.tabs.link
+    - navigation.footer
+    - navigation.indexes
+    - navigation.instant
+    - navigation.instant.prefetch
+    - navigation.sections
+    - navigation.tabs
+    - navigation.top
+    - navigation.tracking
+    - search.highlight
+    - search.share
+    - search.suggest
+    - toc.follow
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: blue grey
+      accent: cyan
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: blue grey
+      accent: cyan
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+plugins:
+  - search
+  - privacy
+
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+
+extra_css:
+  - stylesheets/extra.css
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/Crimsab/Repressurizer
+      name: Repressurizer on GitHub
+
+copyright: Repressurizer is GPL-3.0 licensed and is not affiliated with Valve.
+
+nav:
+  - Home: index.md
+  - Get started:
+      - getting-started/index.md
+      - Install: getting-started/installation.md
+      - First run: getting-started/first-run.md
+      - First safe save: getting-started/safe-first-save.md
+      - Updates and previews: getting-started/updates.md
+  - User guide:
+      - user-guide/index.md
+      - Collections: user-guide/collections.md
+      - Search and filters: user-guide/search-and-filters.md
+      - Metadata cache and network: cache-and-network.md
+      - AutoCat: user-guide/autocat.md
+      - Export: user-guide/export.md
+      - Backups and restore: user-guide/backups.md
+      - Steam Family: steam-family.md
+      - Steam Tools: user-guide/steam-tools.md
+      - Privacy: privacy.md
+  - Recipes:
+      - recipes/index.md
+      - Organize a large library: recipes/large-library.md
+      - Backlog and short games: recipes/backlog-and-short-games.md
+      - Migrate from Depressurizer: recipes/migrate-from-depressurizer.md
+  - Troubleshooting:
+      - troubleshooting/index.md
+      - Install and SmartScreen: troubleshooting/installation.md
+      - Missing metadata: troubleshooting/metadata.md
+      - Collection save problems: troubleshooting/collections.md
+      - Diagnostics and bug reports: troubleshooting/diagnostics.md
+  - CLI and integrations:
+      - integrations/index.md
+      - CLI: cli.md
+      - Automation export: automation-export.md
+      - Snapshot schema: integrations/repressurizer-snapshot-v1.md
+      - Receiver example: integrations/receiver-example.md
+      - TypeScript package: integrations/integration-package-release.md
+      - Rust crate: integrations/rust-integration-crate.md
+  - Contributing:
+      - development/index.md
+      - Development setup: development/setup.md
+      - Architecture: development/architecture.md
+      - Testing: development/testing.md
+      - Localization: localization.md
+      - Release process: development/releases.md

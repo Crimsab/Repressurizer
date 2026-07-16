@@ -1,13 +1,13 @@
 name: Tag Release
 
 on:
-  push:
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
     branches:
       - main
-    paths:
-      - package.json
-      - packages/integration/package.json
-      - packages/rust/Cargo.toml
   workflow_dispatch:
 
 permissions:
@@ -15,43 +15,27 @@ permissions:
   actions: write
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: tag-release-main
+  cancel-in-progress: false
 
 jobs:
   tag:
-    name: Create version tag
+    name: Reconcile version tags after CI
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-        env:
-          GIT_CONFIG_COUNT: 1
-          GIT_CONFIG_KEY_0: init.defaultBranch
-          GIT_CONFIG_VALUE_0: main
+      - name: Checkout validated commit
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
         with:
           fetch-depth: 0
-          ref: ${{ github.sha }}
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
-      - name: Read package version
-        id: version
+      - name: Record validated commit
         run: |
-          version="$(jq -r '.version' package.json)"
-          if [ -z "$version" ] || [ "$version" = "null" ]; then
-            echo "Could not read package.json version" >&2
-            exit 1
-          fi
-          echo "tag=v$version" >> "$GITHUB_OUTPUT"
-
-      - name: Check existing tag
-        id: existing
-        run: |
-          git fetch --tags --force
-          if git rev-parse -q --verify "refs/tags/${{ steps.version.outputs.tag }}" >/dev/null; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
+          echo "Validated commit: $(git rev-parse HEAD)"
+          if [ "${{ github.event_name }}" = "workflow_run" ]; then
+            test "$(git rev-parse HEAD)" = "${{ github.event.workflow_run.head_sha }}"
           fi
 
       - name: Configure git author
@@ -59,24 +43,51 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-      - name: Create and push tag
-        if: steps.existing.outputs.exists == 'false'
-        run: |
-          git tag -a "${{ steps.version.outputs.tag }}" -m "Release ${{ steps.version.outputs.tag }}"
-          git push origin "${{ steps.version.outputs.tag }}"
+      - name: Fetch release tags
+        run: git fetch --tags --force
 
-      - name: Start release workflow
-        if: steps.existing.outputs.exists == 'false'
+      - name: Read and validate desktop app version
+        id: app_version
+        run: |
+          package_version="$(jq -r '.version' package.json)"
+          tauri_version="$(jq -r '.version' src-tauri/tauri.conf.json)"
+          cargo_version="$(awk -F '"' '/^version = / { print $2; exit }' src-tauri/Cargo.toml)"
+
+          if [ -z "$package_version" ] || [ "$package_version" = "null" ]; then
+            echo "Could not read package.json version" >&2
+            exit 1
+          fi
+
+          if [ "$package_version" != "$tauri_version" ] || [ "$package_version" != "$cargo_version" ]; then
+            echo "Desktop versions differ: package=$package_version tauri=$tauri_version cargo=$cargo_version" >&2
+            exit 1
+          fi
+
+          echo "tag=v$package_version" >> "$GITHUB_OUTPUT"
+
+      - name: Check desktop app tag
+        id: app_existing
+        run: |
+          if git rev-parse -q --verify "refs/tags/${{ steps.app_version.outputs.tag }}" >/dev/null; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create desktop app tag
+        if: steps.app_existing.outputs.exists == 'false'
+        run: |
+          git tag -a "${{ steps.app_version.outputs.tag }}" -m "Release ${{ steps.app_version.outputs.tag }}"
+          git push origin "${{ steps.app_version.outputs.tag }}"
+
+      - name: Start desktop release workflow
+        if: steps.app_existing.outputs.exists == 'false'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh workflow run release.yml --ref "${{ steps.version.outputs.tag }}"
+        run: gh workflow run release.yml --ref "${{ steps.app_version.outputs.tag }}"
 
-      - name: Skip existing tag
-        if: steps.existing.outputs.exists == 'true'
-        run: echo "Tag ${{ steps.version.outputs.tag }} already exists; no release tag created."
-
-      - name: Read TypeScript integration package version
-        id: integration_version
+      - name: Read TypeScript integration version
+        id: typescript_version
         run: |
           version="$(jq -r '.version' packages/integration/package.json)"
           if [ -z "$version" ] || [ "$version" = "null" ]; then
@@ -85,33 +96,29 @@ jobs:
           fi
           echo "tag=integration-v$version" >> "$GITHUB_OUTPUT"
 
-      - name: Check existing TypeScript integration tag
-        id: integration_existing
+      - name: Check TypeScript integration tag
+        id: typescript_existing
         run: |
-          if git rev-parse -q --verify "refs/tags/${{ steps.integration_version.outputs.tag }}" >/dev/null; then
+          if git rev-parse -q --verify "refs/tags/${{ steps.typescript_version.outputs.tag }}" >/dev/null; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Create and push TypeScript integration tag
-        if: steps.integration_existing.outputs.exists == 'false'
+      - name: Create TypeScript integration tag
+        if: steps.typescript_existing.outputs.exists == 'false'
         run: |
-          git tag -a "${{ steps.integration_version.outputs.tag }}" -m "Release ${{ steps.integration_version.outputs.tag }}"
-          git push origin "${{ steps.integration_version.outputs.tag }}"
+          git tag -a "${{ steps.typescript_version.outputs.tag }}" -m "Release ${{ steps.typescript_version.outputs.tag }}"
+          git push origin "${{ steps.typescript_version.outputs.tag }}"
 
       - name: Start TypeScript integration publish workflow
-        if: steps.integration_existing.outputs.exists == 'false'
+        if: steps.typescript_existing.outputs.exists == 'false'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh workflow run publish-integration.yml --ref "${{ steps.integration_version.outputs.tag }}" -f dry_run=false
+        run: gh workflow run publish-integration.yml --ref "${{ steps.typescript_version.outputs.tag }}" -f dry_run=false
 
-      - name: Skip existing TypeScript integration tag
-        if: steps.integration_existing.outputs.exists == 'true'
-        run: echo "Tag ${{ steps.integration_version.outputs.tag }} already exists; no TypeScript integration release tag created."
-
-      - name: Read Rust integration crate version
-        id: rust_integration_version
+      - name: Read Rust integration version
+        id: rust_version
         run: |
           version="$(awk -F '"' '/^version = / { print $2; exit }' packages/rust/Cargo.toml)"
           if [ -z "$version" ]; then
@@ -120,27 +127,33 @@ jobs:
           fi
           echo "tag=rust-integration-v$version" >> "$GITHUB_OUTPUT"
 
-      - name: Check existing Rust integration tag
-        id: rust_integration_existing
+      - name: Check Rust integration tag
+        id: rust_existing
         run: |
-          if git rev-parse -q --verify "refs/tags/${{ steps.rust_integration_version.outputs.tag }}" >/dev/null; then
+          if git rev-parse -q --verify "refs/tags/${{ steps.rust_version.outputs.tag }}" >/dev/null; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Create and push Rust integration tag
-        if: steps.rust_integration_existing.outputs.exists == 'false'
+      - name: Create Rust integration tag
+        if: steps.rust_existing.outputs.exists == 'false'
         run: |
-          git tag -a "${{ steps.rust_integration_version.outputs.tag }}" -m "Release ${{ steps.rust_integration_version.outputs.tag }}"
-          git push origin "${{ steps.rust_integration_version.outputs.tag }}"
+          git tag -a "${{ steps.rust_version.outputs.tag }}" -m "Release ${{ steps.rust_version.outputs.tag }}"
+          git push origin "${{ steps.rust_version.outputs.tag }}"
 
       - name: Start Rust integration publish workflow
-        if: steps.rust_integration_existing.outputs.exists == 'false'
+        if: steps.rust_existing.outputs.exists == 'false'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh workflow run publish-rust-integration.yml --ref "${{ steps.rust_integration_version.outputs.tag }}" -f dry_run=false
+        run: gh workflow run publish-rust-integration.yml --ref "${{ steps.rust_version.outputs.tag }}" -f dry_run=false
 
-      - name: Skip existing Rust integration tag
-        if: steps.rust_integration_existing.outputs.exists == 'true'
-        run: echo "Tag ${{ steps.rust_integration_version.outputs.tag }} already exists; no Rust integration release tag created."
+      - name: Write release reconciliation summary
+        run: |
+          {
+            echo "## Version tag reconciliation"
+            echo
+            echo "- Desktop: ${{ steps.app_version.outputs.tag }} (already existed: ${{ steps.app_existing.outputs.exists }})"
+            echo "- TypeScript integration: ${{ steps.typescript_version.outputs.tag }} (already existed: ${{ steps.typescript_existing.outputs.exists }})"
+            echo "- Rust integration: ${{ steps.rust_version.outputs.tag }} (already existed: ${{ steps.rust_existing.outputs.exists }})"
+          } >> "$GITHUB_STEP_SUMMARY"
