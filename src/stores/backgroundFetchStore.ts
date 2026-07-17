@@ -82,6 +82,19 @@ const _releaseDatesRun = createRunGate();
 // Adaptive per-request extra delay (only grows for unexpected failures)
 let _extraDelayMs = 0;
 
+type FetchItem = { appId: number; name: string };
+
+// Cache preparation can be requested again while a long-running worker is
+// active (for example when the library auto-refreshes during a details scan).
+// Keep those requests instead of silently dropping them.
+const _pendingDetailsIds = new Set<number>();
+const _pendingDetailsForceIds = new Set<number>();
+const _pendingHltbItems = new Map<number, FetchItem>();
+const _pendingRatingsItems = new Map<number, FetchItem>();
+const _pendingRatingsForceIds = new Set<number>();
+const _pendingReleaseDateItems = new Map<number, FetchItem>();
+const _pendingReleaseDateForceIds = new Set<number>();
+
 interface BackgroundFetchState {
   // Game details
   detailsRunning: boolean;
@@ -130,13 +143,13 @@ interface BackgroundFetchState {
 
   startDetailsFetch: (missingIds: number[], options?: { force?: boolean }) => void;
   stopDetailsFetch: () => void;
-  startHltbFetch: (items: Array<{ appId: number; name: string }>) => void;
+  startHltbFetch: (items: FetchItem[]) => void;
   stopHltbFetch: () => void;
-  startAchievementsFetch: (items: Array<{ appId: number; name: string }>) => void;
+  startAchievementsFetch: (items: FetchItem[]) => void;
   stopAchievementsFetch: () => void;
-  startRatingsFetch: (items: Array<{ appId: number; name: string }>, options?: { force?: boolean }) => void;
+  startRatingsFetch: (items: FetchItem[], options?: { force?: boolean }) => void;
   stopRatingsFetch: () => void;
-  startStoreReleaseDateFetch: (items: Array<{ appId: number; name: string }>, options?: { force?: boolean }) => void;
+  startStoreReleaseDateFetch: (items: FetchItem[], options?: { force?: boolean }) => void;
   stopStoreReleaseDateFetch: () => void;
 }
 
@@ -207,7 +220,12 @@ export const useBackgroundFetchStore = create<BackgroundFetchState>((set, get) =
     releaseDatesRecentNames: [],
 
     startDetailsFetch: (missingIds, options) => {
-      if (_detailsRun.running || missingIds.length === 0) return;
+      if (missingIds.length === 0) return;
+      if (_detailsRun.running) {
+        missingIds.forEach((id) => _pendingDetailsIds.add(id));
+        if (options?.force) missingIds.forEach((id) => _pendingDetailsForceIds.add(id));
+        return;
+      }
       // Filter out games already permanently failed (removed from Steam)
       const { isIgnored } = useFailedGamesStore.getState();
       const details = useGameStore.getState().details;
@@ -248,12 +266,18 @@ export const useBackgroundFetchStore = create<BackgroundFetchState>((set, get) =
 
     stopDetailsFetch: () => {
       _detailsRun.stop();
+      _pendingDetailsIds.clear();
+      _pendingDetailsForceIds.clear();
       _extraDelayMs = 0;
       set({ detailsRunning: false, detailsCurrentName: "", detailsCoolingDown: false, detailsCooldownSecs: 0 });
     },
 
     startHltbFetch: (items) => {
-      if (_hltbRun.running || items.length === 0) return;
+      if (items.length === 0) return;
+      if (_hltbRun.running) {
+        items.forEach((item) => _pendingHltbItems.set(item.appId, item));
+        return;
+      }
       // Filter out HLTB-ignored games
       const { isIgnored } = useHltbIgnoredStore.getState();
       const filtered = items.filter((it) => !isIgnored(it.appId));
@@ -279,6 +303,7 @@ export const useBackgroundFetchStore = create<BackgroundFetchState>((set, get) =
 
     stopHltbFetch: () => {
       _hltbRun.stop();
+      _pendingHltbItems.clear();
       set({ hltbRunning: false, hltbCurrentName: "" });
     },
 
@@ -304,7 +329,12 @@ export const useBackgroundFetchStore = create<BackgroundFetchState>((set, get) =
     },
 
     startRatingsFetch: (items, options) => {
-      if (_ratingsRun.running || items.length === 0) return;
+      if (items.length === 0) return;
+      if (_ratingsRun.running) {
+        items.forEach((item) => _pendingRatingsItems.set(item.appId, item));
+        if (options?.force) items.forEach((item) => _pendingRatingsForceIds.add(item.appId));
+        return;
+      }
       const ratings = useSteamRatingsStore.getState().ratings;
       const filtered = options?.force ? items : items.filter((item) => !isSteamRatingFresh(ratings[item.appId]));
       if (filtered.length === 0) return;
@@ -328,11 +358,18 @@ export const useBackgroundFetchStore = create<BackgroundFetchState>((set, get) =
 
     stopRatingsFetch: () => {
       _ratingsRun.stop();
+      _pendingRatingsItems.clear();
+      _pendingRatingsForceIds.clear();
       set({ ratingsRunning: false, ratingsCurrentName: "", ratingsCoolingDown: false, ratingsCooldownSecs: 0 });
     },
 
     startStoreReleaseDateFetch: (items, options) => {
-      if (_releaseDatesRun.running || items.length === 0) return;
+      if (items.length === 0) return;
+      if (_releaseDatesRun.running) {
+        items.forEach((item) => _pendingReleaseDateItems.set(item.appId, item));
+        if (options?.force) items.forEach((item) => _pendingReleaseDateForceIds.add(item.appId));
+        return;
+      }
       const details = useGameStore.getState().details;
       const filtered = items.filter((item) =>
         isDetailsCacheCurrent(details[item.appId]) && (options?.force || storeReleaseDateNeedsRefresh(details[item.appId]))
@@ -357,6 +394,8 @@ export const useBackgroundFetchStore = create<BackgroundFetchState>((set, get) =
 
     stopStoreReleaseDateFetch: () => {
       _releaseDatesRun.stop();
+      _pendingReleaseDateItems.clear();
+      _pendingReleaseDateForceIds.clear();
       set({ releaseDatesRunning: false, releaseDatesCurrentName: "" });
     },
   };
@@ -367,6 +406,54 @@ export const useBackgroundFetchStore = create<BackgroundFetchState>((set, get) =
 function addToRecent(key: "detailsRecentNames" | "hltbRecentNames" | "achievementsRecentNames" | "ratingsRecentNames" | "releaseDatesRecentNames", label: string) {
   const prev = _getState()[key];
   _setState({ [key]: [label, ...prev.filter((item) => item !== label)].slice(0, MAX_RECENT) } as Partial<BackgroundFetchState>);
+}
+
+function drainPendingDetails() {
+  if (_pendingDetailsIds.size === 0) return;
+
+  const forceIds = [..._pendingDetailsForceIds].filter((id) => _pendingDetailsIds.has(id));
+  const forceSet = new Set(forceIds);
+  const regularIds = [..._pendingDetailsIds].filter((id) => !forceSet.has(id));
+  _pendingDetailsIds.clear();
+  _pendingDetailsForceIds.clear();
+
+  if (forceIds.length > 0) _getState().startDetailsFetch(forceIds, { force: true });
+  if (regularIds.length > 0) _getState().startDetailsFetch(regularIds);
+}
+
+function drainPendingHltb() {
+  if (_pendingHltbItems.size === 0) return;
+  const items = [..._pendingHltbItems.values()];
+  _pendingHltbItems.clear();
+  _getState().startHltbFetch(items);
+}
+
+function drainPendingRatings() {
+  if (_pendingRatingsItems.size === 0) return;
+
+  const forceIds = [..._pendingRatingsForceIds].filter((id) => _pendingRatingsItems.has(id));
+  const forceSet = new Set(forceIds);
+  const regularItems = [..._pendingRatingsItems.values()].filter((item) => !forceSet.has(item.appId));
+  const forceItems = forceIds.map((id) => _pendingRatingsItems.get(id)).filter((item): item is FetchItem => !!item);
+  _pendingRatingsItems.clear();
+  _pendingRatingsForceIds.clear();
+
+  if (forceItems.length > 0) _getState().startRatingsFetch(forceItems, { force: true });
+  if (regularItems.length > 0) _getState().startRatingsFetch(regularItems);
+}
+
+function drainPendingReleaseDates() {
+  if (_pendingReleaseDateItems.size === 0) return;
+
+  const forceIds = [..._pendingReleaseDateForceIds].filter((id) => _pendingReleaseDateItems.has(id));
+  const forceSet = new Set(forceIds);
+  const regularItems = [..._pendingReleaseDateItems.values()].filter((item) => !forceSet.has(item.appId));
+  const forceItems = forceIds.map((id) => _pendingReleaseDateItems.get(id)).filter((item): item is FetchItem => !!item);
+  _pendingReleaseDateItems.clear();
+  _pendingReleaseDateForceIds.clear();
+
+  if (forceItems.length > 0) _getState().startStoreReleaseDateFetch(forceItems, { force: true });
+  if (regularItems.length > 0) _getState().startStoreReleaseDateFetch(regularItems);
 }
 
 /**
@@ -580,9 +667,8 @@ async function _runDetailsLoop(missingIds: number[], run: RunToken) {
   const releaseDateItems = [...successfulDetailIds]
     .filter((id) => isDetailsCacheCurrent(detailsAfterFetch[id]) && storeReleaseDateNeedsRefresh(detailsAfterFetch[id]))
     .map((appId) => ({ appId, name: useGameStore.getState().games[appId]?.name ?? `#${appId}` }));
-  if (releaseDateItems.length > 0 && !_releaseDatesRun.running) {
-    _getState().startStoreReleaseDateFetch(releaseDateItems);
-  }
+  if (releaseDateItems.length > 0) _getState().startStoreReleaseDateFetch(releaseDateItems);
+  drainPendingDetails();
 }
 
 async function _runStoreReleaseDateLoop(items: Array<{ appId: number; name: string }>, run: RunToken) {
@@ -660,6 +746,7 @@ async function _runStoreReleaseDateLoop(items: Array<{ appId: number; name: stri
     releaseDatesSucceeded: succeeded,
     releaseDatesFailed: failed,
   });
+  drainPendingReleaseDates();
 }
 
 // ── HLTB loop (concurrent requests, count from settings) ─────────────────────
@@ -718,6 +805,7 @@ async function _runHltbLoop(items: Array<{ appId: number; name: string }>, run: 
   if (!_hltbRun.finish(run)) return;
   console.log(`[HLTB] Done: ${fetched} processed`);
   _setState({ hltbRunning: false, hltbCurrentName: "", hltbFetched: items.length });
+  drainPendingHltb();
 }
 
 // ── Achievements loop (concurrent batches, like HLTB) ─────────────────────────
@@ -851,6 +939,7 @@ async function _runRatingsLoop(items: Array<{ appId: number; name: string }>, ru
     ratingsCoolingDown: false,
     ratingsCooldownSecs: 0,
   });
+  drainPendingRatings();
 }
 
 async function waitRatingsCooldown(totalMs: number, run: RunToken): Promise<boolean> {

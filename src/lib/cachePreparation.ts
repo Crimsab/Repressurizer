@@ -70,18 +70,13 @@ export async function startCachePreparation(mode: LibraryRefreshCacheMode): Prom
   const plan = buildCachePreparationPlan(mode);
   const background = useBackgroundFetchStore.getState();
 
-  if (!background.detailsRunning && plan.detailIds.length > 0) {
-    background.startDetailsFetch(plan.detailIds);
-  }
-  if (!background.hltbRunning && plan.hltbItems.length > 0) {
-    background.startHltbFetch(plan.hltbItems);
-  }
-  if (!background.releaseDatesRunning && plan.releaseDateItems.length > 0) {
-    background.startStoreReleaseDateFetch(plan.releaseDateItems);
-  }
-  if (!background.ratingsRunning && plan.ratingItems.length > 0) {
-    background.startRatingsFetch(plan.ratingItems);
-  }
+  // The background store queues requests when the corresponding worker is
+  // already running. Calling every starter here prevents a concurrent
+  // library refresh from silently losing newly discovered games.
+  if (plan.detailIds.length > 0) background.startDetailsFetch(plan.detailIds);
+  if (plan.hltbItems.length > 0) background.startHltbFetch(plan.hltbItems);
+  if (plan.releaseDateItems.length > 0) background.startStoreReleaseDateFetch(plan.releaseDateItems);
+  if (plan.ratingItems.length > 0) background.startRatingsFetch(plan.ratingItems);
 
   return plan;
 }

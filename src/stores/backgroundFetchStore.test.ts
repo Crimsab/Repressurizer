@@ -42,7 +42,7 @@ function steamReviewSummary(appId: number) {
   };
 }
 
-function gameDetails(appId: number) {
+function gameDetails(appId: number, storeReleaseDate: string | null = null) {
   return {
     app_id: appId,
     name: `Game ${appId}`,
@@ -50,7 +50,7 @@ function gameDetails(appId: number) {
     tags: [],
     categories: ["Single-player"],
     release_date: "Jan 1, 2020",
-    store_release_date: null,
+    store_release_date: storeReleaseDate,
     store_release_date_fetched_at: null,
     metacritic_score: null,
     developers: [],
@@ -111,6 +111,50 @@ describe("backgroundFetchStore details fetch", () => {
     expect(detailCalls).toEqual([1]);
   });
 
+  it("queues details requested while another details run is active", async () => {
+    vi.stubGlobal("localStorage", createStorage());
+    const detailCalls: number[] = [];
+    let resolveFirst!: () => void;
+    const firstRequest = new Promise<void>((resolve) => {
+      resolveFirst = resolve;
+    });
+    const invoke = vi.fn(async (command: string, args?: { appId?: number }) => {
+      if (command === "fetch_game_details") {
+        const appId = args?.appId ?? 0;
+        detailCalls.push(appId);
+        if (appId === 1) await firstRequest;
+        return gameDetails(appId, "Jan 1, 2020");
+      }
+      return null;
+    });
+    vi.doMock("@tauri-apps/api/core", () => ({ invoke }));
+    vi.resetModules();
+
+    const { useBackgroundFetchStore } = await import("./backgroundFetchStore");
+    const { useGameStore } = await import("./gameStore");
+    const { useSettingsStore } = await import("./settingsStore");
+
+    useSettingsStore.getState().setSettings({ steamDetailsDelayMs: 100 });
+    useGameStore.getState().setGames([
+      { appid: 1, name: "One", playtime_forever: 0, img_icon_url: null, rtime_last_played: 0 },
+      { appid: 2, name: "Two", playtime_forever: 0, img_icon_url: null, rtime_last_played: 0 },
+    ]);
+
+    useBackgroundFetchStore.getState().startDetailsFetch([1]);
+    await waitFor(() => detailCalls.length === 1, "first details request");
+
+    useBackgroundFetchStore.getState().startDetailsFetch([2]);
+    expect(useBackgroundFetchStore.getState().detailsRunning).toBe(true);
+
+    resolveFirst();
+    await waitFor(
+      () => detailCalls.length === 2 && !useBackgroundFetchStore.getState().detailsRunning,
+      "queued details request completion"
+    );
+
+    expect(detailCalls).toEqual([1, 2]);
+  });
+
   it("treats permanent Steam Store failures as unavailable without retrying or adaptive slowdown", async () => {
     vi.stubGlobal("localStorage", createStorage());
     const detailCalls: number[] = [];
@@ -156,6 +200,50 @@ describe("backgroundFetchStore details fetch", () => {
     expect(state.detailsCoolingDown).toBe(false);
     expect(state.detailsCooldownSecs).toBe(0);
     expect(Object.values(useFailedGamesStore.getState().fails)).toEqual(Array(10).fill(1));
+  });
+});
+
+describe("backgroundFetchStore release date fetch", () => {
+  it("queues release dates requested while another release date run is active", async () => {
+    vi.stubGlobal("localStorage", createStorage());
+    const releaseDateCalls: number[][] = [];
+    let resolveFirst!: () => void;
+    const firstRequest = new Promise<void>((resolve) => {
+      resolveFirst = resolve;
+    });
+    const invoke = vi.fn(async (command: string, args?: { appIds?: number[] }) => {
+      if (command === "fetch_store_release_dates") {
+        const appIds = args?.appIds ?? [];
+        releaseDateCalls.push(appIds);
+        if (releaseDateCalls.length === 1) await firstRequest;
+        return appIds.map((appId) => ({ app_id: appId, release_date: "Jan 1, 2000" }));
+      }
+      return null;
+    });
+    vi.doMock("@tauri-apps/api/core", () => ({ invoke }));
+    vi.resetModules();
+
+    const { useBackgroundFetchStore } = await import("./backgroundFetchStore");
+    const { useGameStore } = await import("./gameStore");
+
+    useGameStore.getState().setGames([
+      { appid: 1, name: "One", playtime_forever: 0, img_icon_url: null, rtime_last_played: 0 },
+      { appid: 2, name: "Two", playtime_forever: 0, img_icon_url: null, rtime_last_played: 0 },
+    ]);
+    useGameStore.getState().setDetails(1, gameDetails(1));
+    useGameStore.getState().setDetails(2, gameDetails(2));
+
+    useBackgroundFetchStore.getState().startStoreReleaseDateFetch([{ appId: 1, name: "One" }]);
+    await waitFor(() => releaseDateCalls.length === 1, "first release date request");
+
+    useBackgroundFetchStore.getState().startStoreReleaseDateFetch([{ appId: 2, name: "Two" }]);
+    resolveFirst();
+    await waitFor(
+      () => releaseDateCalls.length === 2 && !useBackgroundFetchStore.getState().releaseDatesRunning,
+      "queued release date request completion"
+    );
+
+    expect(releaseDateCalls).toEqual([[1], [2]]);
   });
 });
 
