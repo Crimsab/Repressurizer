@@ -56,9 +56,18 @@ writeFileSync(out, releaseNotes, "utf8");
 console.log(`Wrote ${out}`);
 
 function findPreviousTag(releaseTag: string): string | null {
-  const previous = run(["git", "describe", "--tags", "--abbrev=0", `${releaseTag}^{}^`], {
+  const releaseParent = run(["git", "rev-parse", `${releaseTag}^{}^`], {
     allowFailure: true
   }).trim();
+  if (!releaseParent) return null;
+
+  const tags = run(["git", "tag", "--merged", releaseParent, "--sort=-version:refname"], {
+    allowFailure: true
+  });
+  const previous = tags
+    .split("\n")
+    .map((candidate) => candidate.trim())
+    .find((candidate) => /^v\d+\.\d+\.\d+$/.test(candidate) && candidate !== releaseTag);
 
   return previous || null;
 }

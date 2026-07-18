@@ -21,7 +21,7 @@
     "i18n:status:write": "bun scripts/i18n-status.ts --write",
     "changelog:write": "bun scripts/generate-changelog.ts",
     "test": "bun run test:unit && bun run test:e2e",
-    "test:unit": "vitest run src packages/integration/test",
+    "test:unit": "vitest run src packages/integration/test scripts/release-notes.test.ts",
     "test:e2e": "playwright test",
     "test:docs": "playwright test --config playwright.docs.config.ts",
     "preview": "vite preview",
