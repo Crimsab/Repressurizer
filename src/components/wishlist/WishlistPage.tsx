@@ -7,6 +7,7 @@ import { X, BookmarkSimple, ArrowsClockwise, SortAscending, Export } from "@phos
 import { SteamImage } from "../games/SteamImage";
 import { useT } from "../../lib/i18n";
 import { priceSnapshotForCurrency } from "../../lib/prices";
+import { scheduleOriginalReleaseDateFetch } from "../../lib/releaseDateQueue";
 import type { GameDetails } from "../../lib/types";
 import { DialogOverlay } from "../ui/DialogOverlay";
 
@@ -53,7 +54,10 @@ export function WishlistPage({ onClose }: WishlistPageProps) {
     for (const appid of missing) {
       fetchingRef.current.add(appid);
       fetchGameDetails(appid, currencyToCountryCode(currency))
-        .then((d) => setDetails(appid, d))
+        .then((d) => {
+          setDetails(appid, d);
+          scheduleOriginalReleaseDateFetch(appid, d.name);
+        })
         .catch(() => {})
         .finally(() => fetchingRef.current.delete(appid));
     }

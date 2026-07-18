@@ -7,6 +7,7 @@ import {
   getCapsuleImageUrl,
   getHeaderImageUrl,
 } from "../../lib/tauri";
+import { scheduleOriginalReleaseDateFetch } from "../../lib/releaseDateQueue";
 
 type SteamImageKind = "header" | "capsule";
 
@@ -63,7 +64,10 @@ export function SteamImage({
     if (details || detailsRequests.has(appId)) return;
     detailsRequests.add(appId);
     fetchGameDetails(appId, currencyToCountryCode(currency))
-      .then((result) => setDetails(appId, result))
+      .then((result) => {
+        setDetails(appId, result);
+        scheduleOriginalReleaseDateFetch(appId, result.name);
+      })
       .catch(() => {})
       .finally(() => detailsRequests.delete(appId));
   };

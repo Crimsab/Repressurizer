@@ -204,6 +204,39 @@ describe("backgroundFetchStore details fetch", () => {
 });
 
 describe("backgroundFetchStore release date fetch", () => {
+  it("schedules original release dates after details are saved outside the background worker", async () => {
+    vi.stubGlobal("localStorage", createStorage());
+    const releaseDateCalls: number[][] = [];
+    const invoke = vi.fn(async (command: string, args?: { appIds?: number[] }) => {
+      if (command === "fetch_store_release_dates") {
+        const appIds = args?.appIds ?? [];
+        releaseDateCalls.push(appIds);
+        return appIds.map((appId) => ({ app_id: appId, release_date: "Jan 1, 2000" }));
+      }
+      return null;
+    });
+    vi.doMock("@tauri-apps/api/core", () => ({ invoke }));
+    vi.resetModules();
+
+    const { scheduleOriginalReleaseDateFetch } = await import("../lib/releaseDateQueue");
+    const { useBackgroundFetchStore } = await import("./backgroundFetchStore");
+    const { useGameStore } = await import("./gameStore");
+
+    useGameStore.getState().setGames([
+      { appid: 1, name: "One", playtime_forever: 0, img_icon_url: null, rtime_last_played: 0 },
+    ]);
+    useGameStore.getState().setDetails(1, gameDetails(1));
+
+    scheduleOriginalReleaseDateFetch(1);
+    await waitFor(
+      () => releaseDateCalls.length === 1 && !useBackgroundFetchStore.getState().releaseDatesRunning,
+      "direct details release date completion"
+    );
+
+    expect(releaseDateCalls).toEqual([[1]]);
+    expect(useGameStore.getState().details[1]?.store_release_date).toBe("Jan 1, 2000");
+  });
+
   it("queues release dates requested while another release date run is active", async () => {
     vi.stubGlobal("localStorage", createStorage());
     const releaseDateCalls: number[][] = [];

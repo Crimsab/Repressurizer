@@ -17,6 +17,7 @@ import {
   runSamAchievementAction,
 } from "../../../lib/tauri";
 import { detailsPriceMatchesCurrency, detailsWithPriceForCurrency } from "../../../lib/prices";
+import { scheduleOriginalReleaseDateFetch } from "../../../lib/releaseDateQueue";
 import { SteamImage } from "../SteamImage";
 import { GameInfoTab } from "./GameInfoTab";
 import {
@@ -142,6 +143,7 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
           if (cancelled) return;
           setDetails(d);
           useGameStore.getState().setDetails(game.appid, d);
+          scheduleOriginalReleaseDateFetch(game.appid, d.name);
         })
         .catch(() => {})
         .finally(() => {
@@ -268,6 +270,7 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
       const next = await fetchGameDetails(game.appid, currencyToCountryCode(currency));
       setDetails(next);
       useGameStore.getState().setDetails(game.appid, next);
+      scheduleOriginalReleaseDateFetch(game.appid, next.name);
       if (tab === "achievements") {
         await loadAchievementData(true, next);
         if (gameHasSteamAchievements(next) && steamToolsSamEnabled) {
