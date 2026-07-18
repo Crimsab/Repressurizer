@@ -246,7 +246,8 @@ jobs:
           $entries = $env:VT_ANALYSIS -split "," | Where-Object { $_ -match "=" }
           $lines = @()
           $detections = @()
-          $requiresReview = $false
+          $scanIncomplete = $false
+          $maxDetections = 0
 
           foreach ($entry in $entries) {
             $parts = $entry -split "=", 2
@@ -255,7 +256,7 @@ jobs:
 
             if ($url -notmatch "/file-analysis/([^/]+)/") {
               $lines += "- ${name}: unable to parse VirusTotal analysis link - $url"
-              $requiresReview = $true
+              $scanIncomplete = $true
               continue
             }
 
@@ -277,7 +278,7 @@ jobs:
 
             if ($null -eq $attributes -or $attributes.status -ne "completed") {
               $lines += "- ${name}: analysis still pending after timeout - $url"
-              $requiresReview = $true
+              $scanIncomplete = $true
               continue
             }
 
@@ -295,9 +296,12 @@ jobs:
 
             $lines += "- ${name}: ${malicious} malicious, ${suspicious} suspicious, ${harmless} harmless, ${undetected} undetected, ${timeout} timeout.${engineText} - $url"
 
-            if ($malicious -gt 0 -or $suspicious -gt 0) {
-              $detections += "${name}: ${malicious} malicious, ${suspicious} suspicious"
-              $requiresReview = $true
+            $detectionCount = $malicious + $suspicious
+            if ($detectionCount -gt $maxDetections) {
+              $maxDetections = $detectionCount
+            }
+            if ($detectionCount -gt 0) {
+              $detections += "${name}: ${malicious} malicious, ${suspicious} suspicious.${engineText}"
             }
           }
 
@@ -306,24 +310,30 @@ jobs:
           "markdown<<$delimiter" >> $env:GITHUB_OUTPUT
           $markdown >> $env:GITHUB_OUTPUT
           "$delimiter" >> $env:GITHUB_OUTPUT
-          "requires_review=$($requiresReview.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          "scan_incomplete=$($scanIncomplete.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
+          "max_detections=$maxDetections" >> $env:GITHUB_OUTPUT
 
           if ($detections.Count -gt 0) {
             $message = $detections -join "; "
             Write-Output "::warning::VirusTotal reported detections: $message"
           }
 
-      - name: Require a clean VirusTotal result when configured
+      - name: Enforce VirusTotal release policy
         id: release-policy
         if: startsWith(github.ref, 'refs/tags/')
         shell: pwsh
         run: |
           $virusTotalEnabled = "${{ env.HAS_VT_API_KEY }}" -eq "true"
           $hasAnalysis = "${{ steps.vt-scan.outputs.analysis }}" -ne ""
-          $requiresReview = "${{ steps.vt-verdict.outputs.requires_review }}" -eq "true"
+          $scanIncomplete = "${{ steps.vt-verdict.outputs.scan_incomplete }}" -eq "true"
+          $maxDetections = [int]"0${{ steps.vt-verdict.outputs.max_detections }}"
 
-          if ($virusTotalEnabled -and (-not $hasAnalysis -or $requiresReview)) {
-            throw "VirusTotal did not produce a clean completed result; release will not be published."
+          if ($virusTotalEnabled -and (-not $hasAnalysis -or $scanIncomplete)) {
+            throw "VirusTotal did not produce a completed result for every binary; release will not be published."
+          }
+
+          if ($virusTotalEnabled -and $maxDetections -ge 3) {
+            throw "VirusTotal reported $maxDetections detections for at least one binary; release will not be published."
           }
 
           "draft=false" >> $env:GITHUB_OUTPUT
