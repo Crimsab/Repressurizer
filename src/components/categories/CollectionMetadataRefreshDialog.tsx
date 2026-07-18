@@ -89,12 +89,7 @@ export function CollectionMetadataRefreshDialog({
       ratings,
     ]
   );
-  const runnableTotal =
-    (detailsRunning ? 0 : plan.detailIds.length) +
-    (ratingsRunning ? 0 : plan.ratingItems.length) +
-    (hltbRunning ? 0 : plan.hltbItems.length) +
-    (releaseDatesRunning ? 0 : plan.releaseDateItems.length) +
-    (achievementsRunning ? 0 : plan.achievementItems.length);
+  const runnableTotal = metadataRefreshPlanTotal(plan);
   const canStart =
     runnableTotal > 0 &&
     (options.includeDetails ||
@@ -138,23 +133,23 @@ export function CollectionMetadataRefreshDialog({
 
     const background = useBackgroundFetchStore.getState();
     let startedTotal = 0;
-    if (currentPlan.detailIds.length > 0 && !background.detailsRunning) {
+    if (currentPlan.detailIds.length > 0) {
       background.startDetailsFetch(currentPlan.detailIds, { force: currentOptions.forceDetails });
       startedTotal += currentPlan.detailIds.length;
     }
-    if (currentPlan.ratingItems.length > 0 && !background.ratingsRunning) {
+    if (currentPlan.ratingItems.length > 0) {
       background.startRatingsFetch(currentPlan.ratingItems, { force: currentOptions.forceRatings });
       startedTotal += currentPlan.ratingItems.length;
     }
-    if (currentPlan.hltbItems.length > 0 && !background.hltbRunning) {
+    if (currentPlan.hltbItems.length > 0) {
       background.startHltbFetch(currentPlan.hltbItems);
       startedTotal += currentPlan.hltbItems.length;
     }
-    if (currentPlan.releaseDateItems.length > 0 && !background.releaseDatesRunning) {
+    if (currentPlan.releaseDateItems.length > 0) {
       background.startStoreReleaseDateFetch(currentPlan.releaseDateItems, { force: currentOptions.forceReleaseDates });
       startedTotal += currentPlan.releaseDateItems.length;
     }
-    if (currentPlan.achievementItems.length > 0 && !background.achievementsRunning) {
+    if (currentPlan.achievementItems.length > 0) {
       background.startAchievementsFetch(currentPlan.achievementItems);
       startedTotal += currentPlan.achievementItems.length;
     }

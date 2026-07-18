@@ -90,6 +90,7 @@ type FetchItem = { appId: number; name: string };
 const _pendingDetailsIds = new Set<number>();
 const _pendingDetailsForceIds = new Set<number>();
 const _pendingHltbItems = new Map<number, FetchItem>();
+const _pendingAchievementItems = new Map<number, FetchItem>();
 const _pendingRatingsItems = new Map<number, FetchItem>();
 const _pendingRatingsForceIds = new Set<number>();
 const _pendingReleaseDateItems = new Map<number, FetchItem>();
@@ -308,7 +309,11 @@ export const useBackgroundFetchStore = create<BackgroundFetchState>((set, get) =
     },
 
     startAchievementsFetch: (items) => {
-      if (_achievementsRun.running || items.length === 0) return;
+      if (items.length === 0) return;
+      if (_achievementsRun.running) {
+        items.forEach((item) => _pendingAchievementItems.set(item.appId, item));
+        return;
+      }
       const run = _achievementsRun.start();
       if (!run) return;
       set({
@@ -325,6 +330,7 @@ export const useBackgroundFetchStore = create<BackgroundFetchState>((set, get) =
 
     stopAchievementsFetch: () => {
       _achievementsRun.stop();
+      _pendingAchievementItems.clear();
       set({ achievementsRunning: false, achievementsCurrentName: "" });
     },
 
@@ -426,6 +432,13 @@ function drainPendingHltb() {
   const items = [..._pendingHltbItems.values()];
   _pendingHltbItems.clear();
   _getState().startHltbFetch(items);
+}
+
+function drainPendingAchievements() {
+  if (_pendingAchievementItems.size === 0) return;
+  const items = [..._pendingAchievementItems.values()];
+  _pendingAchievementItems.clear();
+  _getState().startAchievementsFetch(items);
 }
 
 function drainPendingRatings() {
@@ -859,6 +872,7 @@ async function _runAchievementsLoop(items: Array<{ appId: number; name: string }
   if (!_achievementsRun.finish(run)) return;
   console.log(`[Achievements] Done: ${fetched} processed`);
   _setState({ achievementsRunning: false, achievementsCurrentName: "", achievementsFetched: items.length });
+  drainPendingAchievements();
 }
 
 // ── Steam ratings loop (sequential to avoid hammering Steam Store) ─────────────

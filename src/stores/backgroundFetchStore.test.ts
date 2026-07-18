@@ -292,6 +292,45 @@ describe("backgroundFetchStore release date fetch", () => {
   });
 });
 
+describe("backgroundFetchStore achievements fetch", () => {
+  it("queues achievements requested while another achievements run is active", async () => {
+    vi.stubGlobal("localStorage", createStorage());
+    const achievementCalls: number[] = [];
+    let resolveFirst!: () => void;
+    const firstRequest = new Promise<void>((resolve) => {
+      resolveFirst = resolve;
+    });
+    const invoke = vi.fn(async (command: string, args?: { appId?: number }) => {
+      if (command === "fetch_achievements_summary") {
+        const appId = args?.appId ?? 0;
+        achievementCalls.push(appId);
+        if (appId === 1) await firstRequest;
+        return [10, 5] as [number, number];
+      }
+      return null;
+    });
+    vi.doMock("@tauri-apps/api/core", () => ({ invoke }));
+    vi.resetModules();
+
+    const { useBackgroundFetchStore } = await import("./backgroundFetchStore");
+    const { useSettingsStore } = await import("./settingsStore");
+
+    useSettingsStore.getState().setSettings({ apiKey: "test-key", steamId64: "76561198000000000" });
+
+    useBackgroundFetchStore.getState().startAchievementsFetch([{ appId: 1, name: "One" }]);
+    await waitFor(() => achievementCalls.length === 1, "first achievements request");
+
+    useBackgroundFetchStore.getState().startAchievementsFetch([{ appId: 2, name: "Two" }]);
+    resolveFirst();
+    await waitFor(
+      () => achievementCalls.length === 2 && !useBackgroundFetchStore.getState().achievementsRunning,
+      "queued achievements request completion"
+    );
+
+    expect(achievementCalls).toEqual([1, 2]);
+  });
+});
+
 describe("backgroundFetchStore ratings fetch", () => {
   it("keeps Steam review progress counters internally consistent during the run", async () => {
     vi.stubGlobal("localStorage", createStorage());
