@@ -207,10 +207,15 @@ describe("backgroundFetchStore release date fetch", () => {
   it("schedules original release dates after details are saved outside the background worker", async () => {
     vi.stubGlobal("localStorage", createStorage());
     const releaseDateCalls: number[][] = [];
+    let resolveFirst!: () => void;
+    const firstRequest = new Promise<void>((resolve) => {
+      resolveFirst = resolve;
+    });
     const invoke = vi.fn(async (command: string, args?: { appIds?: number[] }) => {
       if (command === "fetch_store_release_dates") {
         const appIds = args?.appIds ?? [];
         releaseDateCalls.push(appIds);
+        if (releaseDateCalls.length === 1) await firstRequest;
         return appIds.map((appId) => ({ app_id: appId, release_date: "Jan 1, 2000" }));
       }
       return null;
@@ -224,17 +229,24 @@ describe("backgroundFetchStore release date fetch", () => {
 
     useGameStore.getState().setGames([
       { appid: 1, name: "One", playtime_forever: 0, img_icon_url: null, rtime_last_played: 0 },
+      { appid: 2, name: "Two", playtime_forever: 0, img_icon_url: null, rtime_last_played: 0 },
     ]);
     useGameStore.getState().setDetails(1, gameDetails(1));
 
     scheduleOriginalReleaseDateFetch(1);
+    await waitFor(() => releaseDateCalls.length === 1, "first direct details release date request");
+
+    useGameStore.getState().setDetails(2, gameDetails(2));
+    scheduleOriginalReleaseDateFetch(2);
+    resolveFirst();
     await waitFor(
-      () => releaseDateCalls.length === 1 && !useBackgroundFetchStore.getState().releaseDatesRunning,
-      "direct details release date completion"
+      () => releaseDateCalls.length === 2 && !useBackgroundFetchStore.getState().releaseDatesRunning,
+      "queued direct details release date completion"
     );
 
-    expect(releaseDateCalls).toEqual([[1]]);
+    expect(releaseDateCalls).toEqual([[1], [2]]);
     expect(useGameStore.getState().details[1]?.store_release_date).toBe("Jan 1, 2000");
+    expect(useGameStore.getState().details[2]?.store_release_date).toBe("Jan 1, 2000");
   });
 
   it("queues release dates requested while another release date run is active", async () => {
