@@ -313,20 +313,20 @@ jobs:
             Write-Output "::warning::VirusTotal reported detections: $message"
           }
 
-      - name: Decide release publication policy
+      - name: Require a clean VirusTotal result when configured
         id: release-policy
         if: startsWith(github.ref, 'refs/tags/')
         shell: pwsh
         run: |
-          $requiresReview = `
-            ("${{ env.HAS_VT_API_KEY }}" -ne "true") -or `
-            ("${{ steps.vt-scan.outputs.analysis }}" -eq "") -or `
-            ("${{ steps.vt-verdict.outputs.requires_review }}" -eq "true")
+          $virusTotalEnabled = "${{ env.HAS_VT_API_KEY }}" -eq "true"
+          $hasAnalysis = "${{ steps.vt-scan.outputs.analysis }}" -ne ""
+          $requiresReview = "${{ steps.vt-verdict.outputs.requires_review }}" -eq "true"
 
-          "draft=$($requiresReview.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
-          if ($requiresReview) {
-            Write-Output "::warning::Release will remain a draft until VirusTotal results are reviewed."
+          if ($virusTotalEnabled -and (-not $hasAnalysis -or $requiresReview)) {
+            throw "VirusTotal did not produce a clean completed result; release will not be published."
           }
+
+          "draft=false" >> $env:GITHUB_OUTPUT
 
       - name: Append VirusTotal results
         if: startsWith(github.ref, 'refs/tags/') && steps.vt-scan.outputs.analysis != ''
