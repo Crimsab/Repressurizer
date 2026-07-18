@@ -272,3 +272,69 @@ fn rapid_manual_backups_do_not_overwrite_each_other() {
 
     let _ = fs::remove_dir_all(steam_path);
 }
+
+#[test]
+fn stale_leveldb_directory_does_not_block_json_backup_or_save() {
+    let steam_path = temp_steam_dir("stale-leveldb");
+    let steam_id3 = "13579";
+    write_json_catalog(&steam_path, steam_id3, &sample_catalog("RPG", vec![10]));
+
+    let stale_db_path = steam_path
+        .join("config")
+        .join("htmlcache")
+        .join("Local Storage")
+        .join("leveldb");
+    fs::create_dir_all(&stale_db_path).unwrap();
+    for filename in ["LOCK", "LOG", "LOG.old"] {
+        fs::write(stale_db_path.join(filename), []).unwrap();
+    }
+
+    create_manual_backup(
+        steam_path.to_string_lossy().to_string(),
+        steam_id3.to_string(),
+        "before save".to_string(),
+    )
+    .unwrap();
+
+    let mut collections = load_collections(
+        steam_path.to_string_lossy().to_string(),
+        steam_id3.to_string(),
+    )
+    .unwrap();
+    collections
+        .iter_mut()
+        .find(|collection| collection.name == "RPG")
+        .unwrap()
+        .added
+        .push(20);
+
+    save_collections(
+        steam_path.to_string_lossy().to_string(),
+        steam_id3.to_string(),
+        collections,
+    )
+    .unwrap();
+
+    let saved = read_json_catalog(&get_collections_path(
+        &steam_path.to_string_lossy(),
+        steam_id3,
+    ))
+    .unwrap();
+    let collection_data = extract_collection_data(&saved);
+    let rpg_games = collection_data
+        .iter()
+        .find(|(name, _)| name == "RPG")
+        .map(|(_, games)| games)
+        .unwrap();
+    assert!(rpg_games.contains(&10));
+    assert!(rpg_games.contains(&20));
+
+    let backups = list_backups(
+        steam_path.to_string_lossy().to_string(),
+        steam_id3.to_string(),
+    )
+    .unwrap();
+    assert_eq!(backups.len(), 2);
+
+    let _ = fs::remove_dir_all(steam_path);
+}

@@ -150,7 +150,10 @@ pub(super) fn read_leveldb_catalog(
     let mut saw_database = false;
 
     for path in steam_leveldb_candidates(steam_path) {
-        if !path.exists() {
+        // Chromium can leave a Local Storage directory containing only lock
+        // and log files. Without CURRENT this is not an initialized LevelDB
+        // database and must not block the JSON catalog fallback.
+        if !path.join("CURRENT").is_file() {
             continue;
         }
 
