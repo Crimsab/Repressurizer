@@ -55,17 +55,33 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $releaseCommit = (git rev-parse HEAD).Trim()
-          $successfulRuns = gh run list `
-            --repo "${{ github.repository }}" `
-            --workflow ci.yml `
-            --commit "$releaseCommit" `
-            --status completed `
-            --json conclusion `
-            --jq '[.[] | select(.conclusion == "success")] | length'
+          $deadline = (Get-Date).AddMinutes(20)
 
-          if ([int]$successfulRuns -lt 1) {
-            throw "No successful CI run found for release commit $releaseCommit"
+          while ((Get-Date) -lt $deadline) {
+            $runs = @(gh run list `
+              --repo "${{ github.repository }}" `
+              --workflow ci.yml `
+              --commit "$releaseCommit" `
+              --limit 20 `
+              --json status,conclusion | ConvertFrom-Json)
+
+            $successfulRuns = @($runs | Where-Object { $_.conclusion -eq "success" })
+            if ($successfulRuns.Count -gt 0) {
+              Write-Host "Found a successful CI run for release commit $releaseCommit"
+              exit 0
+            }
+
+            $running = @($runs | Where-Object { $_.status -ne "completed" })
+            if ($runs.Count -gt 0 -and $running.Count -eq 0) {
+              $conclusions = ($runs | ForEach-Object { $_.conclusion }) -join ", "
+              throw "All CI runs for release commit $releaseCommit completed without success: $conclusions"
+            }
+
+            Write-Host "Waiting for CI to finish for release commit $releaseCommit"
+            Start-Sleep -Seconds 15
           }
+
+          throw "Timed out waiting for a successful CI run for release commit $releaseCommit"
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
