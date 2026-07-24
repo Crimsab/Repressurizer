@@ -904,6 +904,42 @@ test("achievement write controls require explicit Steam Tools write opt-in", asy
   await expectNoHorizontalOverflow(page);
 });
 
+test("runtime-verified achievements require an explicit unverified-permission confirmation", async ({ page }) => {
+  await page.addInitScript(() => {
+    const raw = window.localStorage.getItem("repressurizer-settings");
+    if (!raw) return;
+    const settings = JSON.parse(raw);
+    settings.steamToolsEnabled = true;
+    settings.steamToolsAchievementWritesEnabled = true;
+    window.localStorage.setItem("repressurizer-settings", JSON.stringify(settings));
+    window.localStorage.setItem("repressurizer-runtime-only-achievement", "ACH_SECRET");
+  });
+  await page.goto("/");
+  await page.locator(".game-card").filter({ hasText: "Hades" }).dblclick();
+  const detail = page.locator(".fixed.inset-0").filter({
+    has: page.getByRole("heading", { name: "Hades" }),
+  });
+  await detail.getByRole("button", { name: /Achievements/ }).click();
+  const secretRow = detail.locator("[data-achievement-row]").filter({ hasText: "Secret route" });
+  await expect(secretRow).toHaveAttribute("data-permission-verified", "false");
+  await secretRow.getByRole("button", { name: "Unlock", exact: true }).click();
+
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        window.localStorage.getItem("repressurizer-last-confirm-message")
+      )
+    )
+    .toContain("local binary schema");
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        window.localStorage.getItem("repressurizer-last-sam-allow-unverified")
+      )
+    )
+    .toBe("true");
+});
+
 test("SAM backup buttons show the in-app backup viewer and restore a selected snapshot", async ({ page }, testInfo) => {
   await page.addInitScript(() => {
     const raw = window.localStorage.getItem("repressurizer-settings");

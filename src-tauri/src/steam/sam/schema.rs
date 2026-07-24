@@ -1,5 +1,5 @@
 use super::SamAchievementSchemaItem;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::PathBuf;
 
@@ -7,6 +7,7 @@ use std::path::PathBuf;
 pub(super) enum SamLocalWritePermission {
     Allowed,
     Protected,
+    RuntimeVerified,
     Unknown,
 }
 
@@ -47,32 +48,88 @@ pub(super) fn load_required_schema_permissions(
 
 pub(super) fn local_write_permission(
     permissions: &HashMap<String, SamAchievementSchemaItem>,
+    runtime_verified: &HashSet<String>,
     achievement_id: &str,
 ) -> SamLocalWritePermission {
     match permissions.get(achievement_id) {
         Some(item) if item.protected_achievement => SamLocalWritePermission::Protected,
         Some(_) => SamLocalWritePermission::Allowed,
+        None if runtime_verified.contains(achievement_id) => {
+            SamLocalWritePermission::RuntimeVerified
+        }
         None => SamLocalWritePermission::Unknown,
     }
 }
 
 pub(super) fn ensure_verified_target_permissions(
     permissions: &HashMap<String, SamAchievementSchemaItem>,
+    runtime_verified: &HashSet<String>,
     achievement_ids: &[String],
+    allow_unverified_permissions: bool,
 ) -> Result<(), String> {
     let unknown = achievement_ids
         .iter()
-        .filter(|id| local_write_permission(permissions, id) == SamLocalWritePermission::Unknown)
+        .filter(|id| {
+            local_write_permission(permissions, runtime_verified, id)
+                == SamLocalWritePermission::Unknown
+        })
         .cloned()
         .collect::<Vec<_>>();
-    if unknown.is_empty() {
-        Ok(())
-    } else {
-        Err(format!(
-            "Could not verify local Steam write permissions for {}; no achievements were changed.",
+    if !unknown.is_empty() {
+        return Err(format!(
+            "Steam did not recognize {} as valid achievement API name(s); no achievements were changed.",
             unknown.join(",")
-        ))
+        ));
     }
+
+    let runtime_only = achievement_ids
+        .iter()
+        .filter(|id| {
+            local_write_permission(permissions, runtime_verified, id)
+                == SamLocalWritePermission::RuntimeVerified
+        })
+        .cloned()
+        .collect::<Vec<_>>();
+    if !runtime_only.is_empty() && !allow_unverified_permissions {
+        return Err(format!(
+            "Could not verify local Steam write permissions for {}; no achievements were changed.",
+            runtime_only.join(",")
+        ));
+    }
+
+    Ok(())
+}
+
+pub(super) fn merge_runtime_verified_schema_items(
+    mut items: Vec<SamAchievementSchemaItem>,
+    runtime_verified: &HashSet<String>,
+) -> Vec<SamAchievementSchemaItem> {
+    let local_ids = items
+        .iter()
+        .map(|item| item.api_name.clone())
+        .collect::<HashSet<_>>();
+    let mut runtime_only = runtime_verified
+        .iter()
+        .filter(|id| !local_ids.contains(*id))
+        .cloned()
+        .collect::<Vec<_>>();
+    runtime_only.sort_by_key(|id| id.to_ascii_lowercase());
+    items.extend(
+        runtime_only
+            .into_iter()
+            .map(|api_name| SamAchievementSchemaItem {
+                api_name,
+                permission: 0,
+                protected_achievement: false,
+                permission_verified: false,
+                source: "steamRuntime".to_string(),
+                flags: vec![
+                    "RuntimeVerified".to_string(),
+                    "PermissionUnavailable".to_string(),
+                ],
+            }),
+    );
+    items
 }
 
 pub(super) fn sam_schema_path(steam_path: &str, app_id: u64) -> PathBuf {
@@ -115,6 +172,8 @@ pub(super) fn parse_sam_achievement_schema(
                     api_name,
                     permission,
                     protected_achievement: sam_achievement_is_protected(permission),
+                    permission_verified: true,
+                    source: "steamLocalSchema".to_string(),
                     flags: sam_achievement_permission_flags(permission),
                 });
             }

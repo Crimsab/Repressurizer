@@ -49,6 +49,8 @@ describe("achievement detail helpers", () => {
         apiName: "PROTECTED",
         permission: 2,
         protectedAchievement: true,
+        permissionVerified: true,
+        source: "steamLocalSchema",
         flags: ["protected"],
       },
     ]);
@@ -59,8 +61,35 @@ describe("achievement detail helpers", () => {
       protected_achievement: true,
       protection_source: "samLocalSchema",
       protection_flags: ["protected"],
+      permission_verified: true,
+      permission_source: "steamLocalSchema",
     });
     expect(isProtectedAchievement(merged.achievements[0])).toBe(true);
     expect(summary.achievements[0]).not.toHaveProperty("permission");
+  });
+
+  it("marks runtime-only schema entries as permission-unverified", () => {
+    const summary: AchievementSummary = {
+      total: 1,
+      achieved: 0,
+      achievements: [achievement("Pal_Achievement_67", false)],
+    };
+    const merged = mergeAchievementsWithSamSchema(summary, [
+      {
+        apiName: "Pal_Achievement_67",
+        permission: 0,
+        protectedAchievement: false,
+        permissionVerified: false,
+        source: "steamRuntime",
+        flags: ["RuntimeVerified", "PermissionUnavailable"],
+      },
+    ]);
+
+    expect(merged.achievements[0]).toMatchObject({
+      api_name: "Pal_Achievement_67",
+      protected_achievement: false,
+      permission_verified: false,
+      permission_source: "steamRuntime",
+    });
   });
 });

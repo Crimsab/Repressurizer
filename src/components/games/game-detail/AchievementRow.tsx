@@ -32,6 +32,7 @@ export function AchievementRow({
   return (
     <div
       data-achievement-row
+      data-permission-verified={achievement.permission_verified !== false}
       className={`flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors ${
         selected
           ? "border-repressurizer-accent/80 bg-repressurizer-bg"
@@ -147,6 +148,8 @@ export function mergeAchievementsWithSamSchema(
         protected_achievement: item.protectedAchievement,
         protection_source: "samLocalSchema",
         protection_flags: item.flags,
+        permission_verified: item.permissionVerified,
+        permission_source: item.source,
       };
     }),
   };

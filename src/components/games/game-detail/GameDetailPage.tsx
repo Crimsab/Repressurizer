@@ -326,12 +326,25 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
       const isRestoreAction = action === "restore_backup";
       const isUnlockAction =
         action === "unlock" || action === "unlock_selected" || action === "unlock_all";
-      const confirmMessage =
+      const unverifiedPermissionIds = achievementIds.filter((id) =>
+        achievements?.achievements.some(
+          (achievement) =>
+            achievement.api_name === id && achievement.permission_verified === false
+        )
+      );
+      const baseConfirmMessage =
         isRestoreAction
           ? t("detail.sam.confirmRestore")
           : isUnlockAction
           ? t("detail.sam.confirmUnlock", { count })
           : t("detail.sam.confirmLock", { count });
+      const confirmMessage =
+        unverifiedPermissionIds.length > 0
+          ? `${baseConfirmMessage}\n\n${t("detail.sam.confirmUnverifiedPermissions", {
+              count: unverifiedPermissionIds.length,
+              ids: unverifiedPermissionIds.join(", "),
+            })}`
+          : baseConfirmMessage;
       setSamActionMessage("");
       setSamActionError("");
 
@@ -355,6 +368,7 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
           action,
           achievementIds,
           backupPath,
+          allowUnverifiedPermissions: unverifiedPermissionIds.length > 0,
         });
         applySamResultToAchievements(result);
         const beforeBackup = result.beforeBackupPath ?? t("common.unknown");
@@ -397,6 +411,7 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
     },
     [
       applySamResultToAchievements,
+      achievements?.achievements,
       game.appid,
       refreshSamProbe,
       steamPath,

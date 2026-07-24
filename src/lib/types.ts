@@ -206,6 +206,8 @@ export interface AchievementInfo {
   protected_achievement?: boolean;
   protection_source?: string | null;
   protection_flags?: string[];
+  permission_verified?: boolean;
+  permission_source?: string | null;
 }
 
 export interface AchievementSummary {
@@ -247,6 +249,8 @@ export interface SamAchievementSchemaItem {
   apiName: string;
   permission: number;
   protectedAchievement: boolean;
+  permissionVerified: boolean;
+  source: "steamLocalSchema" | "steamRuntime" | string;
   flags: string[];
 }
 
@@ -265,6 +269,7 @@ export interface SamAchievementActionInput {
   action: SamAchievementAction;
   achievementIds: string[];
   backupPath: string | null;
+  allowUnverifiedPermissions: boolean;
 }
 
 export interface SamAchievementState {

@@ -818,6 +818,7 @@ pub fn run() {
             api::fetch_achievements,
             api::fetch_achievements_summary,
             sam::load_sam_achievement_schema,
+            sam::refresh_sam_achievement_schema,
             sam::probe_sam_bridge,
             sam::sam_achievement_action,
             sam::list_sam_backups,

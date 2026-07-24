@@ -33,12 +33,12 @@ Usage:
   repressurizer-cli sam achievements <app_id> [filter]
   repressurizer-cli sam backups <app_id>
   repressurizer-cli sam backup-dir <app_id>
-  repressurizer-cli sam unlock <app_id> <achievement_id...> --yes
-  repressurizer-cli sam lock <app_id> <achievement_id...> --yes
-  repressurizer-cli sam unlock-all <app_id> --yes
-  repressurizer-cli sam lock-all <app_id> --yes
-  repressurizer-cli sam restore <app_id> <backup_path> --yes
-  repressurizer-cli sam action <input.json|-> --yes
+  repressurizer-cli sam unlock <app_id> <achievement_id...> [--allow-unverified] --yes
+  repressurizer-cli sam lock <app_id> <achievement_id...> [--allow-unverified] --yes
+  repressurizer-cli sam unlock-all <app_id> [--allow-unverified] --yes
+  repressurizer-cli sam lock-all <app_id> [--allow-unverified] --yes
+  repressurizer-cli sam restore <app_id> <backup_path> [--allow-unverified] --yes
+  repressurizer-cli sam action <input.json|-> [--allow-unverified] --yes
 "#;
 
 const SAM_HELP: &str = r#"Repressurizer CLI SAM commands
@@ -51,14 +51,16 @@ Read-only:
   repressurizer-cli sam backup-dir <app_id>
 
 Write-capable, requires --yes and Steam Tools write settings enabled:
-  repressurizer-cli sam unlock <app_id> <achievement_id...> --yes
-  repressurizer-cli sam lock <app_id> <achievement_id...> --yes
-  repressurizer-cli sam unlock-all <app_id> --yes
-  repressurizer-cli sam lock-all <app_id> --yes
-  repressurizer-cli sam restore <app_id> <backup_path> --yes
-  repressurizer-cli sam action <input.json|-> --yes
+  repressurizer-cli sam unlock <app_id> <achievement_id...> [--allow-unverified] --yes
+  repressurizer-cli sam lock <app_id> <achievement_id...> [--allow-unverified] --yes
+  repressurizer-cli sam unlock-all <app_id> [--allow-unverified] --yes
+  repressurizer-cli sam lock-all <app_id> [--allow-unverified] --yes
+  repressurizer-cli sam restore <app_id> <backup_path> [--allow-unverified] --yes
+  repressurizer-cli sam action <input.json|-> [--allow-unverified] --yes
 
 Short write commands use the Steam path saved by Repressurizer setup.
+--allow-unverified permits only achievement IDs validated by the live Steamworks runtime when
+the local binary schema has no permission entry. It does not bypass protected achievements.
 "#;
 
 fn usage() -> ! {
@@ -301,7 +303,7 @@ fn sam_command(args: &[String]) -> Result<(), String> {
             let app_id = parse_app_id(&args[1])?;
             let filter = args.get(2).map(String::as_str);
             let steam_path = saved_steam_path()?;
-            let schema = sam::load_sam_achievement_schema(steam_path, app_id)?;
+            let schema = sam::refresh_sam_achievement_schema(steam_path, app_id)?;
             let achievements = filter_sam_schema_items(schema, filter);
             print_json(&json!({
                 "appId": app_id,
@@ -320,15 +322,19 @@ fn sam_command(args: &[String]) -> Result<(), String> {
             let path = sam::sam_backup_dir(app_id)?;
             print_json(&json!({ "path": path }))
         }
-        Some("action") if args.len() == 3 && args[2] == "--yes" => {
-            let input = read_sam_action_input(&args[1])?;
+        Some("action") => {
+            let (positionals, confirmed, allow_unverified) = parse_sam_write_args(args)?;
+            if !confirmed || positionals.len() != 2 {
+                return Err(
+                    "SAM action writes to Steam achievement state. Re-run with: sam action <input.json|-> [--allow-unverified] --yes"
+                        .to_string(),
+                );
+            }
+            let mut input = read_sam_action_input(&positionals[1])?;
+            input.allow_unverified_permissions |= allow_unverified;
             let result = sam::sam_achievement_action(input)?;
             print_json(&result)
         }
-        Some("action") => Err(
-            "SAM action writes to Steam achievement state. Re-run with: sam action <input.json|-> --yes"
-                .to_string(),
-        ),
         Some("unlock") | Some("lock") | Some("unlock-all") | Some("lock-all") | Some("restore") => {
             run_sam_short_action(args)
         }
@@ -337,15 +343,15 @@ fn sam_command(args: &[String]) -> Result<(), String> {
 }
 
 fn run_sam_short_action(args: &[String]) -> Result<(), String> {
-    if let Some(command) = args.first().map(String::as_str) {
-        if args.last().map(String::as_str) != Some("--yes") {
-            return Err(format!(
-                "SAM {command} writes to Steam achievement state. Re-run with --yes."
-            ));
-        }
+    let command = args.first().map(String::as_str).unwrap_or("action");
+    let (positionals, confirmed, allow_unverified) = parse_sam_write_args(args)?;
+    if !confirmed {
+        return Err(format!(
+            "SAM {command} writes to Steam achievement state. Re-run with --yes."
+        ));
     }
     let steam_path = saved_steam_path()?;
-    let input = short_sam_action_input(args, steam_path)?;
+    let input = short_sam_action_input(&positionals, steam_path, allow_unverified)?;
     let result = sam::sam_achievement_action(input)?;
     print_json(&result)
 }
@@ -353,16 +359,11 @@ fn run_sam_short_action(args: &[String]) -> Result<(), String> {
 fn short_sam_action_input(
     args: &[String],
     steam_path: String,
+    allow_unverified_permissions: bool,
 ) -> Result<sam::SamAchievementActionInput, String> {
     let Some(command) = args.first().map(String::as_str) else {
         usage();
     };
-    if args.last().map(String::as_str) != Some("--yes") {
-        return Err(format!(
-            "SAM {command} writes to Steam achievement state. Re-run with --yes."
-        ));
-    }
-
     let app_id = args
         .get(1)
         .ok_or_else(|| format!("sam {command} needs an appId"))?
@@ -370,12 +371,12 @@ fn short_sam_action_input(
     let app_id = parse_app_id(app_id)?;
     match command {
         "unlock" | "lock" => {
-            if args.len() < 4 {
+            if args.len() < 3 {
                 return Err(format!(
                     "sam {command} needs at least one achievement API name"
                 ));
             }
-            let achievement_ids = args[2..args.len() - 1]
+            let achievement_ids = args[2..]
                 .iter()
                 .filter(|id| !id.trim().is_empty())
                 .cloned()
@@ -395,11 +396,14 @@ fn short_sam_action_input(
                 },
                 achievement_ids,
                 backup_path: None,
+                allow_unverified_permissions,
             })
         }
         "unlock-all" | "lock-all" => {
-            if args.len() != 3 {
-                return Err(format!("sam {command} usage: sam {command} <app_id> --yes"));
+            if args.len() != 2 {
+                return Err(format!(
+                    "sam {command} usage: sam {command} <app_id> [--allow-unverified] --yes"
+                ));
             }
             Ok(sam::SamAchievementActionInput {
                 steam_path,
@@ -411,12 +415,13 @@ fn short_sam_action_input(
                 },
                 achievement_ids: Vec::new(),
                 backup_path: None,
+                allow_unverified_permissions,
             })
         }
         "restore" => {
-            if args.len() != 4 {
+            if args.len() != 3 {
                 return Err(
-                    "sam restore usage: sam restore <app_id> <backup_path> --yes".to_string(),
+                    "sam restore usage: sam restore <app_id> <backup_path> [--allow-unverified] --yes".to_string(),
                 );
             }
             Ok(sam::SamAchievementActionInput {
@@ -425,10 +430,28 @@ fn short_sam_action_input(
                 action: "restore_backup".to_string(),
                 achievement_ids: Vec::new(),
                 backup_path: args.get(2).cloned(),
+                allow_unverified_permissions,
             })
         }
         _ => usage(),
     }
+}
+
+fn parse_sam_write_args(args: &[String]) -> Result<(Vec<String>, bool, bool), String> {
+    let mut positionals = Vec::new();
+    let mut confirmed = false;
+    let mut allow_unverified = false;
+    for arg in args {
+        match arg.as_str() {
+            "--yes" => confirmed = true,
+            "--allow-unverified" => allow_unverified = true,
+            value if value.starts_with("--") => {
+                return Err(format!("unknown SAM write flag: {value}"));
+            }
+            _ => positionals.push(arg.clone()),
+        }
+    }
+    Ok((positionals, confirmed, allow_unverified))
 }
 
 fn read_sam_action_input(path: &str) -> Result<sam::SamAchievementActionInput, String> {
@@ -807,6 +830,7 @@ mod tests {
         assert_eq!(input.action, "unlock_selected");
         assert_eq!(input.achievement_ids, vec!["ACH_ONE"]);
         assert!(input.backup_path.is_none());
+        assert!(!input.allow_unverified_permissions);
     }
 
     #[test]
@@ -825,15 +849,21 @@ mod tests {
             "632470".to_string(),
             "ACH_ONE".to_string(),
             "ACH_TWO".to_string(),
+            "--allow-unverified".to_string(),
             "--yes".to_string(),
         ];
-        let input = short_sam_action_input(&args, steam_path).expect("short SAM action");
+        let (positionals, confirmed, allow_unverified) =
+            parse_sam_write_args(&args).expect("SAM flags");
+        assert!(confirmed);
+        let input = short_sam_action_input(&positionals, steam_path, allow_unverified)
+            .expect("short SAM action");
 
         assert_eq!(input.steam_path, "C:\\Program Files (x86)\\Steam");
         assert_eq!(input.app_id, 632470);
         assert_eq!(input.action, "unlock_selected");
         assert_eq!(input.achievement_ids, vec!["ACH_ONE", "ACH_TWO"]);
         assert!(input.backup_path.is_none());
+        assert!(input.allow_unverified_permissions);
     }
 
     #[test]
@@ -844,9 +874,10 @@ mod tests {
             "632470".to_string(),
             "ACH_ONE".to_string(),
         ];
-        let error = short_sam_action_input(&args, steam_path).expect_err("--yes is required");
-
-        assert!(error.contains("Re-run with --yes"));
+        let (_, confirmed, _) = parse_sam_write_args(&args).expect("SAM flags");
+        assert!(!confirmed);
+        let input = short_sam_action_input(&args, steam_path, false).expect("valid action input");
+        assert!(!input.allow_unverified_permissions);
     }
 
     #[test]
@@ -939,12 +970,16 @@ mod tests {
                 api_name: "ACH_STORY_ONE".to_string(),
                 permission: 0,
                 protected_achievement: false,
+                permission_verified: true,
+                source: "steamLocalSchema".to_string(),
                 flags: vec!["story".to_string()],
             },
             sam::SamAchievementSchemaItem {
                 api_name: "ACH_ONLINE_ONLY".to_string(),
                 permission: 1,
                 protected_achievement: true,
+                permission_verified: true,
+                source: "steamLocalSchema".to_string(),
                 flags: vec!["online".to_string()],
             },
         ];

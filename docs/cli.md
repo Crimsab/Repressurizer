@@ -43,13 +43,21 @@ Most commands print JSON so receivers can pipe the output into validation, dashb
 
 SAM probe, schema, backup listing, and backup directory commands are read-only.
 
-`sam achievements` is also read-only. It uses the Steam path saved during Repressurizer setup, loads the SAM achievement schema for an app, and can filter by achievement API name, flags, or `protected`.
+`sam achievements` is also read-only. It uses the Steam path saved during Repressurizer setup, requests current user stats from Steam, and reconciles the local binary schema with achievement API names validated by the live Steamworks runtime. It can filter by achievement API name, flags, or `protected`.
+
+Steamworks does not provide a supported API for rewriting
+`appcache/stats/UserGameStatsSchema_<appId>.bin`. Repressurizer therefore leaves
+that Steam-managed file untouched and refreshes its effective schema in memory.
+Runtime-only entries are reported with `permissionVerified: false`,
+`source: "steamRuntime"`, and the `PermissionUnavailable` flag.
 
 `sam action` is the only write-capable SAM command. It requires `--yes`, reads the same JSON shape used by the app's internal SAM action runner, creates before/after backups through the normal Repressurizer SAM backup flow, and still honors the app settings guardrails:
 
 - Steam Tools must be enabled.
 - Achievement writes must be enabled in Settings.
 - Protected achievements are blocked by the SAM schema when detected.
+- Achievement IDs missing local permission metadata remain blocked unless Steamworks validates
+  them at runtime and the caller explicitly opts in with `allowUnverifiedPermissions`.
 
 Example action input:
 
@@ -59,7 +67,8 @@ Example action input:
   "appId": 632470,
   "action": "unlock_selected",
   "achievementIds": ["ACHIEVEMENT_API_NAME"],
-  "backupPath": null
+  "backupPath": null,
+  "allowUnverifiedPermissions": false
 }
 ```
 
@@ -76,3 +85,14 @@ The short commands use the Steam path saved during Repressurizer setup:
 .\repressurizer-cli.exe sam unlock-all 632470 --yes
 .\repressurizer-cli.exe sam restore 632470 "C:\Users\you\AppData\Roaming\Repressurizer\sam_backups\632470\backup.json" --yes
 ```
+
+When `sam achievements` reports an ID as `RuntimeVerified` with unavailable
+permissions, an explicit guarded attempt can be made with:
+
+```powershell
+.\repressurizer-cli.exe sam unlock 1623730 Pal_Achievement_67 --allow-unverified --yes
+```
+
+`--allow-unverified` does not accept arbitrary API names and does not bypass
+achievements marked `Protected` by the local schema. The ID must be returned by
+Steamworks and have a readable current state after `RequestUserStats`.

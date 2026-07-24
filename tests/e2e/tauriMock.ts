@@ -271,8 +271,16 @@ export async function installTauriMock(page: Page) {
           case "plugin:notification|is_permission_granted":
             return true;
           case "plugin:dialog|confirm":
+            window.localStorage.setItem(
+              "repressurizer-last-confirm-message",
+              String(args?.message ?? "")
+            );
             return true;
           case "plugin:dialog|message":
+            window.localStorage.setItem(
+              "repressurizer-last-confirm-message",
+              String(args?.message ?? "")
+            );
             return "Ok";
           case "plugin:dialog|open": {
             const options = args?.options as { defaultPath?: string } | undefined;
@@ -470,12 +478,22 @@ export async function installTauriMock(page: Page) {
               mockAchievementStates().filter((achievement) => achievement.achieved).length,
             ];
           case "load_sam_achievement_schema":
-            return mockAchievementStates().map((achievement) => ({
-              apiName: achievement.apiName,
-              permission: 0,
-              protectedAchievement: false,
-              flags: ["None"],
-            }));
+          case "refresh_sam_achievement_schema":
+            return mockAchievementStates().map((achievement) => {
+              const runtimeOnly =
+                window.localStorage.getItem("repressurizer-runtime-only-achievement") ===
+                achievement.apiName;
+              return {
+                apiName: achievement.apiName,
+                permission: 0,
+                protectedAchievement: false,
+                permissionVerified: !runtimeOnly,
+                source: runtimeOnly ? "steamRuntime" : "steamLocalSchema",
+                flags: runtimeOnly
+                  ? ["RuntimeVerified", "PermissionUnavailable"]
+                  : ["None"],
+              };
+            });
           case "probe_sam_bridge": {
             const currentSettings = readSettings();
             const ready =
@@ -591,12 +609,17 @@ export async function installTauriMock(page: Page) {
               action?: string;
               achievementIds?: string[];
               backupPath?: string | null;
+              allowUnverifiedPermissions?: boolean;
             };
             const action = input?.action ?? "unlock";
             window.localStorage.setItem("repressurizer-last-sam-action", action);
             window.localStorage.setItem(
               "repressurizer-last-sam-backup-path",
               String(input?.backupPath ?? "")
+            );
+            window.localStorage.setItem(
+              "repressurizer-last-sam-allow-unverified",
+              String(input?.allowUnverifiedPermissions ?? false)
             );
             const requested = new Set(input?.achievementIds ?? []);
             const after = mockAchievementStates().map((achievement) => {

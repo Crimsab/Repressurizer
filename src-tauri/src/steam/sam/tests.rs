@@ -43,24 +43,89 @@ fn sam_writes_fail_closed_when_schema_permissions_are_unavailable() {
             api_name: "KNOWN".to_string(),
             permission: 0,
             protected_achievement: false,
+            permission_verified: true,
+            source: "steamLocalSchema".to_string(),
             flags: Vec::new(),
         },
     );
+    let runtime_verified = HashSet::from(["RUNTIME".to_string()]);
     assert_eq!(
-        local_write_permission(&permissions, "KNOWN"),
+        local_write_permission(&permissions, &runtime_verified, "KNOWN"),
         SamLocalWritePermission::Allowed
     );
     assert_eq!(
-        local_write_permission(&permissions, "UNKNOWN"),
+        local_write_permission(&permissions, &runtime_verified, "RUNTIME"),
+        SamLocalWritePermission::RuntimeVerified
+    );
+    assert_eq!(
+        local_write_permission(&permissions, &runtime_verified, "UNKNOWN"),
         SamLocalWritePermission::Unknown
     );
     let error = ensure_verified_target_permissions(
         &permissions,
+        &runtime_verified,
         &["KNOWN".to_string(), "UNKNOWN".to_string()],
+        false,
     )
     .unwrap_err();
     assert!(error.contains("UNKNOWN"));
     assert!(error.contains("no achievements were changed"));
+}
+
+#[test]
+fn runtime_verified_achievements_require_explicit_permission_override() {
+    let permissions = HashMap::new();
+    let runtime_verified = HashSet::from(["Pal_Achievement_67".to_string()]);
+    let targets = ["Pal_Achievement_67".to_string()];
+
+    let blocked =
+        ensure_verified_target_permissions(&permissions, &runtime_verified, &targets, false)
+            .unwrap_err();
+    assert!(blocked.contains("Pal_Achievement_67"));
+    assert!(blocked.contains("no achievements were changed"));
+
+    ensure_verified_target_permissions(&permissions, &runtime_verified, &targets, true).unwrap();
+
+    let unknown = ["NOT_IN_STEAM_RUNTIME".to_string()];
+    let blocked =
+        ensure_verified_target_permissions(&permissions, &runtime_verified, &unknown, true)
+            .unwrap_err();
+    assert!(blocked.contains("Steam did not recognize"));
+}
+
+#[test]
+fn runtime_refresh_enriches_but_does_not_overwrite_local_permissions() {
+    let local = vec![SamAchievementSchemaItem {
+        api_name: "LOCAL_PROTECTED".to_string(),
+        permission: 3,
+        protected_achievement: true,
+        permission_verified: true,
+        source: "steamLocalSchema".to_string(),
+        flags: vec!["Protected".to_string()],
+    }];
+    let runtime_verified = HashSet::from([
+        "LOCAL_PROTECTED".to_string(),
+        "Pal_Achievement_67".to_string(),
+    ]);
+
+    let merged = merge_runtime_verified_schema_items(local, &runtime_verified);
+    assert_eq!(merged.len(), 2);
+    let protected = merged
+        .iter()
+        .find(|item| item.api_name == "LOCAL_PROTECTED")
+        .unwrap();
+    assert!(protected.protected_achievement);
+    assert!(protected.permission_verified);
+    let runtime_only = merged
+        .iter()
+        .find(|item| item.api_name == "Pal_Achievement_67")
+        .unwrap();
+    assert!(!runtime_only.protected_achievement);
+    assert!(!runtime_only.permission_verified);
+    assert_eq!(runtime_only.source, "steamRuntime");
+    assert!(runtime_only
+        .flags
+        .contains(&"PermissionUnavailable".to_string()));
 }
 
 #[test]
@@ -105,6 +170,7 @@ fn single_actions_reject_multiple_achievement_ids() {
         action: "unlock".to_string(),
         achievement_ids: vec!["ACH_ONE".to_string(), "ACH_TWO".to_string()],
         backup_path: None,
+        allow_unverified_permissions: false,
     };
 
     let error = validate_achievement_action_input(&input).unwrap_err();
@@ -119,6 +185,7 @@ fn selected_actions_allow_multiple_achievement_ids() {
         action: "unlock_selected".to_string(),
         achievement_ids: vec!["ACH_ONE".to_string(), "ACH_TWO".to_string()],
         backup_path: None,
+        allow_unverified_permissions: false,
     };
 
     validate_achievement_action_input(&input).unwrap();
@@ -270,8 +337,14 @@ fn schema_entries_without_permissions_are_not_treated_as_writable() {
         .into_iter()
         .map(|item| (item.api_name.clone(), item))
         .collect::<HashMap<_, _>>();
-    let error = ensure_verified_target_permissions(&permissions, &["ACH_UNVERIFIED".to_string()])
-        .unwrap_err();
+    let runtime_verified = HashSet::new();
+    let error = ensure_verified_target_permissions(
+        &permissions,
+        &runtime_verified,
+        &["ACH_UNVERIFIED".to_string()],
+        false,
+    )
+    .unwrap_err();
     assert!(error.contains("ACH_UNVERIFIED"));
     assert!(error.contains("no achievements were changed"));
 }

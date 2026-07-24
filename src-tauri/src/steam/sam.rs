@@ -35,7 +35,8 @@ use probe::{
 use schema::parse_sam_achievement_schema;
 use schema::{
     ensure_verified_target_permissions, load_required_schema_permissions,
-    load_sam_achievement_schema_items, local_write_permission, SamLocalWritePermission,
+    load_sam_achievement_schema_items, local_write_permission, merge_runtime_verified_schema_items,
+    SamLocalWritePermission,
 };
 use state::{
     changed_non_target_states, count_target_achievement_changes, dedupe_strings,
@@ -94,6 +95,8 @@ pub struct SamAchievementActionInput {
     #[serde(default)]
     pub achievement_ids: Vec<String>,
     pub backup_path: Option<String>,
+    #[serde(default)]
+    pub allow_unverified_permissions: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -102,6 +105,8 @@ pub struct SamAchievementSchemaItem {
     pub api_name: String,
     pub permission: i32,
     pub protected_achievement: bool,
+    pub permission_verified: bool,
+    pub source: String,
     pub flags: Vec<String>,
 }
 
@@ -261,6 +266,26 @@ pub fn load_sam_achievement_schema(
     app_id: u64,
 ) -> Result<Vec<SamAchievementSchemaItem>, String> {
     load_sam_achievement_schema_items(&steam_path, app_id)
+}
+
+#[tauri::command]
+pub fn refresh_sam_achievement_schema(
+    steam_path: String,
+    app_id: u64,
+) -> Result<Vec<SamAchievementSchemaItem>, String> {
+    let local_items = load_sam_achievement_schema_items(&steam_path, app_id);
+    let Ok(mut bridge) = SamSteamBridge::connect(&steam_path, app_id) else {
+        return local_items;
+    };
+    let _ = bridge.prepare_user_stats();
+    let runtime_verified = runtime_verified_achievement_ids(&bridge);
+    if runtime_verified.is_empty() {
+        return local_items;
+    }
+    Ok(merge_runtime_verified_schema_items(
+        local_items.unwrap_or_default(),
+        &runtime_verified,
+    ))
 }
 
 pub fn run_embedded_bridge_from_env() -> Option<i32> {
@@ -602,14 +627,25 @@ fn perform_bridge_achievement_action(
     let mut bridge = SamSteamBridge::connect(&input.steam_path, input.app_id)?;
     let active_app_id = bridge.active_app_id();
     let initial_stats_requested = bridge.prepare_user_stats();
-    let schema_permissions = load_required_schema_permissions(&input.steam_path, input.app_id)?;
+    let (schema_permissions, schema_load_warning) =
+        match load_required_schema_permissions(&input.steam_path, input.app_id) {
+            Ok(permissions) => (permissions, None),
+            Err(error) if input.allow_unverified_permissions => (HashMap::new(), Some(error)),
+            Err(error) => return Err(error),
+        };
 
     let available_names = bridge.achievement_names().unwrap_or_default();
+    let runtime_verified = runtime_verified_achievement_ids_from_names(&bridge, &available_names);
     if ids.is_empty() {
         ids = available_names.clone();
     }
     ids = dedupe_strings(ids);
-    ensure_verified_target_permissions(&schema_permissions, &ids)?;
+    ensure_verified_target_permissions(
+        &schema_permissions,
+        &runtime_verified,
+        &ids,
+        input.allow_unverified_permissions,
+    )?;
 
     let backup_names = if available_names.is_empty() {
         ids.clone()
@@ -629,21 +665,37 @@ fn perform_bridge_achievement_action(
         format!("request_user_stats_before={initial_stats_requested}"),
         "Hidden SAM runner clears inherited SteamAppId, SteamGameId, and SteamOverlayGameId before setting the target SteamAppId.".to_string(),
     ];
+    if let Some(error) = schema_load_warning {
+        diagnostics.push(format!("sam_local_schema_unavailable={error}"));
+        diagnostics.push(
+            "The user explicitly allowed runtime-verified achievement IDs because the Steam-managed local schema could not be loaded."
+                .to_string(),
+        );
+    }
     let mut attempted = 0usize;
     let target_set: HashSet<String> = ids.iter().cloned().collect();
     let mut desired_states: HashMap<String, bool> = HashMap::new();
     let mut protected_blocked = Vec::new();
     let mut unverified_blocked = Vec::new();
+    let mut runtime_verified_attempted = Vec::new();
 
     let mut apply_achievement =
         |bridge: &SamSteamBridge, failed: &mut Vec<String>, id: &str, achieved: bool| -> bool {
             desired_states.insert(id.to_string(), achieved);
-            match local_write_permission(&schema_permissions, id) {
+            match local_write_permission(&schema_permissions, &runtime_verified, id) {
                 SamLocalWritePermission::Allowed => {}
                 SamLocalWritePermission::Protected => {
                     protected_blocked.push(id.to_string());
                     failed.push(id.to_string());
                     return false;
+                }
+                SamLocalWritePermission::RuntimeVerified => {
+                    if !input.allow_unverified_permissions {
+                        unverified_blocked.push(id.to_string());
+                        failed.push(id.to_string());
+                        return false;
+                    }
+                    runtime_verified_attempted.push(id.to_string());
                 }
                 SamLocalWritePermission::Unknown => {
                     unverified_blocked.push(id.to_string());
@@ -720,6 +772,17 @@ fn perform_bridge_achievement_action(
         ));
         diagnostics.push(
             "Repressurizer does not send achievement writes when the local Steam schema has no permission entry for the target."
+                .to_string(),
+        );
+    }
+    runtime_verified_attempted = dedupe_strings(runtime_verified_attempted);
+    if !runtime_verified_attempted.is_empty() {
+        diagnostics.push(format!(
+            "sam_runtime_verified_without_local_permission={}",
+            runtime_verified_attempted.join(",")
+        ));
+        diagnostics.push(
+            "Steamworks recognized these achievement API names after RequestUserStats, but the local binary schema did not expose permission metadata. The user explicitly allowed the guarded write attempt."
                 .to_string(),
         );
     }
@@ -865,6 +928,23 @@ fn perform_bridge_achievement_action(
         unlock_times_restorable: false,
         message,
     })
+}
+
+fn runtime_verified_achievement_ids(bridge: &SamSteamBridge) -> HashSet<String> {
+    let names = bridge.achievement_names().unwrap_or_default();
+    runtime_verified_achievement_ids_from_names(bridge, &names)
+}
+
+fn runtime_verified_achievement_ids_from_names(
+    bridge: &SamSteamBridge,
+    names: &[String],
+) -> HashSet<String> {
+    bridge
+        .capture_states(names)
+        .into_iter()
+        .filter(|state| state.valid)
+        .map(|state| state.api_name)
+        .collect()
 }
 
 #[cfg(not(windows))]

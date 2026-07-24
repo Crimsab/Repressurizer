@@ -281,7 +281,7 @@ export async function loadSamAchievementSchema(
   steamPath: string,
   appId: number
 ): Promise<SamAchievementSchemaItem[]> {
-  return invoke<SamAchievementSchemaItem[]>("load_sam_achievement_schema", {
+  return invoke<SamAchievementSchemaItem[]>("refresh_sam_achievement_schema", {
     steamPath,
     appId,
   });
