@@ -922,6 +922,24 @@ test("runtime-verified achievements require an explicit unverified-permission co
   await detail.getByRole("button", { name: /Achievements/ }).click();
   const secretRow = detail.locator("[data-achievement-row]").filter({ hasText: "Secret route" });
   await expect(secretRow).toHaveAttribute("data-permission-verified", "false");
+  await expect(detail.locator("[data-sam-schema-status]")).toContainText(
+    "2 local permissions, 1 runtime-only"
+  );
+  const refreshCount = await page.evaluate(() =>
+    Number(
+      window.localStorage.getItem("repressurizer-sam-schema-refresh-count") ?? 0
+    )
+  );
+  await detail.getByRole("button", { name: "Refresh schema" }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        Number(
+          window.localStorage.getItem("repressurizer-sam-schema-refresh-count") ?? 0
+        )
+      )
+    )
+    .toBeGreaterThan(refreshCount);
   await secretRow.getByRole("button", { name: "Unlock", exact: true }).click();
 
   await expect
@@ -948,6 +966,7 @@ test("SAM backup buttons show the in-app backup viewer and restore a selected sn
     settings.steamToolsEnabled = true;
     settings.steamToolsAchievementWritesEnabled = true;
     window.localStorage.setItem("repressurizer-settings", JSON.stringify(settings));
+    window.localStorage.setItem("repressurizer-runtime-only-achievement", "ACH_SECRET");
   });
 
   await page.goto("/");
@@ -1014,6 +1033,13 @@ test("SAM backup buttons show the in-app backup viewer and restore a selected sn
   await expect
     .poll(() => page.evaluate(() => window.localStorage.getItem("repressurizer-last-sam-backup-path")))
     .toContain("mock-before.json");
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        window.localStorage.getItem("repressurizer-last-sam-allow-unverified")
+      )
+    )
+    .toBe("true");
   await expect(detail.getByText("After backup:")).toBeVisible();
 });
 

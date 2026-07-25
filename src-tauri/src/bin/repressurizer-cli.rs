@@ -304,11 +304,23 @@ fn sam_command(args: &[String]) -> Result<(), String> {
             let filter = args.get(2).map(String::as_str);
             let steam_path = saved_steam_path()?;
             let schema = sam::refresh_sam_achievement_schema(steam_path, app_id)?;
+            let local_count = schema
+                .iter()
+                .filter(|item| item.permission_verified)
+                .count();
+            let runtime_only_count = schema.len().saturating_sub(local_count);
             let achievements = filter_sam_schema_items(schema, filter);
             print_json(&json!({
                 "appId": app_id,
                 "filter": filter,
                 "count": achievements.len(),
+                "schema": {
+                    "localPermissionCount": local_count,
+                    "runtimeOnlyCount": runtime_only_count,
+                    "permissionMetadataComplete": runtime_only_count == 0,
+                    "refreshMode": "steamRuntimeInMemory",
+                    "steamManagedFileChanged": false,
+                },
                 "achievements": achievements,
             }))
         }

@@ -50,6 +50,10 @@ Steamworks does not provide a supported API for rewriting
 that Steam-managed file untouched and refreshes its effective schema in memory.
 Runtime-only entries are reported with `permissionVerified: false`,
 `source: "steamRuntime"`, and the `PermissionUnavailable` flag.
+The command also reports `schema.localPermissionCount`,
+`schema.runtimeOnlyCount`, and `schema.permissionMetadataComplete`. The refresh
+is an in-memory reconciliation with Steamworks; `steamManagedFileChanged`
+remains `false` because Repressurizer does not rewrite Steam's schema file.
 
 `sam action` is the only write-capable SAM command. It requires `--yes`, reads the same JSON shape used by the app's internal SAM action runner, creates before/after backups through the normal Repressurizer SAM backup flow, and still honors the app settings guardrails:
 

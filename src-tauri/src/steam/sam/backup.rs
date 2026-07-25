@@ -1,6 +1,7 @@
 use super::probe::path_to_string;
 use super::{SamAchievementBackup, SamAchievementState};
 use std::fs;
+use std::io::Write;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -30,7 +31,7 @@ pub(super) fn save_achievement_backup(backup: &SamAchievementBackup) -> Result<S
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(|error| error.to_string())?
-        .as_secs();
+        .as_nanos();
     let filename = format!(
         "{}-{}-{}.json",
         timestamp,
@@ -39,7 +40,25 @@ pub(super) fn save_achievement_backup(backup: &SamAchievementBackup) -> Result<S
     );
     let path = base.join(filename);
     let json = serde_json::to_string_pretty(backup).map_err(|error| error.to_string())?;
-    fs::write(&path, json).map_err(|error| format!("Failed to write SAM backup: {error}"))?;
+    let temporary_path =
+        path.with_extension(format!("json.tmp-{}-{timestamp}", std::process::id()));
+    let write_result = (|| -> Result<(), String> {
+        let mut file = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temporary_path)
+            .map_err(|error| format!("Failed to create temporary SAM backup: {error}"))?;
+        file.write_all(json.as_bytes())
+            .map_err(|error| format!("Failed to write temporary SAM backup: {error}"))?;
+        file.sync_all()
+            .map_err(|error| format!("Failed to flush temporary SAM backup: {error}"))?;
+        fs::rename(&temporary_path, &path)
+            .map_err(|error| format!("Failed to commit SAM backup: {error}"))
+    })();
+    if write_result.is_err() {
+        let _ = fs::remove_file(&temporary_path);
+    }
+    write_result?;
     Ok(path_to_string(path))
 }
 

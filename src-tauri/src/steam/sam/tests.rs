@@ -48,7 +48,7 @@ fn sam_writes_fail_closed_when_schema_permissions_are_unavailable() {
             flags: Vec::new(),
         },
     );
-    let runtime_verified = HashSet::from(["RUNTIME".to_string()]);
+    let runtime_verified = HashSet::from(["KNOWN".to_string(), "RUNTIME".to_string()]);
     assert_eq!(
         local_write_permission(&permissions, &runtime_verified, "KNOWN"),
         SamLocalWritePermission::Allowed
@@ -90,7 +90,37 @@ fn runtime_verified_achievements_require_explicit_permission_override() {
     let blocked =
         ensure_verified_target_permissions(&permissions, &runtime_verified, &unknown, true)
             .unwrap_err();
-    assert!(blocked.contains("Steam did not recognize"));
+    assert!(blocked.contains("Steamworks did not expose"));
+}
+
+#[test]
+fn stale_local_schema_entries_are_not_treated_as_runtime_valid() {
+    let permissions = HashMap::from([(
+        "STALE_LOCAL".to_string(),
+        SamAchievementSchemaItem {
+            api_name: "STALE_LOCAL".to_string(),
+            permission: 0,
+            protected_achievement: false,
+            permission_verified: true,
+            source: "steamLocalSchema".to_string(),
+            flags: vec!["None".to_string()],
+        },
+    )]);
+    let runtime_verified = HashSet::new();
+
+    assert_eq!(
+        local_write_permission(&permissions, &runtime_verified, "STALE_LOCAL"),
+        SamLocalWritePermission::Unknown
+    );
+    let error = ensure_verified_target_permissions(
+        &permissions,
+        &runtime_verified,
+        &["STALE_LOCAL".to_string()],
+        true,
+    )
+    .unwrap_err();
+    assert!(error.contains("readable current state"));
+    assert!(error.contains("no achievements were changed"));
 }
 
 #[test]

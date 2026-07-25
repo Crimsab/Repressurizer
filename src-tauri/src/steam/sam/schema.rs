@@ -53,11 +53,11 @@ pub(super) fn local_write_permission(
 ) -> SamLocalWritePermission {
     match permissions.get(achievement_id) {
         Some(item) if item.protected_achievement => SamLocalWritePermission::Protected,
-        Some(_) => SamLocalWritePermission::Allowed,
+        Some(_) if runtime_verified.contains(achievement_id) => SamLocalWritePermission::Allowed,
         None if runtime_verified.contains(achievement_id) => {
             SamLocalWritePermission::RuntimeVerified
         }
-        None => SamLocalWritePermission::Unknown,
+        _ => SamLocalWritePermission::Unknown,
     }
 }
 
@@ -77,7 +77,7 @@ pub(super) fn ensure_verified_target_permissions(
         .collect::<Vec<_>>();
     if !unknown.is_empty() {
         return Err(format!(
-            "Steam did not recognize {} as valid achievement API name(s); no achievements were changed.",
+            "Steamworks did not expose a readable current state for {} after RequestUserStats; no achievements were changed.",
             unknown.join(",")
         ));
     }

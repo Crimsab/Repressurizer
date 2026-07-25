@@ -14,7 +14,10 @@ import {
   AchievementRow,
   isProtectedAchievement,
 } from "./AchievementRow";
-import { SamBridgePanel } from "./SamAchievementPanels";
+import {
+  SamBridgePanel,
+  type SamSchemaStatus,
+} from "./SamAchievementPanels";
 
 export function GameAchievementsTab({
   achievements,
@@ -22,6 +25,7 @@ export function GameAchievementsTab({
   error,
   percent,
   samProbe,
+  samSchemaStatus,
   steamToolsEnabled,
   steamToolsAchievementWritesEnabled,
   samActionRunning,
@@ -30,12 +34,14 @@ export function GameAchievementsTab({
   onSamAction,
   onOpenSamBackups,
   onRestoreSamBackup,
+  onRefreshSamMetadata,
 }: {
   achievements: AchievementSummary | null;
   loading: boolean;
   error: string;
   percent: number;
   samProbe: SamBridgeProbe | null;
+  samSchemaStatus: SamSchemaStatus;
   steamToolsEnabled: boolean;
   steamToolsAchievementWritesEnabled: boolean;
   samActionRunning: string;
@@ -48,6 +54,7 @@ export function GameAchievementsTab({
   ) => Promise<boolean>;
   onOpenSamBackups: () => void;
   onRestoreSamBackup: () => void;
+  onRefreshSamMetadata: () => void;
 }) {
   const t = useT();
   const [search, setSearch] = useState("");
@@ -179,6 +186,7 @@ export function GameAchievementsTab({
       {steamToolsEnabled && (
         <SamBridgePanel
           probe={samProbe}
+          schemaStatus={samSchemaStatus}
           writesEnabled={steamToolsAchievementWritesEnabled}
           runningAction={samActionRunning}
           message={samActionMessage}
@@ -189,6 +197,7 @@ export function GameAchievementsTab({
           onLockAll={() => onSamAction("lock_all", unlockedIds)}
           onOpenBackups={onOpenSamBackups}
           onRestoreBackup={onRestoreSamBackup}
+          onRefreshMetadata={onRefreshSamMetadata}
         />
       )}
 

@@ -22,6 +22,7 @@ import { SteamImage } from "../SteamImage";
 import { GameInfoTab } from "./GameInfoTab";
 import {
   SamBackupViewerDialog,
+  type SamSchemaStatus,
 } from "./SamAchievementPanels";
 import {
   mergeAchievementsWithSamSchema,
@@ -84,6 +85,12 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
   const [samActionMessage, setSamActionMessage] = useState("");
   const [samActionError, setSamActionError] = useState("");
   const [samSchemaKey, setSamSchemaKey] = useState("");
+  const [samSchemaStatus, setSamSchemaStatus] = useState<SamSchemaStatus>({
+    loading: false,
+    error: "",
+    localPermissionCount: 0,
+    runtimeOnlyCount: 0,
+  });
   const [samBackupsOpen, setSamBackupsOpen] = useState(false);
   const [samBackups, setSamBackups] = useState<SamBackupInfo[]>([]);
   const [samBackupsLoading, setSamBackupsLoading] = useState(false);
@@ -120,6 +127,12 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
     setAchError("");
     setSamProbe(null);
     setSamSchemaKey("");
+    setSamSchemaStatus({
+      loading: false,
+      error: "",
+      localPermissionCount: 0,
+      runtimeOnlyCount: 0,
+    });
     const cachedAchievements = useAchievementsStore.getState().summaries[game.appid];
     if (cachedAchievements?.achievements?.length) {
       setAchievements(cachedAchievements);
@@ -201,44 +214,55 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
     }
   }, [game.appid, steamPath, steamToolsSamEnabled]);
 
-  useEffect(() => {
-    if (
-      tab !== "achievements" ||
-      !steamToolsSamEnabled ||
-      !achievements?.achievements.length
-    ) {
-      return;
-    }
+  const refreshSamSchema = useCallback(async (force = false) => {
+    if (!steamToolsSamEnabled || !achievements?.achievements.length) return;
     const key = `${game.appid}:${steamPath}`;
-    if (samSchemaKey === key) return;
+    if (!force && samSchemaKey === key) return;
 
-    let cancelled = false;
-    loadSamAchievementSchema(steamPath, game.appid)
-      .then((schema) => {
-        if (cancelled || schema.length === 0) return;
+    setSamSchemaStatus((current) => ({ ...current, loading: true, error: "" }));
+    try {
+      const schema = await loadSamAchievementSchema(steamPath, game.appid);
+      const localPermissionCount = schema.filter(
+        (item) => item.permissionVerified
+      ).length;
+      const runtimeOnlyCount = schema.length - localPermissionCount;
+      if (schema.length > 0) {
         setAchievements((current) => {
           if (!current) return current;
           const next = mergeAchievementsWithSamSchema(current, schema);
           useAchievementsStore.getState().setSummary(game.appid, next);
           return next;
         });
-      })
-      .catch(() => {})
-      .finally(() => {
-        if (!cancelled) setSamSchemaKey(key);
+      }
+      setSamSchemaKey(key);
+      setSamSchemaStatus({
+        loading: false,
+        error: "",
+        localPermissionCount,
+        runtimeOnlyCount,
       });
-
-    return () => {
-      cancelled = true;
-    };
+    } catch (error) {
+      setSamSchemaStatus((current) => ({
+        ...current,
+        loading: false,
+        error: String(error),
+      }));
+    }
   }, [
     achievements?.achievements.length,
     game.appid,
     samSchemaKey,
     steamPath,
     steamToolsSamEnabled,
-    tab,
   ]);
+
+  const refreshSamMetadata = useCallback(async () => {
+    await Promise.all([refreshSamProbe(), refreshSamSchema(true)]);
+  }, [refreshSamProbe, refreshSamSchema]);
+
+  useEffect(() => {
+    if (tab === "achievements") void refreshSamSchema();
+  }, [refreshSamSchema, tab]);
 
   useEffect(() => {
     if (tab !== "achievements") return;
@@ -326,7 +350,10 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
       const isRestoreAction = action === "restore_backup";
       const isUnlockAction =
         action === "unlock" || action === "unlock_selected" || action === "unlock_all";
-      const unverifiedPermissionIds = achievementIds.filter((id) =>
+      const permissionCandidates = isRestoreAction
+        ? achievements?.achievements.map((achievement) => achievement.api_name) ?? []
+        : achievementIds;
+      const unverifiedPermissionIds = permissionCandidates.filter((id) =>
         achievements?.achievements.some(
           (achievement) =>
             achievement.api_name === id && achievement.permission_verified === false
@@ -400,7 +427,7 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
             })
           );
         }
-        void refreshSamProbe();
+        void refreshSamMetadata();
         return result.failed.length === 0;
       } catch (error) {
         setSamActionError(String(error));
@@ -413,7 +440,7 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
       applySamResultToAchievements,
       achievements?.achievements,
       game.appid,
-      refreshSamProbe,
+      refreshSamMetadata,
       steamPath,
       t,
     ]
@@ -599,6 +626,7 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
               error={achError}
               percent={achPercent}
               samProbe={samProbe}
+              samSchemaStatus={samSchemaStatus}
               steamToolsEnabled={steamToolsSamEnabled}
               steamToolsAchievementWritesEnabled={steamToolsSamEnabled}
               samActionRunning={samActionRunning}
@@ -607,6 +635,7 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
               onSamAction={handleSamAchievementAction}
               onOpenSamBackups={handleOpenSamBackups}
               onRestoreSamBackup={handleRestoreSamBackup}
+              onRefreshSamMetadata={refreshSamMetadata}
             />
           )}
         </div>

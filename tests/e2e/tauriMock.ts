@@ -479,6 +479,16 @@ export async function installTauriMock(page: Page) {
             ];
           case "load_sam_achievement_schema":
           case "refresh_sam_achievement_schema":
+            window.localStorage.setItem(
+              "repressurizer-sam-schema-refresh-count",
+              String(
+                Number(
+                  window.localStorage.getItem(
+                    "repressurizer-sam-schema-refresh-count"
+                  ) ?? 0
+                ) + 1
+              )
+            );
             return mockAchievementStates().map((achievement) => {
               const runtimeOnly =
                 window.localStorage.getItem("repressurizer-runtime-only-achievement") ===

@@ -11,8 +11,16 @@ import { useT, type TranslationKey } from "../../../lib/i18n";
 import { DialogOverlay } from "../../ui/DialogOverlay";
 import { SelectMenu } from "../../ui/SelectMenu";
 
+export interface SamSchemaStatus {
+  loading: boolean;
+  error: string;
+  localPermissionCount: number;
+  runtimeOnlyCount: number;
+}
+
 export function SamBridgePanel({
   probe,
+  schemaStatus,
   writesEnabled,
   runningAction,
   message,
@@ -23,8 +31,10 @@ export function SamBridgePanel({
   onLockAll,
   onOpenBackups,
   onRestoreBackup,
+  onRefreshMetadata,
 }: {
   probe: SamBridgeProbe | null;
+  schemaStatus: SamSchemaStatus;
   writesEnabled: boolean;
   runningAction: string;
   message: string;
@@ -35,6 +45,7 @@ export function SamBridgePanel({
   onLockAll: () => void;
   onOpenBackups: () => void;
   onRestoreBackup: () => void;
+  onRefreshMetadata: () => void;
 }) {
   const t = useT();
   const readiness = samReadinessLabel(t, probe);
@@ -61,14 +72,50 @@ export function SamBridgePanel({
       </div>
 
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-repressurizer-border-subtle pt-3">
-        <p className="min-w-0 flex-1 text-[11px] leading-relaxed text-repressurizer-text-faint">
-          {!writesEnabled
-            ? t("detail.sam.enableWrites")
-            : probe?.available
-              ? t("detail.sam.backupNote")
-              : t("detail.sam.bridgeRequired")}
-        </p>
+        <div className="min-w-0 flex-1">
+          <p className="text-[11px] leading-relaxed text-repressurizer-text-faint">
+            {!writesEnabled
+              ? t("detail.sam.enableWrites")
+              : probe?.available
+                ? t("detail.sam.backupNote")
+                : t("detail.sam.bridgeRequired")}
+          </p>
+          {writesEnabled && (
+            <p
+              className={`mt-1 font-mono text-[10px] ${
+                schemaStatus.error
+                  ? "text-repressurizer-danger"
+                  : schemaStatus.runtimeOnlyCount > 0
+                    ? "text-amber-300"
+                    : "text-repressurizer-text-faint"
+              }`}
+              role={schemaStatus.error ? "alert" : undefined}
+              data-sam-schema-status
+            >
+              {schemaStatus.loading
+                ? t("detail.sam.schemaRefreshing")
+                : schemaStatus.error
+                  ? t("detail.sam.schemaRefreshFailed", { error: schemaStatus.error })
+                  : t("detail.sam.schemaStatus", {
+                      local: schemaStatus.localPermissionCount,
+                      runtime: schemaStatus.runtimeOnlyCount,
+                    })}
+            </p>
+          )}
+        </div>
         <div className="flex shrink-0 flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={onRefreshMetadata}
+            disabled={schemaStatus.loading || busy}
+            className="btn-press inline-flex items-center gap-1.5 rounded-lg border border-repressurizer-border bg-repressurizer-surface px-3 py-1.5 text-xs font-medium text-repressurizer-text-muted transition-colors hover:border-repressurizer-text-faint hover:text-repressurizer-text disabled:opacity-40"
+          >
+            <ArrowsClockwise
+              size={13}
+              className={schemaStatus.loading ? "animate-spin" : ""}
+            />
+            {t("detail.sam.refreshMetadata")}
+          </button>
           <button
             type="button"
             onClick={onOpenBackups}

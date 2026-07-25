@@ -871,8 +871,11 @@ fn perform_bridge_achievement_action(
 
     if attempted > 0 && !store_stats {
         return Err(format!(
-            "Steam rejected StoreStats after {attempted} achievement write request(s). Before backup: {}",
+            "Steam rejected StoreStats after {attempted} achievement write request(s). Before backup: {}. After-state backup: {}",
             before_backup_path
+                .as_deref()
+                .unwrap_or("backup path unavailable"),
+            after_backup_path
                 .as_deref()
                 .unwrap_or("backup path unavailable")
         ));
