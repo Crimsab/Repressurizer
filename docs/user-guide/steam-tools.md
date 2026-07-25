@@ -19,6 +19,11 @@ shows how many entries have local permission metadata and how many are
 runtime-only. Use **Refresh schema** after starting Steam or changing games if
 the first check ran while Steam was unavailable.
 
+The live Steamworks check runs in a short-lived hidden helper process. Steam may
+briefly show the selected AppID as running while the check is active, but the
+helper exits as soon as the schema is returned so Repressurizer does not keep
+that game presence attached to its long-running desktop process.
+
 Repressurizer does not modify
 `appcache/stats/UserGameStatsSchema_<appId>.bin`. Steam owns that file. A
 runtime-only achievement still requires a second explicit confirmation before

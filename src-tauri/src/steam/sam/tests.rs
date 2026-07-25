@@ -193,6 +193,20 @@ fn embedded_probe_outputs_json() {
 }
 
 #[test]
+fn embedded_schema_runner_validates_app_id_before_connecting_to_steam() {
+    let error = run_embedded_bridge_command(vec![
+        "achievement-schema".to_string(),
+        "--steam-path".to_string(),
+        String::new(),
+        "--app-id".to_string(),
+        "0".to_string(),
+    ])
+    .unwrap_err();
+
+    assert!(error.contains("valid Steam appId"));
+}
+
+#[test]
 fn single_actions_reject_multiple_achievement_ids() {
     let input = SamAchievementActionInput {
         steam_path: "C:\\Steam".to_string(),
@@ -409,8 +423,10 @@ fn bridge_child_timeout_reports_hung_runner() {
         .spawn()
         .unwrap();
 
-    let error = wait_for_bridge_child(child, Duration::from_millis(10)).unwrap_err();
+    let error = wait_for_bridge_child_output(child, Duration::from_millis(10), "SAM test runner")
+        .unwrap_err();
     assert!(error.contains("timed out"));
+    assert!(error.contains("SAM test runner"));
 }
 
 fn temp_dir(name: &str) -> PathBuf {

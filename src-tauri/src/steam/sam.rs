@@ -49,6 +49,7 @@ const SAM_REFERENCE_SOURCE: &str =
 const SAM_LICENSE: &str =
     "Original Steam Achievement Manager project: zlib license; Repressurizer implementation: independent Rust integration";
 const EMBEDDED_BRIDGE_ARG: &str = "--repressurizer-sam-bridge";
+const SAM_SCHEMA_RUNNER_TIMEOUT: Duration = Duration::from_secs(10);
 const SAM_ACTION_RUNNER_TIMEOUT: Duration = Duration::from_secs(45);
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
@@ -273,8 +274,18 @@ pub fn refresh_sam_achievement_schema(
     steam_path: String,
     app_id: u64,
 ) -> Result<Vec<SamAchievementSchemaItem>, String> {
-    let local_items = load_sam_achievement_schema_items(&steam_path, app_id);
-    let Ok(mut bridge) = SamSteamBridge::connect(&steam_path, app_id) else {
+    validate_app_id(app_id)?;
+    let bridge_path = std::env::current_exe()
+        .map_err(|error| format!("Could not resolve Repressurizer SAM runner path: {error}"))?;
+    run_bridge_schema_refresh(&bridge_path, &steam_path, app_id)
+}
+
+fn perform_sam_achievement_schema_refresh(
+    steam_path: &str,
+    app_id: u64,
+) -> Result<Vec<SamAchievementSchemaItem>, String> {
+    let local_items = load_sam_achievement_schema_items(steam_path, app_id);
+    let Ok(mut bridge) = SamSteamBridge::connect(steam_path, app_id) else {
         return local_items;
     };
     let _ = bridge.prepare_user_stats();
@@ -325,9 +336,10 @@ fn run_embedded_bridge_command(args: Vec<String>) -> Result<String, String> {
 
     match command.as_str() {
         "probe" => run_embedded_bridge_probe(args.collect()),
+        "achievement-schema" => run_embedded_bridge_schema(args.collect()),
         "achievement-action" => run_embedded_bridge_achievement_action(),
         "help" | "--help" | "-h" => Ok(format!(
-            "Repressurizer embedded SAM bridge\nusage: {EMBEDDED_BRIDGE_ARG} probe --steam-path <path> [--app-id <appid>]\n       {EMBEDDED_BRIDGE_ARG} achievement-action < input.json"
+            "Repressurizer embedded SAM bridge\nusage: {EMBEDDED_BRIDGE_ARG} probe --steam-path <path> [--app-id <appid>]\n       {EMBEDDED_BRIDGE_ARG} achievement-schema --steam-path <path> --app-id <appid>\n       {EMBEDDED_BRIDGE_ARG} achievement-action < input.json"
         )),
         other => Err(format!("unknown embedded SAM bridge command: {other}")),
     }
@@ -356,6 +368,31 @@ fn run_embedded_bridge_probe(args: Vec<String>) -> Result<String, String> {
 
     serde_json::to_string(&probe_sam_bridge_for_cli(steam_path, app_id))
         .map_err(|error| error.to_string())
+}
+
+fn run_embedded_bridge_schema(args: Vec<String>) -> Result<String, String> {
+    let mut steam_path = String::new();
+    let mut app_id = 0_u64;
+    let mut iter = args.into_iter();
+
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--steam-path" => {
+                steam_path = iter.next().ok_or("--steam-path needs a value")?;
+            }
+            "--app-id" => {
+                let value = iter.next().ok_or("--app-id needs a value")?;
+                app_id = value
+                    .parse::<u64>()
+                    .map_err(|_| format!("invalid --app-id value: {value}"))?;
+            }
+            other => return Err(format!("unknown achievement-schema argument: {other}")),
+        }
+    }
+
+    validate_app_id(app_id)?;
+    let schema = perform_sam_achievement_schema_refresh(&steam_path, app_id)?;
+    serde_json::to_string(&schema).map_err(|error| error.to_string())
 }
 
 fn run_embedded_bridge_achievement_action() -> Result<String, String> {
@@ -519,6 +556,36 @@ fn build_probe(
     }
 }
 
+fn run_bridge_schema_refresh(
+    bridge_path: &Path,
+    steam_path: &str,
+    app_id: u64,
+) -> Result<Vec<SamAchievementSchemaItem>, String> {
+    let mut command = Command::new(bridge_path);
+    #[cfg(windows)]
+    command.creation_flags(CREATE_NO_WINDOW);
+
+    let child = command
+        .arg(EMBEDDED_BRIDGE_ARG)
+        .arg("achievement-schema")
+        .arg("--steam-path")
+        .arg(steam_path)
+        .arg("--app-id")
+        .arg(app_id.to_string())
+        .env_remove("SteamAppId")
+        .env_remove("SteamGameId")
+        .env_remove("SteamOverlayGameId")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|error| format!("Failed to start hidden SAM schema runner: {error}"))?;
+
+    let output =
+        wait_for_bridge_child_output(child, SAM_SCHEMA_RUNNER_TIMEOUT, "SAM schema runner")?;
+    serde_json::from_slice::<Vec<SamAchievementSchemaItem>>(&output)
+        .map_err(|error| format!("Failed to parse SAM schema output: {error}"))
+}
+
 fn run_bridge_achievement_action(
     bridge_path: &Path,
     input: SamAchievementActionInput,
@@ -546,13 +613,17 @@ fn run_bridge_achievement_action(
             .map_err(|error| format!("Failed to write SAM action input: {error}"))?;
     }
 
-    wait_for_bridge_child(child, SAM_ACTION_RUNNER_TIMEOUT)
+    let output =
+        wait_for_bridge_child_output(child, SAM_ACTION_RUNNER_TIMEOUT, "SAM action runner")?;
+    serde_json::from_slice::<SamAchievementActionResult>(&output)
+        .map_err(|error| format!("Failed to parse SAM action output: {error}"))
 }
 
-fn wait_for_bridge_child(
+fn wait_for_bridge_child_output(
     mut child: std::process::Child,
     timeout: Duration,
-) -> Result<SamAchievementActionResult, String> {
+    runner_name: &str,
+) -> Result<Vec<u8>, String> {
     let started = Instant::now();
     loop {
         match child.try_wait() {
@@ -561,19 +632,19 @@ fn wait_for_bridge_child(
             Ok(None) => {
                 let _ = child.kill();
                 let output = child.wait_with_output().map_err(|error| {
-                    format!("SAM action runner timed out and could not be collected: {error}")
+                    format!("{runner_name} timed out and could not be collected: {error}")
                 })?;
                 let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
                 return Err(if stderr.is_empty() {
-                    format!("SAM action runner timed out after {}s.", timeout.as_secs())
+                    format!("{runner_name} timed out after {}s.", timeout.as_secs())
                 } else {
                     format!(
-                        "SAM action runner timed out after {}s. {stderr}",
+                        "{runner_name} timed out after {}s. {stderr}",
                         timeout.as_secs()
                     )
                 });
             }
-            Err(error) => return Err(format!("Failed to poll SAM action runner: {error}")),
+            Err(error) => return Err(format!("Failed to poll {runner_name}: {error}")),
         }
     }
 
@@ -590,8 +661,7 @@ fn wait_for_bridge_child(
         });
     }
 
-    serde_json::from_slice::<SamAchievementActionResult>(&output.stdout)
-        .map_err(|error| format!("Failed to parse SAM action output: {error}"))
+    Ok(output.stdout)
 }
 
 fn perform_bridge_achievement_action(

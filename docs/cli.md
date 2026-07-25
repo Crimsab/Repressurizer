@@ -54,6 +54,9 @@ The command also reports `schema.localPermissionCount`,
 `schema.runtimeOnlyCount`, and `schema.permissionMetadataComplete`. The refresh
 is an in-memory reconciliation with Steamworks; `steamManagedFileChanged`
 remains `false` because Repressurizer does not rewrite Steam's schema file.
+The Steamworks portion runs in an isolated helper process that exits after the
+result is returned, preventing a long-running Repressurizer process from
+retaining the selected game's Steam presence.
 
 `sam action` is the only write-capable SAM command. It requires `--yes`, reads the same JSON shape used by the app's internal SAM action runner, creates before/after backups through the normal Repressurizer SAM backup flow, and still honors the app settings guardrails:
 
