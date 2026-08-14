@@ -51,7 +51,7 @@ const releaseNotes = [
   "",
   "## Install Notes",
   "",
-  "On Windows, use the installer for a normal installation or the portable ZIP for a self-contained executable. On Linux, use the AppImage for a portable app with built-in updates or the Debian package for system installation. The CLI archives support scriptable diagnostics, snapshot validation/export, and automation publishing; guarded SAM write commands remain Windows-only.",
+  "On Windows, use the installer for a normal installation with built-in updates or the portable ZIP for a self-contained executable that you update manually. On Linux, use the AppImage for a portable app with built-in updates or the Debian package for system installation. The CLI archives support scriptable diagnostics, snapshot validation/export, and automation publishing; guarded SAM write commands remain Windows-only.",
   ""
 ].join("\n");
 

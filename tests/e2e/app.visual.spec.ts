@@ -77,6 +77,23 @@ test("loads the main library surface with mocked Steam data", async ({ page }, t
   await testInfo.attach("dashboard", { path: screenshotPath, contentType: "image/png" });
 });
 
+test("portable builds explain manual updates without offering in-place installation", async ({ page }, testInfo) => {
+  await page.goto("/?updater-kind=windows-portable");
+  await page.getByRole("button", { name: "Settings" }).click();
+  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+  await settingsDialog.getByRole("button", { name: "About", exact: true }).click();
+
+  await expect(settingsDialog.getByText("Portable builds do not update in place.", { exact: false })).toBeVisible();
+  await expect(settingsDialog.getByRole("button", { name: "Open GitHub Releases" })).toBeVisible();
+  await expect(settingsDialog.getByRole("button", { name: "Check for updates" })).toHaveCount(0);
+  await expect(settingsDialog.getByText("Automatically check for updates")).toHaveCount(0);
+  await expectNoHorizontalOverflow(page);
+
+  const screenshotPath = testInfo.outputPath("portable-updates.png");
+  await page.screenshot({ path: screenshotPath, fullPage: true });
+  await testInfo.attach("portable-updates", { path: screenshotPath, contentType: "image/png" });
+});
+
 test("keeps every header action reachable at the minimum window size", async ({ page }) => {
   await page.setViewportSize({ width: 900, height: 600 });
   await page.goto("/");

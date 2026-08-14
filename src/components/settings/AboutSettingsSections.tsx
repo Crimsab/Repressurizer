@@ -4,6 +4,7 @@ import { check, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import {
   ArrowCounterClockwise,
+  ArrowSquareOut,
   CheckCircle,
   CloudArrowDown,
   Warning,
@@ -11,6 +12,8 @@ import {
 } from "@phosphor-icons/react";
 import { changelogEntries } from "../../lib/changelog";
 import { useT } from "../../lib/i18n";
+import { getStartupContext, type StartupContext } from "../../lib/tauri";
+import { manualUpdateMessageKey } from "../../lib/updater";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { SelectMenu } from "../ui/SelectMenu";
 import { ChangelogPanel } from "./data/SettingsDataPanels";
@@ -31,6 +34,7 @@ export function AboutSettingsSections({
   const [checkingUpdates, setCheckingUpdates] = useState(false);
   const [installingUpdate, setInstallingUpdate] = useState(false);
   const [availableUpdate, setAvailableUpdate] = useState<Update | null>(null);
+  const [startupContext, setStartupContext] = useState<StartupContext | null>(null);
   const [updateMessage, setUpdateMessage] = useState<{
     text: string;
     tone: "success" | "error";
@@ -41,6 +45,29 @@ export function AboutSettingsSections({
     const timer = window.setTimeout(() => setUpdateMessage(null), 5000);
     return () => window.clearTimeout(timer);
   }, [updateMessage]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void getStartupContext()
+      .then((context) => {
+        if (!cancelled) setStartupContext(context);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setStartupContext({
+            launchedFromAutostart: false,
+            mainWindowCreated: true,
+            updaterKind: "unsupported",
+            updaterCanInstall: false,
+          });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const updaterCanInstall = startupContext?.updaterCanInstall ?? true;
 
   const handleCheckUpdates = async () => {
     setCheckingUpdates(true);
@@ -93,28 +120,50 @@ export function AboutSettingsSections({
               </span>
             )}
           </p>
-          <button
-            onClick={handleCheckUpdates}
-            disabled={checkingUpdates || installingUpdate}
-            className="btn-press mt-3 flex w-full items-start gap-3 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-surface/50 px-3 py-2.5 text-left transition-colors hover:border-repressurizer-border disabled:opacity-50"
-          >
-            <CloudArrowDown
-              size={16}
-              weight="duotone"
-              className="mt-0.5 text-repressurizer-accent"
-            />
-            <span>
-              <span className="block text-sm text-repressurizer-text">
-                {checkingUpdates
-                  ? t("settings.updates.checking")
-                  : t("settings.updates.check")}
+          {updaterCanInstall ? (
+            <button
+              onClick={handleCheckUpdates}
+              disabled={checkingUpdates || installingUpdate}
+              className="btn-press mt-3 flex w-full items-start gap-3 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-surface/50 px-3 py-2.5 text-left transition-colors hover:border-repressurizer-border disabled:opacity-50"
+            >
+              <CloudArrowDown
+                size={16}
+                weight="duotone"
+                className="mt-0.5 text-repressurizer-accent"
+              />
+              <span>
+                <span className="block text-sm text-repressurizer-text">
+                  {checkingUpdates
+                    ? t("settings.updates.checking")
+                    : t("settings.updates.check")}
+                </span>
+                <span className="mt-0.5 block text-xs leading-relaxed text-repressurizer-text-faint">
+                  {t("settings.updates.desc")}
+                </span>
               </span>
-              <span className="mt-0.5 block text-xs leading-relaxed text-repressurizer-text-faint">
-                {t("settings.updates.desc")}
-              </span>
-            </span>
-          </button>
-          {availableUpdate && (
+            </button>
+          ) : (
+            <div
+              role="note"
+              className="mt-3 flex items-start gap-3 rounded-lg border border-amber-400/20 bg-amber-400/5 px-3 py-2.5"
+            >
+              <Warning size={16} weight="duotone" className="mt-0.5 shrink-0 text-amber-300" />
+              <div className="min-w-0 flex-1">
+                <p className="text-xs leading-relaxed text-repressurizer-text-muted">
+                  {t(manualUpdateMessageKey(startupContext?.updaterKind ?? "unsupported"))}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void open("https://github.com/Crimsab/Repressurizer/releases")}
+                  className="btn-press mt-2 inline-flex items-center gap-1.5 text-xs font-medium text-repressurizer-accent transition-colors hover:text-repressurizer-accent-hover"
+                >
+                  {t("settings.updates.manual.openReleases")}
+                  <ArrowSquareOut size={13} weight="bold" />
+                </button>
+              </div>
+            </div>
+          )}
+          {updaterCanInstall && availableUpdate && (
             <button
               onClick={handleInstallUpdate}
               disabled={installingUpdate}
@@ -149,7 +198,7 @@ export function AboutSettingsSections({
               </button>
             </div>
           )}
-          <div className="mt-3 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-surface/40 px-3 py-2.5">
+          {updaterCanInstall && <div className="mt-3 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-surface/40 px-3 py-2.5">
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0">
                 <p className="text-sm text-repressurizer-text">
@@ -205,7 +254,7 @@ export function AboutSettingsSections({
                 }))}
               />
             </div>
-          </div>
+          </div>}
           <div className="mt-4 border-t border-repressurizer-border-subtle pt-4">
             <p className="text-xs font-medium text-repressurizer-text-muted">
               {t("settings.credits.title")}

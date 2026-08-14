@@ -7,6 +7,7 @@ pub mod steam;
 
 mod app_data;
 mod runtime_cache;
+mod updater;
 #[cfg(test)]
 use app_data::validate_app_data_key;
 pub(crate) use app_data::{
@@ -48,6 +49,8 @@ struct HttpPublishResult {
 struct StartupContext {
     launched_from_autostart: bool,
     main_window_created: bool,
+    updater_kind: updater::UpdaterKind,
+    updater_can_install: bool,
 }
 
 #[derive(Deserialize)]
@@ -440,9 +443,12 @@ fn quit_app(app: tauri::AppHandle) {
 
 #[tauri::command]
 fn get_startup_context(app: tauri::AppHandle) -> StartupContext {
+    let updater = updater::current_capability();
     StartupContext {
         launched_from_autostart: launched_from_autostart(),
         main_window_created: app.get_webview_window("main").is_some(),
+        updater_kind: updater.kind,
+        updater_can_install: updater.can_install,
     }
 }
 

@@ -26,6 +26,11 @@ Extract the ZIP to a writable folder and run `Repressurizer-portable.exe`. Do no
 
 The portable package changes how the executable is delivered, not where all application data is stored. Repressurizer still uses the Windows application data directory for settings and caches.
 
+Portable builds do not update themselves in place. The Updates section links to
+GitHub Releases when a newer portable ZIP must be downloaded. Use the Windows
+installer if you want signed in-app updates that download, install, and restart
+Repressurizer automatically.
+
 ## Linux AppImage
 
 Download the AppImage, make it executable, and launch it:

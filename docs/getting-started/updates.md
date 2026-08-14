@@ -6,6 +6,11 @@ Stable releases are versioned tags such as `v0.5.2`. The release workflow publis
 
 Use the stable channel for your normal library maintenance.
 
+On Windows, in-app installation is supported by the normal NSIS installer. The
+portable ZIP can check its delivery mode but does not replace its executable in
+place; download a newer portable ZIP from GitHub Releases instead. Settings and
+caches remain in the Windows application data directory in either case.
+
 ## Preview channel
 
 The Windows `preview` prerelease is continuously replaced by a build from the newest commit on `main`. It has a separate version number and updater manifest, so it does not replace the stable release record. Linux preview artifacts are not currently published.

@@ -53,7 +53,7 @@ Get the current stable build from the
 | Asset | Use |
 | --- | --- |
 | `Repressurizer_..._x64-setup.exe` | Normal Windows installation with built-in updates. |
-| `Repressurizer-portable-windows-x64.zip` | Portable app without installation. |
+| `Repressurizer-portable-windows-x64.zip` | Portable app without installation; update it manually. |
 | `Repressurizer-cli-windows-x64.zip` | Diagnostics, snapshots, cache checks, backups, and guarded Steam tooling. |
 | `Repressurizer_..._amd64.AppImage` | Portable Linux desktop app for x86_64 systems. |
 | `Repressurizer_..._amd64.deb` | Debian/Ubuntu package for x86_64 systems. |

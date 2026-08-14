@@ -301,7 +301,20 @@ export async function installTauriMock(page: Page) {
             autostartEnabled = false;
             return null;
           case "get_startup_context":
-            return { launchedFromAutostart: false, mainWindowCreated: true };
+            {
+              const requestedKind = new URLSearchParams(window.location.search).get("updater-kind");
+              const updaterKind = requestedKind === "windows-portable"
+                ? "windows-portable"
+                : requestedKind === "linux-system-package"
+                  ? "linux-system-package"
+                  : "windows-installer";
+              return {
+                launchedFromAutostart: false,
+                mainWindowCreated: true,
+                updaterKind,
+                updaterCanInstall: updaterKind === "windows-installer",
+              };
+            }
           case "fetch_library":
             return games;
           case "fetch_steam_app_list":

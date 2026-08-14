@@ -19,6 +19,7 @@ import type {
   StoreReleaseDateResult,
   HltbTimeMode,
 } from "./types";
+import type { UpdaterKind } from "./updater";
 
 export async function detectSteam(): Promise<SteamInfo> {
   return invoke<SteamInfo>("detect_steam");
@@ -656,6 +657,8 @@ export async function quitApp(): Promise<void> {
 export interface StartupContext {
   launchedFromAutostart: boolean;
   mainWindowCreated: boolean;
+  updaterKind: UpdaterKind;
+  updaterCanInstall: boolean;
 }
 
 export async function getStartupContext(): Promise<StartupContext> {
