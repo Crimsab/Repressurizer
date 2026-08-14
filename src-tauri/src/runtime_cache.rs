@@ -115,6 +115,7 @@ fn diagnostics_payload(steam_path: &str, steam_id3: &str, steam_id64: &str) -> s
         "native_crashes": native_crash::diagnostics_summary(),
         "privacy": {
             "api_key_included": false,
+            "gg_deals_api_key_included": false,
             "proxy_credentials_included": false,
             "steam_ids_redacted": true,
             "local_paths_included": false,

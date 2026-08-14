@@ -39,7 +39,7 @@ application-data directory also removes them, together with settings and caches.
 
 ## Remove
 
-- Steam Web API keys and Store tokens.
+- Steam Web API keys, GG.deals API keys, and Store tokens.
 - Full Steam IDs when they are not necessary.
 - Personal notes and private library exports.
 - Private filesystem paths and proxy credentials.

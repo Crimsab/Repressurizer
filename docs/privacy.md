@@ -12,6 +12,7 @@ Depending on which features you use, Repressurizer may contact:
 - Steam Store API for game metadata, regional price data, release dates, genres, platforms, and artwork.
 - Steam Family endpoints for shared library data.
 - HowLongToBeat for playtime estimates.
+- GG.deals for opt-in deal and historical-low data when a game detail page is opened.
 - GitHub Releases for update checks.
 
 ## Local Data
@@ -23,8 +24,10 @@ Local app data may include:
 - Steam install/user selection.
 - Steam Web API key.
 - Optional Steam Store `webapi_token`.
+- Optional GG.deals API key.
 - Cached Steam metadata.
 - Cached HLTB results.
+- Cached GG.deals price responses without API credentials.
 - Local notes, ratings, tags, statuses, and ignored-fetch state.
 - Family library cache.
 
@@ -44,6 +47,7 @@ you delete the `crash-reports` folder from the application-data directory.
 Before sharing diagnostics publicly, quickly check that they do not include:
 
 - Steam Web API keys.
+- GG.deals API keys.
 - Store `webapi_token` values.
 - Full Steam IDs.
 - Private paths you do not want public.
@@ -52,4 +56,4 @@ Before sharing diagnostics publicly, quickly check that they do not include:
 
 Repressurizer sends requests directly from your machine to the upstream services listed above. It does not proxy your data through a Repressurizer server.
 
-Some metadata features can fail if Steam, HLTB, or GitHub rate-limit, change endpoints, block a region, or return incomplete responses.
+Some metadata features can fail if Steam, HLTB, GG.deals, or GitHub rate-limit, change endpoints, block a region, or return incomplete responses. GG.deals pricing is disabled by default, cached for 24 hours, and requested only from an open game detail page.

@@ -150,6 +150,11 @@ directory. Steam collection backups are stored next to the collection file they
 protect. Read [Backups and restore](https://crimsab.github.io/Repressurizer/user-guide/backups/)
 and [Privacy](https://crimsab.github.io/Repressurizer/privacy/) for details.
 
+Optional GG.deals pricing can show current offers and historical lows in game
+details. It is disabled by default, uses the user's official GG.deals API key,
+caches responses for 24 hours, and never scrapes the website. See the
+[GG.deals integration guide](https://crimsab.github.io/Repressurizer/integrations/gg-deals/).
+
 ## Repressurizer and Depressurizer
 
 Repressurizer is a spiritual successor, not an in-place upgrade or an official

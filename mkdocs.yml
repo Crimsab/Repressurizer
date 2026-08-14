@@ -145,6 +145,7 @@ nav:
       - integrations/index.md
       - CLI: cli.md
       - Automation export: automation-export.md
+      - GG.deals pricing: integrations/gg-deals.md
       - Snapshot schema: integrations/repressurizer-snapshot-v1.md
       - Receiver example: integrations/receiver-example.md
       - TypeScript package: integrations/integration-package-release.md

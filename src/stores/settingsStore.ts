@@ -32,6 +32,8 @@ const defaults: AppSettings = {
   steamId64: "",
   steamPersonaName: "",
   apiKey: "",
+  ggDealsEnabled: false,
+  ggDealsApiKey: "",
   setupComplete: false,
   showDynamicCategories: false,
   pinFavorites: true,

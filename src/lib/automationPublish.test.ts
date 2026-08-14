@@ -9,6 +9,8 @@ const settings: AppSettings = {
   steamId64: "",
   steamPersonaName: "",
   apiKey: "",
+  ggDealsEnabled: false,
+  ggDealsApiKey: "",
   setupComplete: true,
   showDynamicCategories: false,
   pinFavorites: true,

@@ -625,6 +625,7 @@ fn diagnostics(steam_path: &str, steam_id3: &str, steam_id64: &str) -> Value {
             .unwrap_or(Value::Null),
         "privacy": {
             "apiKeyIncluded": false,
+            "ggDealsApiKeyIncluded": false,
             "proxyCredentialsIncluded": false,
             "steamIdsRedacted": true,
             "localPathsIncluded": false,
@@ -648,6 +649,7 @@ fn settings_summary(settings: &Value, path: &str) -> Value {
         },
         "credentials": {
             "apiKeyConfigured": setting_configured(settings, "apiKey"),
+            "ggDealsApiKeyConfigured": setting_configured(settings, "ggDealsApiKey"),
             "steamFamilyStoreTokenConfigured": steam_family_token_configured(),
         },
         "automation": {
@@ -680,6 +682,7 @@ fn settings_summary(settings: &Value, path: &str) -> Value {
         },
         "privacy": {
             "apiKeyIncluded": false,
+            "ggDealsApiKeyIncluded": false,
             "bearerTokenIncluded": false,
             "proxyCredentialsIncluded": false,
             "steamFamilyStoreTokenIncluded": false,
@@ -902,6 +905,7 @@ mod tests {
             "steamId64": "76561198000012345",
             "steamPersonaName": "Player",
             "apiKey": "secret",
+            "ggDealsApiKey": "gg-secret",
             "automationPublishBearerToken": "secret-token",
             "automationPublishEnabled": true,
             "automationPublishUrl": "https://example.test/snapshot",
@@ -954,6 +958,7 @@ mod tests {
         assert_eq!(summary["steam"]["steamId3"], "***3456");
         assert_eq!(summary["steam"]["steamId64"], "***2345");
         assert_eq!(summary["credentials"]["apiKeyConfigured"], true);
+        assert_eq!(summary["credentials"]["ggDealsApiKeyConfigured"], true);
         assert_eq!(summary["automation"]["bearerTokenConfigured"], true);
         assert_eq!(summary["fetch"]["steamDetailsDelayMs"], 1500);
         assert_eq!(summary["fetch"]["steamRatingsCooldownMinutes"], 7);
@@ -968,6 +973,7 @@ mod tests {
         assert_eq!(summary["proxy"]["scopes"]["automation"], true);
         assert_eq!(summary["proxy"]["proxyCredentialsIncluded"], false);
         assert_eq!(summary["privacy"]["apiKeyIncluded"], false);
+        assert_eq!(summary["privacy"]["ggDealsApiKeyIncluded"], false);
         assert_eq!(summary["privacy"]["proxyCredentialsIncluded"], false);
 
         let encoded = serde_json::to_string(&summary).expect("summary serializes");

@@ -854,6 +854,43 @@ test("compare collections follows sidebar order and opens game details", async (
   await expectNoHorizontalOverflow(page);
 });
 
+test("GG.deals pricing is opt-in, lazy, cached, and readable", async ({ page }, testInfo) => {
+  await page.addInitScript(() => {
+    const raw = window.localStorage.getItem("repressurizer-settings");
+    if (!raw) return;
+    const settings = JSON.parse(raw);
+    settings.ggDealsEnabled = true;
+    settings.ggDealsApiKey = "test-gg-deals-key";
+    window.localStorage.setItem("repressurizer-settings", JSON.stringify(settings));
+  });
+
+  await page.goto("/");
+  await expect.poll(() => page.evaluate(() => window.localStorage.getItem("repressurizer-gg-deals-request-count"))).toBeNull();
+
+  const hadesCard = page.locator(".game-card").filter({ hasText: "Hades" });
+  await hadesCard.dblclick();
+  const detail = page.locator(".fixed.inset-0").filter({
+    has: page.getByRole("heading", { name: "Hades" }),
+  });
+  await expect(detail.getByRole("region", { name: "GG.deals" })).toBeVisible();
+  await expect(detail.getByText("Best current deal")).toBeVisible();
+  await expect(detail.getByText("10.99€", { exact: true })).toBeVisible();
+  await expect(detail.getByText("Official historical low")).toBeVisible();
+  await expect(detail.getByText("8.49€", { exact: true })).toBeVisible();
+  await expect(detail.getByText("Data by GG.deals")).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.localStorage.getItem("repressurizer-gg-deals-request-count"))).toBe("1");
+  await expectNoHorizontalOverflow(page);
+
+  await detail.getByRole("button", { name: "Close" }).click();
+  await hadesCard.dblclick();
+  await expect(page.getByRole("region", { name: "GG.deals" })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.localStorage.getItem("repressurizer-gg-deals-request-count"))).toBe("1");
+
+  const screenshotPath = testInfo.outputPath("gg-deals-game-detail.png");
+  await page.screenshot({ path: screenshotPath, fullPage: true });
+  await testInfo.attach("gg-deals-game-detail", { path: screenshotPath, contentType: "image/png" });
+});
+
 test("play history shows tracked deltas instead of lifetime playtime", async ({ page }) => {
   await page.goto("/");
 

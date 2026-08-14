@@ -394,6 +394,19 @@ export async function installTauriMock(page: Page) {
               is_free: false,
             };
           }
+          case "fetch_gg_deals_price": {
+            const requestCount = Number(window.localStorage.getItem("repressurizer-gg-deals-request-count") ?? "0");
+            window.localStorage.setItem("repressurizer-gg-deals-request-count", String(requestCount + 1));
+            return {
+              appId: Number(args?.appId ?? 0),
+              url: "https://gg.deals/game/hades/",
+              currency: "€",
+              currentRetail: 12.49,
+              currentKeyshops: 10.99,
+              historicalRetail: 8.49,
+              historicalKeyshops: 7.99,
+            };
+          }
           case "load_collections":
             return collections;
           case "fetch_family_library":

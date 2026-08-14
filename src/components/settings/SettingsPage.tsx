@@ -69,6 +69,7 @@ import { AutomationSettingsSection } from "./automation/AutomationSettingsSectio
 import { CoreSettingsSection } from "./CoreSettingsSections";
 import { MaintenanceSettingsSection } from "./data/MaintenanceSettingsSection";
 import { useMaintenanceSettings } from "./data/useMaintenanceSettings";
+import { GgDealsSettingsSection } from "./GgDealsSettingsSection";
 
 const AppearanceTab = lazy(() =>
   import("./AppearanceSettingsTab").then((module) => ({ default: module.AppearanceTab }))
@@ -364,6 +365,14 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
         tab: "steam" as const,
         label: t("settings.apiKey"),
         keywords: [t("settings.apiKey"), "api key steam web api credential credentials token developer"],
+      },
+      {
+        id: "ggdeals",
+        tab: "steam" as const,
+        label: "GG.deals",
+        keywords: [
+          "gg.deals deals price history historical low retail keyshop api pricing offers sales sconti prezzi storico",
+        ],
       },
       {
         id: "maintenance",
@@ -808,6 +817,10 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                   </button>
                 </div>
               </div>
+              )}
+
+              {isSectionVisible("ggdeals") && (
+                <GgDealsSettingsSection onSaved={(savedMessage) => setMessage(savedMessage, 2000)} />
               )}
 
               {isSectionVisible("maintenance") && (

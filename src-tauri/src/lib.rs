@@ -1,6 +1,7 @@
 pub mod app_channel;
 pub mod automation;
 pub mod categorizer;
+mod gg_deals;
 pub mod hltb;
 pub mod http_policy;
 pub mod steam;
@@ -822,6 +823,7 @@ pub fn run() {
             api::fetch_store_release_date,
             api::fetch_store_release_dates,
             api::fetch_game_price_overviews,
+            gg_deals::fetch_gg_deals_price,
             api::fetch_steam_review_summary,
             api::fetch_achievements,
             api::fetch_achievements_summary,

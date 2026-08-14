@@ -9,6 +9,7 @@ Repressurizer can contact these sources:
 - Steam Web API for owned games, playtime, achievements, player summaries, wishlist, friends, and Steam Family data.
 - Steam Store endpoints for game details, genres, categories, release dates, platforms, Metacritic, artwork, review summaries, and regional prices.
 - HowLongToBeat for story length matches.
+- GG.deals for opt-in current deals and historical lows on an open game detail page.
 - Automation export targets when background publishing is enabled.
 
 Steam collection reads and writes are local file operations. Saving collections writes local Steam collection data and creates backups; it does not upload collection edits through a Steam web endpoint.
@@ -44,6 +45,12 @@ When you change the default currency:
 - Free games and games with unavailable regional pricing may cache explicit empty price snapshots.
 
 The Steam Store does not expose one universal "all regional prices for every app" response suitable for normal app use. Repressurizer therefore fetches the selected region and keeps snapshots as they are discovered.
+
+## Optional GG.deals Prices
+
+GG.deals pricing is separate from Steam Store pricing and is off by default. When enabled with the user's GG.deals API key, opening a game detail page matches its Steam App ID against the official GG.deals API.
+
+Responses and explicit no-result matches are cached for 24 hours. Requests are serialized with at least two seconds between them, have a 12-second timeout, and do not run during library refresh or cache preparation. A GG.deals failure only affects its own panel. See [GG.deals pricing](integrations/gg-deals.md) for setup, attribution, and privacy details.
 
 ## Request Rate Settings
 
@@ -100,4 +107,3 @@ If a price appears in the wrong currency, check the default currency setting and
 If AutoCat creates fewer categories than expected, check whether the selected rule needs metadata that is missing, ignored, or intentionally running cached-only.
 
 If requests repeatedly fail, lower concurrency/delay settings, test without proxies, or check the Ignored tab before assuming the game data is missing from Repressurizer.
-

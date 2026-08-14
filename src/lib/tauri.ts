@@ -18,6 +18,7 @@ import type {
   GamePriceOverview,
   StoreReleaseDateResult,
   HltbTimeMode,
+  GgDealsPrice,
 } from "./types";
 import type { UpdaterKind } from "./updater";
 
@@ -235,6 +236,14 @@ export async function fetchGamePriceOverviews(
     appIds,
     countryCode: countryCode ?? null,
   });
+}
+
+export async function fetchGgDealsPrice(
+  appId: number,
+  apiKey: string,
+  region: string
+): Promise<GgDealsPrice | null> {
+  return invoke<GgDealsPrice | null>("fetch_gg_deals_price", { appId, apiKey, region });
 }
 
 export async function fetchSteamReviewSummary(appId: number): Promise<SteamReviewSummary> {
