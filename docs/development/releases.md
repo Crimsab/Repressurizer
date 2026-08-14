@@ -24,10 +24,12 @@ never marks them as GitHub's latest release.
 
 The macOS job is a required release gate. It verifies both Intel and Apple Silicon slices, the ad-hoc app signature, DMG contents, updater archive, and updater signature before the Windows publisher job assembles the final release. The app is not Apple-notarized, so the first launch requires explicit approval in macOS Privacy & Security. See [macOS packaging](macos.md).
 
-Manual release runs require an existing `v<version>` tag. Every platform checks
-out that tag, verifies that it resolves to the versioned release commit, and
-requires a successful CI run for the same commit. This permits a failed release
-pipeline to be rebuilt without moving the tag or building untagged source.
+Manual release runs require an existing `v<version>` tag. A secret-free preflight
+validates its syntax and version, resolves it once to an immutable commit SHA,
+and requires a successful CI run for that commit. Every platform then checks out
+the same resolved SHA. This permits a failed release pipeline to be rebuilt
+without moving the tag, exposing signing keys to unvalidated source, or building
+untagged source.
 
 ## Beta desktop release
 

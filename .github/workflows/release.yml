@@ -21,14 +21,110 @@ concurrency:
 
 env:
   HAS_VT_API_KEY: ${{ secrets.VT_API_KEY != '' }}
-  IS_RELEASE: ${{ startsWith(github.ref, 'refs/tags/') || inputs.release_tag != '' }}
-  RELEASE_REF: ${{ inputs.release_tag || github.ref }}
-  RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
 
 jobs:
+  preflight:
+    name: Resolve and validate release tag
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      channel: ${{ steps.metadata.outputs.channel }}
+      release_sha: ${{ steps.resolve.outputs.release_sha }}
+      release_tag: ${{ steps.resolve.outputs.release_tag }}
+      version: ${{ steps.metadata.outputs.version }}
+
+    steps:
+      - name: Checkout release metadata
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        env:
+          GIT_CONFIG_COUNT: 1
+          GIT_CONFIG_KEY_0: init.defaultBranch
+          GIT_CONFIG_VALUE_0: main
+        with:
+          fetch-depth: 0
+
+      - name: Resolve immutable release commit
+        id: resolve
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-beta\.[1-9][0-9]*)?$ ]]; then
+            echo "Release tag must match vX.Y.Z or vX.Y.Z-beta.N" >&2
+            exit 1
+          fi
+          tag_ref="refs/tags/$RELEASE_TAG"
+          git show-ref --verify --quiet "$tag_ref" || {
+            echo "Release tag $RELEASE_TAG does not exist" >&2
+            exit 1
+          }
+          release_sha=$(git rev-list -n 1 "$tag_ref")
+          test -n "$release_sha"
+          git checkout --detach "$release_sha"
+          echo "release_sha=$release_sha" >> "$GITHUB_OUTPUT"
+          echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Validate version metadata
+        id: metadata
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ steps.resolve.outputs.release_tag }}
+        run: |
+          set -euo pipefail
+          version=$(node -p "require('./package.json').version")
+          expected_tag="v$version"
+          if [[ "$RELEASE_TAG" != "$expected_tag" ]]; then
+            echo "Tag $RELEASE_TAG does not match package version $expected_tag" >&2
+            exit 1
+          fi
+          if [[ "$version" == *-beta.* ]]; then
+            channel=beta
+          else
+            channel=stable
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "channel=$channel" >> "$GITHUB_OUTPUT"
+
+      - name: Verify CI passed for release commit
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ steps.resolve.outputs.release_sha }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          deadline=$((SECONDS + 1200))
+          while (( SECONDS < deadline )); do
+            runs=$(gh run list \
+              --repo "$REPOSITORY" \
+              --workflow ci.yml \
+              --commit "$RELEASE_SHA" \
+              --limit 20 \
+              --json status,conclusion)
+            if [[ $(jq '[.[] | select(.conclusion == "success")] | length' <<< "$runs") -gt 0 ]]; then
+              echo "Found a successful CI run for release commit $RELEASE_SHA"
+              exit 0
+            fi
+            run_count=$(jq 'length' <<< "$runs")
+            active_count=$(jq '[.[] | select(.status != "completed")] | length' <<< "$runs")
+            if [[ "$run_count" -gt 0 && "$active_count" -eq 0 ]]; then
+              jq -r '[.[].conclusion] | join(", ")' <<< "$runs" >&2
+              echo "All CI runs for release commit $RELEASE_SHA completed without success" >&2
+              exit 1
+            fi
+            echo "Waiting for CI to finish for release commit $RELEASE_SHA"
+            sleep 15
+          done
+          echo "Timed out waiting for successful CI on $RELEASE_SHA" >&2
+          exit 1
+
   linux:
     name: Linux AppImage, Debian package, and CLI
     runs-on: ubuntu-22.04
+    needs: preflight
 
     steps:
       - name: Checkout
@@ -38,7 +134,7 @@ jobs:
           GIT_CONFIG_KEY_0: init.defaultBranch
           GIT_CONFIG_VALUE_0: main
         with:
-          ref: ${{ env.RELEASE_REF }}
+          ref: ${{ needs.preflight.outputs.release_sha }}
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
@@ -100,6 +196,7 @@ jobs:
   macos:
     name: macOS universal DMG and updater
     runs-on: macos-15
+    needs: preflight
 
     steps:
       - name: Checkout
@@ -109,7 +206,7 @@ jobs:
           GIT_CONFIG_KEY_0: init.defaultBranch
           GIT_CONFIG_VALUE_0: main
         with:
-          ref: ${{ env.RELEASE_REF }}
+          ref: ${{ needs.preflight.outputs.release_sha }}
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
@@ -187,7 +284,14 @@ jobs:
   windows:
     name: Windows installer and portable
     runs-on: windows-2025-vs2026
-    needs: [linux, macos]
+    needs: [preflight, linux, macos]
+    env:
+      DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+      RELEASE_CHANNEL: ${{ needs.preflight.outputs.channel }}
+      RELEASE_SHA: ${{ needs.preflight.outputs.release_sha }}
+      RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
+      RELEASE_VERSION: ${{ needs.preflight.outputs.version }}
+      REPOSITORY: ${{ github.repository }}
 
     steps:
       - name: Checkout
@@ -197,73 +301,13 @@ jobs:
           GIT_CONFIG_KEY_0: init.defaultBranch
           GIT_CONFIG_VALUE_0: main
         with:
-          ref: ${{ env.RELEASE_REF }}
+          ref: ${{ needs.preflight.outputs.release_sha }}
           fetch-depth: 0
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version-file: .bun-version
-
-      - name: Read version
-        id: version
-        shell: pwsh
-        run: |
-          $version = (Get-Content package.json | ConvertFrom-Json).version
-          $tag = "v$version"
-          $channel = bun scripts/release-channel.ts identify --version $version --tag $tag
-          $sha = (git rev-parse HEAD).Trim()
-          "version=$version" >> $env:GITHUB_OUTPUT
-          "tag=$tag" >> $env:GITHUB_OUTPUT
-          "channel=$channel" >> $env:GITHUB_OUTPUT
-          "sha=$sha" >> $env:GITHUB_OUTPUT
-
-      - name: Validate release tag
-        shell: pwsh
-        run: |
-          $releaseTag = "${{ env.RELEASE_TAG }}"
-          if ($releaseTag -ne "${{ steps.version.outputs.tag }}") {
-            throw "Tag $releaseTag does not match package version ${{ steps.version.outputs.tag }}"
-          }
-          $tagCommit = (git rev-list -n 1 $releaseTag).Trim()
-          $releaseCommit = (git rev-parse HEAD).Trim()
-          if ($tagCommit -ne $releaseCommit) {
-            throw "Checked out commit $releaseCommit does not match $releaseTag at $tagCommit"
-          }
-
-      - name: Verify CI passed for release commit
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $releaseCommit = (git rev-parse HEAD).Trim()
-          $deadline = (Get-Date).AddMinutes(20)
-
-          while ((Get-Date) -lt $deadline) {
-            $runs = @(gh run list `
-              --repo "${{ github.repository }}" `
-              --workflow ci.yml `
-              --commit "$releaseCommit" `
-              --limit 20 `
-              --json status,conclusion | ConvertFrom-Json)
-
-            $successfulRuns = @($runs | Where-Object { $_.conclusion -eq "success" })
-            if ($successfulRuns.Count -gt 0) {
-              Write-Host "Found a successful CI run for release commit $releaseCommit"
-              exit 0
-            }
-
-            $running = @($runs | Where-Object { $_.status -ne "completed" })
-            if ($runs.Count -gt 0 -and $running.Count -eq 0) {
-              $conclusions = ($runs | ForEach-Object { $_.conclusion }) -join ", "
-              throw "All CI runs for release commit $releaseCommit completed without success: $conclusions"
-            }
-
-            Write-Host "Waiting for CI to finish for release commit $releaseCommit"
-            Start-Sleep -Seconds 15
-          }
-
-          throw "Timed out waiting for a successful CI run for release commit $releaseCommit"
 
       - name: Restore Bun cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -348,9 +392,9 @@ jobs:
             throw "Could not find updater signature for $($installer.Name)"
           }
 
-          $assetUrl = "https://github.com/${{ github.repository }}/releases/download/${{ env.RELEASE_TAG }}/$($installer.Name)"
+          $assetUrl = "https://github.com/$env:REPOSITORY/releases/download/$env:RELEASE_TAG/$($installer.Name)"
           $manifest = [ordered]@{
-            version = "${{ steps.version.outputs.version }}"
+            version = $env:RELEASE_VERSION
             notes = "Modern Steam library management, inspired by Depressurizer."
             pub_date = (Get-Date).ToUniversalTime().ToString("o")
             platforms = [ordered]@{
@@ -372,7 +416,7 @@ jobs:
           $linuxAssetName = [System.Uri]::EscapeDataString($linuxUpdater.Name)
           $manifest.platforms["linux-x86_64"] = [ordered]@{
             signature = (Get-Content $linuxSignaturePath -Raw).Trim()
-            url = "https://github.com/${{ github.repository }}/releases/download/${{ env.RELEASE_TAG }}/$linuxAssetName"
+            url = "https://github.com/$env:REPOSITORY/releases/download/$env:RELEASE_TAG/$linuxAssetName"
           }
 
           $macUpdater = Get-ChildItem artifacts -Filter "*.app.tar.gz" | Select-Object -First 1
@@ -386,7 +430,7 @@ jobs:
           $macAssetName = [System.Uri]::EscapeDataString($macUpdater.Name)
           $macUpdaterEntry = [ordered]@{
             signature = (Get-Content $macSignaturePath -Raw).Trim()
-            url = "https://github.com/${{ github.repository }}/releases/download/${{ env.RELEASE_TAG }}/$macAssetName"
+            url = "https://github.com/$env:REPOSITORY/releases/download/$env:RELEASE_TAG/$macAssetName"
           }
           $manifest.platforms["darwin-aarch64"] = $macUpdaterEntry
           $manifest.platforms["darwin-x86_64"] = $macUpdaterEntry
@@ -394,13 +438,14 @@ jobs:
           $manifest | ConvertTo-Json -Depth 8 | Set-Content -Path artifacts\latest.json -Encoding utf8
 
       - name: Create channel-specific updater manifests
-        run: bun scripts/release-channel.ts manifests --manifest artifacts/latest.json --out artifacts --channel "${{ steps.version.outputs.channel }}"
+        shell: pwsh
+        run: bun scripts/release-channel.ts manifests --manifest artifacts/latest.json --out artifacts --channel $env:RELEASE_CHANNEL
 
       - name: Validate updater manifest
         shell: pwsh
         run: |
-          $channel = "${{ steps.version.outputs.channel }}"
-          $common = @("--artifacts", "artifacts", "--repo", "${{ github.repository }}", "--tag", "${{ env.RELEASE_TAG }}", "--version", "${{ steps.version.outputs.version }}")
+          $channel = $env:RELEASE_CHANNEL
+          $common = @("--artifacts", "artifacts", "--repo", $env:REPOSITORY, "--tag", $env:RELEASE_TAG, "--version", $env:RELEASE_VERSION)
           bun scripts/updater-manifest.ts --manifest artifacts/latest.json @common --platform windows-x86_64 --platform linux-x86_64 --platform darwin-aarch64 --platform darwin-x86_64
           foreach ($target in @("windows-x86_64", "linux-x86_64", "darwin-aarch64", "darwin-x86_64")) {
             $channelTarget = "$target-$channel"
@@ -421,14 +466,13 @@ jobs:
 
       - name: Create release notes
         id: notes
-        if: env.IS_RELEASE == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bun scripts/release-notes.ts --repo "${{ github.repository }}" --tag "${{ env.RELEASE_TAG }}" --sha "${{ steps.version.outputs.sha }}" --out release-notes.md
+        run: bun scripts/release-notes.ts --repo $env:REPOSITORY --tag $env:RELEASE_TAG --sha $env:RELEASE_SHA --out release-notes.md
 
       - name: VirusTotal Scan
         id: vt-scan
-        if: env.IS_RELEASE == 'true' && env.HAS_VT_API_KEY == 'true'
+        if: env.HAS_VT_API_KEY == 'true'
         uses: crazy-max/ghaction-virustotal@936d8c5c00afe97d3d9a1af26d017cfdf26800a2 # v5
         with:
           vt_api_key: ${{ secrets.VT_API_KEY }}
@@ -438,7 +482,7 @@ jobs:
 
       - name: Check VirusTotal verdicts
         id: vt-verdict
-        if: env.IS_RELEASE == 'true' && steps.vt-scan.outputs.analysis != ''
+        if: steps.vt-scan.outputs.analysis != ''
         shell: pwsh
         env:
           VT_API_KEY: ${{ secrets.VT_API_KEY }}
@@ -555,13 +599,16 @@ jobs:
 
       - name: Enforce VirusTotal release policy
         id: release-policy
-        if: env.IS_RELEASE == 'true'
         shell: pwsh
+        env:
+          VT_ANALYSIS: ${{ steps.vt-scan.outputs.analysis }}
+          VT_MAX_DETECTIONS: ${{ steps.vt-verdict.outputs.max_detections }}
+          VT_SCAN_INCOMPLETE: ${{ steps.vt-verdict.outputs.scan_incomplete }}
         run: |
-          $virusTotalEnabled = "${{ env.HAS_VT_API_KEY }}" -eq "true"
-          $hasAnalysis = "${{ steps.vt-scan.outputs.analysis }}" -ne ""
-          $scanIncomplete = "${{ steps.vt-verdict.outputs.scan_incomplete }}" -eq "true"
-          $maxDetections = [int]"0${{ steps.vt-verdict.outputs.max_detections }}"
+          $virusTotalEnabled = $env:HAS_VT_API_KEY -eq "true"
+          $hasAnalysis = $env:VT_ANALYSIS -ne ""
+          $scanIncomplete = $env:VT_SCAN_INCOMPLETE -eq "true"
+          $maxDetections = [int]"0$env:VT_MAX_DETECTIONS"
 
           if ($virusTotalEnabled -and (-not $hasAnalysis -or $scanIncomplete)) {
             throw "VirusTotal did not produce a completed result for every binary; release will not be published."
@@ -574,7 +621,7 @@ jobs:
           "draft=false" >> $env:GITHUB_OUTPUT
 
       - name: Append VirusTotal results
-        if: env.IS_RELEASE == 'true' && steps.vt-scan.outputs.analysis != ''
+        if: steps.vt-scan.outputs.analysis != ''
         shell: pwsh
         env:
           VT_ANALYSIS: ${{ steps.vt-scan.outputs.analysis }}
@@ -587,7 +634,6 @@ jobs:
           }
 
       - name: Publish GitHub release
-        if: env.IS_RELEASE == 'true'
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3
         with:
           tag_name: ${{ env.RELEASE_TAG }}
@@ -596,11 +642,10 @@ jobs:
           files: artifacts/*
           fail_on_unmatched_files: true
           draft: ${{ steps.release-policy.outputs.draft }}
-          prerelease: ${{ steps.version.outputs.channel == 'beta' }}
-          make_latest: ${{ steps.version.outputs.channel == 'stable' }}
+          prerelease: ${{ env.RELEASE_CHANNEL == 'beta' }}
+          make_latest: ${{ env.RELEASE_CHANNEL == 'stable' }}
 
       - name: Publish isolated updater channel manifests
-        if: env.IS_RELEASE == 'true'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -611,14 +656,14 @@ jobs:
           if ($LASTEXITCODE -ne 0) {
             $global:LASTEXITCODE = 0
             gh release create $registryTag `
-              --target "${{ github.event.repository.default_branch }}" `
+              --target $env:DEFAULT_BRANCH `
               --title "Repressurizer updater channel manifests" `
               --notes "Machine-readable signed updater manifests. Use the normal versioned releases for downloads and release notes." `
               --prerelease `
               --latest=false
           }
 
-          $channel = "${{ steps.version.outputs.channel }}"
+          $channel = $env:RELEASE_CHANNEL
           $manifests = Get-ChildItem artifacts -Filter "*-$channel.json"
           if ($manifests.Count -ne 4) {
             throw "Expected 4 $channel channel manifests, found $($manifests.Count)"
