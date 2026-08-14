@@ -1530,16 +1530,9 @@ test("opens organized settings tabs, automation logs, and Steam controls without
   await expectNoHorizontalOverflow(page);
 });
 
-test("imports only Steam Family webapi_token after an explicit clipboard action", async ({ page }, testInfo) => {
+test("pastes only Steam Family webapi_token through the token field", async ({ page }, testInfo) => {
   const token = "mock-store-token-for-e2e";
   await page.setViewportSize({ width: 900, height: 600 });
-  await page.addInitScript((clipboardToken) => {
-    window.localStorage.setItem(
-      "repressurizer-clipboard-text",
-      "unrelated-password-must-not-be-imported"
-    );
-    window.localStorage.setItem("repressurizer-mock-family-token", clipboardToken);
-  }, token);
 
   await page.goto("/");
   await page.getByRole("button", { name: "More tools" }).click();
@@ -1547,31 +1540,34 @@ test("imports only Steam Family webapi_token after an explicit clipboard action"
   const settingsDialog = page.getByRole("dialog", { name: "Settings" });
   await settingsDialog.getByRole("button", { name: "Steam", exact: true }).click();
 
-  const importButton = settingsDialog.getByRole("button", { name: "Import from clipboard" });
-  await importButton.click();
   await expect(
-    settingsDialog.getByText(/clipboard does not contain Steam JSON with webapi_token/)
-  ).toBeVisible();
-  expect(
-    await page.evaluate(() =>
-      window.localStorage.getItem("repressurizer-app-data:steam_family_token.json")
-    )
-  ).toBeNull();
+    settingsDialog.getByRole("button", { name: "Import from clipboard" })
+  ).toHaveCount(0);
 
-  await page.evaluate(() => {
-    const clipboardToken = window.localStorage.getItem("repressurizer-mock-family-token");
-    window.localStorage.setItem(
-      "repressurizer-clipboard-text",
-      JSON.stringify({
-        success: 1,
-        data: { webapi_token: clipboardToken },
-        browser_cookie: "must-not-be-persisted",
+  const tokenInput = settingsDialog.getByPlaceholder("Paste token or full Steam JSON");
+  const pastedJson = JSON.stringify({
+    success: 1,
+    data: { webapi_token: token },
+    browser_cookie: "must-not-be-persisted",
+  });
+  await tokenInput.evaluate((input, value) => {
+    const transfer = new DataTransfer();
+    transfer.setData("text", String(value));
+    input.dispatchEvent(
+      new ClipboardEvent("paste", {
+        bubbles: true,
+        cancelable: true,
+        clipboardData: transfer,
       })
     );
-  });
-  await importButton.click();
+  }, pastedJson);
+  await expect(tokenInput).toHaveValue(token);
   await expect(
-    settingsDialog.getByText("Steam Store token imported and saved. No cookies were stored.")
+    settingsDialog.getByText("Steam Store token extracted from pasted JSON.")
+  ).toBeVisible();
+  await settingsDialog.getByRole("button", { name: "Save token" }).click();
+  await expect(
+    settingsDialog.getByText("Steam Store token saved.")
   ).toBeVisible();
 
   const saved = await page.evaluate(() =>

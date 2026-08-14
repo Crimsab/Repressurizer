@@ -33,25 +33,6 @@ export function extractStoreWebApiToken(input: string): string {
   return normalizeToken(trimmed);
 }
 
-/**
- * Clipboard import is intentionally stricter than the manual field: it accepts
- * only a Steam JSON response that names webapi_token. This prevents an
- * unrelated clipboard secret from being treated as a token.
- */
-export function extractStoreWebApiTokenFromClipboard(input: string): string {
-  const trimmed = input.trim();
-  if (!trimmed) return "";
-
-  try {
-    const parsed = JSON.parse(trimmed);
-    const token = parsed?.data?.webapi_token ?? parsed?.webapi_token ?? "";
-    return typeof token === "string" ? normalizeToken(token) : "";
-  } catch {
-    const match = trimmed.match(/"webapi_token"\s*:\s*"([^"]+)"/);
-    return match?.[1] ? normalizeToken(match[1]) : "";
-  }
-}
-
 export function isSteamFamilyTokenRefreshRecommended(
   cache: Pick<SteamFamilyTokenCache, "savedAt" | "lastValidatedAt">,
   now = Date.now()

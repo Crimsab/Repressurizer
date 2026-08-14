@@ -281,8 +281,6 @@ export async function installTauriMock(page: Page) {
               String(args?.allowDowngrades ?? false)
             );
             return null;
-          case "plugin:clipboard-manager|read_text":
-            return window.localStorage.getItem("repressurizer-clipboard-text") ?? "";
           case "plugin:dialog|confirm":
             window.localStorage.setItem(
               "repressurizer-last-confirm-message",

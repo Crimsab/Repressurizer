@@ -1,4 +1,4 @@
-import { ClipboardText, Globe, TrashSimple, UsersThree } from "@phosphor-icons/react";
+import { Globe, TrashSimple, UsersThree } from "@phosphor-icons/react";
 import { useT } from "../../../lib/i18n";
 import type { SteamFamilySettingsController } from "./useSteamFamilySettings";
 
@@ -25,7 +25,6 @@ export function SteamFamilySettingsSection({
     setIncludeNonGames,
     handleTokenPaste,
     openTokenPage,
-    importTokenFromClipboard,
     saveToken,
     clearToken,
     probe,
@@ -91,30 +90,16 @@ export function SteamFamilySettingsSection({
               {t("settings.family.browserHelper")}
             </p>
             <p className="mt-0.5 text-xs leading-relaxed text-repressurizer-text-faint">
-              {t("settings.family.browserHelperDesc")}
+              {t("settings.family.tokenHelp")}
             </p>
           </div>
-          <ol className="list-inside list-decimal space-y-1 text-xs leading-relaxed text-repressurizer-text-muted">
-            <li>{t("settings.family.stepOpen")}</li>
-            <li>{t("settings.family.stepCopy")}</li>
-            <li>{t("settings.family.stepImport")}</li>
-          </ol>
-          <div className="flex flex-wrap gap-2">
-            <button
-              onClick={openTokenPage}
-              className="btn-press inline-flex items-center gap-1.5 rounded-lg border border-repressurizer-border bg-repressurizer-surface px-3 py-1.5 text-xs font-medium text-repressurizer-text-muted transition-colors hover:text-repressurizer-text"
-            >
-              <Globe size={13} />
-              {t("settings.family.openTokenPage")}
-            </button>
-            <button
-              onClick={importTokenFromClipboard}
-              className="btn-press inline-flex items-center gap-1.5 rounded-lg bg-repressurizer-accent px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-repressurizer-accent-hover"
-            >
-              <ClipboardText size={13} />
-              {t("settings.family.importClipboard")}
-            </button>
-          </div>
+          <button
+            onClick={openTokenPage}
+            className="btn-press inline-flex w-fit items-center gap-1.5 rounded-lg border border-repressurizer-border bg-repressurizer-surface px-3 py-1.5 text-xs font-medium text-repressurizer-text-muted transition-colors hover:text-repressurizer-text"
+          >
+            <Globe size={13} />
+            {t("settings.family.openTokenPage")}
+          </button>
         </div>
         <div className="space-y-2">
           <label className="block text-xs font-medium text-repressurizer-text-muted">
