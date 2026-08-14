@@ -221,7 +221,7 @@ jobs:
           test -n "$dmg_path"
           binary_path="$app_path/Contents/MacOS/repressurizer"
           test -x "$binary_path"
-          lipo -verify_arch x86_64 arm64 "$binary_path"
+          lipo "$binary_path" -verify_arch x86_64 arm64
           codesign --verify --deep --strict --verbose=2 "$app_path"
           mount_point=$(mktemp -d)
           hdiutil attach "$dmg_path" -nobrowse -readonly -mountpoint "$mount_point"

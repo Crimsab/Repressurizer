@@ -45,6 +45,6 @@ await run([
   universalBinary,
 ]);
 await chmod(universalBinary, 0o755);
-await run(["lipo", "-verify_arch", "x86_64", "arm64", universalBinary]);
+await run(["lipo", universalBinary, "-verify_arch", "x86_64", "arm64"]);
 
 console.log(`Prepared universal CLI binary at ${universalBinary}`);

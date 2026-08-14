@@ -181,7 +181,7 @@ jobs:
           test -s "$updater_path.sig"
           binary_path="$app_path/Contents/MacOS/repressurizer"
           test -x "$binary_path"
-          lipo -verify_arch x86_64 arm64 "$binary_path"
+          lipo "$binary_path" -verify_arch x86_64 arm64
           codesign --verify --deep --strict --verbose=2 "$app_path"
           spctl --assess --type execute --verbose=2 "$app_path"
           xcrun stapler validate "$app_path"
