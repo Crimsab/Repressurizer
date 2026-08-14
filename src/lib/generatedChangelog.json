@@ -4,163 +4,58 @@
   "repository": "Crimsab/Repressurizer",
   "entries": [
     {
-      "version": "0.4.6",
-      "date": "2026-06-29",
-      "releaseUrl": "https://github.com/Crimsab/Repressurizer/releases/tag/v0.4.6",
-      "compareUrl": "https://github.com/Crimsab/Repressurizer/compare/v0.4.5...v0.4.6",
-      "groups": [
-        {
-          "title": "Added",
-          "audience": "user",
-          "items": [
-            {
-              "text": "Batch Steam price refreshes",
-              "sha": "de9c86c",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/de9c86c"
-            },
-            {
-              "text": "Cache regional Steam prices",
-              "sha": "8daecf2",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/8daecf2"
-            }
-          ]
-        },
-        {
-          "title": "Fixed",
-          "audience": "user",
-          "items": [
-            {
-              "text": "Simplify AutoCat cache controls",
-              "sha": "034d1f2",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/034d1f2"
-            },
-            {
-              "text": "Migrate usable details cache",
-              "sha": "8091203",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/8091203"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "version": "0.4.5",
-      "date": "2026-06-29",
-      "releaseUrl": "https://github.com/Crimsab/Repressurizer/releases/tag/v0.4.5",
-      "compareUrl": "https://github.com/Crimsab/Repressurizer/compare/v0.4.4...v0.4.5",
+      "version": "0.5.5",
+      "date": "2026-07-18",
+      "releaseUrl": "https://github.com/Crimsab/Repressurizer/releases/tag/v0.5.5",
+      "compareUrl": "https://github.com/Crimsab/Repressurizer/compare/v0.5.4...v0.5.5",
       "groups": [
         {
           "title": "Fixed",
           "audience": "user",
           "items": [
             {
-              "text": "Stabilize AutoCat cache and currency refresh",
-              "sha": "2687bc8",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/2687bc8"
+              "text": "Tolerate isolated antivirus false positives",
+              "sha": "8653b62",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/8653b62"
+            },
+            {
+              "text": "Ignore uninitialized Steam LevelDB directories",
+              "sha": "7e379ac",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/7e379ac"
+            },
+            {
+              "text": "Publish clean releases automatically",
+              "sha": "4386d7c",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/4386d7c"
             }
           ]
         }
       ]
     },
     {
-      "version": "0.4.4",
-      "date": "2026-06-29",
-      "releaseUrl": "https://github.com/Crimsab/Repressurizer/releases/tag/v0.4.4",
-      "compareUrl": "https://github.com/Crimsab/Repressurizer/compare/v0.4.3...v0.4.4",
+      "version": "0.5.4",
+      "date": "2026-07-18",
+      "releaseUrl": "https://github.com/Crimsab/Repressurizer/releases/tag/v0.5.4",
+      "compareUrl": "https://github.com/Crimsab/Repressurizer/compare/v0.5.3...v0.5.4",
       "groups": [
-        {
-          "title": "Added",
-          "audience": "user",
-          "items": [
-            {
-              "text": "Cache preparation and library sorting",
-              "sha": "5f398a0",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/5f398a0"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "version": "0.4.3",
-      "date": "2026-06-29",
-      "releaseUrl": "https://github.com/Crimsab/Repressurizer/releases/tag/v0.4.3",
-      "compareUrl": "https://github.com/Crimsab/Repressurizer/compare/v0.4.2...v0.4.3",
-      "groups": [
-        {
-          "title": "Added",
-          "audience": "user",
-          "items": [
-            {
-              "text": "Proxy routing and fetch controls",
-              "sha": "cab2844",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/cab2844"
-            }
-          ]
-        },
         {
           "title": "Fixed",
           "audience": "user",
           "items": [
             {
-              "text": "Allow cached-only Steam rating autocats",
-              "sha": "fe4b4bd",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/fe4b4bd"
+              "text": "Wait for CI before releasing tags",
+              "sha": "bf9a682",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/bf9a682"
             },
             {
-              "text": "Resolve imported placeholder game names",
-              "sha": "320af45",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/320af45"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "version": "0.4.2",
-      "date": "2026-06-29",
-      "releaseUrl": "https://github.com/Crimsab/Repressurizer/releases/tag/v0.4.2",
-      "compareUrl": "https://github.com/Crimsab/Repressurizer/compare/v0.4.1...v0.4.2",
-      "groups": [
-        {
-          "title": "Added",
-          "audience": "user",
-          "items": [
-            {
-              "text": "AutoCat: handle Steam review rate limits",
-              "sha": "0a959e7",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/0a959e7"
+              "text": "Queue overlapping metadata refreshes",
+              "sha": "a21e39c",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/a21e39c"
             },
             {
-              "text": "Configurable refresh and update settings",
-              "sha": "83800ca",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/83800ca"
-            },
-            {
-              "text": "AutoCat: refine Steam review defaults controls",
-              "sha": "dffde4a",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/dffde4a"
-            },
-            {
-              "text": "Steam review rule labels",
-              "sha": "3e5a417",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/3e5a417"
-            },
-            {
-              "text": "AutoCat: improve Steam review fetch and rules",
-              "sha": "debeb1b",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/debeb1b"
-            }
-          ]
-        },
-        {
-          "title": "Fixed",
-          "audience": "user",
-          "items": [
-            {
-              "text": "Harden app data storage",
-              "sha": "d51b9d8",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/d51b9d8"
+              "text": "Queue original dates after direct detail fetches",
+              "sha": "95b548c",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/95b548c"
             }
           ]
         },
@@ -169,148 +64,33 @@
           "audience": "internal",
           "items": [
             {
-              "text": "Update settings e2e coverage",
-              "sha": "1ef3fc1",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/1ef3fc1"
+              "text": "Cover queued original dates after direct detail fetches",
+              "sha": "ba21a59",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/ba21a59"
             }
           ]
         }
       ]
     },
     {
-      "version": "0.4.1",
-      "date": "2026-06-29",
-      "releaseUrl": "https://github.com/Crimsab/Repressurizer/releases/tag/v0.4.1",
-      "compareUrl": "https://github.com/Crimsab/Repressurizer/compare/v0.4.0...v0.4.1",
+      "version": "0.5.3",
+      "date": "2026-07-17",
+      "releaseUrl": "https://github.com/Crimsab/Repressurizer/releases/tag/v0.5.3",
+      "compareUrl": "https://github.com/Crimsab/Repressurizer/compare/v0.5.2...v0.5.3",
       "groups": [
-        {
-          "title": "Added",
-          "audience": "user",
-          "items": [
-            {
-              "text": "AutoCat: compact and reorder AutoCat chooser",
-              "sha": "46c2e04",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/46c2e04"
-            },
-            {
-              "text": "AutoCat rating and preset labels",
-              "sha": "15dc2a0",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/15dc2a0"
-            },
-            {
-              "text": "AutoCat: Steam review rating support",
-              "sha": "f10a24e",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/f10a24e"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "version": "0.4.0",
-      "date": "2026-06-26",
-      "releaseUrl": "https://github.com/Crimsab/Repressurizer/releases/tag/v0.4.0",
-      "compareUrl": "https://github.com/Crimsab/Repressurizer/compare/v0.3.4...v0.4.0",
-      "groups": [
-        {
-          "title": "Added",
-          "audience": "user",
-          "items": [
-            {
-              "text": "AutoCat: improve metadata selection and preview sorting",
-              "sha": "8b70a81",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/8b70a81"
-            },
-            {
-              "text": "UI: standardize custom select menus",
-              "sha": "1b97bd3",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/1b97bd3"
-            },
-            {
-              "text": "Steam: export shortcut tags on save",
-              "sha": "cf7db23",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/cf7db23"
-            },
-            {
-              "text": "Steam: import local license library",
-              "sha": "c788d3d",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/c788d3d"
-            },
-            {
-              "text": "AutoCat: language categorizer",
-              "sha": "5bee4fd",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/5bee4fd"
-            },
-            {
-              "text": "Import: convert Depressurizer filters",
-              "sha": "0cee9a9",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/0cee9a9"
-            },
-            {
-              "text": "Import: convert Depressurizer autocats to presets",
-              "sha": "3c3bb00",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/3c3bb00"
-            },
-            {
-              "text": "AutoCat: run saved preset sequence",
-              "sha": "f6a5cce",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/f6a5cce"
-            },
-            {
-              "text": "Legacy: import sharedconfig categories",
-              "sha": "aa40991",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/aa40991"
-            },
-            {
-              "text": "Shortcuts: import non-Steam shortcuts",
-              "sha": "24adb7f",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/24adb7f"
-            },
-            {
-              "text": "Filters: saved advanced category filters",
-              "sha": "f3e6867",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/f3e6867"
-            },
-            {
-              "text": "AutoCat: save reusable presets",
-              "sha": "4c532bb",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/4c532bb"
-            },
-            {
-              "text": "AutoCat: metadata categorizer types",
-              "sha": "7a8ed33",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/7a8ed33"
-            },
-            {
-              "text": "Import: Depressurizer profile import",
-              "sha": "50d2d41",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/50d2d41"
-            }
-          ]
-        },
         {
           "title": "Fixed",
           "audience": "user",
           "items": [
             {
-              "text": "Settings: keep dialog size stable",
-              "sha": "3a47c43",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/3a47c43"
+              "text": "Queue metadata refreshes during active scans",
+              "sha": "538047e",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/538047e"
             },
             {
-              "text": "Filters: stabilize advanced filter collections selector",
-              "sha": "bfa5cc2",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/bfa5cc2"
-            },
-            {
-              "text": "AutoCat: replace generated category contents",
-              "sha": "b442aa5",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/b442aa5"
-            },
-            {
-              "text": "Steam: block collection saves while Steam runs",
-              "sha": "3e68d47",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/3e68d47"
+              "text": "Polish documentation rendering and accessibility",
+              "sha": "beb7d4d",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/beb7d4d"
             }
           ]
         },
@@ -319,14 +99,14 @@
           "audience": "internal",
           "items": [
             {
-              "text": "Simplify readme badges",
-              "sha": "9058794",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/9058794"
+              "text": "Enrich site and publish redesigned readme",
+              "sha": "482eec7",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/482eec7"
             },
             {
-              "text": "Integration: add package badges and guides",
-              "sha": "23f18c8",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/23f18c8"
+              "text": "Publish documentation site and harden releases",
+              "sha": "1328ca6",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/1328ca6"
             }
           ]
         },
@@ -335,53 +115,68 @@
           "audience": "internal",
           "items": [
             {
-              "text": "Steam: cover Depressurizer parity fixtures",
-              "sha": "4bb114f",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/4bb114f"
+              "text": "Bump actions/setup-node from 6.5.0 to 7.0.0 (#27)",
+              "sha": "5e08ac0",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/5e08ac0"
+            },
+            {
+              "text": "Bump actions/upload-pages-artifact from 4.0.0 to 5.0.0 (#28)",
+              "sha": "d5c80aa",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/d5c80aa"
+            },
+            {
+              "text": "Bump actions/cache/restore from 5.1.0 to 6.1.0 (#26)",
+              "sha": "a4e1f1f",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/a4e1f1f"
+            },
+            {
+              "text": "Bump actions/cache from 5.1.0 to 6.1.0 (#29)",
+              "sha": "f21b4ea",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/f21b4ea"
+            },
+            {
+              "text": "Bump actions/checkout from 6.0.3 to 7.0.0 (#30)",
+              "sha": "52a85be",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/52a85be"
+            },
+            {
+              "text": "Cover documentation button hover states",
+              "sha": "7e9f836",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/7e9f836"
             }
           ]
         }
       ]
     },
     {
-      "version": "0.3.4",
-      "date": "2026-06-23",
-      "releaseUrl": "https://github.com/Crimsab/Repressurizer/releases/tag/v0.3.4",
-      "compareUrl": "https://github.com/Crimsab/Repressurizer/compare/v0.3.3...v0.3.4",
+      "version": "0.5.2",
+      "date": "2026-07-13",
+      "releaseUrl": "https://github.com/Crimsab/Repressurizer/releases/tag/v0.5.2",
+      "compareUrl": "https://github.com/Crimsab/Repressurizer/compare/v0.5.1...v0.5.2",
       "groups": [
         {
-          "title": "Added",
+          "title": "Fixed",
           "audience": "user",
           "items": [
             {
-              "text": "CLI: help and validation commands",
-              "sha": "d0f2a22",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/d0f2a22"
+              "text": "Separate tag and flag metadata",
+              "sha": "0702966",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/0702966"
             },
             {
-              "text": "CLI: short SAM achievement commands",
-              "sha": "4880a35",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/4880a35"
+              "text": "Invalidate v2 AutoCat previews",
+              "sha": "72929f3",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/72929f3"
             },
             {
-              "text": "CLI: expose guarded SAM actions",
-              "sha": "164902e",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/164902e"
+              "text": "Require real metadata for tag autocats",
+              "sha": "a8e80fa",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/a8e80fa"
             },
             {
-              "text": "CLI: snapshot and diagnostics commands",
-              "sha": "ba8ad0b",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/ba8ad0b"
-            },
-            {
-              "text": "Snapshot: export library enrichment data",
-              "sha": "9b3d406",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/9b3d406"
-            },
-            {
-              "text": "Integration: release snapshot helpers v0.3.0",
-              "sha": "c3bee29",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/c3bee29"
+              "text": "Preserve uncertain metadata memberships",
+              "sha": "2452ed0",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/2452ed0"
             }
           ]
         },
@@ -390,9 +185,356 @@
           "audience": "internal",
           "items": [
             {
-              "text": "Release: include CLI asset in releases",
-              "sha": "e328efd",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/e328efd"
+              "text": "Cover incomplete AutoCat metadata",
+              "sha": "1f37cb7",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/1f37cb7"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "version": "0.5.1",
+      "date": "2026-07-11",
+      "releaseUrl": "https://github.com/Crimsab/Repressurizer/releases/tag/v0.5.1",
+      "compareUrl": "https://github.com/Crimsab/Repressurizer/compare/v0.5.0...v0.5.1",
+      "groups": [
+        {
+          "title": "Fixed",
+          "audience": "user",
+          "items": [
+            {
+              "text": "Invalidate unsafe AutoCat previews",
+              "sha": "3d4f280",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/3d4f280"
+            },
+            {
+              "text": "Resolve cached names in save preview",
+              "sha": "cd255b0",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/cd255b0"
+            },
+            {
+              "text": "Isolate AutoCat preset apply scopes",
+              "sha": "dab4e0a",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/dab4e0a"
+            },
+            {
+              "text": "Exclude orphaned AutoCat metadata",
+              "sha": "6000655",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/6000655"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "version": "0.5.0",
+      "date": "2026-07-10",
+      "releaseUrl": "https://github.com/Crimsab/Repressurizer/releases/tag/v0.5.0",
+      "compareUrl": "https://github.com/Crimsab/Repressurizer/compare/v0.4.11...v0.5.0",
+      "groups": [
+        {
+          "title": "Added",
+          "audience": "user",
+          "items": [
+            {
+              "text": "Resize complex workspace dialogs",
+              "sha": "dcf2274",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/dcf2274"
+            },
+            {
+              "text": "Make AutoCat workspace resizable",
+              "sha": "646ab31",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/646ab31"
+            },
+            {
+              "text": "Persistent resizable dialog panels",
+              "sha": "97d97e8",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/97d97e8"
+            },
+            {
+              "text": "Accessible toolbar tooltips",
+              "sha": "9f81cce",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/9f81cce"
+            },
+            {
+              "text": "Make advanced category filters searchable",
+              "sha": "77a39b7",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/77a39b7"
+            },
+            {
+              "text": "Reveal truncated category names",
+              "sha": "44c623b",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/44c623b"
+            },
+            {
+              "text": "Reveal all save preview changes",
+              "sha": "ce102f2",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/ce102f2"
+            },
+            {
+              "text": "AutoCat: custom rule builder",
+              "sha": "27277eb",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/27277eb"
+            },
+            {
+              "text": "Library refresh cache controls",
+              "sha": "e92c45a",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/e92c45a"
+            },
+            {
+              "text": "Preview channel and category chip settings",
+              "sha": "85a0729",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/85a0729"
+            },
+            {
+              "text": "Improve compare collection navigation",
+              "sha": "4d7e4a4",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/4d7e4a4"
+            }
+          ]
+        },
+        {
+          "title": "Fixed",
+          "audience": "user",
+          "items": [
+            {
+              "text": "Polish resizable dialog focus and layout",
+              "sha": "3caf0da",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/3caf0da"
+            },
+            {
+              "text": "Keep dirty header within minimum width",
+              "sha": "75d82a7",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/75d82a7"
+            },
+            {
+              "text": "Dismiss tooltips when actions open",
+              "sha": "d434069",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/d434069"
+            },
+            {
+              "text": "Clarify AutoCat metadata requirements",
+              "sha": "1d97d19",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/1d97d19"
+            },
+            {
+              "text": "Raise secondary text contrast across themes",
+              "sha": "a4507ce",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/a4507ce"
+            },
+            {
+              "text": "Open save preview at the summary",
+              "sha": "76bd5d9",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/76bd5d9"
+            },
+            {
+              "text": "Keep header actions reachable at minimum width",
+              "sha": "2fc43e1",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/2fc43e1"
+            },
+            {
+              "text": "Let AutoCat Run all skip ignored details",
+              "sha": "bfd428f",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/bfd428f"
+            },
+            {
+              "text": "Harden categorization and fetch lifecycles",
+              "sha": "aa97c43",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/aa97c43"
+            },
+            {
+              "text": "Satisfy latest clippy",
+              "sha": "c8c6e8a",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/c8c6e8a"
+            },
+            {
+              "text": "Harden backups automation and UI",
+              "sha": "253254e",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/253254e"
+            },
+            {
+              "text": "AutoCat: polish custom rule preview",
+              "sha": "1e8e382",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/1e8e382"
+            }
+          ]
+        },
+        {
+          "title": "Changed",
+          "audience": "user",
+          "items": [
+            {
+              "text": "Organize frontend feature modules",
+              "sha": "184b913",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/184b913"
+            },
+            {
+              "text": "Optimize category lookups and note lifecycle",
+              "sha": "18b86e0",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/18b86e0"
+            },
+            {
+              "text": "Decompose Steam collections storage",
+              "sha": "c0cca52",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/c0cca52"
+            },
+            {
+              "text": "Extract automation snapshot builder",
+              "sha": "53094af",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/53094af"
+            },
+            {
+              "text": "Decompose Tauri runtime modules",
+              "sha": "d822b0c",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/d822b0c"
+            },
+            {
+              "text": "Decompose SAM integration",
+              "sha": "78807da",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/78807da"
+            },
+            {
+              "text": "Decompose sidebar architecture",
+              "sha": "69d718b",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/69d718b"
+            },
+            {
+              "text": "Decompose game detail page",
+              "sha": "75b3091",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/75b3091"
+            },
+            {
+              "text": "Decompose auto categorization dialog",
+              "sha": "c3c0578",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/c3c0578"
+            },
+            {
+              "text": "Decompose settings architecture",
+              "sha": "11b0da1",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/11b0da1"
+            }
+          ]
+        },
+        {
+          "title": "Internal",
+          "audience": "internal",
+          "items": [
+            {
+              "text": "Normalize extracted module endings",
+              "sha": "ccfbce6",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/ccfbce6"
+            },
+            {
+              "text": "Systematize preview release numbering",
+              "sha": "1d26b95",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/1d26b95"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "version": "0.4.11",
+      "date": "2026-07-03",
+      "releaseUrl": "https://github.com/Crimsab/Repressurizer/releases/tag/v0.4.11",
+      "compareUrl": "https://github.com/Crimsab/Repressurizer/compare/v0.4.10...v0.4.11",
+      "groups": [
+        {
+          "title": "Added",
+          "audience": "user",
+          "items": [
+            {
+              "text": "Compare collections and HLTB unknown",
+              "sha": "072b31e",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/072b31e"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "version": "0.4.10",
+      "date": "2026-07-02",
+      "releaseUrl": "https://github.com/Crimsab/Repressurizer/releases/tag/v0.4.10",
+      "compareUrl": "https://github.com/Crimsab/Repressurizer/compare/v0.4.9...v0.4.10",
+      "groups": [
+        {
+          "title": "Added",
+          "audience": "user",
+          "items": [
+            {
+              "text": "Refresh collection metadata cache",
+              "sha": "a7be1dc",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/a7be1dc"
+            }
+          ]
+        },
+        {
+          "title": "Fixed",
+          "audience": "user",
+          "items": [
+            {
+              "text": "Search game metadata from simple queries",
+              "sha": "ab82884",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/ab82884"
+            }
+          ]
+        },
+        {
+          "title": "Documentation",
+          "audience": "internal",
+          "items": [
+            {
+              "text": "Streamline README preview [skip ci]",
+              "sha": "5ddf89a",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/5ddf89a"
+            },
+            {
+              "text": "Fix README demo preview [skip ci]",
+              "sha": "431a6fd",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/431a6fd"
+            },
+            {
+              "text": "Update README presentation",
+              "sha": "98bf0c4",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/98bf0c4"
+            },
+            {
+              "text": "Trim README demo intro",
+              "sha": "6d8dd33",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/6d8dd33"
+            },
+            {
+              "text": "Improve README demo media",
+              "sha": "a338cf2",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/a338cf2"
+            },
+            {
+              "text": "Use real screenshots and align sidebar rows",
+              "sha": "69fbeb8",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/69fbeb8"
+            },
+            {
+              "text": "Refresh README and project visuals",
+              "sha": "dcf61af",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/dcf61af"
+            }
+          ]
+        },
+        {
+          "title": "Internal",
+          "audience": "internal",
+          "items": [
+            {
+              "text": "Refine checks and release packaging",
+              "sha": "8d24d02",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/8d24d02"
+            },
+            {
+              "text": "Mirror integration package to GitHub Packages",
+              "sha": "b45a9c6",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/b45a9c6"
             }
           ]
         }
