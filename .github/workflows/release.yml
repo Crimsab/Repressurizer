@@ -213,7 +213,9 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path artifacts
           Copy-Item src-tauri\target\release\repressurizer.exe artifacts\Repressurizer-portable.exe
-          Compress-Archive -Path artifacts\Repressurizer-portable.exe -DestinationPath artifacts\Repressurizer-portable-windows-x64.zip -Force
+          Set-Content -Path artifacts\repressurizer-portable.marker -Value "portable"
+          Compress-Archive -Path artifacts\Repressurizer-portable.exe, artifacts\repressurizer-portable.marker -DestinationPath artifacts\Repressurizer-portable-windows-x64.zip -Force
+          Remove-Item artifacts\repressurizer-portable.marker
           Copy-Item src-tauri\target\release\repressurizer-cli.exe artifacts\Repressurizer-cli.exe
           Compress-Archive -Path artifacts\Repressurizer-cli.exe -DestinationPath artifacts\Repressurizer-cli-windows-x64.zip -Force
           Copy-Item src-tauri\target\release\bundle\nsis\*.exe artifacts\
@@ -261,6 +263,9 @@ jobs:
           }
 
           $manifest | ConvertTo-Json -Depth 8 | Set-Content -Path artifacts\latest.json -Encoding utf8
+
+      - name: Validate updater manifest
+        run: bun scripts/updater-manifest.ts --manifest artifacts/latest.json --artifacts artifacts --repo "${{ github.repository }}" --tag "${{ github.ref_name }}" --version "${{ steps.version.outputs.version }}" --platform windows-x86_64 --platform linux-x86_64
 
       - name: Create artifact checksums
         shell: pwsh
