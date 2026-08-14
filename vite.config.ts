@@ -25,7 +25,7 @@ export default defineConfig({
     strictPort: true,
   },
   build: {
-    target: "ES2022",
+    target: "es2022",
     sourcemap: process.env.REPRESSURIZER_SOURCEMAP === "true",
     rollupOptions: {
       output: {
