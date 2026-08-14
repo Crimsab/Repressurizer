@@ -2,5 +2,10 @@
   "identifier": "com.crimsab.repressurizer",
   "build": {
     "beforeBundleCommand": "bun scripts/prepare-macos-universal-cli.ts"
+  },
+  "bundle": {
+    "macOS": {
+      "signingIdentity": "-"
+    }
   }
 }

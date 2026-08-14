@@ -79,7 +79,14 @@ ARM64 Linux devices are not supported by the current release packages.
 
 ## macOS
 
-Download the universal DMG, open it, and drag **Repressurizer** to Applications. The same bundle supports Intel and Apple Silicon Macs on macOS 11 or newer. Release DMGs are signed with a Developer ID certificate, notarized by Apple, and support in-app updates.
+Download the universal DMG, open it, and drag **Repressurizer** to Applications. The same bundle supports Intel and Apple Silicon Macs on macOS 11 or newer and supports signed in-app updates.
+
+Repressurizer is ad-hoc signed and is not notarized by Apple. On the first launch,
+macOS may say that it cannot verify the developer. After attempting to open the
+app, go to **System Settings > Privacy & Security**, choose **Open Anyway** for
+Repressurizer, and confirm the prompt. Only do this for a DMG downloaded from the
+official GitHub release and verified against `SHA256SUMS.txt`. Later launches do
+not require this approval. See [Apple's Gatekeeper instructions](https://support.apple.com/102445).
 
 Automatic Steam detection uses `~/Library/Application Support/Steam`. Collection files remain under Steam's normal `userdata/<id3>/config/cloudstorage` directory. Repressurizer blocks collection saves and restores while either the native `steam_osx` process or the Steam app process is running, and creates the same pre-write and pre-restore backups used on Windows and Linux.
 

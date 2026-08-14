@@ -22,7 +22,14 @@ never marks them as GitHub's latest release.
 4. After CI succeeds, the tag workflow creates `v<version>` if it does not exist.
 5. The release workflow builds Windows, Linux, and a universal macOS desktop bundle, then publishes a shared updater manifest, release notes, and optional VirusTotal results.
 
-The macOS job is a required release gate. It verifies both Intel and Apple Silicon slices, the app signature, Gatekeeper assessment, notarization ticket, DMG, updater archive, and updater signature before the Windows publisher job assembles the final release. See [macOS packaging](macos.md) for the required Apple secrets.
+The macOS job is a required release gate. It verifies both Intel and Apple Silicon slices, the ad-hoc app signature, DMG contents, updater archive, and updater signature before the Windows publisher job assembles the final release. The app is not Apple-notarized, so the first launch requires explicit approval in macOS Privacy & Security. See [macOS packaging](macos.md).
+
+Manual release runs require an existing `v<version>` tag. A secret-free preflight
+validates its syntax and version, resolves it once to an immutable commit SHA,
+and requires a successful CI run for that commit. Every platform then checks out
+the same resolved SHA. This permits a failed release pipeline to be rebuilt
+without moving the tag, exposing signing keys to unvalidated source, or building
+untagged source.
 
 ## Beta desktop release
 
