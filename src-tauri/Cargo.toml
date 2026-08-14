@@ -32,7 +32,7 @@ reqwest = { version = "0.13", features = ["json", "query", "socks"] }
 repressurizer-integration = { path = "../packages/rust" }
 tokio = { version = "1", features = ["full"] }
 sha2 = "0.10"
-base64 = "0.22"
+base64 = "0.23"
 chrono = "0.4"
 dirs = "6"
 rusty-leveldb = "4.0.1"
