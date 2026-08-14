@@ -18,9 +18,79 @@ env:
   HAS_VT_API_KEY: ${{ secrets.VT_API_KEY != '' }}
 
 jobs:
+  linux:
+    name: Linux AppImage, Debian package, and CLI
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        env:
+          GIT_CONFIG_COUNT: 1
+          GIT_CONFIG_KEY_0: init.defaultBranch
+          GIT_CONFIG_VALUE_0: main
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
+        with:
+          toolchain: 1.94.0
+
+      - name: Install Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            patchelf
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Validate project
+        run: bun run check
+
+      - name: Build Linux desktop bundles
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: "1"
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: bun run build:linux
+
+      - name: Build Linux CLI
+        run: cargo build --manifest-path src-tauri/Cargo.toml --release --bin repressurizer-cli
+
+      - name: Collect Linux artifacts
+        run: |
+          mkdir -p artifacts
+          cp src-tauri/target/release/bundle/deb/*.deb artifacts/
+          cp src-tauri/target/release/bundle/appimage/*.AppImage artifacts/
+          cp src-tauri/target/release/bundle/appimage/*.AppImage.sig artifacts/
+          cp src-tauri/target/release/repressurizer-cli artifacts/repressurizer-cli
+          tar --create --gzip \
+            --file artifacts/Repressurizer-cli-linux-x86_64.tar.gz \
+            --directory artifacts repressurizer-cli
+          rm artifacts/repressurizer-cli
+          find artifacts -maxdepth 1 -type f -printf '%f %s bytes\n' | sort
+
+      - name: Upload Linux release artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: linux-release-artifacts
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 1
+
   windows:
     name: Windows installer and portable
     runs-on: windows-2025-vs2026
+    needs: linux
 
     steps:
       - name: Checkout
@@ -132,6 +202,12 @@ jobs:
       - name: Build Windows CLI
         run: cargo build --manifest-path src-tauri/Cargo.toml --release --bin repressurizer-cli
 
+      - name: Download Linux artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: linux-release-artifacts
+          path: artifacts
+
       - name: Collect Windows artifacts
         shell: pwsh
         run: |
@@ -168,6 +244,20 @@ jobs:
                 url = $assetUrl
               }
             }
+          }
+
+          $linuxUpdater = Get-ChildItem artifacts -Filter "*.AppImage" | Select-Object -First 1
+          if (-not $linuxUpdater) {
+            throw "Could not find Linux AppImage updater bundle"
+          }
+          $linuxSignaturePath = "$($linuxUpdater.FullName).sig"
+          if (-not (Test-Path $linuxSignaturePath)) {
+            throw "Could not find updater signature for $($linuxUpdater.Name)"
+          }
+          $linuxAssetName = [System.Uri]::EscapeDataString($linuxUpdater.Name)
+          $manifest.platforms["linux-x86_64"] = [ordered]@{
+            signature = (Get-Content $linuxSignaturePath -Raw).Trim()
+            url = "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/$linuxAssetName"
           }
 
           $manifest | ConvertTo-Json -Depth 8 | Set-Content -Path artifacts\latest.json -Encoding utf8

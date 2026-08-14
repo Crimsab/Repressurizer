@@ -44,11 +44,14 @@ const releaseNotes = [
   "- `Repressurizer-portable.exe`: unpacked portable executable",
   "- `Repressurizer-cli-windows-x64.zip`: command-line tools for scripts and automation",
   "- `Repressurizer-cli.exe`: unpacked command-line executable",
+  "- `Repressurizer_*_amd64.AppImage`: portable Linux desktop app with built-in updates",
+  "- `Repressurizer_*_amd64.deb`: Debian/Ubuntu desktop package",
+  "- `Repressurizer-cli-linux-x86_64.tar.gz`: Linux command-line tools",
   "- `latest.json`: updater manifest",
   "",
   "## Install Notes",
   "",
-  "Use the installer for normal Windows installs. Use the portable ZIP when you want a self-contained executable. Use the CLI ZIP for scriptable diagnostics, snapshot validation/export, automation publishing, and guarded SAM commands.",
+  "On Windows, use the installer for a normal installation or the portable ZIP for a self-contained executable. On Linux, use the AppImage for a portable app with built-in updates or the Debian package for system installation. The CLI archives support scriptable diagnostics, snapshot validation/export, and automation publishing; guarded SAM write commands remain Windows-only.",
   ""
 ].join("\n");
 

@@ -14,6 +14,29 @@ test.beforeEach(async ({ page }) => {
   await installTauriMock(page);
 });
 
+test.describe("Linux setup", () => {
+  test.use({
+    userAgent:
+      "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/147.0.0.0 Safari/537.36",
+  });
+
+  test("shows a Linux Steam path during first-run setup", async ({ page }, testInfo) => {
+    await page.goto("/");
+    await page.evaluate(async () => {
+      const { useSettingsStore } = await import("/src/stores/settingsStore.ts");
+      useSettingsStore.getState().setSettings({ setupComplete: false, steamPath: "" });
+    });
+
+    const pathInput = page.getByPlaceholder("/home/you/.local/share/Steam");
+    await expect(pathInput).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+
+    const screenshotPath = testInfo.outputPath("linux-setup.png");
+    await page.screenshot({ path: screenshotPath, fullPage: true });
+    await testInfo.attach("linux-setup", { path: screenshotPath, contentType: "image/png" });
+  });
+});
+
 test("loads the main library surface with mocked Steam data", async ({ page }, testInfo) => {
   await page.goto("/");
 

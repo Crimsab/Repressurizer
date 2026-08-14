@@ -2,7 +2,7 @@
 
 Thanks for considering a contribution to Repressurizer.
 
-Repressurizer is a Tauri desktop app with a Rust backend and a React/TypeScript frontend. It is Windows-first for now.
+Repressurizer is a Tauri desktop app with a Rust backend and a React/TypeScript frontend. Windows and x86_64 Linux are supported; Steam Achievement Manager writes remain Windows-only.
 
 ## Setup
 

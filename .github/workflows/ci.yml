@@ -121,6 +121,17 @@ jobs:
       - name: Rust app tests
         run: cargo test --manifest-path src-tauri/Cargo.toml
 
+      - name: Setup Bun for Linux desktop build
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
+
+      - name: Install frontend dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build Linux desktop executable
+        run: bun tauri build --no-bundle
+
   rust-integration-check:
     name: Rust integration crate
     runs-on: ubuntu-latest

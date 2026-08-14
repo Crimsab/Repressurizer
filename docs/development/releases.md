@@ -8,11 +8,11 @@ The desktop app, TypeScript integration package, and Rust integration crate have
 2. Push the version commit to `main`.
 3. CI validates TypeScript, Rust, browser smoke tests, and the documentation build.
 4. After CI succeeds, the tag workflow creates `v<version>` if it does not exist.
-5. The release workflow builds the Windows installer, portable executable, CLI, updater manifest, release notes, and optional VirusTotal results.
+5. The release workflow builds Windows and Linux desktop packages and CLIs, then publishes a shared updater manifest, release notes, and optional VirusTotal results.
 
 ## Preview
 
-Every commit on `main` starts the Preview workflow. It replaces the rolling `preview` prerelease and produces a preview-specific updater manifest.
+Every commit on `main` starts the Preview workflow. It replaces the rolling Windows `preview` prerelease and produces a preview-specific updater manifest. Linux uses stable releases until the preview workflow gains matching Linux artifacts.
 
 ## Integration packages
 

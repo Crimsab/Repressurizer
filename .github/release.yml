@@ -17,10 +17,11 @@ changelog:
         - metadata
         - steam-store
         - steam-family
-    - title: Installer and Windows
+    - title: Installer and Platforms
       labels:
         - installer
         - windows
+        - linux
     - title: User Interface
       labels:
         - ui

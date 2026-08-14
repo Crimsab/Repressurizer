@@ -10,6 +10,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:linux": "bun tauri build --bundles deb,appimage",
     "check": "bun run i18n:check && tsc --noEmit && bun run --cwd packages/integration check",
     "integration:build": "bun run --cwd packages/integration build",
     "integration:rust:check": "cargo check --manifest-path packages/rust/Cargo.toml",

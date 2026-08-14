@@ -20,18 +20,20 @@ body:
     attributes:
       label: Build type
       options:
-        - Installer
-        - Portable zip
-        - Portable exe
+        - Windows installer
+        - Windows portable zip
+        - Windows portable exe
+        - Linux AppImage
+        - Linux Debian package
         - Local dev build
         - Unknown
     validations:
       required: true
   - type: input
-    id: windows
+    id: operating-system
     attributes:
-      label: Windows version
-      placeholder: "Windows 11 24H2"
+      label: Operating system and version
+      placeholder: "Windows 11 24H2 / Ubuntu 24.04"
     validations:
       required: true
   - type: textarea

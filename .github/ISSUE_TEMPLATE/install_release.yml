@@ -1,7 +1,7 @@
 name: Install, updater, or release issue
 description: Report installer, portable, update, SmartScreen, or launch problems.
 title: "release: "
-labels: ["installer", "windows", "needs-triage"]
+labels: ["installer", "needs-triage"]
 body:
   - type: input
     id: version
@@ -15,18 +15,20 @@ body:
     attributes:
       label: Build type
       options:
-        - Installer
-        - Portable zip
-        - Portable exe
+        - Windows installer
+        - Windows portable zip
+        - Windows portable exe
+        - Linux AppImage
+        - Linux Debian package
         - Built-in updater
         - Unknown
     validations:
       required: true
   - type: input
-    id: windows
+    id: operating-system
     attributes:
-      label: Windows version
-      placeholder: "Windows 11 24H2"
+      label: Operating system and version
+      placeholder: "Windows 11 24H2 / Ubuntu 24.04"
     validations:
       required: true
   - type: dropdown
@@ -35,7 +37,7 @@ body:
       label: Problem type
       options:
         - SmartScreen warning
-        - Installer failed
+        - Package installation failed
         - Portable failed to launch
         - App crashed on startup
         - Updater failed

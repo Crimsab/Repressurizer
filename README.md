@@ -5,7 +5,7 @@
 <h1 align="center">Repressurizer</h1>
 
 <p align="center">
-  A backup-first Windows app for organizing large Steam libraries.
+  A backup-first Windows and Linux app for organizing large Steam libraries.
 </p>
 
 <p align="center">
@@ -55,6 +55,9 @@ Get the current stable build from the
 | `Repressurizer_..._x64-setup.exe` | Normal Windows installation with built-in updates. |
 | `Repressurizer-portable-windows-x64.zip` | Portable app without installation. |
 | `Repressurizer-cli-windows-x64.zip` | Diagnostics, snapshots, cache checks, backups, and guarded Steam tooling. |
+| `Repressurizer_..._amd64.AppImage` | Portable Linux desktop app for x86_64 systems. |
+| `Repressurizer_..._amd64.deb` | Debian/Ubuntu package for x86_64 systems. |
+| `Repressurizer-cli-linux-x86_64.tar.gz` | Linux CLI for diagnostics, snapshots, cache checks, and backups. |
 
 Windows SmartScreen may warn because early releases are not signed with a
 commercial Windows certificate. Download only from this repository and read the
@@ -158,13 +161,21 @@ before applying imported rules to a library you care about.
 
 ## Requirements
 
-- Windows 10 or Windows 11.
+- Windows 10/11 or a current x86_64 Linux distribution with WebKitGTK 4.1.
 - Steam installed locally.
-- WebView2 Runtime, already present on most current Windows systems.
+- WebView2 Runtime on Windows, already present on most current systems.
 - A Steam Web API key for owned games, achievements, wishlist data, and related metadata.
 
-Linux and macOS are possible future targets, but Windows is the supported
-platform today.
+Linux supports native, Flatpak, and Snap Steam paths. Library loading, collection
+editing, backups, shortcuts, metadata, and exports use the same safety model as
+Windows. Steam Achievement Manager write actions remain Windows-only because
+their local Steamworks bridge is platform-specific.
+
+Steam Deck is an experimental target through the x86_64 AppImage in Desktop
+Mode. Its standard Steam path is detected, but Game Mode has not been validated.
+Steam must be fully closed before Repressurizer writes collection changes, so a
+Deck workflow should currently use Desktop Mode and exit Steam first. ARM64
+Linux is not a release target.
 
 ## Development
 
@@ -191,7 +202,6 @@ and [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
 
 - [Documentation](https://crimsab.github.io/Repressurizer/)
 - [Releases](https://github.com/Crimsab/Repressurizer/releases)
-- [Roadmap](ROADMAP.md)
 - [Changelog](CHANGELOG.md)
 - [Security policy](SECURITY.md)
 - [Issue templates](https://github.com/Crimsab/Repressurizer/issues/new/choose)

@@ -5,7 +5,7 @@ Repressurizer can export redacted diagnostics for support. Redaction reduces acc
 ## Include
 
 - Repressurizer version and build channel.
-- Windows version.
+- Operating system, distribution, and version.
 - The exact workflow that failed.
 - Whether Steam was running.
 - A small reproducible example when possible.
