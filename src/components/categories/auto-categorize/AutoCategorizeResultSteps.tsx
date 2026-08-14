@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
   Check,
+  DownloadSimple,
   FolderSimplePlus,
   Spinner,
   Warning,
@@ -80,18 +81,21 @@ export function FetchStep({ progress, total, error, waiting, coolingDown, cooldo
 // Step: Preview
 // ============================================================
 
-export function PreviewStep({ result, context, notice, error, onBack, onApply }: {
+export function PreviewStep({ result, context, notice, error, onBack, onExport, onApply }: {
   result: CategorizeResult;
   context: PreviewSortContext | null;
   notice: string;
   error: string;
   onBack: () => void;
+  onExport: () => Promise<string | null>;
   onApply: () => void;
 }) {
   const t = useT();
   const games = useGameStore((s) => s.games);
   const hltbData = useHltbStore((s) => s.data);
   const [sortMode, setSortMode] = useState<PreviewSortMode>("count");
+  const [exporting, setExporting] = useState(false);
+  const [exportMessage, setExportMessage] = useState<{ text: string; error: boolean } | null>(null);
   const entries = useMemo(
     () => sortAutoCategorizePreviewEntries(result.assignments, sortMode, context),
     [context, result.assignments, sortMode]
@@ -111,6 +115,22 @@ export function PreviewStep({ result, context, notice, error, onBack, onApply }:
       else next.add(name);
       return next;
     });
+  };
+
+  const handleExport = async () => {
+    setExporting(true);
+    setExportMessage(null);
+    try {
+      const path = await onExport();
+      if (path) setExportMessage({ text: t("auto.exportDiffSuccess"), error: false });
+    } catch (exportError) {
+      setExportMessage({
+        text: t("auto.exportDiffFailed", { error: String(exportError) }),
+        error: true,
+      });
+    } finally {
+      setExporting(false);
+    }
   };
 
   return (
@@ -214,13 +234,35 @@ export function PreviewStep({ result, context, notice, error, onBack, onApply }:
         {t("auto.previewHint")}
       </p>
 
-      <div className="flex justify-between">
+      {exportMessage && (
+        <p
+          role={exportMessage.error ? "alert" : "status"}
+          className={`text-xs ${
+            exportMessage.error ? "text-repressurizer-danger" : "text-repressurizer-success"
+          }`}
+        >
+          {exportMessage.text}
+        </p>
+      )}
+
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <button onClick={onBack} className="btn-press inline-flex items-center gap-1.5 rounded-lg border border-repressurizer-border px-4 py-2 text-sm text-repressurizer-text-muted transition-colors hover:text-white hover:bg-repressurizer-surface-hover">
           <ArrowLeft size={14} /> {t("auto.back")}
         </button>
-        <button onClick={onApply} className="btn-press inline-flex items-center gap-1.5 rounded-xl bg-repressurizer-accent px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-repressurizer-accent-hover">
-          <Check size={14} weight="bold" /> {t("auto.step.apply")}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void handleExport()}
+            disabled={exporting}
+            className="btn-press inline-flex items-center gap-1.5 rounded-lg border border-repressurizer-border px-4 py-2 text-sm text-repressurizer-text-muted transition-colors hover:bg-repressurizer-surface-hover hover:text-white disabled:opacity-50"
+          >
+            <DownloadSimple size={14} />
+            {exporting ? t("auto.exportingDiff") : t("auto.exportDiff")}
+          </button>
+          <button onClick={onApply} className="btn-press inline-flex items-center gap-1.5 rounded-xl bg-repressurizer-accent px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-repressurizer-accent-hover">
+            <Check size={14} weight="bold" /> {t("auto.step.apply")}
+          </button>
+        </div>
       </div>
     </div>
   );

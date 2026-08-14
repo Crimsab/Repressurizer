@@ -214,7 +214,7 @@ test("keeps advanced category filters compact and searchable", async ({ page }) 
   await expect(dialog.getByText("Advanced Collection 1", { exact: true })).toHaveCount(0);
 });
 
-test("AutoCat shows cached metadata suggestions and preview sorting controls", async ({ page }) => {
+test("AutoCat shows cached metadata suggestions and preview sorting controls", async ({ page }, testInfo) => {
   await page.addInitScript(() => {
     const makeDetail = (
       appId: number,
@@ -280,6 +280,20 @@ test("AutoCat shows cached metadata suggestions and preview sorting controls", a
   await expect(dialog.getByText("(Flag) Steam Cloud")).toBeVisible();
   await expect(dialog.getByRole("button", { name: "Games", exact: true })).toBeVisible();
   await dialog.getByRole("button", { name: "Natural" }).click();
+  await dialog.getByRole("button", { name: "Export diff" }).click();
+  await expect(dialog.getByRole("status")).toHaveText("Preview diff exported.");
+
+  const exportedDiff = await page.evaluate(() =>
+    window.localStorage.getItem("repressurizer-last-written-text")
+  );
+  expect(exportedDiff).toContain('"schema": "repressurizer.autocat-preview-diff"');
+  expect(exportedDiff).toContain('"gamesProcessed": 11');
+  expect(exportedDiff).toContain('"type": "flags"');
+  expect(exportedDiff).not.toMatch(/mock-key|steamPath|apiKey|token|cookie/i);
+
+  const screenshotPath = testInfo.outputPath("autocat-export-diff.png");
+  await page.screenshot({ path: screenshotPath, fullPage: true });
+  await testInfo.attach("autocat-export-diff", { path: screenshotPath, contentType: "image/png" });
 });
 
 test("AutoCat resizes accessibly and restores its saved dialog layout", async ({ page }) => {

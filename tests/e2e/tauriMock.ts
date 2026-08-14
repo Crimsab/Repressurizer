@@ -292,6 +292,25 @@ export async function installTauriMock(page: Page) {
             );
             return backupPath;
           }
+          case "plugin:dialog|save": {
+            const options = args?.options as { defaultPath?: string } | undefined;
+            const exportPath = `C:\\Users\\DemoUser\\Documents\\${String(
+              options?.defaultPath ?? "repressurizer-export.json",
+            )}`;
+            window.localStorage.setItem("repressurizer-last-save-path", exportPath);
+            return exportPath;
+          }
+          case "plugin:fs|write_text_file": {
+            const payload = args as unknown;
+            const writtenText = payload instanceof Uint8Array
+              ? new TextDecoder().decode(payload)
+              : String(args?.contents ?? args?.data ?? "");
+            window.localStorage.setItem(
+              "repressurizer-last-written-text",
+              writtenText,
+            );
+            return null;
+          }
           case "plugin:autostart|is_enabled":
             return autostartEnabled;
           case "plugin:autostart|enable":
