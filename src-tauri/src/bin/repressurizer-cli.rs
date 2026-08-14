@@ -678,6 +678,7 @@ fn settings_summary(settings: &Value, path: &str) -> Value {
             "startOnLogin": setting_bool(settings, "startOnLogin"),
             "startOnLoginMode": string_or_null(setting_str(settings, "startOnLoginMode")),
             "checkUpdatesOnStartup": setting_bool(settings, "checkUpdatesOnStartup"),
+            "updateChannel": string_or_null(setting_str(settings, "updateChannel")),
             "desktopNotifications": setting_bool(settings, "desktopNotifications"),
         },
         "privacy": {

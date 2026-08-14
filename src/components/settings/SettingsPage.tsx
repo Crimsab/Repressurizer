@@ -405,7 +405,10 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
           t("settings.updates.check"),
           t("settings.updates.autoCheck"),
           t("settings.updates.autoCheck.interval"),
-          "about version update updater updates install release latest automatic manifest github",
+          t("settings.updates.channel"),
+          t("settings.updates.channel.stable"),
+          t("settings.updates.channel.beta"),
+          "about version update updater updates install release latest automatic manifest github channel stable beta preview prerelease",
         ],
       },
       {

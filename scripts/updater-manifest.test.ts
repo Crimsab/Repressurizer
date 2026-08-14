@@ -51,6 +51,15 @@ describe("updater manifest validation", () => {
 
     expect(() => validateUpdaterManifest(fixture.options)).toThrow(/artifact missing\.exe is missing/);
   });
+
+  it("rejects a channel manifest with a cross-channel target", () => {
+    const fixture = createFixture();
+    fixture.manifest.channel = "stable";
+    fixture.options.channel = "stable";
+    writeFileSync(fixture.options.manifestPath, JSON.stringify(fixture.manifest), "utf8");
+
+    expect(() => validateUpdaterManifest(fixture.options)).toThrow(/crosses the stable channel/);
+  });
 });
 
 function createFixture() {
@@ -69,6 +78,7 @@ function createFixture() {
     version: "0.5.6",
     pub_date: "2026-08-14T00:00:00.000Z",
     platforms,
+    channel: undefined as string | undefined,
   };
   writeFileSync(manifestPath, JSON.stringify(manifest), "utf8");
 
@@ -81,6 +91,7 @@ function createFixture() {
       tag: "v0.5.6",
       version: "0.5.6",
       requiredPlatforms: ["windows-x86_64"],
+      channel: undefined as "stable" | "beta" | undefined,
     },
   };
 }

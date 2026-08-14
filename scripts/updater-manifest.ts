@@ -9,6 +9,7 @@ interface UpdaterPlatform {
 interface UpdaterManifest {
   version?: unknown;
   pub_date?: unknown;
+  channel?: unknown;
   platforms?: unknown;
 }
 
@@ -19,6 +20,7 @@ export interface UpdaterManifestValidationOptions {
   tag: string;
   version: string;
   requiredPlatforms: string[];
+  channel?: "stable" | "beta";
 }
 
 export function validateUpdaterManifest(options: UpdaterManifestValidationOptions): void {
@@ -31,6 +33,19 @@ export function validateUpdaterManifest(options: UpdaterManifestValidationOption
   }
   if (!isRecord(manifest.platforms)) {
     throw new Error("Updater manifest has no platforms object");
+  }
+  if (options.channel) {
+    if (manifest.channel !== options.channel) {
+      throw new Error(
+        `Updater manifest channel ${String(manifest.channel)} does not match ${options.channel}`,
+      );
+    }
+    const wrongChannel = Object.keys(manifest.platforms).find(
+      (platform) => !platform.endsWith(`-${options.channel}`),
+    );
+    if (wrongChannel) {
+      throw new Error(`Updater platform ${wrongChannel} crosses the ${options.channel} channel`);
+    }
   }
 
   for (const platformName of options.requiredPlatforms) {
@@ -101,6 +116,7 @@ if (import.meta.main) {
     tag: requiredOption(argv, "tag", process.env.GITHUB_REF_NAME),
     version: requiredOption(argv, "version"),
     requiredPlatforms,
+    channel: optionValues(argv, "channel")[0] as "stable" | "beta" | undefined,
   });
   console.log(`Validated updater manifest ${manifestPath}`);
 }

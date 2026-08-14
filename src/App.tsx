@@ -1,6 +1,6 @@
 import { Component, lazy, Suspense, useEffect, useRef, useState } from "react";
 import type { ReactNode, ErrorInfo } from "react";
-import { check, type Update } from "@tauri-apps/plugin-updater";
+import type { Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { listen } from "@tauri-apps/api/event";
 import { useSettingsStore, applyAccentColor, applyTheme } from "./stores/settingsStore";
@@ -24,7 +24,7 @@ import { useSteamRatingsStore } from "./stores/steamRatingsStore";
 import { useAppNameOverrideStore } from "./stores/appNameOverrideStore";
 import { fetchLibrary, loadCollections, createManualBackup, fetchPlayerSummary, hideMainWindow, quitApp, getStartupContext } from "./lib/tauri";
 import type { StartupContext } from "./lib/tauri";
-import { manualUpdateMessageKey } from "./lib/updater";
+import { checkForAppUpdate, manualUpdateMessageKey } from "./lib/updater";
 import { mergeCollectionOnlyGames } from "./lib/libraryMerge";
 import {
   automationPublishDue,
@@ -151,6 +151,7 @@ function AppContent() {
     libraryAutoRefreshIntervalMinutes: state.libraryAutoRefreshIntervalMinutes,
     checkUpdatesOnStartup: state.checkUpdatesOnStartup,
     updateAutoCheckIntervalHours: state.updateAutoCheckIntervalHours,
+    updateChannel: state.updateChannel,
     automationPublishEnabled: state.automationPublishEnabled,
     automationPublishUrl: state.automationPublishUrl,
     showFilterBar: state.showFilterBar,
@@ -241,7 +242,13 @@ function AppContent() {
 
     checkingUpdatesRef.current = true;
     try {
-      const update = await check();
+      if (!startupContext?.updaterTarget) {
+        throw new Error(t("settings.updates.targetUnavailable"));
+      }
+      const update = await checkForAppUpdate(
+        startupContext.updaterTarget,
+        settings.updateChannel ?? "stable"
+      );
       availableUpdateRef.current = update;
       setAvailableUpdate(update);
       if (notify) {
@@ -268,6 +275,11 @@ function AppContent() {
   useEffect(() => { applyAccentColor(accentColor); }, [accentColor]);
   useEffect(() => { applyTheme(theme ?? "dark"); }, [theme]);
   useEffect(() => {
+    availableUpdateRef.current = null;
+    setAvailableUpdate(null);
+  }, [settings.updateChannel]);
+
+  useEffect(() => {
     hydrateSettingsFromDisk().catch(() => {});
   }, [hydrateSettingsFromDisk]);
 
@@ -281,6 +293,7 @@ function AppContent() {
           mainWindowCreated: true,
           updaterKind: "unsupported" as const,
           updaterCanInstall: false,
+          updaterTarget: null,
         };
         setStartupContext(next);
         if (!next.launchedFromAutostart || next.mainWindowCreated) {
@@ -294,6 +307,7 @@ function AppContent() {
           mainWindowCreated: true,
           updaterKind: "unsupported",
           updaterCanInstall: false,
+          updaterTarget: null,
         });
         setWindowActivated(true);
       });
@@ -569,7 +583,7 @@ function AppContent() {
       window.clearTimeout(timer);
       window.clearInterval(interval);
     };
-  }, [startupContext, settings.setupComplete, settings.checkUpdatesOnStartup, settings.updateAutoCheckIntervalHours]);
+  }, [startupContext, settings.setupComplete, settings.checkUpdatesOnStartup, settings.updateAutoCheckIntervalHours, settings.updateChannel]);
 
   useEffect(() => {
     if (!settings.setupComplete || settings.autoRefreshLibraryEnabled !== true) return;

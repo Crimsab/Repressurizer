@@ -472,6 +472,7 @@ export interface AppSettings {
   desktopNotifications: boolean;
   checkUpdatesOnStartup: boolean;
   updateAutoCheckIntervalHours: number;
+  updateChannel: "stable" | "beta";
   autoRefreshLibraryEnabled: boolean;
   libraryAutoRefreshIntervalMinutes: number;
   // Automation export

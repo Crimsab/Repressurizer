@@ -90,6 +90,7 @@ const defaults: AppSettings = {
   desktopNotifications: true,
   checkUpdatesOnStartup: true,
   updateAutoCheckIntervalHours: 12,
+  updateChannel: "stable",
   autoRefreshLibraryEnabled: false,
   libraryAutoRefreshIntervalMinutes: 30,
   automationPublishEnabled: false,
@@ -214,6 +215,7 @@ function normalizeSettings(raw: Partial<AppSettings>): AppSettings {
     libraryRefreshCacheMode: normalizeLibraryRefreshCacheMode(raw),
     categoryColors: normalizeCategoryColors(raw.categoryColors),
     categoryChipStyle: normalizeCategoryChipStyle(raw.categoryChipStyle),
+    updateChannel: raw.updateChannel === "beta" ? "beta" : "stable",
     automationPublishPayload: normalizeAutomationPublishPayload(raw.automationPublishPayload),
     proxySettings: {
       ...defaults.proxySettings,

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-shell";
-import { check, type Update } from "@tauri-apps/plugin-updater";
+import type { Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import {
   ArrowCounterClockwise,
@@ -13,7 +13,12 @@ import {
 import { changelogEntries } from "../../lib/changelog";
 import { useT } from "../../lib/i18n";
 import { getStartupContext, type StartupContext } from "../../lib/tauri";
-import { manualUpdateMessageKey } from "../../lib/updater";
+import {
+  checkForAppUpdate,
+  manualUpdateMessageKey,
+  shouldAllowStableReturn,
+  type UpdateChannel,
+} from "../../lib/updater";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { SelectMenu } from "../ui/SelectMenu";
 import { ChangelogPanel } from "./data/SettingsDataPanels";
@@ -59,6 +64,7 @@ export function AboutSettingsSections({
             mainWindowCreated: true,
             updaterKind: "unsupported",
             updaterCanInstall: false,
+            updaterTarget: null,
           });
         }
       });
@@ -67,14 +73,20 @@ export function AboutSettingsSections({
     };
   }, []);
 
-  const updaterCanInstall = startupContext?.updaterCanInstall ?? true;
+  const updaterCanInstall = startupContext === null
+    ? true
+    : startupContext.updaterCanInstall && Boolean(startupContext.updaterTarget);
+  const updateChannel: UpdateChannel = settings.updateChannel ?? "stable";
 
   const handleCheckUpdates = async () => {
     setCheckingUpdates(true);
     setAvailableUpdate(null);
     setUpdateMessage(null);
     try {
-      const update = await check();
+      if (!startupContext?.updaterTarget) {
+        throw new Error(t("settings.updates.targetUnavailable"));
+      }
+      const update = await checkForAppUpdate(startupContext.updaterTarget, updateChannel);
       setAvailableUpdate(update);
       setUpdateMessage({
         text: update
@@ -119,6 +131,11 @@ export function AboutSettingsSections({
                 Preview
               </span>
             )}
+            {__APP_CHANNEL__ !== "preview" && /-beta\.\d+$/.test(__APP_VERSION__) && (
+              <span className="rounded-md border border-sky-400/30 bg-sky-400/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-sky-300">
+                Beta
+              </span>
+            )}
           </p>
           {updaterCanInstall ? (
             <button
@@ -138,7 +155,13 @@ export function AboutSettingsSections({
                     : t("settings.updates.check")}
                 </span>
                 <span className="mt-0.5 block text-xs leading-relaxed text-repressurizer-text-faint">
-                  {t("settings.updates.desc")}
+                  {t("settings.updates.desc", {
+                    channel: t(
+                      __APP_CHANNEL__ === "preview"
+                        ? "settings.updates.channel.preview"
+                        : `settings.updates.channel.${updateChannel}`
+                    ),
+                  })}
                 </span>
               </span>
             </button>
@@ -196,6 +219,43 @@ export function AboutSettingsSections({
               >
                 <X size={12} weight="bold" />
               </button>
+            </div>
+          )}
+          {updaterCanInstall && __APP_CHANNEL__ !== "preview" && (
+            <div className="mt-3 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-surface/40 px-3 py-2.5">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="text-sm text-repressurizer-text">
+                    {t("settings.updates.channel")}
+                  </p>
+                  <p className="mt-0.5 text-xs leading-relaxed text-repressurizer-text-faint">
+                    {t(`settings.updates.channel.${updateChannel}.desc`)}
+                  </p>
+                </div>
+                <SelectMenu
+                  ariaLabel={t("settings.updates.channel")}
+                  value={updateChannel}
+                  onChange={(value) => {
+                    const channel = value === "beta" ? "beta" : "stable";
+                    setAvailableUpdate(null);
+                    setUpdateMessage(null);
+                    settings.setSettings({ updateChannel: channel });
+                  }}
+                  align="right"
+                  size="sm"
+                  className="w-[140px] shrink-0"
+                  buttonClassName="bg-repressurizer-bg"
+                  options={(["stable", "beta"] as const).map((channel) => ({
+                    value: channel,
+                    label: t(`settings.updates.channel.${channel}`),
+                  }))}
+                />
+              </div>
+              {shouldAllowStableReturn(__APP_VERSION__, updateChannel) && (
+                <p role="note" className="mt-2 text-xs leading-relaxed text-amber-300">
+                  {t("settings.updates.channel.stableReturn")}
+                </p>
+              )}
             </div>
           )}
           {updaterCanInstall && <div className="mt-3 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-surface/40 px-3 py-2.5">

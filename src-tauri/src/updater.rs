@@ -40,6 +40,20 @@ pub(crate) fn current_capability() -> UpdaterCapability {
     )
 }
 
+pub(crate) fn current_manifest_target() -> Option<&'static str> {
+    manifest_target(std::env::consts::OS, std::env::consts::ARCH)
+}
+
+fn manifest_target(operating_system: &str, architecture: &str) -> Option<&'static str> {
+    match (operating_system, architecture) {
+        ("windows", "x86_64") => Some("windows-x86_64"),
+        ("linux", "x86_64") => Some("linux-x86_64"),
+        ("macos", "aarch64") => Some("darwin-aarch64"),
+        ("macos", "x86_64") => Some("darwin-x86_64"),
+        _ => None,
+    }
+}
+
 fn classify_runtime(
     operating_system: &str,
     executable_name: Option<&str>,
@@ -83,7 +97,7 @@ fn classify_runtime(
 
 #[cfg(test)]
 mod tests {
-    use super::{classify_runtime, UpdaterCapability, UpdaterKind};
+    use super::{classify_runtime, manifest_target, UpdaterCapability, UpdaterKind};
 
     #[test]
     fn windows_installer_supports_in_app_updates() {
@@ -144,5 +158,14 @@ mod tests {
                 can_install: false,
             }
         );
+    }
+
+    #[test]
+    fn manifest_targets_match_release_platform_names() {
+        assert_eq!(manifest_target("windows", "x86_64"), Some("windows-x86_64"));
+        assert_eq!(manifest_target("linux", "x86_64"), Some("linux-x86_64"));
+        assert_eq!(manifest_target("macos", "aarch64"), Some("darwin-aarch64"));
+        assert_eq!(manifest_target("macos", "x86_64"), Some("darwin-x86_64"));
+        assert_eq!(manifest_target("windows", "aarch64"), None);
     }
 }

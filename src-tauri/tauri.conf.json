@@ -49,7 +49,7 @@
   "plugins": {
     "updater": {
       "endpoints": [
-        "https://github.com/Crimsab/Repressurizer/releases/latest/download/latest.json"
+        "https://github.com/Crimsab/Repressurizer/releases/download/updater-manifests/{{target}}.json"
       ],
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IENGODA5RDkxMDQwOTgwNjEKUldSaGdBa0VrWjJBejQ1clVETkc4TWFRY2tsOFNwK1Zhbnh0YlhnMkUvcnZqZlRNVTNYdVBWZHUK"
     }

@@ -53,6 +53,7 @@ struct StartupContext {
     main_window_created: bool,
     updater_kind: updater::UpdaterKind,
     updater_can_install: bool,
+    updater_target: Option<&'static str>,
 }
 
 #[derive(Deserialize)]
@@ -451,6 +452,7 @@ fn get_startup_context(app: tauri::AppHandle) -> StartupContext {
         main_window_created: app.get_webview_window("main").is_some(),
         updater_kind: updater.kind,
         updater_can_install: updater.can_install,
+        updater_target: updater::current_manifest_target(),
     }
 }
 

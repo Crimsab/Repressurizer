@@ -1596,6 +1596,56 @@ test("imports only Steam Family webapi_token after an explicit clipboard action"
   });
 });
 
+test("keeps beta updates opt-in and isolated from the stable target", async ({ page }, testInfo) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Settings" }).click();
+  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+  await settingsDialog.getByRole("button", { name: "About", exact: true }).click();
+
+  const channelSelect = settingsDialog.getByRole("button", {
+    name: "Release channel: Stable",
+  });
+  await expect(channelSelect).toBeVisible();
+  await channelSelect.click();
+  await settingsDialog.getByRole("option", { name: "Beta" }).click();
+  await expect(
+    settingsDialog.getByText(/Opt in to signed prereleases/)
+  ).toBeVisible();
+
+  await settingsDialog.getByRole("button", { name: "Check for updates" }).click();
+  await expect(settingsDialog.getByText("Repressurizer is up to date.")).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        window.localStorage.getItem("repressurizer-last-updater-target")
+      )
+    )
+    .toBe("windows-x86_64-beta");
+  expect(
+    await page.evaluate(() =>
+      window.localStorage.getItem("repressurizer-last-updater-allow-downgrades")
+    )
+  ).toBe("false");
+
+  const screenshotPath = testInfo.outputPath("settings-release-channel.png");
+  await page.screenshot({ path: screenshotPath, fullPage: true });
+  await testInfo.attach("settings-release-channel", {
+    path: screenshotPath,
+    contentType: "image/png",
+  });
+
+  await settingsDialog.getByRole("button", { name: "Release channel: Beta" }).click();
+  await settingsDialog.getByRole("option", { name: "Stable" }).click();
+  await settingsDialog.getByRole("button", { name: "Check for updates" }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        window.localStorage.getItem("repressurizer-last-updater-target")
+      )
+    )
+    .toBe("windows-x86_64-stable");
+});
+
 test("uses the color picker as the primary custom accent control", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Settings" }).click();

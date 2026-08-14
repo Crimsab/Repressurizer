@@ -668,6 +668,7 @@ export interface StartupContext {
   mainWindowCreated: boolean;
   updaterKind: UpdaterKind;
   updaterCanInstall: boolean;
+  updaterTarget: string | null;
 }
 
 export async function getStartupContext(): Promise<StartupContext> {

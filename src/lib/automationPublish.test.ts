@@ -67,6 +67,7 @@ const settings: AppSettings = {
   desktopNotifications: true,
   checkUpdatesOnStartup: true,
   updateAutoCheckIntervalHours: 12,
+  updateChannel: "stable",
   autoRefreshLibraryEnabled: false,
   libraryAutoRefreshIntervalMinutes: 30,
   automationPublishEnabled: true,

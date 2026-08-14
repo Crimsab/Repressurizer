@@ -63,6 +63,7 @@ export async function installTauriMock(page: Page) {
       startOnLoginMode: "tray",
       desktopNotifications: true,
       checkUpdatesOnStartup: true,
+      updateChannel: "stable",
       includeSteamFamilyNonGames: false,
       automationPublishEnabled: true,
       automationPublishUrl: "http://example.local:3045/api/steam/repressurizer/import",
@@ -270,6 +271,16 @@ export async function installTauriMock(page: Page) {
             return null;
           case "plugin:notification|is_permission_granted":
             return true;
+          case "plugin:updater|check":
+            window.localStorage.setItem(
+              "repressurizer-last-updater-target",
+              String(args?.target ?? "")
+            );
+            window.localStorage.setItem(
+              "repressurizer-last-updater-allow-downgrades",
+              String(args?.allowDowngrades ?? false)
+            );
+            return null;
           case "plugin:clipboard-manager|read_text":
             return window.localStorage.getItem("repressurizer-clipboard-text") ?? "";
           case "plugin:dialog|confirm":
@@ -334,6 +345,7 @@ export async function installTauriMock(page: Page) {
                 mainWindowCreated: true,
                 updaterKind,
                 updaterCanInstall: updaterKind === "windows-installer",
+                updaterTarget: "windows-x86_64",
               };
             }
           case "fetch_library":
