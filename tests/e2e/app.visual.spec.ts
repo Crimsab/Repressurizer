@@ -1545,6 +1545,38 @@ test("keeps recommendation filters inside the dialog", async ({ page }, testInfo
   await testInfo.attach("recommend-filters", { path: screenshotPath, contentType: "image/png" });
 });
 
+test("explains and tunes smart backlog ranking", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 900, height: 600 });
+  await page.goto("/");
+  await page.evaluate(async () => {
+    const { useWishlistStore } = await import("/src/stores/wishlistStore.ts");
+    const { useAchievementsStore } = await import("/src/stores/achievementsStore.ts");
+    useWishlistStore.getState().setItems([{ appid: 753640, priority: 1, date_added: 1_700_000_000 }]);
+    useAchievementsStore.getState().setSummary(753640, { total: 20, achieved: 10, achievements: [] });
+  });
+
+  await page.getByRole("button", { name: "More tools" }).click();
+  await page.getByRole("menuitem", { name: "What to Play Next" }).click();
+  const dialog = page.getByRole("dialog", { name: "What to Play Next" });
+  await expect(dialog.getByText(/Wishlist/).first()).toBeVisible();
+  await expect(dialog.getByText(/pts$/).first()).toBeVisible();
+  await expect(dialog.getByText(/\+\d+ more/).first()).toBeVisible();
+
+  await dialog.getByRole("button", { name: "Tune ranking" }).click();
+  await expect(dialog.getByText("Ranking signals", { exact: true })).toBeVisible();
+  await dialog.getByRole("button", { name: "Playtime" }).click();
+  await dialog.getByRole("button", { name: "Off", exact: true }).click();
+  await expect.poll(() => page.evaluate(() => {
+    const stored = window.localStorage.getItem("repressurizer-ranking-weights");
+    return stored ? JSON.parse(stored).playtime : null;
+  })).toBe(0);
+  await expectNoHorizontalOverflow(page);
+
+  const screenshotPath = testInfo.outputPath("recommend-ranking-tuning.png");
+  await page.screenshot({ path: screenshotPath, fullPage: true });
+  await testInfo.attach("recommend-ranking-tuning", { path: screenshotPath, contentType: "image/png" });
+});
+
 test("guides Steam Family setup during onboarding", async ({ page }) => {
   await page.addInitScript(() => {
     const raw = window.localStorage.getItem("repressurizer-settings");

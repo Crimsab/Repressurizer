@@ -122,6 +122,7 @@ nav:
       - user-guide/index.md
       - Collections: user-guide/collections.md
       - Search and filters: user-guide/search-and-filters.md
+      - What to play next: user-guide/what-to-play-next.md
       - Metadata cache and network: cache-and-network.md
       - AutoCat: user-guide/autocat.md
       - Export: user-guide/export.md
