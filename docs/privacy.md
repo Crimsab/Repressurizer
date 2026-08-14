@@ -34,6 +34,13 @@ Steam collection backups are stored next to the Steam collection file they prote
 
 Diagnostics exports are intended for bug reports and should be redacted by the app.
 
+When the native Rust process panics, Repressurizer keeps up to five small JSON
+crash reports for a maximum of 30 days. Diagnostics exports include a redacted
+summary of those reports, not operating-system crash dumps or process memory.
+The summary removes credential-shaped values, long account identifiers, and
+filesystem paths. Source reports remain local until retention removes them or
+you delete the `crash-reports` folder from the application-data directory.
+
 Before sharing diagnostics publicly, quickly check that they do not include:
 
 - Steam Web API keys.

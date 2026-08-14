@@ -579,7 +579,7 @@
   "settings.maintenance": "Konserwacja",
   "settings.diagnostics.exporting": "Eksportowanie diagnostyki...",
   "settings.diagnostics.export": "Eksportuj diagnostykę",
-  "settings.diagnostics.desc": "Zapisuje bezpieczny dla prywatności raport JSON bez kluczy API.",
+  "settings.diagnostics.desc": "Zapisuje bezpieczny raport z zanonimizowanymi podsumowaniami awarii natywnych, bez kluczy API i ścieżek lokalnych.",
   "settings.diagnostics.exported": "Diagnostyka wyeksportowana.",
   "settings.diagnostics.failed": "Diagnostyka nie powiodła się: {error}",
   "settings.automationExport": "Automation Export",

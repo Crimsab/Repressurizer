@@ -579,7 +579,7 @@
   "settings.maintenance": "Manutenzione",
   "settings.diagnostics.exporting": "Esportazione diagnostica...",
   "settings.diagnostics.export": "Esporta diagnostica",
-  "settings.diagnostics.desc": "Scrive un report JSON sicuro per la privacy senza chiavi API.",
+  "settings.diagnostics.desc": "Scrive un report sicuro per la privacy con riepiloghi dei crash nativi redatti, senza chiavi API o percorsi locali.",
   "settings.diagnostics.exported": "Diagnostica esportata.",
   "settings.diagnostics.failed": "Diagnostica fallita: {error}",
   "settings.automationExport": "Export automazione",

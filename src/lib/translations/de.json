@@ -579,7 +579,7 @@
   "settings.maintenance": "Wartung",
   "settings.diagnostics.exporting": "Diagnose wird exportiert...",
   "settings.diagnostics.export": "Diagnose exportieren",
-  "settings.diagnostics.desc": "Schreibt einen datenschutzfreundlichen JSON-Bericht ohne API-Schlüssel.",
+  "settings.diagnostics.desc": "Schreibt einen datenschutzfreundlichen Bericht mit redigierten nativen Absturzdetails, ohne API-Schlüssel oder lokale Pfade.",
   "settings.diagnostics.exported": "Diagnose exportiert.",
   "settings.diagnostics.failed": "Diagnose fehlgeschlagen: {error}",
   "settings.automationExport": "Automation Export",

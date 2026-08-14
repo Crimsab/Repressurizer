@@ -2,7 +2,7 @@ use crate::app_data::{
     app_data_file_path, read_optional_text_file, steam_collections_path, write_text_file_atomic,
 };
 use crate::app_data_dir;
-use crate::{app_channel, steam::sam};
+use crate::{app_channel, native_crash, steam::sam};
 use serde::Serialize;
 
 #[derive(Serialize)]
@@ -51,8 +51,14 @@ pub(crate) fn export_diagnostics(
     steam_id3: String,
     steam_id64: String,
 ) -> Result<String, String> {
+    let payload = diagnostics_payload(&steam_path, &steam_id3, &steam_id64);
+    serde_json::to_string_pretty(&payload)
+        .map_err(|e| format!("Failed to serialize diagnostics: {}", e))
+}
+
+fn diagnostics_payload(steam_path: &str, steam_id3: &str, steam_id64: &str) -> serde_json::Value {
     let data_dir = app_data_dir();
-    let collections_path = steam_collections_path(&steam_path, &steam_id3);
+    let collections_path = steam_collections_path(steam_path, steam_id3);
     let collections_size = std::fs::metadata(&collections_path).map(|m| m.len()).ok();
     let backup_count = collections_path
         .parent()
@@ -78,7 +84,7 @@ pub(crate) fn export_diagnostics(
             .unwrap_or(0)
     };
 
-    let payload = serde_json::json!({
+    serde_json::json!({
         "generated_at": chrono::Utc::now().to_rfc3339(),
         "app": {
             "name": app_channel::app_display_name(),
@@ -89,15 +95,15 @@ pub(crate) fn export_diagnostics(
             "arch": std::env::consts::ARCH,
         },
         "steam": {
-            "path": steam_path,
-            "steam_id3": redact_tail(&steam_id3),
-            "steam_id64": redact_tail(&steam_id64),
+            "path_configured": !steam_path.trim().is_empty(),
+            "steam_id3": redact_tail(steam_id3),
+            "steam_id64": redact_tail(steam_id64),
             "collections_file_exists": collections_path.exists(),
             "collections_file_size": collections_size,
             "backup_count": backup_count,
         },
         "app_data": {
-            "path": data_dir.as_ref().and_then(|p| p.to_str()).unwrap_or("").to_string(),
+            "available": data_dir.is_some(),
             "details_cache_bytes": cache_size("details_cache.json"),
             "hltb_cache_bytes": cache_size("hltb_cache.json"),
             "failed_games_bytes": cache_size("failed_games.json"),
@@ -106,15 +112,15 @@ pub(crate) fn export_diagnostics(
             "wishlist_bytes": cache_size("wishlist.json"),
             "settings_bytes": cache_size("settings.json"),
         },
+        "native_crashes": native_crash::diagnostics_summary(),
         "privacy": {
             "api_key_included": false,
             "proxy_credentials_included": false,
             "steam_ids_redacted": true,
+            "local_paths_included": false,
+            "native_crash_messages_redacted": true,
         }
-    });
-
-    serde_json::to_string_pretty(&payload)
-        .map_err(|e| format!("Failed to serialize diagnostics: {}", e))
+    })
 }
 
 #[tauri::command]
@@ -196,4 +202,27 @@ pub(crate) fn load_named_cache(name: &str) -> Option<String> {
 pub(crate) fn save_named_cache(name: &str, data: String) -> Result<(), String> {
     let path = app_data_file_path(name)?;
     write_text_file_atomic(&path, &data, "cache file", false)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::diagnostics_payload;
+
+    #[test]
+    fn diagnostics_do_not_export_local_paths_or_full_account_ids() {
+        let payload = diagnostics_payload(
+            "C:\\Users\\Alice\\Private Steam",
+            "123456789",
+            "76561198000012345",
+        );
+        let serialized = serde_json::to_string(&payload).expect("serialize diagnostics");
+
+        assert!(!serialized.contains("Alice"));
+        assert!(!serialized.contains("Private Steam"));
+        assert!(!serialized.contains("123456789"));
+        assert!(!serialized.contains("76561198000012345"));
+        assert_eq!(payload["steam"]["steam_id3"], "***6789");
+        assert_eq!(payload["steam"]["steam_id64"], "***2345");
+        assert_eq!(payload["privacy"]["local_paths_included"], false);
+    }
 }

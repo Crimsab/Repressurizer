@@ -579,7 +579,7 @@
   "settings.maintenance": "维护",
   "settings.diagnostics.exporting": "正在导出诊断...",
   "settings.diagnostics.export": "导出诊断",
-  "settings.diagnostics.desc": "写入不含 API 密钥、保护隐私的 JSON 报告。",
+  "settings.diagnostics.desc": "写入包含已脱敏原生崩溃摘要且不含 API 密钥或本地路径的隐私安全报告。",
   "settings.diagnostics.exported": "诊断已导出。",
   "settings.diagnostics.failed": "诊断失败：{error}",
   "settings.automationExport": "Automation Export",

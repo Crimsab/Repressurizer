@@ -579,7 +579,7 @@
   "settings.maintenance": "Maintenance",
   "settings.diagnostics.exporting": "Exportation du diagnostic...",
   "settings.diagnostics.export": "Exporter le diagnostic",
-  "settings.diagnostics.desc": "Écrit un rapport JSON respectueux de la confidentialité, sans clés API.",
+  "settings.diagnostics.desc": "Écrit un rapport confidentiel avec des résumés de plantages natifs expurgés, sans clés API ni chemins locaux.",
   "settings.diagnostics.exported": "Diagnostic exporté.",
   "settings.diagnostics.failed": "Échec du diagnostic : {error}",
   "settings.automationExport": "Automation Export",

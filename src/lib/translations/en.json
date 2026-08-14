@@ -579,7 +579,7 @@
   "settings.maintenance": "Maintenance",
   "settings.diagnostics.exporting": "Exporting diagnostics...",
   "settings.diagnostics.export": "Export diagnostics",
-  "settings.diagnostics.desc": "Writes a privacy-safe JSON report without API keys.",
+  "settings.diagnostics.desc": "Writes a privacy-safe report with redacted native crash summaries and no API keys or local paths.",
   "settings.diagnostics.exported": "Diagnostics exported.",
   "settings.diagnostics.failed": "Diagnostics failed: {error}",
   "settings.automationExport": "Automation Export",

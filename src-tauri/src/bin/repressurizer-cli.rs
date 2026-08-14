@@ -601,7 +601,7 @@ fn diagnostics(steam_path: &str, steam_id3: &str, steam_id64: &str) -> Value {
             "arch": std::env::consts::ARCH,
         },
         "steam": {
-            "path": steam_path,
+            "pathConfigured": !steam_path.trim().is_empty(),
             "steamId3": redact_tail(steam_id3),
             "steamId64": redact_tail(steam_id64),
             "collectionsFileExists": collections_path.exists(),
@@ -609,7 +609,7 @@ fn diagnostics(steam_path: &str, steam_id3: &str, steam_id64: &str) -> Value {
             "backupCount": backup_count,
         },
         "appData": {
-            "path": data_dir,
+            "available": data_dir.is_some(),
             "detailsCacheBytes": cache_size("details_cache.json"),
             "hltbCacheBytes": cache_size("hltb_cache.json"),
             "failedGamesBytes": cache_size("failed_games.json"),
@@ -627,6 +627,7 @@ fn diagnostics(steam_path: &str, steam_id3: &str, steam_id64: &str) -> Value {
             "apiKeyIncluded": false,
             "proxyCredentialsIncluded": false,
             "steamIdsRedacted": true,
+            "localPathsIncluded": false,
         }
     })
 }
@@ -973,6 +974,24 @@ mod tests {
         assert!(!encoded.contains("secret"));
         assert!(!encoded.contains("proxy-user"));
         assert!(!encoded.contains("127.0.0.1"));
+    }
+
+    #[test]
+    fn diagnostics_redact_local_paths_and_full_account_ids() {
+        let report = diagnostics(
+            "C:\\Users\\Alice\\Private Steam",
+            "123456789",
+            "76561198000012345",
+        );
+        let encoded = serde_json::to_string(&report).expect("diagnostics serializes");
+
+        assert!(!encoded.contains("Alice"));
+        assert!(!encoded.contains("Private Steam"));
+        assert!(!encoded.contains("123456789"));
+        assert!(!encoded.contains("76561198000012345"));
+        assert_eq!(report["steam"]["steamId3"], "***6789");
+        assert_eq!(report["steam"]["steamId64"], "***2345");
+        assert_eq!(report["privacy"]["localPathsIncluded"], false);
     }
 
     #[test]

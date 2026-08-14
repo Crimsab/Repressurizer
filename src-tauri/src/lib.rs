@@ -6,6 +6,7 @@ pub mod http_policy;
 pub mod steam;
 
 mod app_data;
+mod native_crash;
 mod runtime_cache;
 mod updater;
 #[cfg(test)]
@@ -536,6 +537,7 @@ pub(crate) async fn read_response_preview(mut response: reqwest::Response) -> St
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    native_crash::install_panic_hook();
     let mut builder = tauri::Builder::default()
         .plugin(
             tauri_plugin_log::Builder::new()

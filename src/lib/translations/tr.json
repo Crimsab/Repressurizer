@@ -579,7 +579,7 @@
   "settings.maintenance": "Bakım",
   "settings.diagnostics.exporting": "Tanılama dışa aktarılıyor...",
   "settings.diagnostics.export": "Tanılamayı dışa aktar",
-  "settings.diagnostics.desc": "API anahtarı içermeyen gizlilik açısından güvenli bir JSON raporu yazar.",
+  "settings.diagnostics.desc": "Düzenlenmiş yerel çökme özetleri içeren, API anahtarı veya yerel yol içermeyen güvenli bir rapor yazar.",
   "settings.diagnostics.exported": "Tanılama dışa aktarıldı.",
   "settings.diagnostics.failed": "Tanılama başarısız: {error}",
   "settings.automationExport": "Automation Export",
