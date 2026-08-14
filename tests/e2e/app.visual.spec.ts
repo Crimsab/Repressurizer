@@ -953,8 +953,8 @@ test("settings search finds local-only visibility and generated changelog", asyn
 
   await search.fill("changelog");
   await expect(settingsDialog.getByText("Changelog").first()).toBeVisible();
-  await expect(settingsDialog.getByText("v0.4.6")).toBeVisible();
-  await expect(settingsDialog.getByText("Batch Steam price refreshes")).toBeVisible();
+  await expect(settingsDialog.getByText("v0.5.6")).toBeVisible();
+  await expect(settingsDialog.getByText("Steam Tools: harden schema refresh workflow")).toBeVisible();
 });
 
 test("game achievement details show Steam Achievement Manager preflight separately from Steam Web API data", async ({ page }, testInfo) => {
