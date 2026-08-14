@@ -37,6 +37,29 @@ test.describe("Linux setup", () => {
   });
 });
 
+test.describe("macOS setup", () => {
+  test.use({
+    userAgent:
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_7) AppleWebKit/605.1.15 Version/17.6 Safari/605.1.15",
+  });
+
+  test("shows the standard macOS Steam path during first-run setup", async ({ page }, testInfo) => {
+    await page.goto("/");
+    await page.evaluate(async () => {
+      const { useSettingsStore } = await import("/src/stores/settingsStore.ts");
+      useSettingsStore.getState().setSettings({ setupComplete: false, steamPath: "" });
+    });
+
+    await expect(page.getByPlaceholder("/Users/you/Library/Application Support/Steam")).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+    await page.waitForTimeout(350);
+
+    const screenshotPath = testInfo.outputPath("macos-setup.png");
+    await page.screenshot({ path: screenshotPath, fullPage: true });
+    await testInfo.attach("macos-setup", { path: screenshotPath, contentType: "image/png" });
+  });
+});
+
 test("loads the main library surface with mocked Steam data", async ({ page }, testInfo) => {
   await page.goto("/");
 

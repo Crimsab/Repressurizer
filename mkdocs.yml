@@ -153,6 +153,7 @@ nav:
       - development/index.md
       - Development setup: development/setup.md
       - Architecture: development/architecture.md
+      - macOS packaging: development/macos.md
       - Testing: development/testing.md
       - Localization: localization.md
       - Release process: development/releases.md

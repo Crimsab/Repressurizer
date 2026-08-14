@@ -1,4 +1,13 @@
 use super::*;
+
+#[test]
+fn macos_running_guard_checks_the_native_steam_process_name() {
+    assert_eq!(
+        probe::steam_process_names_for_os("macos"),
+        &["steam_osx", "Steam"]
+    );
+    assert_eq!(probe::steam_process_names_for_os("linux"), &["steam"]);
+}
 use std::fs;
 use std::time::{SystemTime, UNIX_EPOCH};
 

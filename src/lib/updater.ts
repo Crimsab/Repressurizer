@@ -3,6 +3,7 @@ export type UpdaterKind =
   | "windows-portable"
   | "linux-appimage"
   | "linux-system-package"
+  | "macos-app"
   | "unsupported";
 
 export type ManualUpdateMessageKey =

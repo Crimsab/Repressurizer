@@ -10,6 +10,7 @@ Download builds from the [latest GitHub release](https://github.com/Crimsab/Repr
 | `Repressurizer_..._amd64.AppImage` | You want a portable Linux desktop app with built-in updates. |
 | `Repressurizer_..._amd64.deb` | You use Debian, Ubuntu, or a compatible x86_64 distribution. |
 | `Repressurizer-cli-linux-x86_64.tar.gz` | You need the Linux CLI without the desktop app. |
+| `Repressurizer_..._universal.dmg` | You use an Intel or Apple Silicon Mac running macOS 11 or newer. |
 
 ## Windows installer
 
@@ -75,3 +76,11 @@ before Repressurizer writes collection changes. Exit Steam in Desktop Mode
 before saving, then reopen it after the write completes.
 
 ARM64 Linux devices are not supported by the current release packages.
+
+## macOS
+
+Download the universal DMG, open it, and drag **Repressurizer** to Applications. The same bundle supports Intel and Apple Silicon Macs on macOS 11 or newer. Release DMGs are signed with a Developer ID certificate, notarized by Apple, and support in-app updates.
+
+Automatic Steam detection uses `~/Library/Application Support/Steam`. Collection files remain under Steam's normal `userdata/<id3>/config/cloudstorage` directory. Repressurizer blocks collection saves and restores while either the native `steam_osx` process or the Steam app process is running, and creates the same pre-write and pre-restore backups used on Windows and Linux.
+
+Steam Achievement Manager reads and writes remain Windows-only. Library loading, collection editing, backups, shortcuts, metadata, exports, and signed app updates are the supported macOS surface.

@@ -18,6 +18,22 @@ describe("updater manifest validation", () => {
     expect(() => validateUpdaterManifest(fixture.options)).not.toThrow();
   });
 
+  it("accepts one universal macOS updater for both architectures", () => {
+    const fixture = createFixture();
+    const assetName = "Repressurizer_0.5.6_universal.app.tar.gz";
+    const entry = {
+      signature: "dW50cnVzdGVkIGNvbW1lbnQ6IG1hY09TIHRlc3Qgc2lnbmF0dXJl",
+      url: `https://github.com/Crimsab/Repressurizer/releases/download/v0.5.6/${assetName}`,
+    };
+    writeFileSync(join(fixture.options.artifactsDirectory, assetName), "universal app", "utf8");
+    fixture.manifest.platforms["darwin-aarch64"] = entry;
+    fixture.manifest.platforms["darwin-x86_64"] = entry;
+    fixture.options.requiredPlatforms.push("darwin-aarch64", "darwin-x86_64");
+    writeFileSync(fixture.options.manifestPath, JSON.stringify(fixture.manifest), "utf8");
+
+    expect(() => validateUpdaterManifest(fixture.options)).not.toThrow();
+  });
+
   it("rejects a manifest URL that points at another tag", () => {
     const fixture = createFixture();
     fixture.manifest.platforms["windows-x86_64"].url =
@@ -43,15 +59,16 @@ function createFixture() {
   const assetName = "Repressurizer_0.5.6_x64-setup.exe";
   const manifestPath = join(directory, "latest.json");
   writeFileSync(join(directory, assetName), "installer", "utf8");
+  const platforms: Record<string, { signature: string; url: string }> = {
+    "windows-x86_64": {
+      signature: "dW50cnVzdGVkIGNvbW1lbnQ6IHRlc3Qgc2lnbmF0dXJl",
+      url: `https://github.com/Crimsab/Repressurizer/releases/download/v0.5.6/${assetName}`,
+    },
+  };
   const manifest = {
     version: "0.5.6",
     pub_date: "2026-08-14T00:00:00.000Z",
-    platforms: {
-      "windows-x86_64": {
-        signature: "dW50cnVzdGVkIGNvbW1lbnQ6IHRlc3Qgc2lnbmF0dXJl",
-        url: `https://github.com/Crimsab/Repressurizer/releases/download/v0.5.6/${assetName}`,
-      },
-    },
+    platforms,
   };
   writeFileSync(manifestPath, JSON.stringify(manifest), "utf8");
 

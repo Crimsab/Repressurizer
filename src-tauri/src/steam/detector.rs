@@ -43,8 +43,21 @@ fn steam_path_candidates() -> Vec<PathBuf> {
         return linux_steam_path_candidates(&home, xdg_data_home.as_deref());
     }
 
+    #[cfg(target_os = "macos")]
+    {
+        let Some(home) = dirs::home_dir() else {
+            return Vec::new();
+        };
+        return macos_steam_path_candidates(&home);
+    }
+
     #[allow(unreachable_code)]
     Vec::new()
+}
+
+#[cfg(any(target_os = "macos", test))]
+fn macos_steam_path_candidates(home: &Path) -> Vec<PathBuf> {
+    vec![home.join("Library/Application Support/Steam")]
 }
 
 fn linux_steam_path_candidates(home: &Path, xdg_data_home: Option<&Path>) -> Vec<PathBuf> {
@@ -212,6 +225,15 @@ mod tests {
     }
 
     #[test]
+    fn macos_candidates_cover_the_standard_application_support_root() {
+        let home = Path::new("/Users/tester");
+        assert_eq!(
+            macos_steam_path_candidates(home),
+            vec![home.join("Library/Application Support/Steam")]
+        );
+    }
+
+    #[test]
     fn detects_users_and_collections_from_linux_shaped_fixture() {
         let steam_path = temp_steam_dir("linux-detect");
         let id3 = "12345";
@@ -241,6 +263,40 @@ mod tests {
         assert!(info.users[0].has_collections);
 
         fs::remove_dir_all(steam_path).unwrap();
+    }
+
+    #[test]
+    fn detects_users_and_collections_from_macos_shaped_fixture() {
+        let home = temp_steam_dir("macos-detect");
+        let steam_path = home.join("Library/Application Support/Steam");
+        let id3 = "67890";
+        let id64 = (STEAM_ID64_BASE + 67_890).to_string();
+        let config_dir = steam_path.join("config");
+        let collections_dir = steam_path
+            .join("userdata")
+            .join(id3)
+            .join("config/cloudstorage");
+        fs::create_dir_all(&config_dir).unwrap();
+        fs::create_dir_all(&collections_dir).unwrap();
+        fs::write(
+            config_dir.join("loginusers.vdf"),
+            format!(
+                "\"users\"\n{{\n  \"{id64}\"\n  {{\n    \"PersonaName\"  \"macOS Tester\"\n  }}\n}}\n"
+            ),
+        )
+        .unwrap();
+        fs::write(collections_dir.join("cloud-storage-namespace-1.json"), "[]").unwrap();
+
+        let info = detect_steam_at(steam_path.to_string_lossy().into_owned()).unwrap();
+
+        assert_eq!(info.steam_path, steam_path.to_string_lossy());
+        assert_eq!(info.users.len(), 1);
+        assert_eq!(info.users[0].id3, id3);
+        assert_eq!(info.users[0].id64, id64);
+        assert_eq!(info.users[0].persona_name, "macOS Tester");
+        assert!(info.users[0].has_collections);
+
+        fs::remove_dir_all(home).unwrap();
     }
 
     #[test]

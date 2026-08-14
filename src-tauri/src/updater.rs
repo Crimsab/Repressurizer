@@ -10,6 +10,7 @@ pub(crate) enum UpdaterKind {
     WindowsPortable,
     LinuxAppimage,
     LinuxSystemPackage,
+    MacosApp,
     Unsupported,
 }
 
@@ -69,6 +70,10 @@ fn classify_runtime(
             kind: UpdaterKind::LinuxSystemPackage,
             can_install: false,
         },
+        "macos" => UpdaterCapability {
+            kind: UpdaterKind::MacosApp,
+            can_install: true,
+        },
         _ => UpdaterCapability {
             kind: UpdaterKind::Unsupported,
             can_install: false,
@@ -120,9 +125,20 @@ mod tests {
     }
 
     #[test]
-    fn unconfigured_platforms_do_not_offer_installation() {
+    fn macos_app_bundles_support_in_place_updates() {
         assert_eq!(
             classify_runtime("macos", Some("repressurizer"), false, false),
+            UpdaterCapability {
+                kind: UpdaterKind::MacosApp,
+                can_install: true,
+            }
+        );
+    }
+
+    #[test]
+    fn unconfigured_platforms_do_not_offer_installation() {
+        assert_eq!(
+            classify_runtime("freebsd", Some("repressurizer"), false, false),
             UpdaterCapability {
                 kind: UpdaterKind::Unsupported,
                 can_install: false,

@@ -8,7 +8,9 @@ The desktop app, TypeScript integration package, and Rust integration crate have
 2. Push the version commit to `main`.
 3. CI validates TypeScript, Rust, browser smoke tests, and the documentation build.
 4. After CI succeeds, the tag workflow creates `v<version>` if it does not exist.
-5. The release workflow builds Windows and Linux desktop packages and CLIs, then publishes a shared updater manifest, release notes, and optional VirusTotal results.
+5. The release workflow builds Windows, Linux, and a universal macOS desktop bundle, then publishes a shared updater manifest, release notes, and optional VirusTotal results.
+
+The macOS job is a required release gate. It verifies both Intel and Apple Silicon slices, the app signature, Gatekeeper assessment, notarization ticket, DMG, updater archive, and updater signature before the Windows publisher job assembles the final release. See [macOS packaging](macos.md) for the required Apple secrets.
 
 ## Preview
 

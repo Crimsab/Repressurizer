@@ -139,11 +139,23 @@ pub(crate) fn is_steam_running() -> bool {
 
 #[cfg(not(windows))]
 pub(crate) fn is_steam_running() -> bool {
-    Command::new("pgrep")
-        .args(["-x", "steam"])
-        .status()
-        .map(|status| status.success())
-        .unwrap_or(false)
+    steam_process_names_for_os(std::env::consts::OS)
+        .iter()
+        .any(|process_name| {
+            Command::new("pgrep")
+                .args(["-x", process_name])
+                .status()
+                .map(|status| status.success())
+                .unwrap_or(false)
+        })
+}
+
+pub(super) fn steam_process_names_for_os(operating_system: &str) -> &'static [&'static str] {
+    if operating_system == "macos" {
+        &["steam_osx", "Steam"]
+    } else {
+        &["steam"]
+    }
 }
 
 #[cfg(windows)]

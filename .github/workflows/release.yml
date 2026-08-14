@@ -87,10 +87,128 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+  macos:
+    name: macOS universal DMG and updater
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        env:
+          GIT_CONFIG_COUNT: 1
+          GIT_CONFIG_KEY_0: init.defaultBranch
+          GIT_CONFIG_VALUE_0: main
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
+        with:
+          toolchain: 1.94.0
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Restore caches
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.bun/install/cache
+            ~/.cargo/git
+            ~/.cargo/registry
+          key: ${{ runner.os }}-macos-release-${{ hashFiles('bun.lock', 'src-tauri/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-macos-release-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Validate Apple release credentials
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          test -n "$APPLE_CERTIFICATE"
+          test -n "$APPLE_CERTIFICATE_PASSWORD"
+          test -n "$APPLE_SIGNING_IDENTITY"
+          test -n "$APPLE_ID"
+          test -n "$APPLE_PASSWORD"
+          test -n "$APPLE_TEAM_ID"
+
+      - name: Import Developer ID certificate
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          set -e
+          keychain_path="$RUNNER_TEMP/repressurizer-build.keychain-db"
+          keychain_password=$(openssl rand -hex 24)
+          echo "::add-mask::$keychain_password"
+          printf '%s' "$APPLE_CERTIFICATE" | openssl base64 -d -A -out "$RUNNER_TEMP/apple-certificate.p12"
+          security create-keychain -p "$keychain_password" "$keychain_path"
+          security default-keychain -s "$keychain_path"
+          security unlock-keychain -p "$keychain_password" "$keychain_path"
+          security set-keychain-settings -t 3600 -u "$keychain_path"
+          security import "$RUNNER_TEMP/apple-certificate.p12" -k "$keychain_path" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$keychain_path"
+          security find-identity -v -p codesigning "$keychain_path"
+
+      - name: Build signed and notarized universal bundles
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: bun run build:macos
+
+      - name: Smoke-test signed app and DMG
+        run: |
+          set -e
+          bundle_dir="src-tauri/target/universal-apple-darwin/release/bundle"
+          app_path=$(find "$bundle_dir/macos" -maxdepth 1 -type d -name '*.app' -print -quit)
+          dmg_path=$(find "$bundle_dir/dmg" -maxdepth 1 -type f -name '*.dmg' -print -quit)
+          updater_path=$(find "$bundle_dir/macos" -maxdepth 1 -type f -name '*.app.tar.gz' -print -quit)
+          test -n "$app_path"
+          test -n "$dmg_path"
+          test -n "$updater_path"
+          test -s "$updater_path.sig"
+          binary_path="$app_path/Contents/MacOS/repressurizer"
+          test -x "$binary_path"
+          lipo -verify_arch x86_64 arm64 "$binary_path"
+          codesign --verify --deep --strict --verbose=2 "$app_path"
+          spctl --assess --type execute --verbose=2 "$app_path"
+          xcrun stapler validate "$app_path"
+          xcrun stapler validate "$dmg_path"
+
+      - name: Collect macOS artifacts
+        run: |
+          set -e
+          bundle_dir="src-tauri/target/universal-apple-darwin/release/bundle"
+          mkdir -p artifacts
+          cp "$bundle_dir/dmg/"*.dmg artifacts/
+          cp "$bundle_dir/macos/"*.app.tar.gz artifacts/
+          cp "$bundle_dir/macos/"*.app.tar.gz.sig artifacts/
+          find artifacts -maxdepth 1 -type f -exec stat -f '%N %z bytes' {} \; | sort
+
+      - name: Upload macOS release artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: macos-release-artifacts
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 1
+
   windows:
     name: Windows installer and portable
     runs-on: windows-2025-vs2026
-    needs: linux
+    needs: [linux, macos]
 
     steps:
       - name: Checkout
@@ -208,6 +326,12 @@ jobs:
           name: linux-release-artifacts
           path: artifacts
 
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: macos-release-artifacts
+          path: artifacts
+
       - name: Collect Windows artifacts
         shell: pwsh
         run: |
@@ -262,10 +386,26 @@ jobs:
             url = "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/$linuxAssetName"
           }
 
+          $macUpdater = Get-ChildItem artifacts -Filter "*.app.tar.gz" | Select-Object -First 1
+          if (-not $macUpdater) {
+            throw "Could not find macOS updater bundle"
+          }
+          $macSignaturePath = "$($macUpdater.FullName).sig"
+          if (-not (Test-Path $macSignaturePath)) {
+            throw "Could not find updater signature for $($macUpdater.Name)"
+          }
+          $macAssetName = [System.Uri]::EscapeDataString($macUpdater.Name)
+          $macUpdaterEntry = [ordered]@{
+            signature = (Get-Content $macSignaturePath -Raw).Trim()
+            url = "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/$macAssetName"
+          }
+          $manifest.platforms["darwin-aarch64"] = $macUpdaterEntry
+          $manifest.platforms["darwin-x86_64"] = $macUpdaterEntry
+
           $manifest | ConvertTo-Json -Depth 8 | Set-Content -Path artifacts\latest.json -Encoding utf8
 
       - name: Validate updater manifest
-        run: bun scripts/updater-manifest.ts --manifest artifacts/latest.json --artifacts artifacts --repo "${{ github.repository }}" --tag "${{ github.ref_name }}" --version "${{ steps.version.outputs.version }}" --platform windows-x86_64 --platform linux-x86_64
+        run: bun scripts/updater-manifest.ts --manifest artifacts/latest.json --artifacts artifacts --repo "${{ github.repository }}" --tag "${{ github.ref_name }}" --version "${{ steps.version.outputs.version }}" --platform windows-x86_64 --platform linux-x86_64 --platform darwin-aarch64 --platform darwin-x86_64
 
       - name: Create artifact checksums
         shell: pwsh

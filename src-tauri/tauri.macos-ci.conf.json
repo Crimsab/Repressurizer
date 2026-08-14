@@ -1,0 +1,9 @@
+{
+  "identifier": "com.crimsab.repressurizer",
+  "bundle": {
+    "createUpdaterArtifacts": false,
+    "macOS": {
+      "signingIdentity": "-"
+    }
+  }
+}

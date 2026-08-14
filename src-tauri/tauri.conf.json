@@ -41,6 +41,9 @@
       "nsis": {
         "installMode": "both"
       }
+    },
+    "macOS": {
+      "minimumSystemVersion": "11.0"
     }
   },
   "plugins": {

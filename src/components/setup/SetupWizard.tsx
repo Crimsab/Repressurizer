@@ -44,7 +44,9 @@ export function SetupWizard() {
   const [loadedCollections, setLoadedCollections] = useState<SteamCollection[]>([]);
   const steamPathPlaceholder = navigator.userAgent.includes("Windows")
     ? "C:\\Program Files (x86)\\Steam"
-    : "/home/you/.local/share/Steam";
+    : navigator.userAgent.includes("Mac")
+      ? "/Users/you/Library/Application Support/Steam"
+      : "/home/you/.local/share/Steam";
 
   const handleDetect = async () => {
     setLoading(true);
