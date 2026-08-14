@@ -4,6 +4,19 @@ All notable user-facing changes are generated from release tags and Conventional
 
 Run `bun run changelog:write` after changing release tags or commit history.
 
+## 0.5.6 - 2026-07-25
+
+### Added
+
+- Steam Tools: harden schema refresh workflow ([22a1b64](https://github.com/Crimsab/Repressurizer/commit/22a1b64))
+
+### Fixed
+
+- Steam Tools: handle incomplete achievement schemas ([a143ac3](https://github.com/Crimsab/Repressurizer/commit/a143ac3))
+- Ignore preview tags in release notes ([dcca7c6](https://github.com/Crimsab/Repressurizer/commit/dcca7c6))
+
+[Release](https://github.com/Crimsab/Repressurizer/releases/tag/v0.5.6) · [Compare](https://github.com/Crimsab/Repressurizer/compare/v0.5.5...v0.5.6)
+
 ## 0.5.5 - 2026-07-18
 
 ### Fixed

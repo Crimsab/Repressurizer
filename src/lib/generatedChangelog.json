@@ -4,6 +4,68 @@
   "repository": "Crimsab/Repressurizer",
   "entries": [
     {
+      "version": "0.5.6",
+      "date": "2026-07-25",
+      "releaseUrl": "https://github.com/Crimsab/Repressurizer/releases/tag/v0.5.6",
+      "compareUrl": "https://github.com/Crimsab/Repressurizer/compare/v0.5.5...v0.5.6",
+      "groups": [
+        {
+          "title": "Added",
+          "audience": "user",
+          "items": [
+            {
+              "text": "Steam Tools: harden schema refresh workflow",
+              "sha": "22a1b64",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/22a1b64"
+            }
+          ]
+        },
+        {
+          "title": "Fixed",
+          "audience": "user",
+          "items": [
+            {
+              "text": "Steam Tools: handle incomplete achievement schemas",
+              "sha": "a143ac3",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/a143ac3"
+            },
+            {
+              "text": "Ignore preview tags in release notes",
+              "sha": "dcca7c6",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/dcca7c6"
+            }
+          ]
+        },
+        {
+          "title": "Documentation",
+          "audience": "internal",
+          "items": [
+            {
+              "text": "Bump mkdocs-redirects from 1.2.2 to 1.2.3 (#34)",
+              "sha": "1f76ecc",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/1f76ecc"
+            },
+            {
+              "text": "Bump mkdocs-material from 9.7.6 to 9.7.7 (#35)",
+              "sha": "5db796c",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/5db796c"
+            }
+          ]
+        },
+        {
+          "title": "Internal",
+          "audience": "internal",
+          "items": [
+            {
+              "text": "Bump actions/deploy-pages from 4.0.5 to 5.0.0 (#33)",
+              "sha": "08830cd",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/08830cd"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "version": "0.5.5",
       "date": "2026-07-18",
       "releaseUrl": "https://github.com/Crimsab/Repressurizer/releases/tag/v0.5.5",
@@ -448,93 +510,6 @@
               "text": "Compare collections and HLTB unknown",
               "sha": "072b31e",
               "url": "https://github.com/Crimsab/Repressurizer/commit/072b31e"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "version": "0.4.10",
-      "date": "2026-07-02",
-      "releaseUrl": "https://github.com/Crimsab/Repressurizer/releases/tag/v0.4.10",
-      "compareUrl": "https://github.com/Crimsab/Repressurizer/compare/v0.4.9...v0.4.10",
-      "groups": [
-        {
-          "title": "Added",
-          "audience": "user",
-          "items": [
-            {
-              "text": "Refresh collection metadata cache",
-              "sha": "a7be1dc",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/a7be1dc"
-            }
-          ]
-        },
-        {
-          "title": "Fixed",
-          "audience": "user",
-          "items": [
-            {
-              "text": "Search game metadata from simple queries",
-              "sha": "ab82884",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/ab82884"
-            }
-          ]
-        },
-        {
-          "title": "Documentation",
-          "audience": "internal",
-          "items": [
-            {
-              "text": "Streamline README preview [skip ci]",
-              "sha": "5ddf89a",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/5ddf89a"
-            },
-            {
-              "text": "Fix README demo preview [skip ci]",
-              "sha": "431a6fd",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/431a6fd"
-            },
-            {
-              "text": "Update README presentation",
-              "sha": "98bf0c4",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/98bf0c4"
-            },
-            {
-              "text": "Trim README demo intro",
-              "sha": "6d8dd33",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/6d8dd33"
-            },
-            {
-              "text": "Improve README demo media",
-              "sha": "a338cf2",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/a338cf2"
-            },
-            {
-              "text": "Use real screenshots and align sidebar rows",
-              "sha": "69fbeb8",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/69fbeb8"
-            },
-            {
-              "text": "Refresh README and project visuals",
-              "sha": "dcf61af",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/dcf61af"
-            }
-          ]
-        },
-        {
-          "title": "Internal",
-          "audience": "internal",
-          "items": [
-            {
-              "text": "Refine checks and release packaging",
-              "sha": "8d24d02",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/8d24d02"
-            },
-            {
-              "text": "Mirror integration package to GitHub Packages",
-              "sha": "b45a9c6",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/b45a9c6"
             }
           ]
         }
