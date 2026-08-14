@@ -100,24 +100,31 @@ pub(super) fn notes_for_probe(
 }
 
 pub(super) fn find_steam_client_library(steam_root: &Path) -> Option<PathBuf> {
+    find_steam_client_library_for_os(steam_root, std::env::consts::OS)
+}
+
+pub(super) fn find_steam_client_library_for_os(
+    steam_root: &Path,
+    operating_system: &str,
+) -> Option<PathBuf> {
     if steam_root.as_os_str().is_empty() {
         return None;
     }
 
-    steam_client_candidates(steam_root)
+    steam_client_candidates_for_os(steam_root, operating_system)
         .into_iter()
         .find(|candidate| candidate.exists())
 }
 
-pub(super) fn steam_client_candidates(steam_root: &Path) -> Vec<PathBuf> {
-    if cfg!(target_os = "windows") {
+fn steam_client_candidates_for_os(steam_root: &Path, operating_system: &str) -> Vec<PathBuf> {
+    if operating_system == "windows" {
         vec![
             steam_root.join("steamclient64.dll"),
             steam_root.join("steamclient.dll"),
             steam_root.join("bin").join("steamclient64.dll"),
             steam_root.join("bin").join("steamclient.dll"),
         ]
-    } else if cfg!(target_os = "macos") {
+    } else if operating_system == "macos" {
         vec![
             steam_root.join("steamclient.dylib"),
             steam_root.join("steam_osx").join("steamclient.dylib"),

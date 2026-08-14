@@ -18,7 +18,7 @@ fn finds_linux_steam_client_library_candidates() {
     fs::create_dir_all(library.parent().unwrap()).unwrap();
     fs::write(&library, b"mock").unwrap();
 
-    let found = find_steam_client_library(&root);
+    let found = super::probe::find_steam_client_library_for_os(&root, "linux");
     assert_eq!(found, Some(library));
 
     let _ = fs::remove_dir_all(root);
