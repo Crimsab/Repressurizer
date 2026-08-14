@@ -46,6 +46,9 @@ describe("release notes", () => {
     expect(notes).toContain("Tolerate isolated antivirus false positives");
     expect(notes).toContain("compare/v0.5.4...v0.5.5");
     expect(notes).not.toContain("compare/preview...v0.5.5");
+    expect(notes).toContain("Repressurizer_*_amd64.AppImage");
+    expect(notes).toContain("Repressurizer_*_amd64.deb");
+    expect(notes).toContain("Repressurizer-cli-linux-x86_64.tar.gz");
   });
 });
 

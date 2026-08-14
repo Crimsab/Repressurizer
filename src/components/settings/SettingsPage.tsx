@@ -69,6 +69,7 @@ import { AutomationSettingsSection } from "./automation/AutomationSettingsSectio
 import { CoreSettingsSection } from "./CoreSettingsSections";
 import { MaintenanceSettingsSection } from "./data/MaintenanceSettingsSection";
 import { useMaintenanceSettings } from "./data/useMaintenanceSettings";
+import { GgDealsSettingsSection } from "./GgDealsSettingsSection";
 
 const AppearanceTab = lazy(() =>
   import("./AppearanceSettingsTab").then((module) => ({ default: module.AppearanceTab }))
@@ -366,6 +367,14 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
         keywords: [t("settings.apiKey"), "api key steam web api credential credentials token developer"],
       },
       {
+        id: "ggdeals",
+        tab: "steam" as const,
+        label: "GG.deals",
+        keywords: [
+          "gg.deals deals price history historical low retail keyshop api pricing offers sales sconti prezzi storico",
+        ],
+      },
+      {
         id: "maintenance",
         tab: "data" as const,
         label: t("settings.maintenance"),
@@ -396,7 +405,10 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
           t("settings.updates.check"),
           t("settings.updates.autoCheck"),
           t("settings.updates.autoCheck.interval"),
-          "about version update updater updates install release latest automatic manifest github",
+          t("settings.updates.channel"),
+          t("settings.updates.channel.stable"),
+          t("settings.updates.channel.beta"),
+          "about version update updater updates install release latest automatic manifest github channel stable beta preview prerelease",
         ],
       },
       {
@@ -808,6 +820,10 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                   </button>
                 </div>
               </div>
+              )}
+
+              {isSectionVisible("ggdeals") && (
+                <GgDealsSettingsSection onSaved={(savedMessage) => setMessage(savedMessage, 2000)} />
               )}
 
               {isSectionVisible("maintenance") && (

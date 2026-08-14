@@ -20,30 +20,69 @@ pub struct SteamInfo {
 }
 
 fn find_steam_path() -> Option<PathBuf> {
-    let windows_paths = [
-        PathBuf::from(r"C:\Program Files (x86)\Steam"),
-        PathBuf::from(r"C:\Program Files\Steam"),
-    ];
+    steam_path_candidates()
+        .into_iter()
+        .find(|path| is_steam_root(path))
+}
 
-    let linux_paths = [
-        dirs::home_dir().map(|h| h.join(".steam/steam")),
-        dirs::home_dir().map(|h| h.join(".local/share/Steam")),
-        dirs::home_dir().map(|h| h.join(".steam/debian-installation")),
-    ];
-
-    for path in &windows_paths {
-        if path.exists() {
-            return Some(path.clone());
-        }
+fn steam_path_candidates() -> Vec<PathBuf> {
+    #[cfg(target_os = "windows")]
+    {
+        return vec![
+            PathBuf::from(r"C:\Program Files (x86)\Steam"),
+            PathBuf::from(r"C:\Program Files\Steam"),
+        ];
     }
 
-    for path in linux_paths.iter().flatten() {
-        if path.exists() {
-            return Some(path.clone());
-        }
+    #[cfg(target_os = "linux")]
+    {
+        let Some(home) = dirs::home_dir() else {
+            return Vec::new();
+        };
+        let xdg_data_home = std::env::var_os("XDG_DATA_HOME").map(PathBuf::from);
+        return linux_steam_path_candidates(&home, xdg_data_home.as_deref());
     }
 
-    None
+    #[cfg(target_os = "macos")]
+    {
+        let Some(home) = dirs::home_dir() else {
+            return Vec::new();
+        };
+        return macos_steam_path_candidates(&home);
+    }
+
+    #[allow(unreachable_code)]
+    Vec::new()
+}
+
+#[cfg(any(target_os = "macos", test))]
+fn macos_steam_path_candidates(home: &Path) -> Vec<PathBuf> {
+    vec![home.join("Library/Application Support/Steam")]
+}
+
+fn linux_steam_path_candidates(home: &Path, xdg_data_home: Option<&Path>) -> Vec<PathBuf> {
+    let mut candidates = Vec::new();
+    if let Some(data_home) = xdg_data_home {
+        candidates.push(data_home.join("Steam"));
+    }
+    candidates.extend([
+        home.join(".steam/root"),
+        home.join(".steam/steam"),
+        home.join(".local/share/Steam"),
+        home.join(".steam/debian-installation"),
+        home.join(".var/app/com.valvesoftware.Steam/.local/share/Steam"),
+        home.join("snap/steam/common/.local/share/Steam"),
+    ]);
+    candidates.dedup();
+    candidates
+}
+
+fn is_steam_root(path: &Path) -> bool {
+    path.is_dir()
+        && (path.join("userdata").is_dir()
+            || path.join("config/loginusers.vdf").is_file()
+            || path.join("steam.sh").is_file()
+            || path.join("steam.exe").is_file())
 }
 
 /// Parse loginusers.vdf to get persona names mapped by SteamID64
@@ -150,6 +189,12 @@ pub fn detect_steam_at(path: String) -> Result<SteamInfo, String> {
     if !steam_path.exists() {
         return Err(format!("Path does not exist: {}", path));
     }
+    if !is_steam_root(&steam_path) {
+        return Err(format!(
+            "Path is not a Steam installation directory: {}",
+            path
+        ));
+    }
 
     let users = get_users(&steam_path);
 
@@ -157,4 +202,122 @@ pub fn detect_steam_at(path: String) -> Result<SteamInfo, String> {
         steam_path: path,
         users,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn linux_candidates_cover_native_flatpak_snap_and_xdg_installs() {
+        let home = Path::new("/home/tester");
+        let xdg = Path::new("/data/tester");
+        let candidates = linux_steam_path_candidates(home, Some(xdg));
+
+        assert_eq!(candidates.first(), Some(&xdg.join("Steam")));
+        assert!(candidates.contains(&home.join(".steam/root")));
+        assert!(candidates.contains(&home.join(".local/share/Steam")));
+        assert!(
+            candidates.contains(&home.join(".var/app/com.valvesoftware.Steam/.local/share/Steam"))
+        );
+        assert!(candidates.contains(&home.join("snap/steam/common/.local/share/Steam")));
+    }
+
+    #[test]
+    fn macos_candidates_cover_the_standard_application_support_root() {
+        let home = Path::new("/Users/tester");
+        assert_eq!(
+            macos_steam_path_candidates(home),
+            vec![home.join("Library/Application Support/Steam")]
+        );
+    }
+
+    #[test]
+    fn detects_users_and_collections_from_linux_shaped_fixture() {
+        let steam_path = temp_steam_dir("linux-detect");
+        let id3 = "12345";
+        let id64 = (STEAM_ID64_BASE + 12_345).to_string();
+        let config_dir = steam_path.join("config");
+        let collections_dir = steam_path
+            .join("userdata")
+            .join(id3)
+            .join("config/cloudstorage");
+        fs::create_dir_all(&config_dir).unwrap();
+        fs::create_dir_all(&collections_dir).unwrap();
+        fs::write(
+            config_dir.join("loginusers.vdf"),
+            format!(
+                "\"users\"\n{{\n  \"{id64}\"\n  {{\n    \"PersonaName\"  \"Linux Tester\"\n  }}\n}}\n"
+            ),
+        )
+        .unwrap();
+        fs::write(collections_dir.join("cloud-storage-namespace-1.json"), "[]").unwrap();
+
+        let info = detect_steam_at(steam_path.to_string_lossy().into_owned()).unwrap();
+
+        assert_eq!(info.users.len(), 1);
+        assert_eq!(info.users[0].id3, id3);
+        assert_eq!(info.users[0].id64, id64);
+        assert_eq!(info.users[0].persona_name, "Linux Tester");
+        assert!(info.users[0].has_collections);
+
+        fs::remove_dir_all(steam_path).unwrap();
+    }
+
+    #[test]
+    fn detects_users_and_collections_from_macos_shaped_fixture() {
+        let home = temp_steam_dir("macos-detect");
+        let steam_path = home.join("Library/Application Support/Steam");
+        let id3 = "67890";
+        let id64 = (STEAM_ID64_BASE + 67_890).to_string();
+        let config_dir = steam_path.join("config");
+        let collections_dir = steam_path
+            .join("userdata")
+            .join(id3)
+            .join("config/cloudstorage");
+        fs::create_dir_all(&config_dir).unwrap();
+        fs::create_dir_all(&collections_dir).unwrap();
+        fs::write(
+            config_dir.join("loginusers.vdf"),
+            format!(
+                "\"users\"\n{{\n  \"{id64}\"\n  {{\n    \"PersonaName\"  \"macOS Tester\"\n  }}\n}}\n"
+            ),
+        )
+        .unwrap();
+        fs::write(collections_dir.join("cloud-storage-namespace-1.json"), "[]").unwrap();
+
+        let info = detect_steam_at(steam_path.to_string_lossy().into_owned()).unwrap();
+
+        assert_eq!(info.steam_path, steam_path.to_string_lossy());
+        assert_eq!(info.users.len(), 1);
+        assert_eq!(info.users[0].id3, id3);
+        assert_eq!(info.users[0].id64, id64);
+        assert_eq!(info.users[0].persona_name, "macOS Tester");
+        assert!(info.users[0].has_collections);
+
+        fs::remove_dir_all(home).unwrap();
+    }
+
+    #[test]
+    fn rejects_existing_directory_that_is_not_a_steam_root() {
+        let path = temp_steam_dir("invalid-root");
+        fs::create_dir_all(&path).unwrap();
+
+        let error = detect_steam_at(path.to_string_lossy().into_owned()).unwrap_err();
+
+        assert!(error.contains("not a Steam installation directory"));
+        fs::remove_dir_all(path).unwrap();
+    }
+
+    fn temp_steam_dir(name: &str) -> PathBuf {
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        std::env::temp_dir().join(format!(
+            "repressurizer-detector-{name}-{}-{unique}",
+            std::process::id()
+        ))
+    }
 }

@@ -14,6 +14,52 @@ test.beforeEach(async ({ page }) => {
   await installTauriMock(page);
 });
 
+test.describe("Linux setup", () => {
+  test.use({
+    userAgent:
+      "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/147.0.0.0 Safari/537.36",
+  });
+
+  test("shows a Linux Steam path during first-run setup", async ({ page }, testInfo) => {
+    await page.goto("/");
+    await page.evaluate(async () => {
+      const { useSettingsStore } = await import("/src/stores/settingsStore.ts");
+      useSettingsStore.getState().setSettings({ setupComplete: false, steamPath: "" });
+    });
+
+    const pathInput = page.getByPlaceholder("/home/you/.local/share/Steam");
+    await expect(pathInput).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+
+    const screenshotPath = testInfo.outputPath("linux-setup.png");
+    await page.screenshot({ path: screenshotPath, fullPage: true });
+    await testInfo.attach("linux-setup", { path: screenshotPath, contentType: "image/png" });
+  });
+});
+
+test.describe("macOS setup", () => {
+  test.use({
+    userAgent:
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_7) AppleWebKit/605.1.15 Version/17.6 Safari/605.1.15",
+  });
+
+  test("shows the standard macOS Steam path during first-run setup", async ({ page }, testInfo) => {
+    await page.goto("/");
+    await page.evaluate(async () => {
+      const { useSettingsStore } = await import("/src/stores/settingsStore.ts");
+      useSettingsStore.getState().setSettings({ setupComplete: false, steamPath: "" });
+    });
+
+    await expect(page.getByPlaceholder("/Users/you/Library/Application Support/Steam")).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+    await page.waitForTimeout(350);
+
+    const screenshotPath = testInfo.outputPath("macos-setup.png");
+    await page.screenshot({ path: screenshotPath, fullPage: true });
+    await testInfo.attach("macos-setup", { path: screenshotPath, contentType: "image/png" });
+  });
+});
+
 test("loads the main library surface with mocked Steam data", async ({ page }, testInfo) => {
   await page.goto("/");
 
@@ -52,6 +98,23 @@ test("loads the main library surface with mocked Steam data", async ({ page }, t
   const screenshotPath = testInfo.outputPath("dashboard.png");
   await page.screenshot({ path: screenshotPath, fullPage: true });
   await testInfo.attach("dashboard", { path: screenshotPath, contentType: "image/png" });
+});
+
+test("portable builds explain manual updates without offering in-place installation", async ({ page }, testInfo) => {
+  await page.goto("/?updater-kind=windows-portable");
+  await page.getByRole("button", { name: "Settings" }).click();
+  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+  await settingsDialog.getByRole("button", { name: "About", exact: true }).click();
+
+  await expect(settingsDialog.getByText("Portable builds do not update in place.", { exact: false })).toBeVisible();
+  await expect(settingsDialog.getByRole("button", { name: "Open GitHub Releases" })).toBeVisible();
+  await expect(settingsDialog.getByRole("button", { name: "Check for updates" })).toHaveCount(0);
+  await expect(settingsDialog.getByText("Automatically check for updates")).toHaveCount(0);
+  await expectNoHorizontalOverflow(page);
+
+  const screenshotPath = testInfo.outputPath("portable-updates.png");
+  await page.screenshot({ path: screenshotPath, fullPage: true });
+  await testInfo.attach("portable-updates", { path: screenshotPath, contentType: "image/png" });
 });
 
 test("keeps every header action reachable at the minimum window size", async ({ page }) => {
@@ -174,7 +237,7 @@ test("keeps advanced category filters compact and searchable", async ({ page }) 
   await expect(dialog.getByText("Advanced Collection 1", { exact: true })).toHaveCount(0);
 });
 
-test("AutoCat shows cached metadata suggestions and preview sorting controls", async ({ page }) => {
+test("AutoCat shows cached metadata suggestions and preview sorting controls", async ({ page }, testInfo) => {
   await page.addInitScript(() => {
     const makeDetail = (
       appId: number,
@@ -240,6 +303,20 @@ test("AutoCat shows cached metadata suggestions and preview sorting controls", a
   await expect(dialog.getByText("(Flag) Steam Cloud")).toBeVisible();
   await expect(dialog.getByRole("button", { name: "Games", exact: true })).toBeVisible();
   await dialog.getByRole("button", { name: "Natural" }).click();
+  await dialog.getByRole("button", { name: "Export diff" }).click();
+  await expect(dialog.getByRole("status")).toHaveText("Preview diff exported.");
+
+  const exportedDiff = await page.evaluate(() =>
+    window.localStorage.getItem("repressurizer-last-written-text")
+  );
+  expect(exportedDiff).toContain('"schema": "repressurizer.autocat-preview-diff"');
+  expect(exportedDiff).toContain('"gamesProcessed": 11');
+  expect(exportedDiff).toContain('"type": "flags"');
+  expect(exportedDiff).not.toMatch(/mock-key|steamPath|apiKey|token|cookie/i);
+
+  const screenshotPath = testInfo.outputPath("autocat-export-diff.png");
+  await page.screenshot({ path: screenshotPath, fullPage: true });
+  await testInfo.attach("autocat-export-diff", { path: screenshotPath, contentType: "image/png" });
 });
 
 test("AutoCat resizes accessibly and restores its saved dialog layout", async ({ page }) => {
@@ -777,6 +854,43 @@ test("compare collections follows sidebar order and opens game details", async (
   await expectNoHorizontalOverflow(page);
 });
 
+test("GG.deals pricing is opt-in, lazy, cached, and readable", async ({ page }, testInfo) => {
+  await page.addInitScript(() => {
+    const raw = window.localStorage.getItem("repressurizer-settings");
+    if (!raw) return;
+    const settings = JSON.parse(raw);
+    settings.ggDealsEnabled = true;
+    settings.ggDealsApiKey = "test-gg-deals-key";
+    window.localStorage.setItem("repressurizer-settings", JSON.stringify(settings));
+  });
+
+  await page.goto("/");
+  await expect.poll(() => page.evaluate(() => window.localStorage.getItem("repressurizer-gg-deals-request-count"))).toBeNull();
+
+  const hadesCard = page.locator(".game-card").filter({ hasText: "Hades" });
+  await hadesCard.dblclick();
+  const detail = page.locator(".fixed.inset-0").filter({
+    has: page.getByRole("heading", { name: "Hades" }),
+  });
+  await expect(detail.getByRole("region", { name: "GG.deals" })).toBeVisible();
+  await expect(detail.getByText("Best current deal")).toBeVisible();
+  await expect(detail.getByText("10.99€", { exact: true })).toBeVisible();
+  await expect(detail.getByText("Official historical low")).toBeVisible();
+  await expect(detail.getByText("8.49€", { exact: true })).toBeVisible();
+  await expect(detail.getByText("Data by GG.deals")).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.localStorage.getItem("repressurizer-gg-deals-request-count"))).toBe("1");
+  await expectNoHorizontalOverflow(page);
+
+  await detail.getByRole("button", { name: "Close" }).click();
+  await hadesCard.dblclick();
+  await expect(page.getByRole("region", { name: "GG.deals" })).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.localStorage.getItem("repressurizer-gg-deals-request-count"))).toBe("1");
+
+  const screenshotPath = testInfo.outputPath("gg-deals-game-detail.png");
+  await page.screenshot({ path: screenshotPath, fullPage: true });
+  await testInfo.attach("gg-deals-game-detail", { path: screenshotPath, contentType: "image/png" });
+});
+
 test("play history shows tracked deltas instead of lifetime playtime", async ({ page }) => {
   await page.goto("/");
 
@@ -839,8 +953,8 @@ test("settings search finds local-only visibility and generated changelog", asyn
 
   await search.fill("changelog");
   await expect(settingsDialog.getByText("Changelog").first()).toBeVisible();
-  await expect(settingsDialog.getByText("v0.4.6")).toBeVisible();
-  await expect(settingsDialog.getByText("Batch Steam price refreshes")).toBeVisible();
+  await expect(settingsDialog.getByText("v0.5.6")).toBeVisible();
+  await expect(settingsDialog.getByText("Steam Tools: harden schema refresh workflow")).toBeVisible();
 });
 
 test("game achievement details show Steam Achievement Manager preflight separately from Steam Web API data", async ({ page }, testInfo) => {
@@ -1416,6 +1530,122 @@ test("opens organized settings tabs, automation logs, and Steam controls without
   await expectNoHorizontalOverflow(page);
 });
 
+test("imports only Steam Family webapi_token after an explicit clipboard action", async ({ page }, testInfo) => {
+  const token = "mock-store-token-for-e2e";
+  await page.setViewportSize({ width: 900, height: 600 });
+  await page.addInitScript((clipboardToken) => {
+    window.localStorage.setItem(
+      "repressurizer-clipboard-text",
+      "unrelated-password-must-not-be-imported"
+    );
+    window.localStorage.setItem("repressurizer-mock-family-token", clipboardToken);
+  }, token);
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "More tools" }).click();
+  await page.getByRole("menuitem", { name: "Settings" }).click();
+  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+  await settingsDialog.getByRole("button", { name: "Steam", exact: true }).click();
+
+  const importButton = settingsDialog.getByRole("button", { name: "Import from clipboard" });
+  await importButton.click();
+  await expect(
+    settingsDialog.getByText(/clipboard does not contain Steam JSON with webapi_token/)
+  ).toBeVisible();
+  expect(
+    await page.evaluate(() =>
+      window.localStorage.getItem("repressurizer-app-data:steam_family_token.json")
+    )
+  ).toBeNull();
+
+  await page.evaluate(() => {
+    const clipboardToken = window.localStorage.getItem("repressurizer-mock-family-token");
+    window.localStorage.setItem(
+      "repressurizer-clipboard-text",
+      JSON.stringify({
+        success: 1,
+        data: { webapi_token: clipboardToken },
+        browser_cookie: "must-not-be-persisted",
+      })
+    );
+  });
+  await importButton.click();
+  await expect(
+    settingsDialog.getByText("Steam Store token imported and saved. No cookies were stored.")
+  ).toBeVisible();
+
+  const saved = await page.evaluate(() =>
+    window.localStorage.getItem("repressurizer-app-data:steam_family_token.json")
+  );
+  expect(saved).not.toBeNull();
+  expect(saved).not.toContain("browser_cookie");
+  expect(saved).not.toContain("must-not-be-persisted");
+  expect(Object.keys(JSON.parse(saved ?? "{}")).sort()).toEqual([
+    "accessToken",
+    "lastValidatedAt",
+    "savedAt",
+  ]);
+  expect(JSON.parse(saved ?? "{}").accessToken).toBe(token);
+  await expectNoHorizontalOverflow(page);
+
+  const screenshotPath = testInfo.outputPath("steam-family-helper-minimum.png");
+  await page.screenshot({ path: screenshotPath, fullPage: true });
+  await testInfo.attach("steam-family-helper-minimum", {
+    path: screenshotPath,
+    contentType: "image/png",
+  });
+});
+
+test("keeps beta updates opt-in and isolated from the stable target", async ({ page }, testInfo) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Settings" }).click();
+  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+  await settingsDialog.getByRole("button", { name: "About", exact: true }).click();
+
+  const channelSelect = settingsDialog.getByRole("button", {
+    name: "Release channel: Stable",
+  });
+  await expect(channelSelect).toBeVisible();
+  await channelSelect.click();
+  await settingsDialog.getByRole("option", { name: "Beta" }).click();
+  await expect(
+    settingsDialog.getByText(/Opt in to signed prereleases/)
+  ).toBeVisible();
+
+  await settingsDialog.getByRole("button", { name: "Check for updates" }).click();
+  await expect(settingsDialog.getByText("Repressurizer is up to date.")).toBeVisible();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        window.localStorage.getItem("repressurizer-last-updater-target")
+      )
+    )
+    .toBe("windows-x86_64-beta");
+  expect(
+    await page.evaluate(() =>
+      window.localStorage.getItem("repressurizer-last-updater-allow-downgrades")
+    )
+  ).toBe("false");
+
+  const screenshotPath = testInfo.outputPath("settings-release-channel.png");
+  await page.screenshot({ path: screenshotPath, fullPage: true });
+  await testInfo.attach("settings-release-channel", {
+    path: screenshotPath,
+    contentType: "image/png",
+  });
+
+  await settingsDialog.getByRole("button", { name: "Release channel: Beta" }).click();
+  await settingsDialog.getByRole("option", { name: "Stable" }).click();
+  await settingsDialog.getByRole("button", { name: "Check for updates" }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        window.localStorage.getItem("repressurizer-last-updater-target")
+      )
+    )
+    .toBe("windows-x86_64-stable");
+});
+
 test("uses the color picker as the primary custom accent control", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Settings" }).click();
@@ -1489,6 +1719,38 @@ test("keeps recommendation filters inside the dialog", async ({ page }, testInfo
   const screenshotPath = testInfo.outputPath("recommend-filters.png");
   await page.screenshot({ path: screenshotPath, fullPage: true });
   await testInfo.attach("recommend-filters", { path: screenshotPath, contentType: "image/png" });
+});
+
+test("explains and tunes smart backlog ranking", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 900, height: 600 });
+  await page.goto("/");
+  await page.evaluate(async () => {
+    const { useWishlistStore } = await import("/src/stores/wishlistStore.ts");
+    const { useAchievementsStore } = await import("/src/stores/achievementsStore.ts");
+    useWishlistStore.getState().setItems([{ appid: 753640, priority: 1, date_added: 1_700_000_000 }]);
+    useAchievementsStore.getState().setSummary(753640, { total: 20, achieved: 10, achievements: [] });
+  });
+
+  await page.getByRole("button", { name: "More tools" }).click();
+  await page.getByRole("menuitem", { name: "What to Play Next" }).click();
+  const dialog = page.getByRole("dialog", { name: "What to Play Next" });
+  await expect(dialog.getByText(/Wishlist/).first()).toBeVisible();
+  await expect(dialog.getByText(/pts$/).first()).toBeVisible();
+  await expect(dialog.getByText(/\+\d+ more/).first()).toBeVisible();
+
+  await dialog.getByRole("button", { name: "Tune ranking" }).click();
+  await expect(dialog.getByText("Ranking signals", { exact: true })).toBeVisible();
+  await dialog.getByRole("button", { name: "Playtime" }).click();
+  await dialog.getByRole("button", { name: "Off", exact: true }).click();
+  await expect.poll(() => page.evaluate(() => {
+    const stored = window.localStorage.getItem("repressurizer-ranking-weights");
+    return stored ? JSON.parse(stored).playtime : null;
+  })).toBe(0);
+  await expectNoHorizontalOverflow(page);
+
+  const screenshotPath = testInfo.outputPath("recommend-ranking-tuning.png");
+  await page.screenshot({ path: screenshotPath, fullPage: true });
+  await testInfo.attach("recommend-ranking-tuning", { path: screenshotPath, contentType: "image/png" });
 });
 
 test("guides Steam Family setup during onboarding", async ({ page }) => {

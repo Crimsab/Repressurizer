@@ -1,6 +1,6 @@
 const SENSITIVE_KEY_PATTERN = /(api.?key|token|secret|password|authorization|bearer)/i;
-const SENSITIVE_QUERY_PATTERN = /([?&](?:key|api_?key|access_token|token|secret|password)=)[^&#\s"']*/gi;
-const SENSITIVE_JSON_PATTERN = /(["'](?:key|api_?key|access_token|token|secret|password)["']\s*:\s*["'])[^"']*/gi;
+const SENSITIVE_QUERY_PATTERN = /([?&](?:key|api_?key|access_token|webapi_?token|token|secret|password)=)[^&#\s"']*/gi;
+const SENSITIVE_JSON_PATTERN = /(["'](?:key|api_?key|access_token|webapi_?token|token|secret|password)["']\s*:\s*["'])[^"']*/gi;
 const BEARER_PATTERN = /(\bBearer\s+)[A-Za-z0-9._~+/=-]+/gi;
 
 function redactString(value: string): string {

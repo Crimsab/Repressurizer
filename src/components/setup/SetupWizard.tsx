@@ -42,6 +42,11 @@ export function SetupWizard() {
   const [loading, setLoading] = useState(false);
   const [loadedGames, setLoadedGames] = useState<OwnedGame[]>([]);
   const [loadedCollections, setLoadedCollections] = useState<SteamCollection[]>([]);
+  const steamPathPlaceholder = navigator.userAgent.includes("Windows")
+    ? "C:\\Program Files (x86)\\Steam"
+    : navigator.userAgent.includes("Mac")
+      ? "/Users/you/Library/Application Support/Steam"
+      : "/home/you/.local/share/Steam";
 
   const handleDetect = async () => {
     setLoading(true);
@@ -176,7 +181,7 @@ export function SetupWizard() {
                   type="text"
                   value={steamPath}
                   onChange={(e) => setSteamPath(e.target.value)}
-                  placeholder="C:\Program Files (x86)\Steam"
+                  placeholder={steamPathPlaceholder}
                   className="w-full rounded-xl border border-repressurizer-border bg-repressurizer-bg pl-9 pr-4 py-2.5 text-sm text-repressurizer-text placeholder:text-repressurizer-text-faint transition-colors focus:border-repressurizer-accent focus:outline-none"
                 />
               </div>

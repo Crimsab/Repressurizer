@@ -22,7 +22,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         env:
           GIT_CONFIG_COUNT: 1
           GIT_CONFIG_KEY_0: init.defaultBranch
@@ -150,7 +150,9 @@ jobs:
           $installerName = "Repressurizer-$label-windows-x64-setup.exe"
 
           Copy-Item src-tauri\target\release\repressurizer.exe "artifacts\$portableName"
-          Compress-Archive -Path "artifacts\$portableName" -DestinationPath "artifacts\$zipName" -Force
+          Set-Content -Path artifacts\repressurizer-portable.marker -Value "portable"
+          Compress-Archive -Path "artifacts\$portableName", artifacts\repressurizer-portable.marker -DestinationPath "artifacts\$zipName" -Force
+          Remove-Item artifacts\repressurizer-portable.marker
           Copy-Item $installer.FullName "artifacts\$installerName"
           Copy-Item $signaturePath "artifacts\$installerName.sig"
           Get-ChildItem artifacts | ForEach-Object { "$($_.Name) $($_.Length) bytes" }
@@ -184,6 +186,9 @@ jobs:
           }
 
           $manifest | ConvertTo-Json -Depth 8 | Set-Content -Path artifacts\latest-preview.json -Encoding utf8
+
+      - name: Validate preview updater manifest
+        run: bun scripts/updater-manifest.ts --manifest artifacts/latest-preview.json --artifacts artifacts --repo "${{ github.repository }}" --tag preview --version "${{ steps.version.outputs.version }}" --platform windows-x86_64
 
       - name: Create preview artifact checksums
         shell: pwsh

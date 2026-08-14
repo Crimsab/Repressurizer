@@ -151,6 +151,16 @@ export interface GamePriceOverview extends GamePriceSnapshot {
   app_id: number;
 }
 
+export interface GgDealsPrice {
+  appId: number;
+  url: string | null;
+  currency: string;
+  currentRetail: number | null;
+  currentKeyshops: number | null;
+  historicalRetail: number | null;
+  historicalKeyshops: number | null;
+}
+
 export interface StoreReleaseDateResult {
   app_id: number;
   release_date: string | null;
@@ -408,6 +418,8 @@ export interface AppSettings {
   steamId64: string;
   steamPersonaName: string;
   apiKey: string;
+  ggDealsEnabled: boolean;
+  ggDealsApiKey: string;
   setupComplete: boolean;
   showDynamicCategories: boolean;
   pinFavorites: boolean;
@@ -460,6 +472,7 @@ export interface AppSettings {
   desktopNotifications: boolean;
   checkUpdatesOnStartup: boolean;
   updateAutoCheckIntervalHours: number;
+  updateChannel: "stable" | "beta";
   autoRefreshLibraryEnabled: boolean;
   libraryAutoRefreshIntervalMinutes: number;
   // Automation export

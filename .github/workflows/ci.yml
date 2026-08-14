@@ -22,7 +22,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         env:
           GIT_CONFIG_COUNT: 1
           GIT_CONFIG_KEY_0: init.defaultBranch
@@ -44,7 +44,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         env:
           GIT_CONFIG_COUNT: 1
           GIT_CONFIG_KEY_0: init.defaultBranch
@@ -78,7 +78,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         env:
           GIT_CONFIG_COUNT: 1
           GIT_CONFIG_KEY_0: init.defaultBranch
@@ -121,13 +121,24 @@ jobs:
       - name: Rust app tests
         run: cargo test --manifest-path src-tauri/Cargo.toml
 
+      - name: Setup Bun for Linux desktop build
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
+
+      - name: Install frontend dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build Linux desktop executable
+        run: bun tauri build --no-bundle
+
   rust-integration-check:
     name: Rust integration crate
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         env:
           GIT_CONFIG_COUNT: 1
           GIT_CONFIG_KEY_0: init.defaultBranch
@@ -157,13 +168,74 @@ jobs:
       - name: Rust integration crate publish dry-run
         run: cargo publish --dry-run --manifest-path packages/rust/Cargo.toml
 
+  macos-bundle-check:
+    name: macOS universal bundle
+    runs-on: macos-15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        env:
+          GIT_CONFIG_COUNT: 1
+          GIT_CONFIG_KEY_0: init.defaultBranch
+          GIT_CONFIG_VALUE_0: main
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30 # stable
+        with:
+          toolchain: 1.94.0
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - name: Restore caches
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.bun/install/cache
+            ~/.cargo/git
+            ~/.cargo/registry
+          key: ${{ runner.os }}-macos-bundle-${{ hashFiles('bun.lock', 'src-tauri/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-macos-bundle-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run macOS detector and guard tests
+        run: cargo test --manifest-path src-tauri/Cargo.toml steam
+
+      - name: Build ad-hoc signed universal bundles
+        run: bun run build:macos:ci
+
+      - name: Smoke-test app and DMG structure
+        run: |
+          set -e
+          bundle_dir="src-tauri/target/universal-apple-darwin/release/bundle"
+          app_path=$(find "$bundle_dir/macos" -maxdepth 1 -type d -name '*.app' -print -quit)
+          dmg_path=$(find "$bundle_dir/dmg" -maxdepth 1 -type f -name '*.dmg' -print -quit)
+          test -n "$app_path"
+          test -n "$dmg_path"
+          binary_path="$app_path/Contents/MacOS/repressurizer"
+          test -x "$binary_path"
+          lipo "$binary_path" -verify_arch x86_64 arm64
+          codesign --verify --deep --strict --verbose=2 "$app_path"
+          mount_point=$(mktemp -d)
+          hdiutil attach "$dmg_path" -nobrowse -readonly -mountpoint "$mount_point"
+          test -d "$mount_point/Repressurizer.app"
+          hdiutil detach "$mount_point"
+          rmdir "$mount_point"
+
   browser-smoke:
     name: Browser smoke tests
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         env:
           GIT_CONFIG_COUNT: 1
           GIT_CONFIG_KEY_0: init.defaultBranch
@@ -208,12 +280,12 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
       - name: Setup Python
-        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.13"
           cache: pip

@@ -28,6 +28,9 @@
 - name: windows
   color: "0078d4"
   description: Windows-specific behavior.
+- name: linux
+  color: "fcc624"
+  description: Linux-specific behavior.
 - name: backups
   color: "f9d0c4"
   description: Backup, restore, save preview, or collection safety.

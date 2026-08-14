@@ -1,15 +1,25 @@
 {
   "name": "repressurizer",
   "private": true,
-  "version": "0.5.6",
+  "version": "0.6.0",
   "license": "GPL-3.0-only",
   "type": "module",
   "workspaces": [
     "packages/*"
   ],
+  "overrides": {
+    "@babel/core": "^7.29.7",
+    "esbuild": "^0.28.2",
+    "nanoid": "^3.3.18",
+    "picomatch": "^4.0.5",
+    "postcss": "^8.5.26"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:linux": "bun tauri build --bundles deb,appimage",
+    "build:macos": "bun tauri build --bundles app,dmg --target universal-apple-darwin --config src-tauri/tauri.macos.conf.json",
+    "build:macos:ci": "bun tauri build --bundles app,dmg --target universal-apple-darwin --config src-tauri/tauri.macos-ci.conf.json",
     "check": "bun run i18n:check && tsc --noEmit && bun run --cwd packages/integration check",
     "integration:build": "bun run --cwd packages/integration build",
     "integration:rust:check": "cargo check --manifest-path packages/rust/Cargo.toml",
@@ -21,7 +31,7 @@
     "i18n:status:write": "bun scripts/i18n-status.ts --write",
     "changelog:write": "bun scripts/generate-changelog.ts",
     "test": "bun run test:unit && bun run test:e2e",
-    "test:unit": "vitest run src packages/integration/test scripts/release-notes.test.ts",
+    "test:unit": "vitest run src packages/integration/test scripts/release-channel.test.ts scripts/release-notes.test.ts scripts/updater-manifest.test.ts",
     "test:e2e": "playwright test",
     "test:docs": "playwright test --config playwright.docs.config.ts",
     "preview": "vite preview",
@@ -30,34 +40,35 @@
     "tauri": "tauri"
   },
   "devDependencies": {
-    "@axe-core/playwright": "^4.11.0",
-    "@playwright/test": "^1.59.1",
-    "@tailwindcss/vite": "^4.2.4",
-    "@tauri-apps/cli": "^2.11.0",
-    "@types/react": "^19.2.14",
-    "@types/react-dom": "^19.2.3",
+    "@axe-core/playwright": "^4.13.0",
+    "@playwright/test": "^1.62.1",
+    "@tailwindcss/vite": "^4.3.3",
+    "@tauri-apps/cli": "^2.11.4",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4",
     "@vitejs/plugin-react": "^5.2.0",
-    "tailwindcss": "^4.2.4",
+    "tailwindcss": "^4.3.3",
     "typescript": "~5.9.3",
-    "vite": "^7.3.2",
-    "vitest": "^4.1.5"
+    "vite": "^7.3.6",
+    "vitest": "^4.1.10"
   },
   "dependencies": {
-    "@fontsource-variable/geist": "^5.2.8",
-    "@fontsource-variable/geist-mono": "^5.2.7",
+    "@fontsource-variable/geist": "^5.3.0",
+    "@fontsource-variable/geist-mono": "^5.3.0",
     "@phosphor-icons/react": "^2.1.10",
-    "@tauri-apps/api": "^2.11.0",
+    "@tauri-apps/api": "^2.11.1",
     "@tauri-apps/plugin-autostart": "^2.5.1",
-    "@tauri-apps/plugin-dialog": "^2.7.1",
+    "@tauri-apps/plugin-clipboard-manager": "^2.3.2",
+    "@tauri-apps/plugin-dialog": "^2.7.2",
     "@tauri-apps/plugin-fs": "^2.5.1",
-    "@tauri-apps/plugin-log": "^2.8.0",
+    "@tauri-apps/plugin-log": "^2.9.0",
     "@tauri-apps/plugin-notification": "^2.3.3",
     "@tauri-apps/plugin-process": "^2.3.1",
     "@tauri-apps/plugin-shell": "^2.3.5",
     "@tauri-apps/plugin-updater": "^2.10.1",
     "html-to-image": "^1.11.13",
-    "react": "^19.2.5",
-    "react-dom": "^19.2.5",
-    "zustand": "^5.0.12"
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "zustand": "^5.0.15"
   }
 }

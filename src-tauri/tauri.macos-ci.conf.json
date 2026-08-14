@@ -1,0 +1,12 @@
+{
+  "identifier": "com.crimsab.repressurizer",
+  "build": {
+    "beforeBundleCommand": "bun scripts/prepare-macos-universal-cli.ts"
+  },
+  "bundle": {
+    "createUpdaterArtifacts": false,
+    "macOS": {
+      "signingIdentity": "-"
+    }
+  }
+}

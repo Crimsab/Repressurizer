@@ -1,6 +1,6 @@
 ---
 title: Repressurizer
-description: A backup-first Steam library manager for Windows.
+description: A backup-first Steam library manager for Windows, Linux, and macOS.
 hide:
   - navigation
   - toc
@@ -12,7 +12,7 @@ hide:
 
 # Organize your library
 
-Repressurizer is a Windows desktop app for collections, metadata, AutoCat rules, exports, and safer local Steam library maintenance.
+Repressurizer is a Windows, Linux, and macOS desktop app for collections, metadata, AutoCat rules, exports, and safer local Steam library maintenance.
 
 [Install Repressurizer](getting-started/installation.md){ .md-button .md-button--primary }
 [Explore the user guide](user-guide/index.md){ .md-button }

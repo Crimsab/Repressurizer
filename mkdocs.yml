@@ -122,6 +122,7 @@ nav:
       - user-guide/index.md
       - Collections: user-guide/collections.md
       - Search and filters: user-guide/search-and-filters.md
+      - What to play next: user-guide/what-to-play-next.md
       - Metadata cache and network: cache-and-network.md
       - AutoCat: user-guide/autocat.md
       - Export: user-guide/export.md
@@ -144,6 +145,7 @@ nav:
       - integrations/index.md
       - CLI: cli.md
       - Automation export: automation-export.md
+      - GG.deals pricing: integrations/gg-deals.md
       - Snapshot schema: integrations/repressurizer-snapshot-v1.md
       - Receiver example: integrations/receiver-example.md
       - TypeScript package: integrations/integration-package-release.md
@@ -152,6 +154,7 @@ nav:
       - development/index.md
       - Development setup: development/setup.md
       - Architecture: development/architecture.md
+      - macOS packaging: development/macos.md
       - Testing: development/testing.md
       - Localization: localization.md
       - Release process: development/releases.md

@@ -25,6 +25,7 @@ import { useTagsStore } from "../../../stores/tagsStore";
 import { useT } from "../../../lib/i18n";
 import { CategoryChip } from "../../ui/CategoryChip";
 import { PriceBlock, RatingWidget, StatCard } from "./GameInfoWidgets";
+import { GgDealsPricePanel } from "./GgDealsPricePanel";
 
 export function GameInfoTab({
   details,
@@ -234,6 +235,8 @@ export function GameInfoTab({
         </div>
       </div>
       )}
+
+      {showDetailPrice !== false && <GgDealsPricePanel appId={game.appid} />}
 
       {/* Game info */}
       {loading ? (

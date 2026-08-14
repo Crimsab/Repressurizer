@@ -1,6 +1,6 @@
 import { Component, lazy, Suspense, useEffect, useRef, useState } from "react";
 import type { ReactNode, ErrorInfo } from "react";
-import { check, type Update } from "@tauri-apps/plugin-updater";
+import type { Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 import { listen } from "@tauri-apps/api/event";
 import { useSettingsStore, applyAccentColor, applyTheme } from "./stores/settingsStore";
@@ -23,6 +23,8 @@ import { useSteamAppIndexStore } from "./stores/steamAppIndexStore";
 import { useSteamRatingsStore } from "./stores/steamRatingsStore";
 import { useAppNameOverrideStore } from "./stores/appNameOverrideStore";
 import { fetchLibrary, loadCollections, createManualBackup, fetchPlayerSummary, hideMainWindow, quitApp, getStartupContext } from "./lib/tauri";
+import type { StartupContext } from "./lib/tauri";
+import { checkForAppUpdate, manualUpdateMessageKey } from "./lib/updater";
 import { mergeCollectionOnlyGames } from "./lib/libraryMerge";
 import {
   automationPublishDue,
@@ -149,6 +151,7 @@ function AppContent() {
     libraryAutoRefreshIntervalMinutes: state.libraryAutoRefreshIntervalMinutes,
     checkUpdatesOnStartup: state.checkUpdatesOnStartup,
     updateAutoCheckIntervalHours: state.updateAutoCheckIntervalHours,
+    updateChannel: state.updateChannel,
     automationPublishEnabled: state.automationPublishEnabled,
     automationPublishUrl: state.automationPublishUrl,
     showFilterBar: state.showFilterBar,
@@ -192,7 +195,7 @@ function AppContent() {
 
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showCloseChoice, setShowCloseChoice] = useState(false);
-  const [startupContext, setStartupContext] = useState<{ launchedFromAutostart: boolean; mainWindowCreated: boolean } | null>(null);
+  const [startupContext, setStartupContext] = useState<StartupContext | null>(null);
   const [windowActivated, setWindowActivated] = useState(false);
 
   const automationPublishConfigured =
@@ -220,6 +223,10 @@ function AppContent() {
   };
 
   checkForUpdatesRef.current = async (notify = false) => {
+    if (startupContext?.updaterCanInstall === false) {
+      if (notify) toast.getState().info(t(manualUpdateMessageKey(startupContext.updaterKind)));
+      return;
+    }
     if (checkingUpdatesRef.current) {
       if (notify) toast.getState().info(t("settings.updates.checking"));
       return;
@@ -235,7 +242,13 @@ function AppContent() {
 
     checkingUpdatesRef.current = true;
     try {
-      const update = await check();
+      if (!startupContext?.updaterTarget) {
+        throw new Error(t("settings.updates.targetUnavailable"));
+      }
+      const update = await checkForAppUpdate(
+        startupContext.updaterTarget,
+        settings.updateChannel ?? "stable"
+      );
       availableUpdateRef.current = update;
       setAvailableUpdate(update);
       if (notify) {
@@ -262,6 +275,11 @@ function AppContent() {
   useEffect(() => { applyAccentColor(accentColor); }, [accentColor]);
   useEffect(() => { applyTheme(theme ?? "dark"); }, [theme]);
   useEffect(() => {
+    availableUpdateRef.current = null;
+    setAvailableUpdate(null);
+  }, [settings.updateChannel]);
+
+  useEffect(() => {
     hydrateSettingsFromDisk().catch(() => {});
   }, [hydrateSettingsFromDisk]);
 
@@ -270,7 +288,13 @@ function AppContent() {
     getStartupContext()
       .then((context) => {
         if (cancelled) return;
-        const next = context ?? { launchedFromAutostart: false, mainWindowCreated: true };
+        const next = context ?? {
+          launchedFromAutostart: false,
+          mainWindowCreated: true,
+          updaterKind: "unsupported" as const,
+          updaterCanInstall: false,
+          updaterTarget: null,
+        };
         setStartupContext(next);
         if (!next.launchedFromAutostart || next.mainWindowCreated) {
           setWindowActivated(true);
@@ -278,7 +302,13 @@ function AppContent() {
       })
       .catch(() => {
         if (cancelled) return;
-        setStartupContext({ launchedFromAutostart: false, mainWindowCreated: true });
+        setStartupContext({
+          launchedFromAutostart: false,
+          mainWindowCreated: true,
+          updaterKind: "unsupported",
+          updaterCanInstall: false,
+          updaterTarget: null,
+        });
         setWindowActivated(true);
       });
     return () => {
@@ -536,7 +566,12 @@ function AppContent() {
   }, []);
 
   useEffect(() => {
-    if (startupContext === null || !settings.setupComplete || settings.checkUpdatesOnStartup === false) return;
+    if (
+      startupContext === null ||
+      !startupContext.updaterCanInstall ||
+      !settings.setupComplete ||
+      settings.checkUpdatesOnStartup === false
+    ) return;
     const intervalHours = Math.max(
       MIN_UPDATE_CHECK_INTERVAL_HOURS,
       settings.updateAutoCheckIntervalHours || DEFAULT_UPDATE_CHECK_INTERVAL_HOURS
@@ -548,7 +583,7 @@ function AppContent() {
       window.clearTimeout(timer);
       window.clearInterval(interval);
     };
-  }, [startupContext, settings.setupComplete, settings.checkUpdatesOnStartup, settings.updateAutoCheckIntervalHours]);
+  }, [startupContext, settings.setupComplete, settings.checkUpdatesOnStartup, settings.updateAutoCheckIntervalHours, settings.updateChannel]);
 
   useEffect(() => {
     if (!settings.setupComplete || settings.autoRefreshLibraryEnabled !== true) return;

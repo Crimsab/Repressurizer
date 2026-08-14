@@ -3,18 +3,41 @@ import { useGameStore } from "../../stores/gameStore";
 import { useHltbStore } from "../../stores/hltbStore";
 import { useStatusStore } from "../../stores/statusStore";
 import { useCategoryStore } from "../../stores/categoryStore";
-import { X, Shuffle, Timer, GameController, Funnel, CaretDown, Check } from "@phosphor-icons/react";
+import { useWishlistStore } from "../../stores/wishlistStore";
+import { useAchievementsStore } from "../../stores/achievementsStore";
+import { X, Shuffle, Timer, GameController, Funnel, CaretDown, Check, SlidersHorizontal, ArrowCounterClockwise } from "@phosphor-icons/react";
 import { SteamImage } from "../games/SteamImage";
-import { useT } from "../../lib/i18n";
+import { useT, type TranslationKey } from "../../lib/i18n";
 import { DialogOverlay } from "../ui/DialogOverlay";
+import {
+  DEFAULT_RANKING_WEIGHTS,
+  rankBacklogCandidates,
+  sanitizeRankingWeights,
+  type RankingContribution,
+  type RankingMode,
+  type RankingSignal,
+  type RankingWeights,
+} from "../../lib/backlogRanking";
 
 interface WhatToPlayNextProps {
   onClose: () => void;
 }
 
 type LengthFilter = "any" | "short" | "medium" | "long";
-type RecommendMode = "smart" | "surprise" | "quick" | "quality" | "backlog";
+type RecommendMode = RankingMode;
 type PlayFilter = "any" | "unplayed" | "started";
+
+const RANKING_WEIGHT_OPTIONS = [0, 0.5, 1, 1.5, 2] as const;
+const RANKING_SIGNALS: RankingSignal[] = ["playtime", "wishlist", "hltb", "achievements", "recency", "quality", "genre"];
+const RANKING_SIGNAL_KEYS: Record<RankingSignal, TranslationKey> = {
+  playtime: "recommend.signal.playtime",
+  wishlist: "recommend.signal.wishlist",
+  hltb: "recommend.signal.hltb",
+  achievements: "recommend.signal.achievements",
+  recency: "recommend.signal.recency",
+  quality: "recommend.signal.quality",
+  genre: "recommend.signal.genre",
+};
 
 export function WhatToPlayNext({ onClose }: WhatToPlayNextProps) {
   const t = useT();
@@ -23,6 +46,8 @@ export function WhatToPlayNext({ onClose }: WhatToPlayNextProps) {
   const hltbData = useHltbStore((s) => s.data);
   const statuses = useStatusStore((s) => s.statuses);
   const collections = useCategoryStore((s) => s.collections);
+  const wishlistItems = useWishlistStore((s) => s.items);
+  const achievements = useAchievementsStore((s) => s.summaries);
 
   const [seed, setSeed] = useState(0);
   const [mode, setMode] = useState<RecommendMode>("smart");
@@ -30,6 +55,14 @@ export function WhatToPlayNext({ onClose }: WhatToPlayNextProps) {
   const [playFilter, setPlayFilter] = useState<PlayFilter>("any");
   const [genreFilter, setGenreFilter] = useState<string>("");
   const [avoidRecent, setAvoidRecent] = useState(true);
+  const [showTuning, setShowTuning] = useState(false);
+  const [rankingWeights, setRankingWeights] = useState<RankingWeights>(() => {
+    try {
+      return sanitizeRankingWeights(JSON.parse(localStorage.getItem("repressurizer-ranking-weights") ?? "null"));
+    } catch {
+      return { ...DEFAULT_RANKING_WEIGHTS };
+    }
+  });
   const [recentIds, setRecentIds] = useState<Set<number>>(() => {
     try {
       return new Set(JSON.parse(localStorage.getItem("repressurizer-recent-recommendations") ?? "[]"));
@@ -43,6 +76,19 @@ export function WhatToPlayNext({ onClose }: WhatToPlayNextProps) {
     const unique = [...new Set(next)];
     localStorage.setItem("repressurizer-recent-recommendations", JSON.stringify(unique));
     setRecentIds(new Set(unique));
+  };
+
+  const updateRankingWeight = (signal: RankingSignal, weight: number) => {
+    setRankingWeights((current) => {
+      const next = { ...current, [signal]: weight };
+      localStorage.setItem("repressurizer-ranking-weights", JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const resetRankingWeights = () => {
+    localStorage.removeItem("repressurizer-ranking-weights");
+    setRankingWeights({ ...DEFAULT_RANKING_WEIGHTS });
   };
 
   // Build genre preference from most-played games
@@ -65,7 +111,7 @@ export function WhatToPlayNext({ onClose }: WhatToPlayNextProps) {
       .sort((a, b) => b[1] - a[1])
       .map(([name]) => name);
 
-    // Score unplayed or barely-played games
+    // Select backlog candidates before applying the pure, deterministic ranking.
     const candidates = list.filter((g) => {
       if (playFilter === "unplayed" && g.playtime_forever > 0) return false;
       if (playFilter === "started" && (g.playtime_forever === 0 || g.playtime_forever > 240)) return false;
@@ -76,49 +122,24 @@ export function WhatToPlayNext({ onClose }: WhatToPlayNextProps) {
       return true;
     });
 
-    const scored = candidates.map((g) => {
-      const d = details[g.appid];
-      const hltb = hltbData[g.appid];
-      let score = 0;
+    const genreAffinity = new Map<number, number>();
+    for (const game of candidates) {
+      const gameGenres = details[game.appid]?.genres ?? [];
+      const affinity = gameGenres.reduce((sum, genre) => sum + (genrePlaytime.get(genre) ?? 0) / maxGenreTime, 0);
+      genreAffinity.set(game.appid, Math.min(1, affinity));
+    }
 
-      // Metacritic bonus (0-30 points)
-      if (d?.metacritic_score) {
-        score += d.metacritic_score * (mode === "quality" ? 0.45 : 0.3);
-      }
-
-      // Genre affinity (0-25 points)
-      if (d) {
-        let genreScore = 0;
-        for (const genre of d.genres) {
-          const pt = genrePlaytime.get(genre) ?? 0;
-          genreScore += (pt / maxGenreTime) * 5;
-        }
-        score += Math.min(genreScore, 25);
-      }
-
-      // HLTB bonus: shorter games get a slight boost (0-20 points)
-      const mainTime = hltb?.main_story ?? hltb?.main_extra;
-      if (mainTime != null) {
-        const quickBoost = mode === "quick" ? 1.35 : 1;
-        if (mainTime <= 10) score += 15 * quickBoost;
-        else if (mainTime <= 25) score += 10 * quickBoost;
-        else if (mainTime <= 50) score += 5 * quickBoost;
-      }
-
-      // Recency penalty: if last played recently, slight boost
-      if (g.rtime_last_played > 0 && g.playtime_forever > 0) {
-        const daysSincePlay = (Date.now() / 1000 - g.rtime_last_played) / 86400;
-        if (daysSincePlay < 30) score += 5;
-      }
-
-      if (mode === "backlog") {
-        score += Math.min(20, Math.max(0, 20 - g.playtime_forever / 3));
-      }
-
-      // Random factor for variety. Surprise mode deliberately moves more.
-      score += ((g.appid * 13 + seed * 97) % 100) * (mode === "surprise" ? 0.22 : 0.07);
-
-      return { game: g, details: d, hltb, score, mainTime };
+    const scored = rankBacklogCandidates({
+      games: candidates,
+      details,
+      hltbData,
+      achievements,
+      wishlistItems,
+      hiddenAppIds: hidden,
+      genreAffinity,
+      mode,
+      weights: rankingWeights,
+      nowSeconds: Math.floor(Date.now() / 1000),
     });
 
     // Apply filters
@@ -137,12 +158,11 @@ export function WhatToPlayNext({ onClose }: WhatToPlayNextProps) {
       filtered = filtered.filter((r) => r.details?.genres.includes(genreFilter));
     }
 
-    filtered.sort((a, b) => b.score - a.score);
-    const pool = mode === "surprise" ? filtered.slice(0, 45) : filtered.slice(0, 30);
-    const picked = weightedPick(pool, seed, mode === "surprise" ? 20 : 12);
-    const recommendations = [...picked, ...filtered.filter((r) => !picked.includes(r))].slice(0, 20);
+    const recommendations = mode === "surprise"
+      ? weightedPick(filtered.slice(0, 45), seed, 20)
+      : filtered.slice(0, 20);
     return { recommendations, genreOptions };
-  }, [games, details, hltbData, statuses, seed, lengthFilter, genreFilter, playFilter, avoidRecent, recentIds, collections, mode]);
+  }, [games, details, hltbData, achievements, wishlistItems, statuses, seed, lengthFilter, genreFilter, playFilter, avoidRecent, recentIds, collections, mode, rankingWeights]);
 
   const handleShuffle = () => {
     rememberRecommendations(recommendations.slice(0, 8).map((r) => r.game.appid));
@@ -262,7 +282,67 @@ export function WhatToPlayNext({ onClose }: WhatToPlayNextProps) {
               className="w-[200px]"
             />
           )}
+          <button
+            type="button"
+            onClick={() => setShowTuning((current) => !current)}
+            aria-expanded={showTuning}
+            className={`ml-auto flex h-8 items-center gap-1.5 rounded-lg border px-2.5 text-[11px] transition-colors ${
+              showTuning
+                ? "border-repressurizer-accent bg-repressurizer-accent/10 text-repressurizer-accent"
+                : "border-repressurizer-border bg-repressurizer-bg text-repressurizer-text-muted hover:text-white"
+            }`}
+          >
+            <SlidersHorizontal size={12} />
+            {t("recommend.tuning")}
+          </button>
         </div>
+
+        {showTuning && (
+          <div className="border-b border-repressurizer-border-subtle bg-repressurizer-bg/35 px-4 py-3">
+            <div className="mb-2.5 flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-medium text-repressurizer-text">{t("recommend.tuning.title")}</p>
+                <p className="mt-0.5 text-[10px] text-repressurizer-text-faint">{t("recommend.tuning.desc")}</p>
+              </div>
+              <button
+                type="button"
+                onClick={resetRankingWeights}
+                className="inline-flex shrink-0 items-center gap-1 text-[10px] text-repressurizer-text-muted transition-colors hover:text-white"
+              >
+                <ArrowCounterClockwise size={11} />
+                {t("recommend.tuning.reset")}
+              </button>
+            </div>
+            <div className="grid grid-cols-1 gap-x-4 gap-y-1.5 sm:grid-cols-2">
+              {RANKING_SIGNALS.map((signal) => (
+                <div key={signal} className="flex min-w-0 items-center justify-between gap-3">
+                  <span className="truncate text-[11px] text-repressurizer-text-muted">
+                    {t(RANKING_SIGNAL_KEYS[signal])}
+                  </span>
+                  <FilterSelect
+                    value={String(rankingWeights[signal])}
+                    onChange={(value) => updateRankingWeight(signal, Number(value))}
+                    options={RANKING_WEIGHT_OPTIONS.map((weight) => ({
+                      value: String(weight),
+                      label: weight === 0
+                        ? t("recommend.weight.off")
+                        : weight === 0.5
+                          ? t("recommend.weight.low")
+                          : weight === 1
+                            ? t("recommend.weight.normal")
+                            : weight === 1.5
+                              ? t("recommend.weight.high")
+                              : t("recommend.weight.max"),
+                    }))}
+                    align="right"
+                    ariaLabel={t(RANKING_SIGNAL_KEYS[signal])}
+                    className="w-[92px]"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Body */}
         <div className="flex-1 overflow-auto">
@@ -274,7 +354,7 @@ export function WhatToPlayNext({ onClose }: WhatToPlayNextProps) {
             </div>
           ) : (
             <div className="divide-y divide-repressurizer-border-subtle">
-              {recommendations.map(({ game, details: d, hltb }, idx) => (
+              {recommendations.map(({ game, hltb, score, contributions, missingSignals }, idx) => (
                 <div key={game.appid} className="flex items-center gap-3 px-4 py-3">
                   <span className="w-5 shrink-0 text-center font-mono text-[11px] text-repressurizer-text-faint tabular-nums">
                     {idx + 1}
@@ -289,30 +369,44 @@ export function WhatToPlayNext({ onClose }: WhatToPlayNextProps) {
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-white">{String(game.name ?? "")}</p>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      {d?.genres && d.genres.length > 0 && (
-                        <span className="truncate text-[10px] text-repressurizer-text-faint">{d.genres.slice(0, 2).join(", ")}</span>
+                    <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1">
+                      {contributions.slice(0, 3).map((contribution) => (
+                        <span
+                          key={`${contribution.signal}-${contribution.reason}`}
+                          className={`max-w-full truncate rounded px-1.5 py-0.5 text-[9px] ${
+                            contribution.points < 0
+                              ? "bg-amber-500/10 text-amber-300"
+                              : "bg-repressurizer-accent/10 text-repressurizer-text-muted"
+                          }`}
+                        >
+                          {formatContribution(contribution, t)}
+                        </span>
+                      ))}
+                      {contributions.length > 3 && (
+                        <span
+                          title={contributions.slice(3).map((contribution) => formatContribution(contribution, t)).join("\n")}
+                          className="rounded px-1 py-0.5 text-[9px] text-repressurizer-text-faint"
+                        >
+                          {t("recommend.reason.more", { count: contributions.length - 3 })}
+                        </span>
+                      )}
+                      {contributions.length === 0 && missingSignals.length > 0 && (
+                        <span className="text-[9px] text-repressurizer-text-faint">{t("recommend.reason.neutral")}</span>
                       )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 shrink-0">
-                    {d?.metacritic_score != null && (
-                      <span
-                        className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${
-                          d.metacritic_score >= 75 ? "bg-emerald-600/20 text-emerald-400" :
-                          d.metacritic_score >= 50 ? "bg-amber-600/20 text-amber-400" :
-                          "bg-red-600/20 text-red-400"
-                        }`}
-                      >
-                        {d.metacritic_score}
-                      </span>
-                    )}
+                  <div className="flex shrink-0 items-center gap-3">
                     {hltb?.main_story != null && (
                       <span className="inline-flex items-center gap-0.5 text-[10px] text-repressurizer-text-faint font-mono tabular-nums">
                         <Timer size={10} />
                         {hltb.main_story}h
                       </span>
                     )}
+                    <span className={`w-12 text-right font-mono text-[10px] font-semibold tabular-nums ${
+                      score < 0 ? "text-amber-300" : "text-repressurizer-accent"
+                    }`}>
+                      {t("recommend.score", { score: Math.round(score) })}
+                    </span>
                   </div>
                 </div>
               ))}
@@ -329,6 +423,28 @@ export function WhatToPlayNext({ onClose }: WhatToPlayNextProps) {
       </div>
     </DialogOverlay>
   );
+}
+
+const CONTRIBUTION_KEYS: Record<RankingContribution["reason"], TranslationKey> = {
+  unplayed: "recommend.reason.unplayed",
+  barelyPlayed: "recommend.reason.barelyPlayed",
+  started: "recommend.reason.started",
+  wishlist: "recommend.reason.wishlist",
+  short: "recommend.reason.short",
+  medium: "recommend.reason.medium",
+  long: "recommend.reason.long",
+  achievementFresh: "recommend.reason.achievementFresh",
+  achievementProgress: "recommend.reason.achievementProgress",
+  achievementComplete: "recommend.reason.achievementComplete",
+  recentlyPlayed: "recommend.reason.recentlyPlayed",
+  quality: "recommend.reason.quality",
+  genreFit: "recommend.reason.genreFit",
+};
+
+function formatContribution(contribution: RankingContribution, t: ReturnType<typeof useT>): string {
+  const points = Math.round(contribution.points);
+  const signedPoints = points > 0 ? `+${points}` : String(points);
+  return `${signedPoints} · ${t(CONTRIBUTION_KEYS[contribution.reason], { value: contribution.value ?? 0 })}`;
 }
 
 function weightedPick<T extends { score: number }>(items: T[], seed: number, count: number): T[] {
@@ -367,12 +483,14 @@ function FilterSelect({
   onChange,
   className = "",
   align = "left",
+  ariaLabel,
 }: {
   value: string;
   options: FilterSelectOption[];
   onChange: (value: string) => void;
   className?: string;
   align?: "left" | "right";
+  ariaLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -398,6 +516,7 @@ function FilterSelect({
     <div ref={ref} className={`relative shrink-0 ${className}`}>
       <button
         type="button"
+        aria-label={ariaLabel}
         onClick={() => setOpen((next) => !next)}
         className={`flex h-8 w-full items-center gap-2 rounded-lg border px-2.5 text-left text-[11px] transition-colors ${
           open

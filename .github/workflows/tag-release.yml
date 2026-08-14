@@ -26,7 +26,7 @@ jobs:
 
     steps:
       - name: Checkout validated commit
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
@@ -46,6 +46,11 @@ jobs:
       - name: Fetch release tags
         run: git fetch --tags --force
 
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
+
       - name: Read and validate desktop app version
         id: app_version
         run: |
@@ -63,7 +68,9 @@ jobs:
             exit 1
           fi
 
+          channel="$(bun scripts/release-channel.ts identify --version "$package_version" --tag "v$package_version")"
           echo "tag=v$package_version" >> "$GITHUB_OUTPUT"
+          echo "channel=$channel" >> "$GITHUB_OUTPUT"
 
       - name: Check desktop app tag
         id: app_existing
@@ -154,6 +161,7 @@ jobs:
             echo "## Version tag reconciliation"
             echo
             echo "- Desktop: ${{ steps.app_version.outputs.tag }} (already existed: ${{ steps.app_existing.outputs.exists }})"
+            echo "- Desktop channel: ${{ steps.app_version.outputs.channel }}"
             echo "- TypeScript integration: ${{ steps.typescript_version.outputs.tag }} (already existed: ${{ steps.typescript_existing.outputs.exists }})"
             echo "- Rust integration: ${{ steps.rust_version.outputs.tag }} (already existed: ${{ steps.rust_existing.outputs.exists }})"
           } >> "$GITHUB_STEP_SUMMARY"

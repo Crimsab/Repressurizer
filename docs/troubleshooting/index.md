@@ -7,4 +7,4 @@ Start with the surface that failed:
 - [Collection save or restore problems](collections.md)
 - [Redacted diagnostics and bug reports](diagnostics.md)
 
-When reporting a problem, include the Repressurizer version, Windows version, the action you attempted, and redacted diagnostics. Never include API keys, Steam Store tokens, full Steam IDs, or private filesystem paths.
+When reporting a problem, include the Repressurizer version, operating system and version, package type, the action you attempted, and redacted diagnostics. Never include API keys, Steam Store tokens, full Steam IDs, or private filesystem paths.

@@ -63,6 +63,7 @@ export async function installTauriMock(page: Page) {
       startOnLoginMode: "tray",
       desktopNotifications: true,
       checkUpdatesOnStartup: true,
+      updateChannel: "stable",
       includeSteamFamilyNonGames: false,
       automationPublishEnabled: true,
       automationPublishUrl: "http://example.local:3045/api/steam/repressurizer/import",
@@ -270,6 +271,18 @@ export async function installTauriMock(page: Page) {
             return null;
           case "plugin:notification|is_permission_granted":
             return true;
+          case "plugin:updater|check":
+            window.localStorage.setItem(
+              "repressurizer-last-updater-target",
+              String(args?.target ?? "")
+            );
+            window.localStorage.setItem(
+              "repressurizer-last-updater-allow-downgrades",
+              String(args?.allowDowngrades ?? false)
+            );
+            return null;
+          case "plugin:clipboard-manager|read_text":
+            return window.localStorage.getItem("repressurizer-clipboard-text") ?? "";
           case "plugin:dialog|confirm":
             window.localStorage.setItem(
               "repressurizer-last-confirm-message",
@@ -292,6 +305,25 @@ export async function installTauriMock(page: Page) {
             );
             return backupPath;
           }
+          case "plugin:dialog|save": {
+            const options = args?.options as { defaultPath?: string } | undefined;
+            const exportPath = `C:\\Users\\DemoUser\\Documents\\${String(
+              options?.defaultPath ?? "repressurizer-export.json",
+            )}`;
+            window.localStorage.setItem("repressurizer-last-save-path", exportPath);
+            return exportPath;
+          }
+          case "plugin:fs|write_text_file": {
+            const payload = args as unknown;
+            const writtenText = payload instanceof Uint8Array
+              ? new TextDecoder().decode(payload)
+              : String(args?.contents ?? args?.data ?? "");
+            window.localStorage.setItem(
+              "repressurizer-last-written-text",
+              writtenText,
+            );
+            return null;
+          }
           case "plugin:autostart|is_enabled":
             return autostartEnabled;
           case "plugin:autostart|enable":
@@ -301,7 +333,21 @@ export async function installTauriMock(page: Page) {
             autostartEnabled = false;
             return null;
           case "get_startup_context":
-            return { launchedFromAutostart: false, mainWindowCreated: true };
+            {
+              const requestedKind = new URLSearchParams(window.location.search).get("updater-kind");
+              const updaterKind = requestedKind === "windows-portable"
+                ? "windows-portable"
+                : requestedKind === "linux-system-package"
+                  ? "linux-system-package"
+                  : "windows-installer";
+              return {
+                launchedFromAutostart: false,
+                mainWindowCreated: true,
+                updaterKind,
+                updaterCanInstall: updaterKind === "windows-installer",
+                updaterTarget: "windows-x86_64",
+              };
+            }
           case "fetch_library":
             return games;
           case "fetch_steam_app_list":
@@ -362,6 +408,19 @@ export async function installTauriMock(page: Page) {
               is_free: false,
             };
           }
+          case "fetch_gg_deals_price": {
+            const requestCount = Number(window.localStorage.getItem("repressurizer-gg-deals-request-count") ?? "0");
+            window.localStorage.setItem("repressurizer-gg-deals-request-count", String(requestCount + 1));
+            return {
+              appId: Number(args?.appId ?? 0),
+              url: "https://gg.deals/game/hades/",
+              currency: "€",
+              currentRetail: 12.49,
+              currentKeyshops: 10.99,
+              historicalRetail: 8.49,
+              historicalKeyshops: 7.99,
+            };
+          }
           case "load_collections":
             return collections;
           case "fetch_family_library":
@@ -402,7 +461,13 @@ export async function installTauriMock(page: Page) {
             if (args?.key === "steam_family.json") return JSON.stringify(familyCache);
             return appData[String(args?.key ?? "")] ?? null;
           case "save_app_data":
-            if (args?.key && typeof args.data === "string") appData[String(args.key)] = args.data;
+            if (args?.key && typeof args.data === "string") {
+              appData[String(args.key)] = args.data;
+              window.localStorage.setItem(
+                `repressurizer-app-data:${String(args.key)}`,
+                args.data
+              );
+            }
             return null;
           case "fetch_hltb":
             return { main_story: 12, main_extra: 18, completionist: 30 };

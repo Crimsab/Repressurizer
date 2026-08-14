@@ -4,6 +4,178 @@ All notable user-facing changes are generated from release tags and Conventional
 
 Run `bun run changelog:write` after changing release tags or commit history.
 
+## 0.5.6 - 2026-07-25
+
+### Added
+
+- Steam Tools: harden schema refresh workflow ([22a1b64](https://github.com/Crimsab/Repressurizer/commit/22a1b64))
+
+### Fixed
+
+- Steam Tools: handle incomplete achievement schemas ([a143ac3](https://github.com/Crimsab/Repressurizer/commit/a143ac3))
+- Ignore preview tags in release notes ([dcca7c6](https://github.com/Crimsab/Repressurizer/commit/dcca7c6))
+
+[Release](https://github.com/Crimsab/Repressurizer/releases/tag/v0.5.6) · [Compare](https://github.com/Crimsab/Repressurizer/compare/v0.5.5...v0.5.6)
+
+## 0.5.5 - 2026-07-18
+
+### Fixed
+
+- Tolerate isolated antivirus false positives ([8653b62](https://github.com/Crimsab/Repressurizer/commit/8653b62))
+- Ignore uninitialized Steam LevelDB directories ([7e379ac](https://github.com/Crimsab/Repressurizer/commit/7e379ac))
+- Publish clean releases automatically ([4386d7c](https://github.com/Crimsab/Repressurizer/commit/4386d7c))
+
+[Release](https://github.com/Crimsab/Repressurizer/releases/tag/v0.5.5) · [Compare](https://github.com/Crimsab/Repressurizer/compare/v0.5.4...v0.5.5)
+
+## 0.5.4 - 2026-07-18
+
+### Fixed
+
+- Wait for CI before releasing tags ([bf9a682](https://github.com/Crimsab/Repressurizer/commit/bf9a682))
+- Queue overlapping metadata refreshes ([a21e39c](https://github.com/Crimsab/Repressurizer/commit/a21e39c))
+- Queue original dates after direct detail fetches ([95b548c](https://github.com/Crimsab/Repressurizer/commit/95b548c))
+
+[Release](https://github.com/Crimsab/Repressurizer/releases/tag/v0.5.4) · [Compare](https://github.com/Crimsab/Repressurizer/compare/v0.5.3...v0.5.4)
+
+## 0.5.3 - 2026-07-17
+
+### Fixed
+
+- Queue metadata refreshes during active scans ([538047e](https://github.com/Crimsab/Repressurizer/commit/538047e))
+- Polish documentation rendering and accessibility ([beb7d4d](https://github.com/Crimsab/Repressurizer/commit/beb7d4d))
+
+[Release](https://github.com/Crimsab/Repressurizer/releases/tag/v0.5.3) · [Compare](https://github.com/Crimsab/Repressurizer/compare/v0.5.2...v0.5.3)
+
+## 0.5.2 - 2026-07-13
+
+### Fixed
+
+- Separate tag and flag metadata ([0702966](https://github.com/Crimsab/Repressurizer/commit/0702966))
+- Invalidate v2 AutoCat previews ([72929f3](https://github.com/Crimsab/Repressurizer/commit/72929f3))
+- Require real metadata for tag autocats ([a8e80fa](https://github.com/Crimsab/Repressurizer/commit/a8e80fa))
+- Preserve uncertain metadata memberships ([2452ed0](https://github.com/Crimsab/Repressurizer/commit/2452ed0))
+
+[Release](https://github.com/Crimsab/Repressurizer/releases/tag/v0.5.2) · [Compare](https://github.com/Crimsab/Repressurizer/compare/v0.5.1...v0.5.2)
+
+## 0.5.1 - 2026-07-11
+
+### Fixed
+
+- Invalidate unsafe AutoCat previews ([3d4f280](https://github.com/Crimsab/Repressurizer/commit/3d4f280))
+- Resolve cached names in save preview ([cd255b0](https://github.com/Crimsab/Repressurizer/commit/cd255b0))
+- Isolate AutoCat preset apply scopes ([dab4e0a](https://github.com/Crimsab/Repressurizer/commit/dab4e0a))
+- Exclude orphaned AutoCat metadata ([6000655](https://github.com/Crimsab/Repressurizer/commit/6000655))
+
+[Release](https://github.com/Crimsab/Repressurizer/releases/tag/v0.5.1) · [Compare](https://github.com/Crimsab/Repressurizer/compare/v0.5.0...v0.5.1)
+
+## 0.5.0 - 2026-07-10
+
+### Added
+
+- Resize complex workspace dialogs ([dcf2274](https://github.com/Crimsab/Repressurizer/commit/dcf2274))
+- Make AutoCat workspace resizable ([646ab31](https://github.com/Crimsab/Repressurizer/commit/646ab31))
+- Persistent resizable dialog panels ([97d97e8](https://github.com/Crimsab/Repressurizer/commit/97d97e8))
+- Accessible toolbar tooltips ([9f81cce](https://github.com/Crimsab/Repressurizer/commit/9f81cce))
+- Make advanced category filters searchable ([77a39b7](https://github.com/Crimsab/Repressurizer/commit/77a39b7))
+- Reveal truncated category names ([44c623b](https://github.com/Crimsab/Repressurizer/commit/44c623b))
+- Reveal all save preview changes ([ce102f2](https://github.com/Crimsab/Repressurizer/commit/ce102f2))
+- AutoCat: custom rule builder ([27277eb](https://github.com/Crimsab/Repressurizer/commit/27277eb))
+- Library refresh cache controls ([e92c45a](https://github.com/Crimsab/Repressurizer/commit/e92c45a))
+- Preview channel and category chip settings ([85a0729](https://github.com/Crimsab/Repressurizer/commit/85a0729))
+- Improve compare collection navigation ([4d7e4a4](https://github.com/Crimsab/Repressurizer/commit/4d7e4a4))
+
+### Fixed
+
+- Polish resizable dialog focus and layout ([3caf0da](https://github.com/Crimsab/Repressurizer/commit/3caf0da))
+- Keep dirty header within minimum width ([75d82a7](https://github.com/Crimsab/Repressurizer/commit/75d82a7))
+- Dismiss tooltips when actions open ([d434069](https://github.com/Crimsab/Repressurizer/commit/d434069))
+- Clarify AutoCat metadata requirements ([1d97d19](https://github.com/Crimsab/Repressurizer/commit/1d97d19))
+- Raise secondary text contrast across themes ([a4507ce](https://github.com/Crimsab/Repressurizer/commit/a4507ce))
+- Open save preview at the summary ([76bd5d9](https://github.com/Crimsab/Repressurizer/commit/76bd5d9))
+- Keep header actions reachable at minimum width ([2fc43e1](https://github.com/Crimsab/Repressurizer/commit/2fc43e1))
+- Let AutoCat Run all skip ignored details ([bfd428f](https://github.com/Crimsab/Repressurizer/commit/bfd428f))
+- Harden categorization and fetch lifecycles ([aa97c43](https://github.com/Crimsab/Repressurizer/commit/aa97c43))
+- Satisfy latest clippy ([c8c6e8a](https://github.com/Crimsab/Repressurizer/commit/c8c6e8a))
+- Harden backups automation and UI ([253254e](https://github.com/Crimsab/Repressurizer/commit/253254e))
+- AutoCat: polish custom rule preview ([1e8e382](https://github.com/Crimsab/Repressurizer/commit/1e8e382))
+
+### Changed
+
+- Organize frontend feature modules ([184b913](https://github.com/Crimsab/Repressurizer/commit/184b913))
+- Optimize category lookups and note lifecycle ([18b86e0](https://github.com/Crimsab/Repressurizer/commit/18b86e0))
+- Decompose Steam collections storage ([c0cca52](https://github.com/Crimsab/Repressurizer/commit/c0cca52))
+- Extract automation snapshot builder ([53094af](https://github.com/Crimsab/Repressurizer/commit/53094af))
+- Decompose Tauri runtime modules ([d822b0c](https://github.com/Crimsab/Repressurizer/commit/d822b0c))
+- Decompose SAM integration ([78807da](https://github.com/Crimsab/Repressurizer/commit/78807da))
+- Decompose sidebar architecture ([69d718b](https://github.com/Crimsab/Repressurizer/commit/69d718b))
+- Decompose game detail page ([75b3091](https://github.com/Crimsab/Repressurizer/commit/75b3091))
+- Decompose auto categorization dialog ([c3c0578](https://github.com/Crimsab/Repressurizer/commit/c3c0578))
+- Decompose settings architecture ([11b0da1](https://github.com/Crimsab/Repressurizer/commit/11b0da1))
+
+[Release](https://github.com/Crimsab/Repressurizer/releases/tag/v0.5.0) · [Compare](https://github.com/Crimsab/Repressurizer/compare/v0.4.11...v0.5.0)
+
+## 0.4.11 - 2026-07-03
+
+### Added
+
+- Compare collections and HLTB unknown ([072b31e](https://github.com/Crimsab/Repressurizer/commit/072b31e))
+
+[Release](https://github.com/Crimsab/Repressurizer/releases/tag/v0.4.11) · [Compare](https://github.com/Crimsab/Repressurizer/compare/v0.4.10...v0.4.11)
+
+## 0.4.10 - 2026-07-02
+
+### Added
+
+- Refresh collection metadata cache ([a7be1dc](https://github.com/Crimsab/Repressurizer/commit/a7be1dc))
+
+### Fixed
+
+- Search game metadata from simple queries ([ab82884](https://github.com/Crimsab/Repressurizer/commit/ab82884))
+
+[Release](https://github.com/Crimsab/Repressurizer/releases/tag/v0.4.10) · [Compare](https://github.com/Crimsab/Repressurizer/compare/v0.4.9...v0.4.10)
+
+## 0.4.9 - 2026-07-01
+
+### Fixed
+
+- Use original store dates for year AutoCat ([50f8f68](https://github.com/Crimsab/Repressurizer/commit/50f8f68))
+- Remove category reorder drag affordance ([87c9529](https://github.com/Crimsab/Repressurizer/commit/87c9529))
+
+### Changed
+
+- Split Steam API module ([be2c775](https://github.com/Crimsab/Repressurizer/commit/be2c775))
+
+[Release](https://github.com/Crimsab/Repressurizer/releases/tag/v0.4.9) · [Compare](https://github.com/Crimsab/Repressurizer/compare/v0.4.8...v0.4.9)
+
+## 0.4.8 - 2026-07-01
+
+### Added
+
+- Import Depressurizer database metadata ([5775fe1](https://github.com/Crimsab/Repressurizer/commit/5775fe1))
+- Category colors ([d29a271](https://github.com/Crimsab/Repressurizer/commit/d29a271))
+- Filter automation snapshots ([0902fec](https://github.com/Crimsab/Repressurizer/commit/0902fec))
+- Improve game exports ([4222e71](https://github.com/Crimsab/Repressurizer/commit/4222e71))
+
+### Fixed
+
+- Dismiss settings messages ([85475af](https://github.com/Crimsab/Repressurizer/commit/85475af))
+- Refine export category selection ([14889d8](https://github.com/Crimsab/Repressurizer/commit/14889d8))
+
+[Release](https://github.com/Crimsab/Repressurizer/releases/tag/v0.4.8) · [Compare](https://github.com/Crimsab/Repressurizer/compare/v0.4.7...v0.4.8)
+
+## 0.4.7 - 2026-06-30
+
+### Added
+
+- Generated changelog and docs ([3e62cb2](https://github.com/Crimsab/Repressurizer/commit/3e62cb2))
+
+### Fixed
+
+- Handle new issue batch ([4df56c3](https://github.com/Crimsab/Repressurizer/commit/4df56c3))
+- Rank settings search matches ([2aa5bfa](https://github.com/Crimsab/Repressurizer/commit/2aa5bfa))
+
+[Release](https://github.com/Crimsab/Repressurizer/releases/tag/v0.4.7) · [Compare](https://github.com/Crimsab/Repressurizer/compare/v0.4.6...v0.4.7)
+
 ## 0.4.6 - 2026-06-29
 
 ### Added

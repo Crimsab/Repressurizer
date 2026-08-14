@@ -100,24 +100,31 @@ pub(super) fn notes_for_probe(
 }
 
 pub(super) fn find_steam_client_library(steam_root: &Path) -> Option<PathBuf> {
+    find_steam_client_library_for_os(steam_root, std::env::consts::OS)
+}
+
+pub(super) fn find_steam_client_library_for_os(
+    steam_root: &Path,
+    operating_system: &str,
+) -> Option<PathBuf> {
     if steam_root.as_os_str().is_empty() {
         return None;
     }
 
-    steam_client_candidates(steam_root)
+    steam_client_candidates_for_os(steam_root, operating_system)
         .into_iter()
         .find(|candidate| candidate.exists())
 }
 
-pub(super) fn steam_client_candidates(steam_root: &Path) -> Vec<PathBuf> {
-    if cfg!(target_os = "windows") {
+fn steam_client_candidates_for_os(steam_root: &Path, operating_system: &str) -> Vec<PathBuf> {
+    if operating_system == "windows" {
         vec![
             steam_root.join("steamclient64.dll"),
             steam_root.join("steamclient.dll"),
             steam_root.join("bin").join("steamclient64.dll"),
             steam_root.join("bin").join("steamclient.dll"),
         ]
-    } else if cfg!(target_os = "macos") {
+    } else if operating_system == "macos" {
         vec![
             steam_root.join("steamclient.dylib"),
             steam_root.join("steam_osx").join("steamclient.dylib"),
@@ -139,11 +146,23 @@ pub(crate) fn is_steam_running() -> bool {
 
 #[cfg(not(windows))]
 pub(crate) fn is_steam_running() -> bool {
-    Command::new("pgrep")
-        .args(["-x", "steam"])
-        .status()
-        .map(|status| status.success())
-        .unwrap_or(false)
+    steam_process_names_for_os(std::env::consts::OS)
+        .iter()
+        .any(|process_name| {
+            Command::new("pgrep")
+                .args(["-x", process_name])
+                .status()
+                .map(|status| status.success())
+                .unwrap_or(false)
+        })
+}
+
+pub(super) fn steam_process_names_for_os(operating_system: &str) -> &'static [&'static str] {
+    if operating_system == "macos" {
+        &["steam_osx", "Steam"]
+    } else {
+        &["steam"]
+    }
 }
 
 #[cfg(windows)]

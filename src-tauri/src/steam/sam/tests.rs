@@ -1,4 +1,13 @@
 use super::*;
+
+#[test]
+fn macos_running_guard_checks_the_native_steam_process_name() {
+    assert_eq!(
+        probe::steam_process_names_for_os("macos"),
+        &["steam_osx", "Steam"]
+    );
+    assert_eq!(probe::steam_process_names_for_os("linux"), &["steam"]);
+}
 use std::fs;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -9,7 +18,7 @@ fn finds_linux_steam_client_library_candidates() {
     fs::create_dir_all(library.parent().unwrap()).unwrap();
     fs::write(&library, b"mock").unwrap();
 
-    let found = find_steam_client_library(&root);
+    let found = super::probe::find_steam_client_library_for_os(&root, "linux");
     assert_eq!(found, Some(library));
 
     let _ = fs::remove_dir_all(root);

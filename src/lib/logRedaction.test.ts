@@ -19,4 +19,14 @@ describe("log redaction", () => {
     expect(redacted).not.toContain(secret);
     expect(redacted).toContain("***");
   });
+
+  it("redacts Steam Family token field names and JSON error fragments", () => {
+    const secret = "sentinel-family-token";
+    const redacted = JSON.stringify(
+      redactLogValue({ webapi_token: secret, response: `{"webapi_token":"${secret}"}` })
+    );
+
+    expect(redacted).not.toContain(secret);
+    expect(redacted).toContain("***");
+  });
 });

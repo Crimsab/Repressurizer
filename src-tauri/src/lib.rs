@@ -1,12 +1,15 @@
 pub mod app_channel;
 pub mod automation;
 pub mod categorizer;
+mod gg_deals;
 pub mod hltb;
 pub mod http_policy;
 pub mod steam;
 
 mod app_data;
+mod native_crash;
 mod runtime_cache;
+mod updater;
 #[cfg(test)]
 use app_data::validate_app_data_key;
 pub(crate) use app_data::{
@@ -48,6 +51,9 @@ struct HttpPublishResult {
 struct StartupContext {
     launched_from_autostart: bool,
     main_window_created: bool,
+    updater_kind: updater::UpdaterKind,
+    updater_can_install: bool,
+    updater_target: Option<&'static str>,
 }
 
 #[derive(Deserialize)]
@@ -440,9 +446,13 @@ fn quit_app(app: tauri::AppHandle) {
 
 #[tauri::command]
 fn get_startup_context(app: tauri::AppHandle) -> StartupContext {
+    let updater = updater::current_capability();
     StartupContext {
         launched_from_autostart: launched_from_autostart(),
         main_window_created: app.get_webview_window("main").is_some(),
+        updater_kind: updater.kind,
+        updater_can_install: updater.can_install,
+        updater_target: updater::current_manifest_target(),
     }
 }
 
@@ -530,6 +540,7 @@ pub(crate) async fn read_response_preview(mut response: reqwest::Response) -> St
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    native_crash::install_panic_hook();
     let mut builder = tauri::Builder::default()
         .plugin(
             tauri_plugin_log::Builder::new()
@@ -561,6 +572,7 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
@@ -814,6 +826,7 @@ pub fn run() {
             api::fetch_store_release_date,
             api::fetch_store_release_dates,
             api::fetch_game_price_overviews,
+            gg_deals::fetch_gg_deals_price,
             api::fetch_steam_review_summary,
             api::fetch_achievements,
             api::fetch_achievements_summary,

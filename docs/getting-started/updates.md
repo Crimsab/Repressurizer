@@ -2,15 +2,46 @@
 
 ## Stable channel
 
-Stable releases are versioned tags such as `v0.5.2`. The installer build publishes `latest.json`, which the built-in updater uses to find signed updater artifacts.
+Stable releases use tags and versions such as `v0.6.0` / `0.6.0`. Stable is
+the default channel and receives only normal GitHub Releases. Its signed updater
+manifests are separate from beta manifests, so publishing a prerelease cannot
+replace the default stable update.
 
 Use the stable channel for your normal library maintenance.
 
-## Preview channel
+On Windows, in-app installation is supported by the normal NSIS installer. The
+portable ZIP can check its delivery mode but does not replace its executable in
+place; download a newer portable ZIP from GitHub Releases instead. Settings and
+caches remain in the Windows application data directory in either case.
 
-The `preview` prerelease is continuously replaced by a build from the newest commit on `main`. It has a separate version number and updater manifest, so it does not replace the stable release record.
+## Beta channel
 
-Preview builds are useful for testing fixes before the next stable version. They can change frequently and should be used with backups enabled.
+Beta releases use numbered SemVer prereleases such as `v0.7.0-beta.1`. They are
+signed, published as GitHub prereleases, and available on the Windows installer,
+Linux AppImage, and macOS app updater paths. Beta is always opt-in:
+
+1. Open Settings > About.
+2. Change `Release channel` from `Stable` to `Beta`.
+3. Click `Check for updates` and confirm installation if a beta is available.
+
+Changing the selection clears any update previously found from the other
+channel. Automatic checks also use the selected channel.
+
+To return, select `Stable` and check again. If the installed beta is newer than
+the current stable release, Repressurizer may offer the older stable version as
+an explicit downgrade; it never installs it without your confirmation. Back up
+your collections before moving between prerelease and stable versions.
+
+Portable Windows ZIPs and Linux system packages keep using manual downloads;
+the channel selector is shown only where in-place updates are supported.
+
+## Developer preview channel
+
+The Windows `preview` prerelease is continuously replaced by a build from the newest commit on `main`. It has a separate version number and updater manifest, so it does not replace the stable release record. Linux preview artifacts are not currently published.
+
+Preview is a separately installed developer build, not the versioned beta
+channel. It is useful for testing the newest commit and can change frequently.
+Use it with backups enabled.
 
 ## Verify a download
 

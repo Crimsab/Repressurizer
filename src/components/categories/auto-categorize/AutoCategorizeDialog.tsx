@@ -27,6 +27,11 @@ import {
 } from "../../../lib/autoCategorizeApply";
 import { combineAutoCategorizePresetResults } from "../../../lib/autoCategorizePresetResults";
 import {
+  buildAutoCategorizeDiff,
+  type AutoCategorizeDiffRule,
+} from "../../../lib/autoCategorizeDiff";
+import { exportAutoCategorizeDiffToDisk } from "../../../lib/autoCategorizeDiffExport";
+import {
   type PreviewSortContext,
 } from "../../../lib/autoCategorizePreview";
 import { DialogOverlay } from "../../ui/DialogOverlay";
@@ -188,6 +193,7 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
   const [fetchError, setFetchError] = useState("");
   const [result, setResult] = useState<CategorizeResult | null>(persist.lastResult);
   const [previewContext, setPreviewContext] = useState<PreviewSortContext | null>(null);
+  const [previewRules, setPreviewRules] = useState<AutoCategorizeDiffRule[]>([]);
   const [previewNotice, setPreviewNotice] = useState("");
   const [runError, setRunError] = useState("");
 
@@ -260,6 +266,12 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
     if (type === "custom") return customConfig;
     return {};
   }, [type, hoursConfig, genreConfig, tagsConfig, yearConfig, devPubConfig, flagsConfig, languageConfig, platformConfig, nameConfig, ratingConfig, hltbConfig, customConfig]);
+
+  useEffect(() => {
+    if (step === "preview" && result && previewRules.length === 0) {
+      setPreviewRules([{ type, config: currentConfig() }]);
+    }
+  }, [currentConfig, previewRules.length, result, step]);
 
   const applyPresetConfig = (preset: AutoCategorizePreset) => {
     const config = preset.config as Record<string, unknown>;
@@ -698,6 +710,7 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
 
       setResult(res);
       setPreviewContext({ type, config });
+      setPreviewRules([{ type, config }]);
       const customNotice = rawResult.custom_diagnostics
         ? customDiagnosticsNotice(rawResult.custom_diagnostics)
         : "";
@@ -753,6 +766,11 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
 
       setResult(res);
       setPreviewContext(null);
+      setPreviewRules(presets.map((preset) => ({
+        type: preset.type,
+        name: preset.name,
+        config: preset.config,
+      })));
       setPreviewNotice(options.cachedOnly
         ? t("auto.cachedOnlyNotice", { count: options.skippedDetails ?? 0 })
         : "");
@@ -765,6 +783,12 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
   }, [games, runCategorizerConfig, t]);
 
   // ---- Step: apply ----
+  const handleExportDiff = async () => {
+    if (!result) return null;
+    const document = buildAutoCategorizeDiff(collections, result, previewRules);
+    return exportAutoCategorizeDiffToDisk(document);
+  };
+
   const handleApply = async () => {
     if (!result) return;
     setRunError("");
@@ -926,6 +950,7 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
               notice={previewNotice}
               error={runError}
               onBack={() => gotoStep("configure")}
+              onExport={handleExportDiff}
               onApply={handleApply}
             />
           )}
