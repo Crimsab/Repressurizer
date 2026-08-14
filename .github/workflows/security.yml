@@ -62,6 +62,10 @@ jobs:
       - name: Install cargo-audit
         run: cargo install cargo-audit --version 0.22.2 --locked
 
+      - name: Resolve integration dependencies
+        if: matrix.crate == 'integration'
+        run: cargo generate-lockfile --manifest-path packages/rust/Cargo.toml
+
       - name: Audit dependencies
         uses: rustsec/audit-check@69366f33c96575abad1ee0dba8212993eecbe998 # v2.0.0
         with:
