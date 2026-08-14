@@ -20,27 +20,39 @@ not the same thing as your Steam Web API key.
 Steam Family endpoints can reject a normal Steam Web API key. When that happens,
 Repressurizer can use the Store `webapi_token` as an `access_token`.
 
-Repressurizer saves this token in its local app data after you save or probe it,
-then reuses it automatically. If Steam expires or rejects the saved token, the
-Family probe will fail and you can paste a fresh one.
+Repressurizer saves only this token in its local app data after you import, save,
+or probe it, then reuses it automatically. It does not import or persist browser
+cookies, a Steam password, or the rest of the Store response. If Steam expires
+or rejects the saved token, the Family probe will fail and you can import a
+fresh one or delete it immediately with `Clear token`.
 
-On Windows, the token file is stored under:
-`%APPDATA%\Repressurizer\steam_family_token.json`.
+The file is named `steam_family_token.json` under the operating system's
+`Repressurizer` application-data folder (for example `%APPDATA%\Repressurizer`
+on Windows, `~/.local/share/Repressurizer` on a typical Linux installation, and
+`~/Library/Application Support/Repressurizer` on macOS).
 
 Treat it like a session secret: do not share it, paste it into chats, commit it,
 or put it in screenshots.
 
-## How To Get The Store `webapi_token`
+## Why There Is No Steam Login Button
+
+Steam OpenID identifies an account but does not grant access to private Steam
+Family data. Steam's OAuth flow requires a Valve-issued Client ID and its
+documented service scopes do not include Steam Family. Repressurizer therefore
+does not ask for Steam credentials, embed a Steam login form, or copy browser
+session databases.
+
+The supported helper keeps authentication on the official Steam website and
+makes the transfer explicit.
+
+## Browser Helper (Recommended)
 
 Use this only if the normal Steam Web API key fails in Steam Family.
 
-1. Open Chrome, Edge, or another browser.
-2. Go to `https://store.steampowered.com/` and log into Steam.
-3. Open this URL in the same browser:
-
-   `https://store.steampowered.com/pointssummary/ajaxgetasyncconfig`
-
-4. The page should show JSON. Find:
+1. In Settings > Steam Family, click `Open token page`. This opens the
+   [official Steam token page](https://store.steampowered.com/pointssummary/ajaxgetasyncconfig).
+2. Sign in on the official Steam website if your browser asks you to.
+3. The page should show JSON containing:
 
    ```json
    {
@@ -50,14 +62,21 @@ Use this only if the normal Steam Web API key fails in Steam Family.
    }
    ```
 
-5. Copy either the value inside `webapi_token` or the whole JSON response.
-6. In Repressurizer, open Settings > Steam Family.
-7. Paste it into the `Steam Store webapi_token` field.
-8. Click `Probe`.
+4. Copy the entire JSON response.
+5. Return to Repressurizer and click `Import from clipboard`.
+6. Click `Probe`.
 
-The `Open token page` button in Repressurizer opens the same Steam URL for you.
-Pasting the full JSON is supported; Repressurizer extracts `data.webapi_token`
-automatically.
+Repressurizer reads clipboard text only when you click the import button. The
+clipboard helper accepts only JSON that explicitly contains `webapi_token`,
+extracts that one value, and discards the response text. It does not monitor the
+clipboard or request clipboard write, clear, image, cookie, or browser-profile
+permissions.
+
+## Manual Fallback
+
+If clipboard access is unavailable, paste either the token value or the full
+JSON response into the manual password field and click `Save token` or `Probe`.
+This preserves the original setup path on every supported desktop platform.
 
 If the page does not show JSON, or `webapi_token` is missing, make sure you are
 logged into the real Steam Store domain and refresh the page.
@@ -80,15 +99,13 @@ The Steam Family flow is:
    was unavailable.
 
 The app masks Steam IDs and family group IDs in console logs and never prints the
-token.
+token. A reminder appears when a token has not been validated for a while; this
+is a refresh hint, not a claim about Steam's exact expiry time.
 
 ## Sources
 
-- Steam Family endpoints reference:
-  `https://steamapi.xpaw.me/IFamilyGroupsService`
-- Lutris Steam Family integration uses the same Store endpoint and reads
-  `data.webapi_token`:
-  `https://gemfury.com/jackenmen/deb%3Alutris/lutris-0.5.22-all/content/usr/lib/python3/dist-packages/lutris/services/steamfamily.py`
-- Chrome DevTools local storage reference, useful for understanding browser
-  storage but not required for the flow above:
-  `https://developer.chrome.com/docs/devtools/storage/localstorage`
+- [Steam Web API and OpenID documentation](https://steamcommunity.com/dev)
+- [Steam OAuth documentation](https://partner.steamgames.com/doc/webapi_overview/OAuth)
+- [Steam authentication documentation](https://partner.steamgames.com/doc/features/auth)
+- [Tauri clipboard plugin documentation](https://v2.tauri.app/plugin/clipboard/)
+- [Steam Family endpoint reference](https://steamapi.xpaw.me/IFamilyGroupsService)

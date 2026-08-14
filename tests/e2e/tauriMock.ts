@@ -270,6 +270,8 @@ export async function installTauriMock(page: Page) {
             return null;
           case "plugin:notification|is_permission_granted":
             return true;
+          case "plugin:clipboard-manager|read_text":
+            return window.localStorage.getItem("repressurizer-clipboard-text") ?? "";
           case "plugin:dialog|confirm":
             window.localStorage.setItem(
               "repressurizer-last-confirm-message",
@@ -447,7 +449,13 @@ export async function installTauriMock(page: Page) {
             if (args?.key === "steam_family.json") return JSON.stringify(familyCache);
             return appData[String(args?.key ?? "")] ?? null;
           case "save_app_data":
-            if (args?.key && typeof args.data === "string") appData[String(args.key)] = args.data;
+            if (args?.key && typeof args.data === "string") {
+              appData[String(args.key)] = args.data;
+              window.localStorage.setItem(
+                `repressurizer-app-data:${String(args.key)}`,
+                args.data
+              );
+            }
             return null;
           case "fetch_hltb":
             return { main_story: 12, main_extra: 18, completionist: 30 };

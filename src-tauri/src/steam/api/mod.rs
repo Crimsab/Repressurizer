@@ -405,6 +405,38 @@ mod tests {
         assert!(error.contains("normal Steam Web API key"));
     }
 
+    #[tokio::test]
+    async fn family_library_explains_expired_store_tokens_without_echoing_them() {
+        let server = MockServer::start().await;
+        let secret = "expired-store-token-sentinel";
+
+        Mock::given(method("GET"))
+            .and(path("/IFamilyGroupsService/GetFamilyGroupForUser/v1/"))
+            .and(query_param("access_token", secret))
+            .respond_with(
+                ResponseTemplate::new(401)
+                    .set_body_string(format!("rejected access_token={secret}")),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let error = fetch_family_library_from_base(
+            &test_client(),
+            &server.uri(),
+            String::new(),
+            Some(secret.to_string()),
+            Some("765000".to_string()),
+            false,
+        )
+        .await
+        .expect_err("expired token");
+
+        assert!(error.contains("expired"));
+        assert!(!error.contains(secret));
+        assert!(!error.contains("access_token="));
+    }
+
     #[test]
     fn parses_successful_store_details_with_images() {
         let raw = r#"{

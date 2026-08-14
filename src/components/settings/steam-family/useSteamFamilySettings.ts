@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
 import type { ClipboardEvent } from "react";
+import { readText } from "@tauri-apps/plugin-clipboard-manager";
 import { open } from "@tauri-apps/plugin-shell";
 import { familyAppsToOwnedGames } from "../../../lib/familyLibrary";
 import { useT } from "../../../lib/i18n";
 import {
   clearSteamFamilyToken,
   extractStoreWebApiToken,
+  extractStoreWebApiTokenFromClipboard,
+  isSteamFamilyTokenRefreshRecommended,
   loadSteamFamilyToken,
   saveSteamFamilyToken,
   type SteamFamilyTokenCache,
@@ -22,6 +25,7 @@ export interface SteamFamilySettingsController {
   setAccessToken: (value: string) => void;
   tokenSavedAt: number | null;
   tokenValidatedAt: number | null;
+  tokenRefreshRecommended: boolean;
   checking: boolean;
   result: FamilyLibraryResult | null;
   lastFetched: number | null;
@@ -31,6 +35,7 @@ export interface SteamFamilySettingsController {
   setIncludeNonGames: (value: boolean) => void;
   handleTokenPaste: (event: ClipboardEvent<HTMLInputElement>) => void;
   openTokenPage: () => Promise<void>;
+  importTokenFromClipboard: () => Promise<void>;
   saveToken: () => Promise<void>;
   clearToken: () => Promise<void>;
   probe: () => Promise<void>;
@@ -129,6 +134,27 @@ export function useSteamFamilySettings(
     }
   };
 
+  const importTokenFromClipboard = async () => {
+    try {
+      const clipboardText = await readText();
+      const token = extractStoreWebApiTokenFromClipboard(clipboardText);
+      if (!token) {
+        setMessage(t("settings.family.clipboardMissingToken"));
+        return;
+      }
+
+      const cache = await saveSteamFamilyToken(token, false);
+      if (!cache) {
+        setMessage(t("settings.family.clipboardMissingToken"));
+        return;
+      }
+      applyTokenCache(cache);
+      setMessage(t("settings.family.clipboardImported"), 2500);
+    } catch {
+      setMessage(t("settings.family.clipboardReadFailed"));
+    }
+  };
+
   const probe = async () => {
     setChecking(true);
     setResult(null);
@@ -196,6 +222,12 @@ export function useSteamFamilySettings(
     setAccessToken,
     tokenSavedAt,
     tokenValidatedAt,
+    tokenRefreshRecommended:
+      tokenSavedAt != null &&
+      isSteamFamilyTokenRefreshRecommended({
+        savedAt: tokenSavedAt,
+        lastValidatedAt: tokenValidatedAt,
+      }),
     checking,
     result,
     lastFetched,
@@ -205,6 +237,7 @@ export function useSteamFamilySettings(
     setIncludeNonGames: (value) => setSettings({ includeSteamFamilyNonGames: value }),
     handleTokenPaste,
     openTokenPage,
+    importTokenFromClipboard,
     saveToken,
     clearToken,
     probe,

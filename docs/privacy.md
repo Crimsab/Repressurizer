@@ -31,6 +31,11 @@ Local app data may include:
 - Local notes, ratings, tags, statuses, and ignored-fetch state.
 - Family library cache.
 
+The Steam Family browser helper reads plain text from the system clipboard only
+after you click `Import from clipboard`. It extracts and stores only the
+`webapi_token` field from the copied Steam JSON. Repressurizer does not read or
+store Steam browser cookies, passwords, or broader session material.
+
 Steam collection backups are stored next to the Steam collection file they protect. When Steam's local LevelDB catalog cache is present, Repressurizer stores a matching raw LevelDB catalog backup next to the JSON backup so restores keep both catalog copies in sync.
 
 ## Diagnostics

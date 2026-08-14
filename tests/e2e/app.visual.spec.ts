@@ -1530,6 +1530,72 @@ test("opens organized settings tabs, automation logs, and Steam controls without
   await expectNoHorizontalOverflow(page);
 });
 
+test("imports only Steam Family webapi_token after an explicit clipboard action", async ({ page }, testInfo) => {
+  const token = "mock-store-token-for-e2e";
+  await page.setViewportSize({ width: 900, height: 600 });
+  await page.addInitScript((clipboardToken) => {
+    window.localStorage.setItem(
+      "repressurizer-clipboard-text",
+      "unrelated-password-must-not-be-imported"
+    );
+    window.localStorage.setItem("repressurizer-mock-family-token", clipboardToken);
+  }, token);
+
+  await page.goto("/");
+  await page.getByRole("button", { name: "More tools" }).click();
+  await page.getByRole("menuitem", { name: "Settings" }).click();
+  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+  await settingsDialog.getByRole("button", { name: "Steam", exact: true }).click();
+
+  const importButton = settingsDialog.getByRole("button", { name: "Import from clipboard" });
+  await importButton.click();
+  await expect(
+    settingsDialog.getByText(/clipboard does not contain Steam JSON with webapi_token/)
+  ).toBeVisible();
+  expect(
+    await page.evaluate(() =>
+      window.localStorage.getItem("repressurizer-app-data:steam_family_token.json")
+    )
+  ).toBeNull();
+
+  await page.evaluate(() => {
+    const clipboardToken = window.localStorage.getItem("repressurizer-mock-family-token");
+    window.localStorage.setItem(
+      "repressurizer-clipboard-text",
+      JSON.stringify({
+        success: 1,
+        data: { webapi_token: clipboardToken },
+        browser_cookie: "must-not-be-persisted",
+      })
+    );
+  });
+  await importButton.click();
+  await expect(
+    settingsDialog.getByText("Steam Store token imported and saved. No cookies were stored.")
+  ).toBeVisible();
+
+  const saved = await page.evaluate(() =>
+    window.localStorage.getItem("repressurizer-app-data:steam_family_token.json")
+  );
+  expect(saved).not.toBeNull();
+  expect(saved).not.toContain("browser_cookie");
+  expect(saved).not.toContain("must-not-be-persisted");
+  expect(Object.keys(JSON.parse(saved ?? "{}")).sort()).toEqual([
+    "accessToken",
+    "lastValidatedAt",
+    "savedAt",
+  ]);
+  expect(JSON.parse(saved ?? "{}").accessToken).toBe(token);
+  await expectNoHorizontalOverflow(page);
+
+  const screenshotPath = testInfo.outputPath("steam-family-helper-minimum.png");
+  await page.screenshot({ path: screenshotPath, fullPage: true });
+  await testInfo.attach("steam-family-helper-minimum", {
+    path: screenshotPath,
+    contentType: "image/png",
+  });
+});
+
 test("uses the color picker as the primary custom accent control", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Settings" }).click();
