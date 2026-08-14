@@ -5,17 +5,25 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing version tag to rebuild and publish
+        required: true
+        type: string
 
 permissions:
   contents: write
   actions: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ inputs.release_tag || github.ref }}
   cancel-in-progress: true
 
 env:
   HAS_VT_API_KEY: ${{ secrets.VT_API_KEY != '' }}
+  IS_RELEASE: ${{ startsWith(github.ref, 'refs/tags/') || inputs.release_tag != '' }}
+  RELEASE_REF: ${{ inputs.release_tag || github.ref }}
+  RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
 
 jobs:
   linux:
@@ -29,6 +37,8 @@ jobs:
           GIT_CONFIG_COUNT: 1
           GIT_CONFIG_KEY_0: init.defaultBranch
           GIT_CONFIG_VALUE_0: main
+        with:
+          ref: ${{ env.RELEASE_REF }}
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
@@ -98,6 +108,8 @@ jobs:
           GIT_CONFIG_COUNT: 1
           GIT_CONFIG_KEY_0: init.defaultBranch
           GIT_CONFIG_VALUE_0: main
+        with:
+          ref: ${{ env.RELEASE_REF }}
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
@@ -124,51 +136,14 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Validate Apple release credentials
+      - name: Build ad-hoc signed universal bundles
         env:
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          test -n "$APPLE_CERTIFICATE"
-          test -n "$APPLE_CERTIFICATE_PASSWORD"
-          test -n "$APPLE_SIGNING_IDENTITY"
-          test -n "$APPLE_ID"
-          test -n "$APPLE_PASSWORD"
-          test -n "$APPLE_TEAM_ID"
-
-      - name: Import Developer ID certificate
-        env:
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-        run: |
-          set -e
-          keychain_path="$RUNNER_TEMP/repressurizer-build.keychain-db"
-          keychain_password=$(openssl rand -hex 24)
-          echo "::add-mask::$keychain_password"
-          printf '%s' "$APPLE_CERTIFICATE" | openssl base64 -d -A -out "$RUNNER_TEMP/apple-certificate.p12"
-          security create-keychain -p "$keychain_password" "$keychain_path"
-          security default-keychain -s "$keychain_path"
-          security unlock-keychain -p "$keychain_password" "$keychain_path"
-          security set-keychain-settings -t 3600 -u "$keychain_path"
-          security import "$RUNNER_TEMP/apple-certificate.p12" -k "$keychain_path" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
-          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$keychain_password" "$keychain_path"
-          security find-identity -v -p codesigning "$keychain_path"
-
-      - name: Build signed and notarized universal bundles
-        env:
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_SIGNING_IDENTITY: "-"
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: bun run build:macos
 
-      - name: Smoke-test signed app and DMG
+      - name: Smoke-test ad-hoc signed app and DMG
         run: |
           set -e
           bundle_dir="src-tauri/target/universal-apple-darwin/release/bundle"
@@ -183,9 +158,13 @@ jobs:
           test -x "$binary_path"
           lipo "$binary_path" -verify_arch x86_64 arm64
           codesign --verify --deep --strict --verbose=2 "$app_path"
-          spctl --assess --type execute --verbose=2 "$app_path"
-          xcrun stapler validate "$app_path"
-          xcrun stapler validate "$dmg_path"
+          codesign -dv --verbose=4 "$app_path" 2>&1 | grep -q '^Signature=adhoc$'
+          mount_point=$(mktemp -d)
+          hdiutil attach "$dmg_path" -nobrowse -readonly -mountpoint "$mount_point"
+          test -d "$mount_point/Repressurizer.app"
+          codesign --verify --deep --strict --verbose=2 "$mount_point/Repressurizer.app"
+          hdiutil detach "$mount_point"
+          rmdir "$mount_point"
 
       - name: Collect macOS artifacts
         run: |
@@ -218,6 +197,7 @@ jobs:
           GIT_CONFIG_KEY_0: init.defaultBranch
           GIT_CONFIG_VALUE_0: main
         with:
+          ref: ${{ env.RELEASE_REF }}
           fetch-depth: 0
 
       - name: Setup Bun
@@ -232,20 +212,26 @@ jobs:
           $version = (Get-Content package.json | ConvertFrom-Json).version
           $tag = "v$version"
           $channel = bun scripts/release-channel.ts identify --version $version --tag $tag
+          $sha = (git rev-parse HEAD).Trim()
           "version=$version" >> $env:GITHUB_OUTPUT
           "tag=$tag" >> $env:GITHUB_OUTPUT
           "channel=$channel" >> $env:GITHUB_OUTPUT
+          "sha=$sha" >> $env:GITHUB_OUTPUT
 
       - name: Validate release tag
-        if: startsWith(github.ref, 'refs/tags/')
         shell: pwsh
         run: |
-          if ("${{ github.ref_name }}" -ne "${{ steps.version.outputs.tag }}") {
-            throw "Tag ${{ github.ref_name }} does not match package version ${{ steps.version.outputs.tag }}"
+          $releaseTag = "${{ env.RELEASE_TAG }}"
+          if ($releaseTag -ne "${{ steps.version.outputs.tag }}") {
+            throw "Tag $releaseTag does not match package version ${{ steps.version.outputs.tag }}"
+          }
+          $tagCommit = (git rev-list -n 1 $releaseTag).Trim()
+          $releaseCommit = (git rev-parse HEAD).Trim()
+          if ($tagCommit -ne $releaseCommit) {
+            throw "Checked out commit $releaseCommit does not match $releaseTag at $tagCommit"
           }
 
       - name: Verify CI passed for release commit
-        if: startsWith(github.ref, 'refs/tags/')
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
@@ -362,7 +348,7 @@ jobs:
             throw "Could not find updater signature for $($installer.Name)"
           }
 
-          $assetUrl = "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/$($installer.Name)"
+          $assetUrl = "https://github.com/${{ github.repository }}/releases/download/${{ env.RELEASE_TAG }}/$($installer.Name)"
           $manifest = [ordered]@{
             version = "${{ steps.version.outputs.version }}"
             notes = "Modern Steam library management, inspired by Depressurizer."
@@ -386,7 +372,7 @@ jobs:
           $linuxAssetName = [System.Uri]::EscapeDataString($linuxUpdater.Name)
           $manifest.platforms["linux-x86_64"] = [ordered]@{
             signature = (Get-Content $linuxSignaturePath -Raw).Trim()
-            url = "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/$linuxAssetName"
+            url = "https://github.com/${{ github.repository }}/releases/download/${{ env.RELEASE_TAG }}/$linuxAssetName"
           }
 
           $macUpdater = Get-ChildItem artifacts -Filter "*.app.tar.gz" | Select-Object -First 1
@@ -400,7 +386,7 @@ jobs:
           $macAssetName = [System.Uri]::EscapeDataString($macUpdater.Name)
           $macUpdaterEntry = [ordered]@{
             signature = (Get-Content $macSignaturePath -Raw).Trim()
-            url = "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/$macAssetName"
+            url = "https://github.com/${{ github.repository }}/releases/download/${{ env.RELEASE_TAG }}/$macAssetName"
           }
           $manifest.platforms["darwin-aarch64"] = $macUpdaterEntry
           $manifest.platforms["darwin-x86_64"] = $macUpdaterEntry
@@ -414,7 +400,7 @@ jobs:
         shell: pwsh
         run: |
           $channel = "${{ steps.version.outputs.channel }}"
-          $common = @("--artifacts", "artifacts", "--repo", "${{ github.repository }}", "--tag", "${{ github.ref_name }}", "--version", "${{ steps.version.outputs.version }}")
+          $common = @("--artifacts", "artifacts", "--repo", "${{ github.repository }}", "--tag", "${{ env.RELEASE_TAG }}", "--version", "${{ steps.version.outputs.version }}")
           bun scripts/updater-manifest.ts --manifest artifacts/latest.json @common --platform windows-x86_64 --platform linux-x86_64 --platform darwin-aarch64 --platform darwin-x86_64
           foreach ($target in @("windows-x86_64", "linux-x86_64", "darwin-aarch64", "darwin-x86_64")) {
             $channelTarget = "$target-$channel"
@@ -435,14 +421,14 @@ jobs:
 
       - name: Create release notes
         id: notes
-        if: startsWith(github.ref, 'refs/tags/')
+        if: env.IS_RELEASE == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: bun scripts/release-notes.ts --repo "${{ github.repository }}" --tag "${{ github.ref_name }}" --sha "${{ github.sha }}" --out release-notes.md
+        run: bun scripts/release-notes.ts --repo "${{ github.repository }}" --tag "${{ env.RELEASE_TAG }}" --sha "${{ steps.version.outputs.sha }}" --out release-notes.md
 
       - name: VirusTotal Scan
         id: vt-scan
-        if: startsWith(github.ref, 'refs/tags/') && env.HAS_VT_API_KEY == 'true'
+        if: env.IS_RELEASE == 'true' && env.HAS_VT_API_KEY == 'true'
         uses: crazy-max/ghaction-virustotal@936d8c5c00afe97d3d9a1af26d017cfdf26800a2 # v5
         with:
           vt_api_key: ${{ secrets.VT_API_KEY }}
@@ -452,7 +438,7 @@ jobs:
 
       - name: Check VirusTotal verdicts
         id: vt-verdict
-        if: startsWith(github.ref, 'refs/tags/') && steps.vt-scan.outputs.analysis != ''
+        if: env.IS_RELEASE == 'true' && steps.vt-scan.outputs.analysis != ''
         shell: pwsh
         env:
           VT_API_KEY: ${{ secrets.VT_API_KEY }}
@@ -569,7 +555,7 @@ jobs:
 
       - name: Enforce VirusTotal release policy
         id: release-policy
-        if: startsWith(github.ref, 'refs/tags/')
+        if: env.IS_RELEASE == 'true'
         shell: pwsh
         run: |
           $virusTotalEnabled = "${{ env.HAS_VT_API_KEY }}" -eq "true"
@@ -588,7 +574,7 @@ jobs:
           "draft=false" >> $env:GITHUB_OUTPUT
 
       - name: Append VirusTotal results
-        if: startsWith(github.ref, 'refs/tags/') && steps.vt-scan.outputs.analysis != ''
+        if: env.IS_RELEASE == 'true' && steps.vt-scan.outputs.analysis != ''
         shell: pwsh
         env:
           VT_ANALYSIS: ${{ steps.vt-scan.outputs.analysis }}
@@ -601,10 +587,11 @@ jobs:
           }
 
       - name: Publish GitHub release
-        if: startsWith(github.ref, 'refs/tags/')
+        if: env.IS_RELEASE == 'true'
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3
         with:
-          name: Repressurizer ${{ github.ref_name }}
+          tag_name: ${{ env.RELEASE_TAG }}
+          name: Repressurizer ${{ env.RELEASE_TAG }}
           body_path: release-notes.md
           files: artifacts/*
           fail_on_unmatched_files: true
@@ -613,7 +600,7 @@ jobs:
           make_latest: ${{ steps.version.outputs.channel == 'stable' }}
 
       - name: Publish isolated updater channel manifests
-        if: startsWith(github.ref, 'refs/tags/')
+        if: env.IS_RELEASE == 'true'
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}

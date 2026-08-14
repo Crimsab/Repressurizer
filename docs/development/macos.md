@@ -16,24 +16,26 @@ The direct-download build is intentionally not App Sandbox enabled. Repressurize
 
 The save and restore paths use the same backup implementation as Windows and Linux. The write guard checks both `steam_osx` and `Steam` process names and refuses collection writes while Steam is open. Steam Achievement Manager capabilities remain explicitly unsupported because the embedded bridge is Windows-only.
 
-## Signing and notarization
+## Ad-hoc signing and Gatekeeper
 
-Direct distribution requires a **Developer ID Application** certificate and Apple notarization. The release workflow expects these repository secrets:
+Repressurizer uses Tauri's ad-hoc signing identity (`-`) for direct macOS
+distribution. It does not require an Apple Developer account, certificate, or
+notarization credentials. The updater archive remains cryptographically signed
+with the normal Tauri updater key, so the release workflow still requires
+`TAURI_SIGNING_PRIVATE_KEY` and its optional password.
 
-| Secret | Purpose |
-| --- | --- |
-| `APPLE_CERTIFICATE` | Base64-encoded Developer ID `.p12` certificate. |
-| `APPLE_CERTIFICATE_PASSWORD` | Password used when exporting the certificate. |
-| `APPLE_SIGNING_IDENTITY` | Full Developer ID Application identity shown by `security find-identity`. |
-| `APPLE_ID` | Apple account used for notarization. |
-| `APPLE_PASSWORD` | App-specific password for that account. |
-| `APPLE_TEAM_ID` | Apple Developer team identifier. |
-| `TAURI_SIGNING_PRIVATE_KEY` | Existing Tauri updater signing key. |
-| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Password for the updater signing key. |
+Ad-hoc signing satisfies Apple Silicon's requirement that application code has
+a signature, but it does not establish an identified developer or notarization
+ticket. Gatekeeper therefore requires the user to approve Repressurizer on the
+first launch through **System Settings > Privacy & Security > Open Anyway**.
+Subsequent launches work normally. This limitation cannot be removed without a
+Developer ID certificate and Apple notarization.
 
-The release job imports the certificate into an ephemeral keychain. Tauri signs, notarizes, and staples the app and DMG. The job then runs `codesign`, `spctl`, and `xcrun stapler validate`; any missing credential or failed assessment blocks the release.
-
-Follow the current [Tauri macOS signing and notarization guide](https://v2.tauri.app/distribute/sign/macos/) when creating or rotating Apple credentials. Tauri documents `.app` and DMG creation in its [macOS distribution guide](https://v2.tauri.app/distribute/), while GitHub lists runner architecture and labels in the [hosted runner reference](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).
+The release job verifies the universal binary, deep code signature, mounted DMG,
+updater archive, and updater signature. Follow Tauri's current
+[macOS signing guide](https://v2.tauri.app/distribute/sign/macos/) for the
+distinction between ad-hoc and Developer ID signing. Apple documents the
+[manual Gatekeeper approval flow](https://support.apple.com/102445).
 
 ## Local and CI validation
 
@@ -44,4 +46,4 @@ bun install --frozen-lockfile
 bun run build:macos
 ```
 
-Pull-request CI uses `src-tauri/tauri.macos-ci.conf.json` to disable updater artifacts and apply an ad-hoc signature. It verifies the two binary slices, the app signature, and mounts the generated DMG. This proves packaging without pretending that an ad-hoc CI bundle is suitable for distribution. Only the signed and notarized release job uploads public macOS assets.
+Pull-request CI uses `src-tauri/tauri.macos-ci.conf.json` to disable updater artifacts while exercising the same ad-hoc signature. It verifies the two binary slices, the app signature, and mounts the generated DMG. The release job additionally creates and validates the signed updater archive before uploading the public assets.

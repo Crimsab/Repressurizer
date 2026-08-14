@@ -1,10 +1,20 @@
-# Installation and SmartScreen
+# Installation warnings
 
 ## SmartScreen warning
 
 Early Repressurizer builds are unsigned. Verify that the installer came from `github.com/Crimsab/Repressurizer/releases`, compare the filename with the release assets, and scan the file if you want an additional check.
 
 Do not download installers from mirrors or reposting sites.
+
+## macOS cannot verify the developer
+
+The macOS release is ad-hoc signed but not Apple-notarized. Confirm that the DMG
+came from the official Repressurizer release and compare its SHA-256 digest with
+`SHA256SUMS.txt`. Attempt to open Repressurizer once, then open **System Settings
+> Privacy & Security**, choose **Open Anyway**, and confirm. macOS remembers the
+approval for later launches.
+
+Do not bypass Gatekeeper for a copy downloaded from a mirror or reposting site.
 
 ## App does not start
 

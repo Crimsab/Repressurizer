@@ -35,6 +35,6 @@ rustup target add aarch64-apple-darwin x86_64-apple-darwin
 bun run build:macos
 ```
 
-The release command also creates the signed `.app.tar.gz` updater artifact. It needs the Tauri updater signing key and the Apple signing/notarization environment described in [macOS packaging](macos.md). CI uses an ad-hoc signature only for structural bundle smoke tests; release artifacts require Developer ID signing and notarization.
+The release command also creates the signed `.app.tar.gz` updater artifact. It needs the Tauri updater signing key described in [macOS packaging](macos.md). Both CI and release builds use an ad-hoc macOS code signature and require no Apple Developer credentials.
 
 Do not commit Steam API keys, Store tokens, private paths, personal library exports, generated build output, or Playwright reports.
