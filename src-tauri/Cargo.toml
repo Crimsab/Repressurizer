@@ -10,6 +10,11 @@ default-run = "repressurizer"
 no-sam = []
 sam-sidecar = []
 
+[[bin]]
+name = "repressurizer-sam"
+path = "src/bin/repressurizer-sam.rs"
+required-features = ["sam-sidecar"]
+
 [lib]
 name = "repressurizer_lib"
 crate-type = ["staticlib", "rlib"]

@@ -4,7 +4,6 @@
     "beforeBundleCommand": "bun scripts/prepare-macos-universal-cli.ts"
   },
   "bundle": {
-    "externalBin": null,
     "macOS": {
       "signingIdentity": "-"
     }

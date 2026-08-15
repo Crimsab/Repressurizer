@@ -20,7 +20,7 @@
     "build:sam-sidecar": "bun scripts/build-sam-sidecar.ts",
     "build:linux": "bun tauri build --bundles deb,appimage",
     "build:macos": "bun tauri build --bundles app,dmg --target universal-apple-darwin --config src-tauri/tauri.macos.conf.json",
-    "build:macos:ci": "bun tauri build --bundles app,dmg --target universal-apple-darwin --config src-tauri/tauri.macos-ci.conf.json --config '{\"bundle\":{\"externalBin\":null}}'",
+    "build:macos:ci": "bun tauri build --bundles app,dmg --target universal-apple-darwin --config src-tauri/tauri.macos-ci.conf.json",
     "check": "bun run i18n:check && tsc --noEmit && bun run --cwd packages/integration check",
     "integration:build": "bun run --cwd packages/integration build",
     "integration:rust:check": "cargo check --manifest-path packages/rust/Cargo.toml",
