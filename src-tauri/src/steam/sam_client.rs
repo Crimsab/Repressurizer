@@ -15,6 +15,8 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 #[cfg(windows)]
+use sha2::{Digest, Sha256};
+#[cfg(windows)]
 use std::os::windows::process::CommandExt;
 
 const SAM_SOURCE: &str = "Repressurizer SAM integration (sidecar)";
@@ -28,6 +30,8 @@ const SAM_SCHEMA_RUNNER_TIMEOUT: Duration = Duration::from_secs(10);
 const SAM_ACTION_RUNNER_TIMEOUT: Duration = Duration::from_secs(45);
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x08000000;
+#[cfg(windows)]
+const EMBEDDED_SAM_PAYLOAD: &[u8] = include_bytes!(env!("REPRESSURIZER_SAM_EMBEDDED_PAYLOAD"));
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -449,15 +453,19 @@ fn resolve_sidecar_path() -> Result<PathBuf, String> {
             }
         }
     }
-    candidates
-        .into_iter()
-        .find(|candidate| candidate.is_file())
-        .ok_or_else(|| {
-            format!(
-                "SAM sidecar '{}' was not found next to Repressurizer. Steam Tools are unavailable until it is installed.",
-                SIDECAR_NAME
-            )
-        })
+    if let Some(candidate) = candidates.into_iter().find(|candidate| candidate.is_file()) {
+        return Ok(candidate);
+    }
+
+    #[cfg(windows)]
+    if !EMBEDDED_SAM_PAYLOAD.is_empty() {
+        return materialize_embedded_sidecar();
+    }
+
+    Err(format!(
+        "SAM sidecar '{}' was not found next to Repressurizer and no embedded payload is available. Steam Tools are unavailable until it is installed.",
+        SIDECAR_NAME
+    ))
 }
 
 fn sidecar_filename(stem: &str) -> String {
@@ -466,6 +474,58 @@ fn sidecar_filename(stem: &str) -> String {
     } else {
         stem.to_string()
     }
+}
+
+#[cfg(windows)]
+fn materialize_embedded_sidecar() -> Result<PathBuf, String> {
+    let digest = Sha256::digest(EMBEDDED_SAM_PAYLOAD);
+    let digest_hex = digest
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
+    let cache_dir = std::env::temp_dir()
+        .join("Repressurizer")
+        .join("sam-sidecar")
+        .join(&digest_hex[..16]);
+    let sidecar = cache_dir.join(sidecar_filename(SIDECAR_NAME));
+
+    fs::create_dir_all(&cache_dir).map_err(|error| {
+        format!("Failed to create the temporary SAM sidecar directory: {error}")
+    })?;
+
+    if !embedded_sidecar_matches(&sidecar) {
+        let temporary = cache_dir.join(format!(".{SIDECAR_NAME}-{}.tmp", std::process::id()));
+        let _ = fs::remove_file(&temporary);
+        fs::write(&temporary, EMBEDDED_SAM_PAYLOAD)
+            .map_err(|error| format!("Failed to materialize the embedded SAM sidecar: {error}"))?;
+        if let Err(error) = fs::rename(&temporary, &sidecar) {
+            if embedded_sidecar_matches(&sidecar) {
+                let _ = fs::remove_file(&temporary);
+            } else {
+                let replace_result =
+                    fs::remove_file(&sidecar).and_then(|_| fs::rename(&temporary, &sidecar));
+                if let Err(replace_error) = replace_result {
+                    let _ = fs::remove_file(&temporary);
+                    return Err(format!(
+                        "Failed to activate the embedded SAM sidecar: {error}; replacement failed: {replace_error}"
+                    ));
+                }
+            }
+        }
+    }
+
+    if embedded_sidecar_matches(&sidecar) {
+        Ok(sidecar)
+    } else {
+        Err("The embedded SAM sidecar failed its integrity check after extraction.".to_string())
+    }
+}
+
+#[cfg(windows)]
+fn embedded_sidecar_matches(path: &Path) -> bool {
+    fs::read(path)
+        .map(|bytes| bytes == EMBEDDED_SAM_PAYLOAD)
+        .unwrap_or(false)
 }
 
 fn unavailable_probe(steam_path: String, app_id: u64, error: String) -> SamBridgeProbe {

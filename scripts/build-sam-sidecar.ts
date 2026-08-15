@@ -40,6 +40,7 @@ const bundledBinary = join(
   binariesRoot,
   `repressurizer-sam-${target}${extension}`,
 );
+const embeddedBinary = join(binariesRoot, "repressurizer-sam-embedded.bin");
 
 const cargoCommand = process.platform === "win32" ? ["cargo"] : ["cargo", "xwin"];
 const command = [
@@ -74,6 +75,7 @@ if ((await build.exited) !== 0) {
 await access(sidecarBinary);
 await mkdir(binariesRoot, { recursive: true });
 await copyFile(sidecarBinary, bundledBinary);
+await copyFile(sidecarBinary, embeddedBinary);
 if (process.platform !== "win32") {
   await chmod(bundledBinary, 0o755);
 }
