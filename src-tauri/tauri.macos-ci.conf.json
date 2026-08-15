@@ -5,6 +5,7 @@
   },
   "bundle": {
     "createUpdaterArtifacts": false,
+    "externalBin": [],
     "macOS": {
       "signingIdentity": "-"
     }
