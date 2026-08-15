@@ -12,7 +12,7 @@ const extraArgs = Bun.argv.slice(3);
 const previewNumber = Bun.env.REPRESSURIZER_PREVIEW_NUMBER ?? "1";
 const previewVersion =
   Bun.env.REPRESSURIZER_PREVIEW_VERSION ??
-  `0.0.0-preview.${previewNumber}`;
+  `0.0.0-${previewNumber}`;
 const previewLabel = Bun.env.REPRESSURIZER_PREVIEW_LABEL ?? `Preview.${previewNumber}`;
 
 const basePreviewConfig = await Bun.file("src-tauri/tauri.preview.conf.json").json() as Record<string, unknown>;

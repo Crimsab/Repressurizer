@@ -60,7 +60,10 @@ jobs:
           }
 
           $previewNumber = $previousNumber + 1
-          $previewVersion = "0.0.0-preview.$previewNumber"
+          # WiX accepts an optional numeric-only prerelease identifier.
+          # The separate product identifier and Preview.N label still keep this
+          # channel isolated from stable Repressurizer.
+          $previewVersion = "0.0.0-$previewNumber"
           $previewLabel = "Preview.$previewNumber"
           $shortSha = "${{ github.sha }}".Substring(0, 7)
           "version=$previewVersion" >> $env:GITHUB_OUTPUT
@@ -87,8 +90,8 @@ jobs:
         with:
           toolchain: 1.94.0
 
-      - name: Install NSIS
-        run: choco install nsis --version=3.11 -y --no-progress
+      - name: Install WiX Toolset
+        run: choco install wixtoolset -y --no-progress
 
       - name: Restore Rust cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -135,9 +138,9 @@ jobs:
           New-Item -ItemType Directory -Force -Path artifacts
           $label = "${{ steps.version.outputs.label }}"
           $shortSha = "${{ steps.version.outputs.short_sha }}"
-          $installer = Get-ChildItem src-tauri\target\release\bundle\nsis -Filter "*.exe" | Select-Object -First 1
+          $installer = Get-ChildItem src-tauri\target\release\bundle\msi -Filter "*.msi" | Select-Object -First 1
           if (-not $installer) {
-            throw "Could not find preview NSIS installer"
+            throw "Could not find preview MSI installer"
           }
 
           $signaturePath = "$($installer.FullName).sig"
@@ -147,7 +150,7 @@ jobs:
 
           $portableName = "Repressurizer-$label-portable.exe"
           $zipName = "Repressurizer-$label-portable-windows-x64.zip"
-          $installerName = "Repressurizer-$label-windows-x64-setup.exe"
+          $installerName = "Repressurizer-$label-windows-x64.msi"
 
           Copy-Item src-tauri\target\release\repressurizer.exe "artifacts\$portableName"
           Compress-Archive -Path "artifacts\$portableName" -DestinationPath "artifacts\$zipName" -Force
@@ -158,9 +161,9 @@ jobs:
       - name: Create preview updater manifest
         shell: pwsh
         run: |
-          $installer = Get-ChildItem artifacts -Filter "Repressurizer-${{ steps.version.outputs.label }}-windows-x64-setup.exe" | Select-Object -First 1
+          $installer = Get-ChildItem artifacts -Filter "Repressurizer-${{ steps.version.outputs.label }}-windows-x64.msi" | Select-Object -First 1
           if (-not $installer) {
-            throw "Could not find preview NSIS installer"
+            throw "Could not find preview MSI installer"
           }
 
           $signaturePath = "$($installer.FullName).sig"

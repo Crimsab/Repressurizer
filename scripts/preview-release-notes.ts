@@ -62,7 +62,7 @@ lines.push(
   "---",
   "## Downloads",
   "",
-  `- \`Repressurizer-${label}-windows-x64-setup.exe\`: Windows preview installer`,
+  `- \`Repressurizer-${label}-windows-x64.msi\`: Windows preview installer`,
   `- \`Repressurizer-${label}-portable-windows-x64.zip\`: portable Windows preview build`,
   `- \`Repressurizer-${label}-portable.exe\`: unpacked portable preview executable`,
   "- `latest-preview.json`: preview updater manifest",
