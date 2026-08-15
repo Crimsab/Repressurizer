@@ -6,6 +6,9 @@ authors = ["you"]
 edition = "2021"
 default-run = "repressurizer"
 
+[features]
+no-sam = []
+
 [lib]
 name = "repressurizer_lib"
 crate-type = ["staticlib", "rlib"]

@@ -5,5 +5,9 @@ pub mod depressurizer_profile;
 pub mod detector;
 pub mod legacy_sharedconfig;
 pub mod local_library;
+#[cfg(not(feature = "no-sam"))]
+pub mod sam;
+#[cfg(feature = "no-sam")]
+#[path = "sam_disabled.rs"]
 pub mod sam;
 pub mod shortcuts;
