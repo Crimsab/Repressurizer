@@ -540,7 +540,10 @@ jobs:
             $analysisId = $Matches[1]
             $attributes = $null
 
-            for ($attempt = 1; $attempt -le 18; $attempt++) {
+            # PE uploads can remain queued while VirusTotal schedules engines.
+            # Allow up to ten minutes per artifact so the release gate can
+            # report the real engine verdicts instead of failing on a timeout.
+            for ($attempt = 1; $attempt -le 60; $attempt++) {
               $response = Invoke-RestMethod `
                 -Headers $headers `
                 -Uri "https://www.virustotal.com/api/v3/analyses/$analysisId"
