@@ -8,6 +8,7 @@ default-run = "repressurizer"
 
 [features]
 no-sam = []
+sam-sidecar = []
 
 [lib]
 name = "repressurizer_lib"

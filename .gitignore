@@ -9,6 +9,7 @@ test-results/
 playwright-report-docs/
 test-results-docs/
 src-tauri/gen/
+src-tauri/binaries/
 src-tauri/target/
 packages/rust/Cargo.lock
 packages/rust/target/

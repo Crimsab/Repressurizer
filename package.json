@@ -17,6 +17,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:sam-sidecar": "bun scripts/build-sam-sidecar.ts",
     "build:linux": "bun tauri build --bundles deb,appimage",
     "build:macos": "bun tauri build --bundles app,dmg --target universal-apple-darwin --config src-tauri/tauri.macos.conf.json",
     "build:macos:ci": "bun tauri build --bundles app,dmg --target universal-apple-darwin --config src-tauri/tauri.macos-ci.conf.json",

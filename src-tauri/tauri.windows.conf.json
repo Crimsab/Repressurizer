@@ -1,5 +1,9 @@
 {
+  "build": {
+    "beforeBuildCommand": "bun run build && bun run build:sam-sidecar"
+  },
   "bundle": {
+    "externalBin": ["binaries/repressurizer-sam"],
     "targets": ["nsis"]
   }
 }
