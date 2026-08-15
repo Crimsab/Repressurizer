@@ -3,13 +3,13 @@
 ## Stable channel
 
 Stable releases use tags and versions such as `v0.6.0` / `0.6.0`. Stable is
-the default channel and receives only normal GitHub Releases. Its signed updater
+the default channel and receives only normal GitHub Releases. Its updater
 manifests are separate from beta manifests, so publishing a prerelease cannot
 replace the default stable update.
 
 Use the stable channel for your normal library maintenance.
 
-On Windows, in-app installation is supported by the normal NSIS installer. The
+On Windows, in-app installation is supported by the normal MSI installer. The
 portable ZIP can check its delivery mode but does not replace its executable in
 place; download a newer portable ZIP from GitHub Releases instead. Settings and
 caches remain in the Windows application data directory in either case.
@@ -37,7 +37,7 @@ the channel selector is shown only where in-place updates are supported.
 
 ## Developer preview channel
 
-The Windows `preview` prerelease is continuously replaced by a build from the newest commit on `main`. It has a separate version number and updater manifest, so it does not replace the stable release record. Linux preview artifacts are not currently published.
+The Windows `preview` prerelease is continuously replaced by an MSI build from the newest commit on `main`. It has a separate version number and updater manifest, so it does not replace the stable release record. Linux preview artifacts are not currently published.
 
 Preview is a separately installed developer build, not the versioned beta
 channel. It is useful for testing the newest commit and can change frequently.

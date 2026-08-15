@@ -22,6 +22,7 @@ changelog:
         - installer
         - windows
         - linux
+        - macos
     - title: User Interface
       labels:
         - ui

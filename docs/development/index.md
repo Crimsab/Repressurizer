@@ -1,6 +1,6 @@
 # Contributing
 
-Repressurizer combines a React and TypeScript frontend with a Tauri and Rust backend. Windows and x86_64 Linux are supported runtime targets; Steam Achievement Manager writes remain Windows-only.
+Repressurizer combines a React and TypeScript frontend with a Tauri and Rust backend. Windows, x86_64 Linux, and universal Intel/Apple Silicon macOS builds are supported runtime targets; Steam Achievement Manager writes remain Windows-only.
 
 - [Set up the development environment](setup.md)
 - [Understand the architecture](architecture.md)

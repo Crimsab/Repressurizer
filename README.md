@@ -52,7 +52,7 @@ Get the current stable build from the
 
 | Asset | Use |
 | --- | --- |
-| `Repressurizer_..._x64-setup.exe` | Normal Windows installation with built-in updates. |
+| `Repressurizer_..._x64_en-US.msi` | Normal Windows installation with built-in updates. |
 | `Repressurizer-portable-windows-x64.zip` | Portable app without installation; update it manually. |
 | `Repressurizer-cli-windows-x64.zip` | Diagnostics, snapshots, cache checks, backups, and guarded Steam tooling. |
 | `Repressurizer_..._amd64.AppImage` | Portable Linux desktop app for x86_64 systems. |
@@ -60,10 +60,10 @@ Get the current stable build from the
 | `Repressurizer-cli-linux-x86_64.tar.gz` | Linux CLI for diagnostics, snapshots, cache checks, and backups. |
 | `Repressurizer_..._universal.dmg` | Universal macOS desktop app for Intel and Apple Silicon. |
 
-Windows SmartScreen may warn because early releases are not signed with a
-commercial Windows certificate. Download only from this repository and read the
-[installation guide](https://crimsab.github.io/Repressurizer/getting-started/installation/)
-before continuing past an unfamiliar publisher warning.
+Windows artifacts are not Authenticode-signed, so SmartScreen may show an
+unfamiliar publisher. Stable release notes include checksums and VirusTotal
+links. Download only from this repository, do not disable Defender, and read the
+[installation guide](https://crimsab.github.io/Repressurizer/getting-started/installation/).
 
 Want the newest commit instead? The rolling
 [`preview` prerelease](https://github.com/Crimsab/Repressurizer/releases/tag/preview)
@@ -172,14 +172,21 @@ before applying imported rules to a library you care about.
 - WebView2 Runtime on Windows, already present on most current systems.
 - A Steam Web API key for owned games, achievements, wishlist data, and related metadata.
 
+| Platform | Desktop package | Built-in updates | Platform notes |
+| --- | --- | --- | --- |
+| Windows 10/11 x86_64 | MSI or portable ZIP | MSI: yes; portable: manual | Steam Achievement Manager writes are Windows-only. |
+| Linux x86_64 | AppImage or Debian package | AppImage: yes; Debian package: manual | Native, Flatpak, and Snap Steam paths are detected. |
+| macOS 11+ | Universal DMG for Intel and Apple Silicon | Yes | Ad-hoc signed and not Apple-notarized; first launch needs Gatekeeper approval. |
+
 Linux supports native, Flatpak, and Snap Steam paths. Library loading, collection
 editing, backups, shortcuts, metadata, and exports use the same safety model as
 Windows. Steam Achievement Manager write actions remain Windows-only because
 their local Steamworks bridge is platform-specific.
 
 macOS uses a universal Intel/Apple Silicon app and detects Steam under
-`~/Library/Application Support/Steam`. Signed DMG releases support built-in
-updates; collection writes keep the same close-Steam guard and backups.
+`~/Library/Application Support/Steam`. The DMG is ad-hoc signed rather than
+Apple-notarized; the updater archive has its own Tauri signature. Collection
+writes keep the same close-Steam guard and backups.
 
 Steam Deck is an experimental target through the x86_64 AppImage in Desktop
 Mode. Its standard Steam path is detected, but Game Mode has not been validated.

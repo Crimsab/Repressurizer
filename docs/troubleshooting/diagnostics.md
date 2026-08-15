@@ -10,8 +10,8 @@ redacted panic message, and source filename/line when available. The diagnostics
 export summarizes these reports; missing or malformed files do not block the
 export and are reported only as an ignored-file count.
 
-This app-generated JSON is the supported native crash artifact on Windows and
-Linux. It will also be used by a future macOS package. Repressurizer does not
+This app-generated JSON is the supported native crash artifact on Windows,
+Linux, and macOS. Repressurizer does not
 automatically import Windows Error Reporting dumps, Linux core dumps or journal
 contents, or macOS DiagnosticReports: those system artifacts can contain memory,
 environment variables, usernames, and unrelated paths. Mention their existence

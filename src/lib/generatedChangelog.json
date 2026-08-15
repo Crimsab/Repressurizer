@@ -4,6 +4,422 @@
   "repository": "Crimsab/Repressurizer",
   "entries": [
     {
+      "version": "0.6.3",
+      "date": "2026-08-15",
+      "releaseUrl": "https://github.com/Crimsab/Repressurizer/releases/tag/v0.6.3",
+      "compareUrl": "https://github.com/Crimsab/Repressurizer/compare/v0.6.2...v0.6.3",
+      "groups": [
+        {
+          "title": "Fixed",
+          "audience": "user",
+          "items": [
+            {
+              "text": "Windows: use MSI installer to avoid NSIS false positives",
+              "sha": "0bbb906",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/0bbb906"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "version": "0.6.2",
+      "date": "2026-08-15",
+      "releaseUrl": "https://github.com/Crimsab/Repressurizer/releases/tag/v0.6.2",
+      "compareUrl": "https://github.com/Crimsab/Repressurizer/compare/v0.6.1...v0.6.2",
+      "groups": [
+        {
+          "title": "Fixed",
+          "audience": "user",
+          "items": [
+            {
+              "text": "Release: wait for VirusTotal analyses before gating",
+              "sha": "08b84f2",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/08b84f2"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "version": "0.6.1",
+      "date": "2026-08-15",
+      "releaseUrl": "https://github.com/Crimsab/Repressurizer/releases/tag/v0.6.1",
+      "compareUrl": "https://github.com/Crimsab/Repressurizer/compare/v0.6.0...v0.6.1",
+      "groups": [
+        {
+          "title": "Added",
+          "audience": "user",
+          "items": [
+            {
+              "text": "Windows: embed SAM sidecar for portable builds",
+              "sha": "7001326",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/7001326"
+            }
+          ]
+        },
+        {
+          "title": "Fixed",
+          "audience": "user",
+          "items": [
+            {
+              "text": "Macos: gate SAM binary behind sidecar feature",
+              "sha": "14b81e2",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/14b81e2"
+            },
+            {
+              "text": "Macos: disable inherited sidecar in universal build",
+              "sha": "724d022",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/724d022"
+            },
+            {
+              "text": "Macos: clear platform sidecar override",
+              "sha": "9633372",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/9633372"
+            },
+            {
+              "text": "Macos: disable Windows SAM sidecar bundling",
+              "sha": "6962d1b",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/6962d1b"
+            },
+            {
+              "text": "Release: keep portable archive executable-only",
+              "sha": "933a1b3",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/933a1b3"
+            },
+            {
+              "text": "Windows: isolate SAM bridge in sidecar",
+              "sha": "af0fbb1",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/af0fbb1"
+            },
+            {
+              "text": "Ci: distinguish unknown VirusTotal hashes",
+              "sha": "038bb9d",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/038bb9d"
+            },
+            {
+              "text": "Windows: align webview2 windows-core version",
+              "sha": "e18befe",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/e18befe"
+            },
+            {
+              "text": "Steam Family: remove native clipboard manager",
+              "sha": "9edf81a",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/9edf81a"
+            },
+            {
+              "text": "Release: validate immutable tag before builds",
+              "sha": "05206bb",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/05206bb"
+            },
+            {
+              "text": "Http: lock reqwest query dependencies",
+              "sha": "bfa419a",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/bfa419a"
+            },
+            {
+              "text": "Http: enable reqwest query support",
+              "sha": "5c0e6d7",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/5c0e6d7"
+            },
+            {
+              "text": "Build: normalize Vite 8 target",
+              "sha": "0743d2a",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/0743d2a"
+            },
+            {
+              "text": "Release: ship ad-hoc signed macOS builds",
+              "sha": "1882295",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/1882295"
+            }
+          ]
+        },
+        {
+          "title": "Internal",
+          "audience": "internal",
+          "items": [
+            {
+              "text": "Release: bump desktop version to 0.6.1",
+              "sha": "c0e25b8",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/c0e25b8"
+            },
+            {
+              "text": "Windows: add no-sam diagnostic build",
+              "sha": "2cc8860",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/2cc8860"
+            },
+            {
+              "text": "Merge pull request #57 from Crimsab/dependabot/bun/typescript-7.0.2",
+              "sha": "d3b031b",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/d3b031b"
+            },
+            {
+              "text": "Bump typescript from 5.9.3 to 7.0.2",
+              "sha": "a503a09",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/a503a09"
+            },
+            {
+              "text": "Merge pull request #54 from Crimsab/dependabot/cargo/src-tauri/roxmltree-0.21.1",
+              "sha": "210c21f",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/210c21f"
+            },
+            {
+              "text": "Merge pull request #52 from Crimsab/dependabot/cargo/src-tauri/sha2-0.11.0",
+              "sha": "1dfc6df",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/1dfc6df"
+            },
+            {
+              "text": "Bump sha2 from 0.10.9 to 0.11.0 in /src-tauri",
+              "sha": "2948418",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/2948418"
+            },
+            {
+              "text": "Merge pull request #51 from Crimsab/dependabot/cargo/src-tauri/windows-core-0.62.2",
+              "sha": "a24e8ee",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/a24e8ee"
+            },
+            {
+              "text": "Merge pull request #49 from Crimsab/dependabot/cargo/src-tauri/base64-0.23.1",
+              "sha": "3aeab30",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/3aeab30"
+            },
+            {
+              "text": "Merge pull request #50 from Crimsab/dependabot/github_actions/actions/checkout-7.0.1",
+              "sha": "9f45118",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/9f45118"
+            },
+            {
+              "text": "Merge pull request #53 from Crimsab/dependabot/bun/vitejs/plugin-react-6.0.5",
+              "sha": "e6e0959",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/e6e0959"
+            },
+            {
+              "text": "Bump actions/checkout from 7.0.0 to 7.0.1",
+              "sha": "215ef5a",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/215ef5a"
+            },
+            {
+              "text": "Bump roxmltree from 0.20.0 to 0.21.1 in /src-tauri",
+              "sha": "286dddc",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/286dddc"
+            },
+            {
+              "text": "Bump base64 from 0.22.1 to 0.23.1 in /src-tauri",
+              "sha": "a5be6c8",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/a5be6c8"
+            },
+            {
+              "text": "Merge pull request #58 from Crimsab/agent/release-0.6.0-adhoc-macos",
+              "sha": "72ad233",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/72ad233"
+            },
+            {
+              "text": "Merge pull request #56 from Crimsab/dependabot/cargo/src-tauri/reqwest-0.13.4",
+              "sha": "b3aa867",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/b3aa867"
+            },
+            {
+              "text": "Bump @vitejs/plugin-react from 5.2.0 to 6.0.5",
+              "sha": "5a3ae51",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/5a3ae51"
+            },
+            {
+              "text": "Merge remote-tracking branch 'origin/main' into agent/release-0.6.0-adhoc-macos",
+              "sha": "1c159b3",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/1c159b3"
+            },
+            {
+              "text": "Merge pull request #55 from Crimsab/dependabot/bun/vite-8.2.1",
+              "sha": "751feea",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/751feea"
+            },
+            {
+              "text": "Bump reqwest from 0.12.28 to 0.13.4 in /src-tauri",
+              "sha": "8b5da70",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/8b5da70"
+            },
+            {
+              "text": "Bump vite from 7.3.6 to 8.2.1",
+              "sha": "1012c26",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/1012c26"
+            },
+            {
+              "text": "Bump windows-core from 0.61.2 to 0.62.2 in /src-tauri",
+              "sha": "cb73807",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/cb73807"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "version": "0.6.0",
+      "date": "2026-08-14",
+      "releaseUrl": "https://github.com/Crimsab/Repressurizer/releases/tag/v0.6.0",
+      "compareUrl": "https://github.com/Crimsab/Repressurizer/compare/v0.5.6...v0.6.0",
+      "groups": [
+        {
+          "title": "Added",
+          "audience": "user",
+          "items": [
+            {
+              "text": "Updater: stable and beta release channels",
+              "sha": "4247fc1",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/4247fc1"
+            },
+            {
+              "text": "Family: explicit clipboard token helper",
+              "sha": "7dc5fb7",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/7dc5fb7"
+            },
+            {
+              "text": "Pricing: opt-in GG.deals integration",
+              "sha": "d7aff17",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/d7aff17"
+            },
+            {
+              "text": "Macos: Steam detection and universal packaging",
+              "sha": "c5c3926",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/c5c3926"
+            },
+            {
+              "text": "Recommend: explainable backlog ranking",
+              "sha": "49353f3",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/49353f3"
+            },
+            {
+              "text": "Diagnostics: include redacted native crash summaries",
+              "sha": "9ec1abc",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/9ec1abc"
+            },
+            {
+              "text": "AutoCat: export preview membership diffs",
+              "sha": "c2c25f6",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/c2c25f6"
+            },
+            {
+              "text": "Linux desktop support",
+              "sha": "7558f15",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/7558f15"
+            }
+          ]
+        },
+        {
+          "title": "Fixed",
+          "audience": "user",
+          "items": [
+            {
+              "text": "Macos: verify universal binaries with Xcode lipo syntax",
+              "sha": "13d5132",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/13d5132"
+            },
+            {
+              "text": "Macos: merge universal CLI before bundling",
+              "sha": "3caa38c",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/3caa38c"
+            },
+            {
+              "text": "Macos: make Steam client probe tests platform-neutral",
+              "sha": "2c57c7f",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/2c57c7f"
+            },
+            {
+              "text": "Ci: resolve library dependencies before audit",
+              "sha": "fbf161c",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/fbf161c"
+            },
+            {
+              "text": "Ci: install cargo-audit with locked dependencies",
+              "sha": "db5df80",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/db5df80"
+            },
+            {
+              "text": "Updater: handle portable and package installs",
+              "sha": "89d8357",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/89d8357"
+            },
+            {
+              "text": "Deps: remediate transitive vulnerabilities",
+              "sha": "60d328d",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/60d328d"
+            },
+            {
+              "text": "Steam Tools: isolate schema refresh process",
+              "sha": "cc6e194",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/cc6e194"
+            }
+          ]
+        },
+        {
+          "title": "Documentation",
+          "audience": "internal",
+          "items": [
+            {
+              "text": "Changelog: include v0.5.6",
+              "sha": "a444aa2",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/a444aa2"
+            }
+          ]
+        },
+        {
+          "title": "Internal",
+          "audience": "internal",
+          "items": [
+            {
+              "text": "Merge pull request #48 from Crimsab/agent/repressurizer-0.6.0",
+              "sha": "9ba5c1f",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/9ba5c1f"
+            },
+            {
+              "text": "Changelog: track latest generated release",
+              "sha": "c1ccbb1",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/c1ccbb1"
+            },
+            {
+              "text": "Merge pull request #37 from dependabot/github_actions/actions/checkout-7.0.1",
+              "sha": "743d597",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/743d597"
+            },
+            {
+              "text": "Merge pull request #36 from dependabot/github_actions/actions/setup-python-7.0.0",
+              "sha": "1e6d828",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/1e6d828"
+            },
+            {
+              "text": "Release: validate updater artifacts",
+              "sha": "c062e4d",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/c062e4d"
+            },
+            {
+              "text": "Security: add recurring dependency audits",
+              "sha": "05a0cbf",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/05a0cbf"
+            },
+            {
+              "text": "Deps: update frontend runtime packages",
+              "sha": "e813df6",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/e813df6"
+            },
+            {
+              "text": "Deps: refresh frontend tooling",
+              "sha": "fc5e62f",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/fc5e62f"
+            },
+            {
+              "text": "Bump actions/checkout from 7.0.0 to 7.0.1",
+              "sha": "0e97a25",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/0e97a25"
+            },
+            {
+              "text": "Bump actions/setup-python from 6.3.0 to 7.0.0",
+              "sha": "fe0af39",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/fe0af39"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "version": "0.5.6",
       "date": "2026-07-25",
       "releaseUrl": "https://github.com/Crimsab/Repressurizer/releases/tag/v0.5.6",
@@ -205,311 +621,6 @@
               "text": "Cover documentation button hover states",
               "sha": "7e9f836",
               "url": "https://github.com/Crimsab/Repressurizer/commit/7e9f836"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "version": "0.5.2",
-      "date": "2026-07-13",
-      "releaseUrl": "https://github.com/Crimsab/Repressurizer/releases/tag/v0.5.2",
-      "compareUrl": "https://github.com/Crimsab/Repressurizer/compare/v0.5.1...v0.5.2",
-      "groups": [
-        {
-          "title": "Fixed",
-          "audience": "user",
-          "items": [
-            {
-              "text": "Separate tag and flag metadata",
-              "sha": "0702966",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/0702966"
-            },
-            {
-              "text": "Invalidate v2 AutoCat previews",
-              "sha": "72929f3",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/72929f3"
-            },
-            {
-              "text": "Require real metadata for tag autocats",
-              "sha": "a8e80fa",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/a8e80fa"
-            },
-            {
-              "text": "Preserve uncertain metadata memberships",
-              "sha": "2452ed0",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/2452ed0"
-            }
-          ]
-        },
-        {
-          "title": "Internal",
-          "audience": "internal",
-          "items": [
-            {
-              "text": "Cover incomplete AutoCat metadata",
-              "sha": "1f37cb7",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/1f37cb7"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "version": "0.5.1",
-      "date": "2026-07-11",
-      "releaseUrl": "https://github.com/Crimsab/Repressurizer/releases/tag/v0.5.1",
-      "compareUrl": "https://github.com/Crimsab/Repressurizer/compare/v0.5.0...v0.5.1",
-      "groups": [
-        {
-          "title": "Fixed",
-          "audience": "user",
-          "items": [
-            {
-              "text": "Invalidate unsafe AutoCat previews",
-              "sha": "3d4f280",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/3d4f280"
-            },
-            {
-              "text": "Resolve cached names in save preview",
-              "sha": "cd255b0",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/cd255b0"
-            },
-            {
-              "text": "Isolate AutoCat preset apply scopes",
-              "sha": "dab4e0a",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/dab4e0a"
-            },
-            {
-              "text": "Exclude orphaned AutoCat metadata",
-              "sha": "6000655",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/6000655"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "version": "0.5.0",
-      "date": "2026-07-10",
-      "releaseUrl": "https://github.com/Crimsab/Repressurizer/releases/tag/v0.5.0",
-      "compareUrl": "https://github.com/Crimsab/Repressurizer/compare/v0.4.11...v0.5.0",
-      "groups": [
-        {
-          "title": "Added",
-          "audience": "user",
-          "items": [
-            {
-              "text": "Resize complex workspace dialogs",
-              "sha": "dcf2274",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/dcf2274"
-            },
-            {
-              "text": "Make AutoCat workspace resizable",
-              "sha": "646ab31",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/646ab31"
-            },
-            {
-              "text": "Persistent resizable dialog panels",
-              "sha": "97d97e8",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/97d97e8"
-            },
-            {
-              "text": "Accessible toolbar tooltips",
-              "sha": "9f81cce",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/9f81cce"
-            },
-            {
-              "text": "Make advanced category filters searchable",
-              "sha": "77a39b7",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/77a39b7"
-            },
-            {
-              "text": "Reveal truncated category names",
-              "sha": "44c623b",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/44c623b"
-            },
-            {
-              "text": "Reveal all save preview changes",
-              "sha": "ce102f2",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/ce102f2"
-            },
-            {
-              "text": "AutoCat: custom rule builder",
-              "sha": "27277eb",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/27277eb"
-            },
-            {
-              "text": "Library refresh cache controls",
-              "sha": "e92c45a",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/e92c45a"
-            },
-            {
-              "text": "Preview channel and category chip settings",
-              "sha": "85a0729",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/85a0729"
-            },
-            {
-              "text": "Improve compare collection navigation",
-              "sha": "4d7e4a4",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/4d7e4a4"
-            }
-          ]
-        },
-        {
-          "title": "Fixed",
-          "audience": "user",
-          "items": [
-            {
-              "text": "Polish resizable dialog focus and layout",
-              "sha": "3caf0da",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/3caf0da"
-            },
-            {
-              "text": "Keep dirty header within minimum width",
-              "sha": "75d82a7",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/75d82a7"
-            },
-            {
-              "text": "Dismiss tooltips when actions open",
-              "sha": "d434069",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/d434069"
-            },
-            {
-              "text": "Clarify AutoCat metadata requirements",
-              "sha": "1d97d19",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/1d97d19"
-            },
-            {
-              "text": "Raise secondary text contrast across themes",
-              "sha": "a4507ce",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/a4507ce"
-            },
-            {
-              "text": "Open save preview at the summary",
-              "sha": "76bd5d9",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/76bd5d9"
-            },
-            {
-              "text": "Keep header actions reachable at minimum width",
-              "sha": "2fc43e1",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/2fc43e1"
-            },
-            {
-              "text": "Let AutoCat Run all skip ignored details",
-              "sha": "bfd428f",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/bfd428f"
-            },
-            {
-              "text": "Harden categorization and fetch lifecycles",
-              "sha": "aa97c43",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/aa97c43"
-            },
-            {
-              "text": "Satisfy latest clippy",
-              "sha": "c8c6e8a",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/c8c6e8a"
-            },
-            {
-              "text": "Harden backups automation and UI",
-              "sha": "253254e",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/253254e"
-            },
-            {
-              "text": "AutoCat: polish custom rule preview",
-              "sha": "1e8e382",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/1e8e382"
-            }
-          ]
-        },
-        {
-          "title": "Changed",
-          "audience": "user",
-          "items": [
-            {
-              "text": "Organize frontend feature modules",
-              "sha": "184b913",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/184b913"
-            },
-            {
-              "text": "Optimize category lookups and note lifecycle",
-              "sha": "18b86e0",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/18b86e0"
-            },
-            {
-              "text": "Decompose Steam collections storage",
-              "sha": "c0cca52",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/c0cca52"
-            },
-            {
-              "text": "Extract automation snapshot builder",
-              "sha": "53094af",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/53094af"
-            },
-            {
-              "text": "Decompose Tauri runtime modules",
-              "sha": "d822b0c",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/d822b0c"
-            },
-            {
-              "text": "Decompose SAM integration",
-              "sha": "78807da",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/78807da"
-            },
-            {
-              "text": "Decompose sidebar architecture",
-              "sha": "69d718b",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/69d718b"
-            },
-            {
-              "text": "Decompose game detail page",
-              "sha": "75b3091",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/75b3091"
-            },
-            {
-              "text": "Decompose auto categorization dialog",
-              "sha": "c3c0578",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/c3c0578"
-            },
-            {
-              "text": "Decompose settings architecture",
-              "sha": "11b0da1",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/11b0da1"
-            }
-          ]
-        },
-        {
-          "title": "Internal",
-          "audience": "internal",
-          "items": [
-            {
-              "text": "Normalize extracted module endings",
-              "sha": "ccfbce6",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/ccfbce6"
-            },
-            {
-              "text": "Systematize preview release numbering",
-              "sha": "1d26b95",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/1d26b95"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "version": "0.4.11",
-      "date": "2026-07-03",
-      "releaseUrl": "https://github.com/Crimsab/Repressurizer/releases/tag/v0.4.11",
-      "compareUrl": "https://github.com/Crimsab/Repressurizer/compare/v0.4.10...v0.4.11",
-      "groups": [
-        {
-          "title": "Added",
-          "audience": "user",
-          "items": [
-            {
-              "text": "Compare collections and HLTB unknown",
-              "sha": "072b31e",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/072b31e"
             }
           ]
         }

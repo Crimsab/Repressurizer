@@ -4,6 +4,73 @@ All notable user-facing changes are generated from release tags and Conventional
 
 Run `bun run changelog:write` after changing release tags or commit history.
 
+## 0.6.3 - 2026-08-15
+
+### Fixed
+
+- Windows: use MSI installer to avoid NSIS false positives ([0bbb906](https://github.com/Crimsab/Repressurizer/commit/0bbb906))
+
+[Release](https://github.com/Crimsab/Repressurizer/releases/tag/v0.6.3) · [Compare](https://github.com/Crimsab/Repressurizer/compare/v0.6.2...v0.6.3)
+
+## 0.6.2 - 2026-08-15
+
+### Fixed
+
+- Release: wait for VirusTotal analyses before gating ([08b84f2](https://github.com/Crimsab/Repressurizer/commit/08b84f2))
+
+[Release](https://github.com/Crimsab/Repressurizer/releases/tag/v0.6.2) · [Compare](https://github.com/Crimsab/Repressurizer/compare/v0.6.1...v0.6.2)
+
+## 0.6.1 - 2026-08-15
+
+### Added
+
+- Windows: embed SAM sidecar for portable builds ([7001326](https://github.com/Crimsab/Repressurizer/commit/7001326))
+
+### Fixed
+
+- Macos: gate SAM binary behind sidecar feature ([14b81e2](https://github.com/Crimsab/Repressurizer/commit/14b81e2))
+- Macos: disable inherited sidecar in universal build ([724d022](https://github.com/Crimsab/Repressurizer/commit/724d022))
+- Macos: clear platform sidecar override ([9633372](https://github.com/Crimsab/Repressurizer/commit/9633372))
+- Macos: disable Windows SAM sidecar bundling ([6962d1b](https://github.com/Crimsab/Repressurizer/commit/6962d1b))
+- Release: keep portable archive executable-only ([933a1b3](https://github.com/Crimsab/Repressurizer/commit/933a1b3))
+- Windows: isolate SAM bridge in sidecar ([af0fbb1](https://github.com/Crimsab/Repressurizer/commit/af0fbb1))
+- Ci: distinguish unknown VirusTotal hashes ([038bb9d](https://github.com/Crimsab/Repressurizer/commit/038bb9d))
+- Windows: align webview2 windows-core version ([e18befe](https://github.com/Crimsab/Repressurizer/commit/e18befe))
+- Steam Family: remove native clipboard manager ([9edf81a](https://github.com/Crimsab/Repressurizer/commit/9edf81a))
+- Release: validate immutable tag before builds ([05206bb](https://github.com/Crimsab/Repressurizer/commit/05206bb))
+- Http: lock reqwest query dependencies ([bfa419a](https://github.com/Crimsab/Repressurizer/commit/bfa419a))
+- Http: enable reqwest query support ([5c0e6d7](https://github.com/Crimsab/Repressurizer/commit/5c0e6d7))
+- Build: normalize Vite 8 target ([0743d2a](https://github.com/Crimsab/Repressurizer/commit/0743d2a))
+- Release: ship ad-hoc signed macOS builds ([1882295](https://github.com/Crimsab/Repressurizer/commit/1882295))
+
+[Release](https://github.com/Crimsab/Repressurizer/releases/tag/v0.6.1) · [Compare](https://github.com/Crimsab/Repressurizer/compare/v0.6.0...v0.6.1)
+
+## 0.6.0 - 2026-08-14
+
+### Added
+
+- Updater: stable and beta release channels ([4247fc1](https://github.com/Crimsab/Repressurizer/commit/4247fc1))
+- Family: explicit clipboard token helper ([7dc5fb7](https://github.com/Crimsab/Repressurizer/commit/7dc5fb7))
+- Pricing: opt-in GG.deals integration ([d7aff17](https://github.com/Crimsab/Repressurizer/commit/d7aff17))
+- Macos: Steam detection and universal packaging ([c5c3926](https://github.com/Crimsab/Repressurizer/commit/c5c3926))
+- Recommend: explainable backlog ranking ([49353f3](https://github.com/Crimsab/Repressurizer/commit/49353f3))
+- Diagnostics: include redacted native crash summaries ([9ec1abc](https://github.com/Crimsab/Repressurizer/commit/9ec1abc))
+- AutoCat: export preview membership diffs ([c2c25f6](https://github.com/Crimsab/Repressurizer/commit/c2c25f6))
+- Linux desktop support ([7558f15](https://github.com/Crimsab/Repressurizer/commit/7558f15))
+
+### Fixed
+
+- Macos: verify universal binaries with Xcode lipo syntax ([13d5132](https://github.com/Crimsab/Repressurizer/commit/13d5132))
+- Macos: merge universal CLI before bundling ([3caa38c](https://github.com/Crimsab/Repressurizer/commit/3caa38c))
+- Macos: make Steam client probe tests platform-neutral ([2c57c7f](https://github.com/Crimsab/Repressurizer/commit/2c57c7f))
+- Ci: resolve library dependencies before audit ([fbf161c](https://github.com/Crimsab/Repressurizer/commit/fbf161c))
+- Ci: install cargo-audit with locked dependencies ([db5df80](https://github.com/Crimsab/Repressurizer/commit/db5df80))
+- Updater: handle portable and package installs ([89d8357](https://github.com/Crimsab/Repressurizer/commit/89d8357))
+- Deps: remediate transitive vulnerabilities ([60d328d](https://github.com/Crimsab/Repressurizer/commit/60d328d))
+- Steam Tools: isolate schema refresh process ([cc6e194](https://github.com/Crimsab/Repressurizer/commit/cc6e194))
+
+[Release](https://github.com/Crimsab/Repressurizer/releases/tag/v0.6.0) · [Compare](https://github.com/Crimsab/Repressurizer/compare/v0.5.6...v0.6.0)
+
 ## 0.5.6 - 2026-07-25
 
 ### Added

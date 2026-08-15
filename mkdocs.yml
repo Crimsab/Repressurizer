@@ -137,7 +137,7 @@ nav:
       - Migrate from Depressurizer: recipes/migrate-from-depressurizer.md
   - Troubleshooting:
       - troubleshooting/index.md
-      - Install and SmartScreen: troubleshooting/installation.md
+      - Installation warnings: troubleshooting/installation.md
       - Missing metadata: troubleshooting/metadata.md
       - Collection save problems: troubleshooting/collections.md
       - Diagnostics and bug reports: troubleshooting/diagnostics.md
@@ -155,6 +155,7 @@ nav:
       - Development setup: development/setup.md
       - Architecture: development/architecture.md
       - macOS packaging: development/macos.md
+      - Windows SAM sidecar: development/sam-sidecar.md
       - Testing: development/testing.md
       - Localization: localization.md
       - Release process: development/releases.md

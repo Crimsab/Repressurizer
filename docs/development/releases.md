@@ -7,7 +7,7 @@ The desktop app, TypeScript integration package, and Rust integration crate have
 - Stable: version `X.Y.Z`, tag `vX.Y.Z`, normal GitHub Release.
 - Beta: version `X.Y.Z-beta.N`, tag `vX.Y.Z-beta.N` where `N` starts at 1,
   GitHub prerelease.
-- Developer preview: rolling `0.0.0-preview.N` build and moving `preview` tag;
+- Developer preview: rolling `0.0.0-N` build and moving `preview` tag;
   it is separate from both user-selectable channels.
 
 The tag workflow rejects other desktop prerelease names. The release workflow
@@ -20,7 +20,7 @@ never marks them as GitHub's latest release.
 2. Push the version commit to `main`.
 3. CI validates TypeScript, Rust, browser smoke tests, and the documentation build.
 4. After CI succeeds, the tag workflow creates `v<version>` if it does not exist.
-5. The release workflow builds Windows, Linux, and a universal macOS desktop bundle, then publishes a shared updater manifest, release notes, and optional VirusTotal results.
+5. The release workflow builds a Windows MSI/portable/CLI, Linux AppImage/Debian/CLI, and a universal macOS desktop bundle, then publishes a shared updater manifest, release notes, and optional VirusTotal results.
 
 The macOS job is a required release gate. It verifies both Intel and Apple Silicon slices, the ad-hoc app signature, DMG contents, updater archive, and updater signature before the Windows publisher job assembles the final release. The app is not Apple-notarized, so the first launch requires explicit approval in macOS Privacy & Security. See [macOS packaging](macos.md).
 
@@ -74,7 +74,7 @@ beta manifest with a stable target (or the reverse) fails validation.
 
 ## Preview
 
-Every commit on `main` starts the Preview workflow. It replaces the rolling Windows `preview` prerelease and produces a preview-specific updater manifest. Linux uses stable releases until the preview workflow gains matching Linux artifacts.
+Every commit on `main` starts the Preview workflow. It replaces the rolling Windows MSI `preview` prerelease and produces a preview-specific updater manifest. The numeric-only prerelease identifier is required by WiX; the displayed release name remains `Preview.N`. Linux uses stable releases until the preview workflow gains matching Linux artifacts.
 
 ## Integration packages
 

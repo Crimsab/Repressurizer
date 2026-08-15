@@ -4,7 +4,7 @@ Download builds from the [latest GitHub release](https://github.com/Crimsab/Repr
 
 | Asset | Choose it when |
 | --- | --- |
-| `Repressurizer_..._x64-setup.exe` | You want the normal Windows installation and built-in updates. |
+| `Repressurizer_..._x64_en-US.msi` | You want the normal Windows installation and built-in updates. |
 | `Repressurizer-portable-windows-x64.zip` | You want to run the app without installing it. |
 | `Repressurizer-cli-windows-x64.zip` | You need scriptable diagnostics, snapshots, backups, or guarded Steam tooling. |
 | `Repressurizer_..._amd64.AppImage` | You want a portable Linux desktop app with built-in updates. |
@@ -14,12 +14,15 @@ Download builds from the [latest GitHub release](https://github.com/Crimsab/Repr
 
 ## Windows installer
 
-1. Download the setup executable.
+1. Download the MSI installer.
 2. Close Steam before the first collection save, but it can remain open during installation.
 3. Run the installer and launch Repressurizer.
 4. If Windows SmartScreen appears, confirm that the file came from the official GitHub release before continuing.
 
-Repressurizer's early releases are not code-signed with a commercial Windows certificate, so SmartScreen may show an unfamiliar publisher warning. See [Install and SmartScreen troubleshooting](../troubleshooting/installation.md).
+Current Windows artifacts are not Authenticode-signed, so SmartScreen may show
+an unfamiliar publisher. This is separate from the Tauri updater signature used
+to verify downloaded updates. Do not disable Defender to install Repressurizer;
+see [installation warnings](../troubleshooting/installation.md).
 
 ## Windows portable build
 
@@ -29,7 +32,7 @@ The portable package changes how the executable is delivered, not where all appl
 
 Portable builds do not update themselves in place. The Updates section links to
 GitHub Releases when a newer portable ZIP must be downloaded. Use the Windows
-installer if you want signed in-app updates that download, install, and restart
+installer if you want verified in-app updates that download, install, and restart
 Repressurizer automatically.
 
 ## Linux AppImage
@@ -79,7 +82,7 @@ ARM64 Linux devices are not supported by the current release packages.
 
 ## macOS
 
-Download the universal DMG, open it, and drag **Repressurizer** to Applications. The same bundle supports Intel and Apple Silicon Macs on macOS 11 or newer and supports signed in-app updates.
+Download the universal DMG, open it, and drag **Repressurizer** to Applications. The same bundle supports Intel and Apple Silicon Macs on macOS 11 or newer. Its updater archive is signed separately so built-in updates can be verified.
 
 Repressurizer is ad-hoc signed and is not notarized by Apple. On the first launch,
 macOS may say that it cannot verify the developer. After attempting to open the
@@ -90,4 +93,4 @@ not require this approval. See [Apple's Gatekeeper instructions](https://support
 
 Automatic Steam detection uses `~/Library/Application Support/Steam`. Collection files remain under Steam's normal `userdata/<id3>/config/cloudstorage` directory. Repressurizer blocks collection saves and restores while either the native `steam_osx` process or the Steam app process is running, and creates the same pre-write and pre-restore backups used on Windows and Linux.
 
-Steam Achievement Manager reads and writes remain Windows-only. Library loading, collection editing, backups, shortcuts, metadata, exports, and signed app updates are the supported macOS surface.
+Steam Achievement Manager reads and writes remain Windows-only. Library loading, collection editing, backups, shortcuts, metadata, exports, and verified app updates are the supported macOS surface.
