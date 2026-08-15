@@ -322,8 +322,8 @@ jobs:
         with:
           toolchain: 1.94.0
 
-      - name: Install NSIS
-        run: choco install nsis --version=3.11 -y --no-progress
+      - name: Install WiX Toolset
+        run: choco install wixtoolset -y --no-progress
 
       - name: Restore Rust cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -373,16 +373,16 @@ jobs:
           Compress-Archive -Path artifacts\Repressurizer-portable.exe -DestinationPath artifacts\Repressurizer-portable-windows-x64.zip -Force
           Copy-Item src-tauri\target\release\repressurizer-cli.exe artifacts\Repressurizer-cli.exe
           Compress-Archive -Path artifacts\Repressurizer-cli.exe -DestinationPath artifacts\Repressurizer-cli-windows-x64.zip -Force
-          Copy-Item src-tauri\target\release\bundle\nsis\*.exe artifacts\
-          Copy-Item src-tauri\target\release\bundle\nsis\*.sig artifacts\
+          Copy-Item src-tauri\target\release\bundle\msi\*.msi artifacts\
+          Copy-Item src-tauri\target\release\bundle\msi\*.sig artifacts\
           Get-ChildItem artifacts | ForEach-Object { "$($_.Name) $($_.Length) bytes" }
 
       - name: Create updater manifest
         shell: pwsh
         run: |
-          $installer = Get-ChildItem artifacts -Filter "Repressurizer_*_x64-setup.exe" | Select-Object -First 1
+          $installer = Get-ChildItem artifacts -Filter "Repressurizer_*.msi" | Select-Object -First 1
           if (-not $installer) {
-            throw "Could not find NSIS installer"
+            throw "Could not find MSI installer"
           }
 
           $signaturePath = "$($installer.FullName).sig"
@@ -477,6 +477,7 @@ jobs:
           request_rate: 4
           files: |
             artifacts/*.exe
+            artifacts/*.msi
 
       - name: Check VirusTotal verdicts
         id: vt-verdict

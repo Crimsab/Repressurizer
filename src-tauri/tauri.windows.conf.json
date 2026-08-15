@@ -4,6 +4,6 @@
   },
   "bundle": {
     "externalBin": ["binaries/repressurizer-sam"],
-    "targets": ["nsis"]
+    "targets": ["msi"]
   }
 }

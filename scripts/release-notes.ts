@@ -39,7 +39,7 @@ const releaseNotes = [
   "---",
   "## Downloads",
   "",
-  "- `Repressurizer_*_x64-setup.exe`: Windows installer",
+  "- `Repressurizer_*.msi`: Windows installer",
   "- `Repressurizer-portable-windows-x64.zip`: portable Windows build",
   "- `Repressurizer-portable.exe`: unpacked portable executable",
   "- `Repressurizer-cli-windows-x64.zip`: command-line tools for scripts and automation",
@@ -51,7 +51,7 @@ const releaseNotes = [
   "",
   "## Install Notes",
   "",
-  "On Windows, use the installer for a normal installation with built-in updates or the portable ZIP for a self-contained executable that you update manually. On Linux, use the AppImage for a portable app with built-in updates or the Debian package for system installation. The CLI archives support scriptable diagnostics, snapshot validation/export, and automation publishing; guarded SAM write commands remain Windows-only.",
+  "On Windows, use the MSI installer for a normal installation with built-in updates or the portable ZIP for a self-contained executable that you update manually. On Linux, use the AppImage for a portable app with built-in updates or the Debian package for system installation. The CLI archives support scriptable diagnostics, snapshot validation/export, and automation publishing; guarded SAM write commands remain Windows-only.",
   ""
 ].join("\n");
 
