@@ -150,9 +150,7 @@ jobs:
           $installerName = "Repressurizer-$label-windows-x64-setup.exe"
 
           Copy-Item src-tauri\target\release\repressurizer.exe "artifacts\$portableName"
-          Set-Content -Path artifacts\repressurizer-portable.marker -Value "portable"
-          Compress-Archive -Path "artifacts\$portableName", artifacts\repressurizer-portable.marker -DestinationPath "artifacts\$zipName" -Force
-          Remove-Item artifacts\repressurizer-portable.marker
+          Compress-Archive -Path "artifacts\$portableName" -DestinationPath "artifacts\$zipName" -Force
           Copy-Item $installer.FullName "artifacts\$installerName"
           Copy-Item $signaturePath "artifacts\$installerName.sig"
           Get-ChildItem artifacts | ForEach-Object { "$($_.Name) $($_.Length) bytes" }
