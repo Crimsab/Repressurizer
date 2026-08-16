@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<evals>
+  <eval id="1">
+    <question>Use Repressurizer to choose one unplayed game for a short session. Which MCP calls provide the evidence, and what caveat must be stated about play history?</question>
+    <expected>Call get_library_context or recommend_games with strategy short, then get_game for the selected app. State that play history is observed activity and does not prove a historical first launch.</expected>
+  </eval>
+  <eval id="2">
+    <question>Find an RPG in my library and compare its metadata with my recent observed sessions before recommending whether to play it next.</question>
+    <expected>Call search_games with query RPG, get_game for a candidate, and get_play_history with its appId. Separate metadata facts from deterministic recommendation heuristics.</expected>
+  </eval>
+  <eval id="3">
+    <question>The library snapshot is unavailable but I still want to know what I played recently. Recover without inventing missing data.</question>
+    <expected>Use get_play_history, which is local-only, and explain that snapshot-backed tools require completed Steam setup.</expected>
+  </eval>
+  <eval id="4">
+    <question>I asked an agent to add a game to a collection, but the tool says the profile or confirmation is missing. What should the agent do next?</question>
+    <expected>Do not retry blindly. Ask the user to select Manage library or Full, show collectionKey/appId/present, then retry set_collection_membership with confirm=true after explicit approval.</expected>
+  </eval>
+  <eval id="5">
+    <question>Continue reading a large library list after the first response says more results are available.</question>
+    <expected>Pass the returned opaque nextCursor to the same list operation; never invent a page number or decode the cursor as user-facing data.</expected>
+  </eval>
+  <eval id="6">
+    <question>Recommend a game when HLTB data is missing for some candidates. How should the answer remain useful and honest?</question>
+    <expected>Call recommend_games, optionally get_game for finalists, use available playtime/wishlist/metadata, and say that the heuristic does not treat missing HLTB as a known duration.</expected>
+  </eval>
+  <eval id="7">
+    <question>Create a new collection called Weekend and add three app IDs, but keep the user in control.</question>
+    <expected>Show the exact name and IDs, request explicit approval, then call create_collection with appIds and confirm=true only when the Manage library or Full profile is active.</expected>
+  </eval>
+  <eval id="8">
+    <question>Unlock one achievement through MCP. What checks and confirmations are required, and what should happen on Linux?</question>
+    <expected>Require Full profile, Steam Tools and achievement writes enabled, a compatible SAM bridge, the exact appId/achievement ID, and confirm=true. Report that SAM is unavailable when the platform/bridge cannot support it.</expected>
+  </eval>
+  <eval id="9">
+    <question>Use the local API instead of MCP stdio to inspect the backlog and avoid downloading unchanged data.</question>
+    <expected>Call GET /v1/health without auth, then use the bearer token for /v1/library or /v1/recommendations, follow nextCursor, and reuse ETag with If-None-Match.</expected>
+  </eval>
+  <eval id="10">
+    <question>Explain what access an agent receives in Full Repressurizer mode.</question>
+    <expected>Describe only Repressurizer-domain reads, collection writes, and guarded SAM actions. Explicitly state that shell, arbitrary filesystem, Steam-account, outbound network, and reverse-tunnel access are not granted.</expected>
+  </eval>
+</evals>

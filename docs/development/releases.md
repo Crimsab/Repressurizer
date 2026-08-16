@@ -20,7 +20,7 @@ never marks them as GitHub's latest release.
 2. Push the version commit to `main`.
 3. CI validates TypeScript, Rust, browser smoke tests, and the documentation build.
 4. After CI succeeds, the tag workflow creates `v<version>` if it does not exist.
-5. The release workflow builds a Windows MSI/portable/CLI, Linux AppImage/Debian/CLI, and a universal macOS desktop bundle, then publishes a shared updater manifest, release notes, and optional VirusTotal results.
+5. The release workflow builds a Windows MSI/portable/CLI (including the MCP companion), Linux AppImage/Debian/CLI (including the MCP companion), and a universal macOS desktop bundle with its companion, then publishes a shared updater manifest, release notes, and optional VirusTotal results.
 
 The macOS job is a required release gate. It verifies both Intel and Apple Silicon slices, the ad-hoc app signature, DMG contents, updater archive, and updater signature before the Windows publisher job assembles the final release. The app is not Apple-notarized, so the first launch requires explicit approval in macOS Privacy & Security. See [macOS packaging](macos.md).
 
@@ -57,6 +57,13 @@ attached to stable releases for older app versions.
 The release workflow validates version, tag, declared channel, platform target,
 artifact presence, download tag, and updater signature before publishing. A
 beta manifest with a stable target (or the reverse) fails validation.
+
+Local Linux packaging uses `bun run build:linux`, which passes Tauri's
+`--no-sign` flag and is suitable for install/runtime testing without secrets.
+The release workflow uses `bun run build:linux:release` with the private Tauri
+updater key held in GitHub Actions secrets; this is the key that produces the
+`.AppImage.sig` updater artifact and is unrelated to Apple Developer signing,
+Steam credentials, or Repressurizer API tokens.
 
 ## Rollback and channel recovery
 

@@ -1,9 +1,11 @@
 {
   "identifier": "com.crimsab.repressurizer",
   "build": {
+    "beforeBuildCommand": "bun run build && bun scripts/prepare-macos-mcp.ts",
     "beforeBundleCommand": "bun scripts/prepare-macos-universal-cli.ts"
   },
   "bundle": {
+    "externalBin": ["binaries/repressurizer-mcp"],
     "macOS": {
       "signingIdentity": "-"
     }

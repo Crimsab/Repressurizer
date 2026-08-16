@@ -28,6 +28,12 @@ Create local Linux AppImage and Debian bundles with:
 bun run build:linux
 ```
 
+The local Linux command deliberately skips code and updater signing, so it does
+not require any private key. Release automation uses `bun run build:linux:release`
+instead; that command requires the Tauri updater minisign private key through
+`TAURI_SIGNING_PRIVATE_KEY` and, when configured, `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
+The private key must never be committed or placed in a local project file.
+
 On macOS, create a universal app bundle and DMG with:
 
 ```bash

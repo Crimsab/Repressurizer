@@ -1,10 +1,15 @@
-use std::io::Write;
+use fs2::FileExt;
+use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, OnceLock};
+use std::time::{Duration, Instant};
 
 static TEMP_FILE_COUNTER: AtomicU64 = AtomicU64::new(0);
 static SETTINGS_FILE_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+static INTEGRATION_AUDIT_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+const INTEGRATION_WRITE_LOCK_TIMEOUT: Duration = Duration::from_secs(60);
+const INTEGRATION_AUDIT_LOCK_TIMEOUT: Duration = Duration::from_secs(5);
 
 pub(crate) fn app_data_dir() -> Option<PathBuf> {
     dirs::data_dir().map(|dir| dir.join("Repressurizer"))
@@ -280,4 +285,145 @@ where
     let mut settings = read_settings_json_unlocked()?;
     update(&mut settings)?;
     write_settings_json_unlocked(&settings)
+}
+
+/// Serialize integration mutations across processes, not only across threads
+/// in one process. OS advisory locks are released automatically if a process
+/// exits, so a crashed agent cannot leave a permanent stale lock behind.
+pub(crate) fn with_integration_write_lock<T, F>(operation: F) -> Result<T, String>
+where
+    F: FnOnce() -> Result<T, String>,
+{
+    with_process_file_lock(
+        "integration_writes.lock",
+        "integration write",
+        INTEGRATION_WRITE_LOCK_TIMEOUT,
+        operation,
+    )
+}
+
+fn with_process_file_lock<T, F>(
+    key: &str,
+    description: &str,
+    timeout: Duration,
+    operation: F,
+) -> Result<T, String>
+where
+    F: FnOnce() -> Result<T, String>,
+{
+    let path = app_data_file_path(key)?;
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|error| {
+            format!(
+                "Failed to create {description} lock directory {}: {error}",
+                parent.display()
+            )
+        })?;
+    }
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(&path)
+        .map_err(|error| {
+            format!(
+                "Failed to open {description} lock {}: {error}",
+                path.display()
+            )
+        })?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+    }
+
+    let deadline = Instant::now() + timeout;
+    loop {
+        match file.try_lock_exclusive() {
+            Ok(()) => break,
+            Err(error) if error.kind() == ErrorKind::WouldBlock && Instant::now() < deadline => {
+                std::thread::sleep(Duration::from_millis(25));
+            }
+            Err(error) => {
+                return Err(format!(
+                    "Could not acquire {description} lock {}: {error}",
+                    path.display()
+                ));
+            }
+        }
+    }
+
+    let result = operation();
+    if let Err(error) = file.unlock() {
+        if result.is_ok() {
+            return Err(format!(
+                "Could not release {description} lock {}: {error}",
+                path.display()
+            ));
+        }
+    }
+    result
+}
+
+/// Append a bounded, local-only audit record for MCP/API mutations. Values are
+/// supplied by the integration seam after secret/path redaction; this helper
+/// deliberately never logs bearer tokens or settings.
+pub(crate) fn append_integration_audit(
+    operation: &str,
+    status: &str,
+    details: &serde_json::Value,
+) -> Result<(), String> {
+    let lock = INTEGRATION_AUDIT_LOCK.get_or_init(|| Mutex::new(()));
+    let _guard = lock
+        .lock()
+        .map_err(|_| "Integration audit lock poisoned".to_string())?;
+    with_process_file_lock(
+        "integration_audit.lock",
+        "integration audit",
+        INTEGRATION_AUDIT_LOCK_TIMEOUT,
+        || {
+            let path = app_data_file_path("integration_audit.jsonl")?;
+            if let Some(parent) = path.parent() {
+                std::fs::create_dir_all(parent).map_err(|error| {
+                    format!(
+                        "Failed to create integration audit directory {}: {error}",
+                        parent.display()
+                    )
+                })?;
+            }
+            if std::fs::metadata(&path)
+                .map(|metadata| metadata.len() > 1_048_576)
+                .unwrap_or(false)
+            {
+                let rotated = app_data_file_path("integration_audit.jsonl.1")?;
+                let _ = std::fs::rename(&path, rotated);
+            }
+            let record = serde_json::json!({
+                "timestamp": chrono::Utc::now().to_rfc3339(),
+                "operation": operation,
+                "status": status,
+                "details": details,
+            });
+            let mut serialized = serde_json::to_vec(&record).map_err(|error| {
+                format!("Failed to serialize integration audit record: {error}")
+            })?;
+            serialized.push(b'\n');
+            let mut file = std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&path)
+                .map_err(|error| format!("Failed to open integration audit log: {error}"))?;
+            file.write_all(&serialized)
+                .map_err(|error| format!("Failed to append integration audit record: {error}"))?;
+            file.sync_data()
+                .map_err(|error| format!("Failed to flush integration audit record: {error}"))?;
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+            }
+            Ok(())
+        },
+    )
 }

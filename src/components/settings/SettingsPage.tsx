@@ -375,6 +375,18 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
         ],
       },
       {
+        id: "mcp",
+        tab: "tools" as const,
+        label: t("settings.integration.mcp"),
+        keywords: [
+          t("settings.mcp.enabled"),
+          t("settings.mcp.command"),
+          t("settings.mcp.permission"),
+          t("settings.mcp.api"),
+          "mcp model context protocol agent ai assistant permissions read only manage library full stdio http api tools resources local",
+        ],
+      },
+      {
         id: "maintenance",
         tab: "data" as const,
         label: t("settings.maintenance"),
@@ -706,10 +718,11 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                 <SteamFamilySettingsSection controller={steamFamilySettings} />
               )}
 
-              {(isSectionVisible("steamtools") || isSectionVisible("ggdeals")) && (
+              {(isSectionVisible("steamtools") || isSectionVisible("ggdeals") || isSectionVisible("mcp")) && (
                 <IntegrationsSettingsSection
                   showSam={isSectionVisible("steamtools")}
                   showGgDeals={isSectionVisible("ggdeals")}
+                  showMcp={isSectionVisible("mcp")}
                   onSaved={(savedMessage) => setMessage(savedMessage, 2000)}
                 />
               )}

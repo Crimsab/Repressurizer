@@ -1,26 +1,34 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { CaretRight, Tag, Trophy } from "@phosphor-icons/react";
+import { CaretRight, CheckCircle, MinusCircle, Robot, Tag, Trophy } from "@phosphor-icons/react";
 import { useT } from "../../lib/i18n";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { ToggleRow } from "./SettingsControls";
 import { GgDealsSettingsSection } from "./GgDealsSettingsSection";
+import { McpSettingsSection } from "./McpSettingsSection";
 
-type IntegrationId = "sam" | "ggdeals";
+type IntegrationId = "sam" | "ggdeals" | "mcp";
 
 export function IntegrationsSettingsSection({
   showSam,
   showGgDeals,
+  showMcp,
   onSaved,
 }: {
   showSam: boolean;
   showGgDeals: boolean;
+  showMcp: boolean;
   onSaved: (message: string) => void;
 }) {
   const t = useT();
   const settings = useSettingsStore();
-  const onlyVisible = showSam === showGgDeals ? null : showSam ? "sam" : "ggdeals";
+  const visibleIntegrations: IntegrationId[] = [
+    ...(showSam ? ["sam" as const] : []),
+    ...(showGgDeals ? ["ggdeals" as const] : []),
+    ...(showMcp ? ["mcp" as const] : []),
+  ];
+  const onlyVisible = visibleIntegrations.length === 1 ? visibleIntegrations[0] : null;
   const [openIntegration, setOpenIntegration] = useState<IntegrationId | null>(
-    onlyVisible ?? "sam"
+    onlyVisible ?? visibleIntegrations[0] ?? null
   );
 
   useEffect(() => {
@@ -52,6 +60,7 @@ export function IntegrationsSettingsSection({
             title={t("settings.integration.sam")}
             description={t("steamTools.sam.desc")}
             status={samEnabled ? t("settings.integration.enabled") : t("settings.integration.disabled")}
+            enabled={samEnabled}
             open={openIntegration === "sam"}
             onToggle={() =>
               setOpenIntegration((current) => (current === "sam" ? null : "sam"))
@@ -86,6 +95,7 @@ export function IntegrationsSettingsSection({
                 ? t("settings.integration.enabled")
                 : t("settings.integration.disabled")
             }
+            enabled={settings.ggDealsEnabled}
             open={openIntegration === "ggdeals"}
             onToggle={() =>
               setOpenIntegration((current) =>
@@ -94,6 +104,27 @@ export function IntegrationsSettingsSection({
             }
           >
             <GgDealsSettingsSection onSaved={onSaved} showHeading={false} />
+          </IntegrationAccordion>
+        )}
+
+        {showMcp && (
+          <IntegrationAccordion
+            id="mcp"
+            icon={<Robot size={17} weight="duotone" />}
+            title={t("settings.integration.mcp")}
+            description={t("settings.mcp.desc")}
+            status={
+              settings.mcpEnabled || settings.apiEnabled
+                ? t("settings.integration.enabled")
+                : t("settings.integration.disabled")
+            }
+            enabled={settings.mcpEnabled || settings.apiEnabled}
+            open={openIntegration === "mcp"}
+            onToggle={() =>
+              setOpenIntegration((current) => (current === "mcp" ? null : "mcp"))
+            }
+          >
+            <McpSettingsSection />
           </IntegrationAccordion>
         )}
       </div>
@@ -107,6 +138,7 @@ function IntegrationAccordion({
   title,
   description,
   status,
+  enabled,
   open,
   onToggle,
   children,
@@ -116,6 +148,7 @@ function IntegrationAccordion({
   title: string;
   description: string;
   status: string;
+  enabled: boolean;
   open: boolean;
   onToggle: () => void;
   children: ReactNode;
@@ -142,8 +175,20 @@ function IntegrationAccordion({
             {description}
           </span>
         </span>
-        <span className="shrink-0 rounded-full border border-repressurizer-border bg-repressurizer-surface px-2 py-0.5 text-[10px] font-medium text-repressurizer-text-muted">
-          {status}
+        <span
+          aria-label={`${title}: ${status}`}
+          className={`inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide ${
+            enabled
+              ? "border-emerald-400/40 bg-emerald-400/10 text-emerald-300"
+              : "border-repressurizer-border bg-repressurizer-surface/80 text-repressurizer-text-muted"
+          }`}
+        >
+          {enabled ? (
+            <CheckCircle size={13} weight="fill" aria-hidden="true" />
+          ) : (
+            <MinusCircle size={13} weight="fill" aria-hidden="true" />
+          )}
+          <span>{status}</span>
         </span>
       </button>
       {open && (

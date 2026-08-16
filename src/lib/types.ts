@@ -488,6 +488,11 @@ export interface AppSettings {
   automationPublishLastHttpStatus: number;
   automationPublishLogs: AutomationPublishLogEntry[];
   automationPublishPayload: AutomationPublishPayloadSettings;
+  // Optional local agent integrations
+  mcpEnabled: boolean;
+  mcpPermissionMode: "readOnly" | "manageLibrary" | "full";
+  apiEnabled: boolean;
+  apiPort: number;
   // Steam Family
   includeSteamFamilyNonGames: boolean;
 }

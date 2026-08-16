@@ -6,6 +6,9 @@ Repressurizer supports both interactive use and controlled automation.
 
 `repressurizer-cli` provides diagnostics, snapshots, cache inspection, backup operations, and guarded Steam tooling. Start with the [CLI reference](../cli.md).
 
+The optional local MCP server is documented in the [MCP integration guide](mcp.md).
+The authenticated loopback JSON API is described in the [local API guide](local-api.md), with its contract in [openapi.yaml](openapi.yaml).
+
 ## Stable snapshots
 
 Automation export publishes `repressurizer.library-snapshot.v1` JSON to an HTTP receiver. Consumers can validate the payload with the published TypeScript package or Rust crate.

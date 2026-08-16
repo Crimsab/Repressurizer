@@ -15,6 +15,10 @@ name = "repressurizer-sam"
 path = "src/bin/repressurizer-sam.rs"
 required-features = ["sam-sidecar"]
 
+[[bin]]
+name = "repressurizer-mcp"
+path = "src/bin/repressurizer-mcp.rs"
+
 [lib]
 name = "repressurizer_lib"
 crate-type = ["staticlib", "rlib"]
@@ -37,17 +41,20 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 log = "0.4"
 reqwest = { version = "0.13", features = ["json", "query", "socks"] }
+subtle = "2"
 repressurizer-integration = { path = "../packages/rust" }
 tokio = { version = "1", features = ["full"] }
 sha2 = "0.11"
 base64 = "0.23"
 chrono = "0.4"
 dirs = "6"
+fs2 = "0.4"
 rusty-leveldb = "4.0.1"
 libloading = "0.8"
 roxmltree = "0.21"
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Diagnostics_ToolHelp", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging"] }
 zip = { version = "4.6.1", default-features = false, features = ["deflate-flate2-zlib-rs"] }
+uuid = { version = "1.24", features = ["v4"] }
 
 [target.'cfg(windows)'.dependencies]
 webview2-com = "0.38.2"

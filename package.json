@@ -17,8 +17,10 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:mcp-adapter": "bun scripts/build-mcp-adapter.ts",
     "build:sam-sidecar": "bun scripts/build-sam-sidecar.ts",
-    "build:linux": "bun tauri build --bundles deb,appimage",
+    "build:linux": "bun tauri build --bundles deb,appimage --no-sign",
+    "build:linux:release": "bun tauri build --bundles deb,appimage",
     "build:macos": "bun tauri build --bundles app,dmg --target universal-apple-darwin --config src-tauri/tauri.macos.conf.json",
     "build:macos:ci": "bun tauri build --bundles app,dmg --target universal-apple-darwin --config src-tauri/tauri.macos-ci.conf.json",
     "check": "bun run i18n:check && tsc --noEmit && bun run --cwd packages/integration check",

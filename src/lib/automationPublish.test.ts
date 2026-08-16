@@ -96,6 +96,10 @@ const settings: AppSettings = {
     includeWishlist: true,
     includeOwnership: true,
   },
+  mcpEnabled: false,
+  mcpPermissionMode: "readOnly",
+  apiEnabled: false,
+  apiPort: 47831,
   includeSteamFamilyNonGames: false,
 };
 

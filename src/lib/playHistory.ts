@@ -6,6 +6,10 @@ export interface PlaytimeSnapshot {
   playtime: number;
   lastPlayed: number;
   observedAt: number;
+  /** First time Repressurizer observed this app in the library. */
+  firstObservedAt: number;
+  /** First time Repressurizer observed a positive playtime delta for this app. */
+  firstPlayedObservedAt: number | null;
 }
 
 export interface PlaytimeSession {
@@ -34,6 +38,11 @@ export const EMPTY_PLAY_HISTORY: PlayHistoryData = {
 const MAX_SESSIONS = 10_000;
 const FUTURE_SLOP_SECS = 24 * 60 * 60;
 
+function nonNegativeInteger(value: unknown, fallback = 0): number {
+  const number = Number(value);
+  return Number.isFinite(number) ? Math.max(0, Math.floor(number)) : fallback;
+}
+
 export function parsePlayHistory(raw: string | null): PlayHistoryData {
   if (!raw) return structuredClone(EMPTY_PLAY_HISTORY);
   try {
@@ -41,9 +50,31 @@ export function parsePlayHistory(raw: string | null): PlayHistoryData {
     if (parsed.version !== 1 || !parsed.snapshots || !Array.isArray(parsed.sessions)) {
       return structuredClone(EMPTY_PLAY_HISTORY);
     }
+    const snapshots = Object.fromEntries(
+      Object.entries(parsed.snapshots).flatMap(([key, value]) => {
+        if (!value || typeof value !== "object") return [];
+        const snapshot = value as Partial<PlaytimeSnapshot>;
+        const appid = nonNegativeInteger(snapshot.appid || key);
+        if (!appid) return [];
+        const observedAt = nonNegativeInteger(snapshot.observedAt);
+        const firstObservedAt = nonNegativeInteger(snapshot.firstObservedAt || observedAt);
+        const firstPlayedObservedAt = snapshot.firstPlayedObservedAt == null
+          ? null
+          : nonNegativeInteger(snapshot.firstPlayedObservedAt);
+        return [[appid, {
+          appid,
+          name: String(snapshot.name ?? ""),
+          playtime: nonNegativeInteger(snapshot.playtime),
+          lastPlayed: nonNegativeInteger(snapshot.lastPlayed),
+          observedAt,
+          firstObservedAt,
+          firstPlayedObservedAt,
+        } satisfies PlaytimeSnapshot]];
+      }),
+    ) as Record<number, PlaytimeSnapshot>;
     return {
       version: 1,
-      snapshots: parsed.snapshots,
+      snapshots,
       sessions: parsed.sessions,
     };
   } catch {
@@ -87,7 +118,15 @@ export function recordPlaytimeObservation(
     const previous = snapshots[appid];
 
     if (!previous) {
-      snapshots[appid] = { appid, name, playtime, lastPlayed, observedAt };
+      snapshots[appid] = {
+        appid,
+        name,
+        playtime,
+        lastPlayed,
+        observedAt,
+        firstObservedAt: observedAt,
+        firstPlayedObservedAt: null,
+      };
       changed = true;
       continue;
     }
@@ -108,12 +147,24 @@ export function recordPlaytimeObservation(
       changed = true;
     }
 
+    const firstPlayedObservedAt = previous.firstPlayedObservedAt ??
+      (playtime > previous.playtime ? observedAt : null);
     if (
       playtime !== previous.playtime ||
       lastPlayed !== previous.lastPlayed ||
-      name !== previous.name
+      name !== previous.name ||
+      previous.firstObservedAt == null ||
+      previous.firstPlayedObservedAt !== firstPlayedObservedAt
     ) {
-      snapshots[appid] = { appid, name, playtime, lastPlayed, observedAt };
+      snapshots[appid] = {
+        appid,
+        name,
+        playtime,
+        lastPlayed,
+        observedAt,
+        firstObservedAt: previous.firstObservedAt || previous.observedAt || observedAt,
+        firstPlayedObservedAt,
+      };
       changed = true;
     }
   }

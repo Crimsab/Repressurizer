@@ -6,6 +6,11 @@ Repressurizer targets macOS 11 or newer with one `universal-apple-darwin` applic
 
 The public download is a universal DMG. Tauri also creates `Repressurizer.app.tar.gz` and its minisign signature for the updater. Both `darwin-aarch64` and `darwin-x86_64` entries in `latest.json` reference that universal updater archive.
 
+The app bundle includes the universal `repressurizer-mcp` stdio companion. The
+macOS build prepares both architecture slices before Tauri validates external
+binaries, then verifies the adapter with the same universal packaging path as
+the desktop executable.
+
 ## Steam data access
 
 The direct-download build is intentionally not App Sandbox enabled. Repressurizer needs user-selected access to Steam data under `~/Library/Application Support/Steam`, including:

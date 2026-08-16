@@ -1,9 +1,9 @@
 {
   "build": {
-    "beforeBuildCommand": "bun run build && bun run build:sam-sidecar"
+    "beforeBuildCommand": "bun run build && bun run build:sam-sidecar && bun run build:mcp-adapter"
   },
   "bundle": {
-    "externalBin": ["binaries/repressurizer-sam"],
+    "externalBin": ["binaries/repressurizer-sam", "binaries/repressurizer-mcp"],
     "targets": ["msi"]
   }
 }

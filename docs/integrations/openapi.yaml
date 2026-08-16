@@ -1,0 +1,233 @@
+openapi: 3.1.0
+info:
+  title: Repressurizer Local API
+  version: 0.6.4
+  description: Loopback-only, bearer-authenticated API backed by the local Repressurizer read model.
+servers:
+  - url: http://127.0.0.1:47831/v1
+    description: Default local listener
+security:
+  - bearerAuth: []
+paths:
+  /health:
+    get:
+      security: []
+      responses:
+        '200':
+          description: Local API health
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Health' }
+  /status:
+    get:
+      description: Runtime and permission status for the embedded local integration listener.
+      responses:
+        '200':
+          description: Current app and integration status
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Status' }
+  /permissions:
+    get:
+      responses:
+        '200':
+          description: Current user-selected capability profile
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PermissionResponse' }
+  /library/summary:
+    get:
+      responses:
+        '200':
+          description: Privacy-safe library summary
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DataResponse' }
+        '503': { $ref: '#/components/responses/SnapshotUnavailable' }
+  /library:
+    get:
+      parameters: [{ $ref: '#/components/parameters/Limit' }, { $ref: '#/components/parameters/Cursor' }]
+      responses:
+        '200':
+          description: Paginated normalized games
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/PageResponse' }
+  /games:
+    get:
+      parameters:
+        - { $ref: '#/components/parameters/Query' }
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Cursor' }
+        - in: query
+          name: wishlistOnly
+          schema: { type: boolean }
+      responses:
+        '200': { description: Paginated games, content: { application/json: { schema: { $ref: '#/components/schemas/PageResponse' } } } }
+  /games/{appId}:
+    get:
+      parameters: [{ $ref: '#/components/parameters/AppId' }]
+      responses:
+        '200': { description: One normalized game, content: { application/json: { schema: { $ref: '#/components/schemas/DataResponse' } } } }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /collections:
+    get:
+      parameters: [{ $ref: '#/components/parameters/Limit' }, { $ref: '#/components/parameters/Cursor' }]
+      responses:
+        '200': { description: Paginated collections, content: { application/json: { schema: { $ref: '#/components/schemas/PageResponse' } } } }
+    post:
+      description: Requires manageLibrary or full profile and confirm=true. Creates a Steam collection backup.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, confirm]
+              properties:
+                name: { type: string, minLength: 1, maxLength: 80 }
+                appIds: { type: array, maxItems: 1000, items: { $ref: '#/components/schemas/AppId' } }
+                confirm: { type: boolean, const: true }
+      responses:
+        '200': { description: Collection created, content: { application/json: { schema: { $ref: '#/components/schemas/DataResponse' } } } }
+        '403': { $ref: '#/components/responses/WriteRejected' }
+  /collections/membership:
+    post:
+      description: Requires manageLibrary or full profile and confirm=true. Creates a Steam collection backup.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [collectionKey, appId, present, confirm]
+              properties:
+                collectionKey: { type: string, minLength: 1, maxLength: 128 }
+                appId: { $ref: '#/components/schemas/AppId' }
+                present: { type: boolean }
+                confirm: { type: boolean, const: true }
+      responses:
+        '200': { description: Membership updated, content: { application/json: { schema: { $ref: '#/components/schemas/DataResponse' } } } }
+        '403': { $ref: '#/components/responses/WriteRejected' }
+  /play-history:
+    get:
+      parameters:
+        - { $ref: '#/components/parameters/Limit' }
+        - { $ref: '#/components/parameters/Cursor' }
+        - in: query
+          name: appId
+          schema: { $ref: '#/components/schemas/AppId' }
+      responses:
+        '200': { description: Observed play sessions, content: { application/json: { schema: { $ref: '#/components/schemas/PageResponse' } } } }
+  /recommendations:
+    get:
+      parameters:
+        - in: query
+          name: strategy
+          schema: { type: string, enum: [backlog, short, quality, surprise], default: backlog }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 20, default: 10 }
+      responses:
+        '200': { description: Deterministic recommendations, content: { application/json: { schema: { $ref: '#/components/schemas/DataResponse' } } } }
+  /sam/action:
+    post:
+      description: Requires full profile, Steam Tools achievement writes, a compatible local bridge, and confirm=true.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [appId, action, confirm]
+              properties:
+                appId: { $ref: '#/components/schemas/AppId' }
+                action: { type: string, enum: [unlock, lock, unlock_all, lock_all, restore_backup] }
+                achievementIds: { type: array, items: { type: string } }
+                backupPath: { type: string }
+                allowUnverified: { type: boolean }
+                confirm: { type: boolean, const: true }
+      responses:
+        '200': { description: SAM result, content: { application/json: { schema: { $ref: '#/components/schemas/DataResponse' } } } }
+        '403': { $ref: '#/components/responses/WriteRejected' }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Per-install token printed only by `repressurizer-cli api token`.
+  parameters:
+    AppId: { in: path, name: appId, required: true, schema: { $ref: '#/components/schemas/AppId' } }
+    Limit: { in: query, name: limit, schema: { type: integer, minimum: 1, maximum: 100, default: 50 } }
+    Cursor: { in: query, name: cursor, schema: { type: string } }
+    Query: { in: query, name: query, schema: { type: string } }
+  schemas:
+    AppId: { type: integer, minimum: 1, maximum: 4294967295 }
+    Meta:
+      type: object
+      required: [apiVersion]
+      properties:
+        apiVersion: { type: string, const: v1 }
+        generatedAt: { type: [string, 'null'] }
+    DataResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data: {}
+        meta: { $ref: '#/components/schemas/Meta' }
+    PageResponse:
+      type: object
+      required: [data, meta]
+      properties:
+        data:
+          type: object
+          required: [items, nextCursor]
+          properties:
+            items: { type: array, items: {} }
+            nextCursor: { type: [string, 'null'] }
+        meta: { $ref: '#/components/schemas/Meta' }
+    Health:
+      type: object
+      required: [ok, apiVersion]
+      properties:
+        ok: { type: boolean }
+        apiVersion: { type: string, const: v1 }
+        apiEnabled: { type: boolean }
+        permissionMode: { type: string, enum: [readOnly, manageLibrary, full] }
+    Status:
+      type: object
+      required: [ok, appVersion, apiVersion, apiEnabled, mcpEnabled, stateLoaded]
+      properties:
+        ok: { type: boolean }
+        appVersion: { type: string }
+        apiVersion: { type: string, const: v1 }
+        apiEnabled: { type: boolean }
+        mcpEnabled: { type: boolean }
+        permissionMode: { type: string, enum: [readOnly, manageLibrary, full] }
+        stateLoaded: { type: boolean }
+    PermissionResponse:
+      type: object
+      properties:
+        permissionMode: { type: string, enum: [readOnly, manageLibrary, full] }
+        writesRequireConfirmation: { type: boolean, const: true }
+        capabilities: { type: object }
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string }
+            message: { type: string }
+  responses:
+    NotFound:
+      description: Not found
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    SnapshotUnavailable:
+      description: Steam snapshot is unavailable
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    WriteRejected:
+      description: Profile, confirmation, or integration precondition rejected the write
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }

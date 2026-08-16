@@ -400,6 +400,19 @@ pub fn save_collections(
     steam_id3: String,
     collections: Vec<SteamCollection>,
 ) -> Result<(), String> {
+    crate::app_data::with_integration_write_lock(|| {
+        save_collections_unlocked(steam_path, steam_id3, collections)
+    })
+}
+
+/// Persist a collection update while the caller already holds the shared
+/// integration write lock. MCP/API use this for their read-modify-write
+/// transaction; the public Tauri command acquires the lock itself.
+pub(crate) fn save_collections_unlocked(
+    steam_path: String,
+    steam_id3: String,
+    collections: Vec<SteamCollection>,
+) -> Result<(), String> {
     if super::sam::is_steam_running() {
         return Err(
             "Steam appears to be running. Close Steam before saving collections to avoid corrupting the library cache."

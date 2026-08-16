@@ -1,5 +1,9 @@
 {
+  "build": {
+    "beforeBuildCommand": "bun run build && bun run build:mcp-adapter"
+  },
   "bundle": {
+    "externalBin": ["binaries/repressurizer-mcp"],
     "targets": ["deb", "appimage"]
   }
 }

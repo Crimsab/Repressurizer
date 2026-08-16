@@ -174,6 +174,12 @@ pub fn probe_sam_bridge(steam_path: String, app_id: u64) -> SamBridgeProbe {
 pub fn sam_achievement_action(
     input: SamAchievementActionInput,
 ) -> Result<SamAchievementActionResult, String> {
+    crate::app_data::with_integration_write_lock(|| sam_achievement_action_unlocked(input))
+}
+
+fn sam_achievement_action_unlocked(
+    input: SamAchievementActionInput,
+) -> Result<SamAchievementActionResult, String> {
     if !crate::read_app_setting_bool("steamToolsEnabled").unwrap_or(false) {
         return Err("Steam Tools are disabled.".to_string());
     }

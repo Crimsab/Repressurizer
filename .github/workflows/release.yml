@@ -167,10 +167,11 @@ jobs:
           APPIMAGE_EXTRACT_AND_RUN: "1"
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: bun run build:linux
+        run: bun run build:linux:release
 
       - name: Build Linux CLI
-        run: cargo build --manifest-path src-tauri/Cargo.toml --release --bin repressurizer-cli
+        run: |
+          cargo build --manifest-path src-tauri/Cargo.toml --release --bin repressurizer-cli --bin repressurizer-mcp
 
       - name: Collect Linux artifacts
         run: |
@@ -179,10 +180,12 @@ jobs:
           cp src-tauri/target/release/bundle/appimage/*.AppImage artifacts/
           cp src-tauri/target/release/bundle/appimage/*.AppImage.sig artifacts/
           cp src-tauri/target/release/repressurizer-cli artifacts/repressurizer-cli
+          cp src-tauri/target/release/repressurizer-mcp artifacts/repressurizer-mcp
           tar --create --gzip \
             --file artifacts/Repressurizer-cli-linux-x86_64.tar.gz \
-            --directory artifacts repressurizer-cli
+            --directory artifacts repressurizer-cli repressurizer-mcp
           rm artifacts/repressurizer-cli
+          rm artifacts/repressurizer-mcp
           find artifacts -maxdepth 1 -type f -printf '%f %s bytes\n' | sort
 
       - name: Upload Linux release artifacts
@@ -351,7 +354,7 @@ jobs:
         run: bun tauri build
 
       - name: Build Windows CLI
-        run: cargo build --manifest-path src-tauri/Cargo.toml --release --bin repressurizer-cli
+        run: cargo build --manifest-path src-tauri/Cargo.toml --release --bin repressurizer-cli --bin repressurizer-mcp
 
       - name: Download Linux artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -372,7 +375,9 @@ jobs:
           Copy-Item src-tauri\target\release\repressurizer.exe artifacts\Repressurizer-portable.exe
           Compress-Archive -Path artifacts\Repressurizer-portable.exe -DestinationPath artifacts\Repressurizer-portable-windows-x64.zip -Force
           Copy-Item src-tauri\target\release\repressurizer-cli.exe artifacts\Repressurizer-cli.exe
-          Compress-Archive -Path artifacts\Repressurizer-cli.exe -DestinationPath artifacts\Repressurizer-cli-windows-x64.zip -Force
+          Copy-Item src-tauri\target\release\repressurizer-mcp.exe artifacts\Repressurizer-mcp.exe
+          Compress-Archive -Path artifacts\Repressurizer-cli.exe, artifacts\Repressurizer-mcp.exe -DestinationPath artifacts\Repressurizer-cli-windows-x64.zip -Force
+          Remove-Item artifacts\Repressurizer-mcp.exe
           Copy-Item src-tauri\target\release\bundle\msi\*.msi artifacts\
           Copy-Item src-tauri\target\release\bundle\msi\*.sig artifacts\
           Get-ChildItem artifacts | ForEach-Object { "$($_.Name) $($_.Length) bytes" }

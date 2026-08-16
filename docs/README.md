@@ -19,6 +19,10 @@ README.
 | [automation-export.md](automation-export.md) | Configuring automation snapshots and HTTP publishing. |
 | [cli.md](cli.md) | `repressurizer-cli` diagnostics, snapshot, cache, backup, and Steam tooling commands. |
 | [integrations/repressurizer-snapshot-v1.md](integrations/repressurizer-snapshot-v1.md) | Stable snapshot schema for receivers. |
+| [integrations/mcp.md](integrations/mcp.md) | Optional local MCP access with user-selected permissions. |
+| [integrations/local-api.md](integrations/local-api.md) | Authenticated loopback HTTP API for local agents and scripts. |
+| [integrations/openapi.yaml](integrations/openapi.yaml) | Versioned v1 API contract. |
+| [integrations/mcp-evals.xml](integrations/mcp-evals.xml) | Ten-scenario MCP integration eval set. |
 | [integrations/integration-package-release.md](integrations/integration-package-release.md) | TypeScript integration package publishing notes. |
 | [integrations/rust-integration-crate.md](integrations/rust-integration-crate.md) | Rust integration crate publishing notes. |
 

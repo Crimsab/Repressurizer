@@ -1,9 +1,14 @@
+pub mod api;
 pub mod app_channel;
 pub mod automation;
 pub mod categorizer;
 mod gg_deals;
 pub mod hltb;
 pub mod http_policy;
+pub mod integration_access;
+mod integration_descriptor;
+mod integration_runtime;
+pub mod mcp;
 pub mod steam;
 
 mod app_data;
@@ -25,7 +30,7 @@ use categorizer::commands;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use steam::api;
+use steam::api as steam_api;
 use steam::collections;
 use steam::depressurizer_database;
 use steam::depressurizer_profile;
@@ -413,23 +418,36 @@ fn load_app_data(_app: tauri::AppHandle, key: String) -> Result<Option<String>, 
 }
 
 #[tauri::command]
-fn save_app_data(_app: tauri::AppHandle, key: String, data: String) -> Result<(), String> {
+fn save_app_data(app: tauri::AppHandle, key: String, data: String) -> Result<(), String> {
     let path = app_data_file_path(&key)?;
     if key == "settings.json" {
-        let _guard = settings_file_lock()
-            .lock()
-            .map_err(|_| "Settings file lock poisoned".to_string())?;
-        let mut incoming = serde_json::from_str::<serde_json::Value>(&data)
-            .map_err(|error| format!("Failed to parse settings data: {error}"))?;
-        if !incoming.is_object() {
-            return Err("Settings data must contain a JSON object".to_string());
+        // Release the settings lock before reconciling the runtime. The
+        // runtime reads settings through the same lock, so calling it while
+        // this guard is alive would deadlock on every integration toggle.
+        let result = {
+            let _guard = settings_file_lock()
+                .lock()
+                .map_err(|_| "Settings file lock poisoned".to_string())?;
+            let mut incoming = serde_json::from_str::<serde_json::Value>(&data)
+                .map_err(|error| format!("Failed to parse settings data: {error}"))?;
+            if !incoming.is_object() {
+                return Err("Settings data must contain a JSON object".to_string());
+            }
+            if let Ok(current) = read_settings_json_unlocked() {
+                preserve_newer_automation_status(&mut incoming, &current);
+            }
+            let merged = serde_json::to_string_pretty(&incoming)
+                .map_err(|error| format!("Failed to serialize settings data: {error}"))?;
+            write_text_file_atomic(&path, &merged, "app data file", true)
+        };
+        if result.is_ok() {
+            if let Some(runtime) = app.try_state::<integration_runtime::IntegrationRuntime>() {
+                if let Err(error) = runtime.sync_from_settings() {
+                    log::error!("Failed to reconcile local integration runtime: {error}");
+                }
+            }
         }
-        if let Ok(current) = read_settings_json_unlocked() {
-            preserve_newer_automation_status(&mut incoming, &current);
-        }
-        let merged = serde_json::to_string_pretty(&incoming)
-            .map_err(|error| format!("Failed to serialize settings data: {error}"))?;
-        return write_text_file_atomic(&path, &merged, "app data file", true);
+        return result;
     }
     write_text_file_atomic(&path, &data, "app data file", should_sync_app_data(&key))
 }
@@ -441,7 +459,17 @@ fn hide_main_window(app: tauri::AppHandle) {
 
 #[tauri::command]
 fn quit_app(app: tauri::AppHandle) {
+    if let Some(runtime) = app.try_state::<integration_runtime::IntegrationRuntime>() {
+        runtime.stop();
+    }
     app.exit(0);
+}
+
+#[tauri::command]
+fn local_integration_status(app: tauri::AppHandle) -> serde_json::Value {
+    app.try_state::<integration_runtime::IntegrationRuntime>()
+        .map(|runtime| runtime.status())
+        .unwrap_or_else(|| serde_json::json!({ "state": "unavailable" }))
 }
 
 #[tauri::command]
@@ -574,6 +602,7 @@ pub fn run() {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .manage(integration_runtime::IntegrationRuntime::new())
         .setup(|app| {
             if !app_channel::claim_cross_channel_instance() {
                 app.handle().exit(0);
@@ -755,6 +784,11 @@ pub fn run() {
                         hide_main_window_handle(app);
                     }
                     "quit" => {
+                        if let Some(runtime) =
+                            app.try_state::<integration_runtime::IntegrationRuntime>()
+                        {
+                            runtime.stop();
+                        }
                         app.exit(0);
                     }
                     _ => {}
@@ -782,6 +816,12 @@ pub fn run() {
             }
 
             automation::start_worker(app.handle().clone());
+            if let Err(error) = app
+                .state::<integration_runtime::IntegrationRuntime>()
+                .sync_from_settings()
+            {
+                log::error!("Failed to start local integration runtime: {error}");
+            }
 
             Ok(())
         })
@@ -802,6 +842,11 @@ pub fn run() {
                 if !read_app_setting_bool("trayCloseChoiceMade").unwrap_or(false) {
                     api.prevent_close();
                     let _ = window.emit("repressurizer-close-requested", ());
+                } else if let Some(runtime) = window
+                    .app_handle()
+                    .try_state::<integration_runtime::IntegrationRuntime>(
+                ) {
+                    runtime.stop();
                 }
             }
         })
@@ -819,16 +864,16 @@ pub fn run() {
             http_policy::test_proxy_profile,
             depressurizer_database::import_depressurizer_database,
             depressurizer_profile::import_depressurizer_profile,
-            api::fetch_library,
-            api::fetch_steam_app_list,
-            api::fetch_game_details,
-            api::fetch_store_release_date,
-            api::fetch_store_release_dates,
-            api::fetch_game_price_overviews,
+            steam_api::fetch_library,
+            steam_api::fetch_steam_app_list,
+            steam_api::fetch_game_details,
+            steam_api::fetch_store_release_date,
+            steam_api::fetch_store_release_dates,
+            steam_api::fetch_game_price_overviews,
             gg_deals::fetch_gg_deals_price,
-            api::fetch_steam_review_summary,
-            api::fetch_achievements,
-            api::fetch_achievements_summary,
+            steam_api::fetch_steam_review_summary,
+            steam_api::fetch_achievements,
+            steam_api::fetch_achievements_summary,
             sam::load_sam_achievement_schema,
             sam::refresh_sam_achievement_schema,
             sam::probe_sam_bridge,
@@ -840,11 +885,11 @@ pub fn run() {
             steam::shortcuts::save_shortcuts,
             steam::legacy_sharedconfig::load_legacy_sharedconfig,
             steam::local_library::load_local_license_library,
-            api::fetch_wishlist,
-            api::fetch_family_library,
-            api::resolve_vanity_url,
-            api::fetch_player_summary,
-            api::fetch_friend_list,
+            steam_api::fetch_wishlist,
+            steam_api::fetch_family_library,
+            steam_api::resolve_vanity_url,
+            steam_api::fetch_player_summary,
+            steam_api::fetch_friend_list,
             commands::run_hours_categorizer,
             commands::run_genre_categorizer,
             commands::run_tags_categorizer,
@@ -875,6 +920,7 @@ pub fn run() {
             post_json_export,
             load_app_data,
             save_app_data,
+            local_integration_status,
             hltb::fetch_hltb,
         ])
         .run(tauri::generate_context!())

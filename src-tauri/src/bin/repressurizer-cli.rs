@@ -2,7 +2,7 @@ use repressurizer_integration::{
     parse_library_snapshot_str, summarize_snapshot, verify_library_snapshot_checksum,
 };
 use repressurizer_lib::{
-    automation,
+    api, automation, mcp,
     steam::{collections, detector, sam},
 };
 use serde_json::{json, Value};
@@ -27,6 +27,16 @@ Usage:
   repressurizer-cli snapshot validate <snapshot.json>
   repressurizer-cli automation status
   repressurizer-cli automation publish-now
+  repressurizer-cli api status
+  repressurizer-cli api token
+  repressurizer-cli api serve [--port <port>]
+  repressurizer-cli mcp status
+  repressurizer-cli mcp config
+  repressurizer-cli mcp doctor
+  repressurizer-cli mcp prompt [name]
+  repressurizer-cli mcp install <client_config.json>
+  repressurizer-cli mcp stdio
+  repressurizer-mcp [--self-test]
   repressurizer-cli sam help
   repressurizer-cli sam probe <steam_path> <app_id>
   repressurizer-cli sam schema <steam_path> <app_id>
@@ -170,6 +180,8 @@ fn run() -> Result<(), String> {
         }
         "snapshot" => snapshot_command(&args[1..]),
         "automation" => automation_command(&args[1..]),
+        "api" => api_command(&args[1..]),
+        "mcp" => mcp_command(&args[1..]),
         "sam" => sam_command(&args[1..]),
         _ => usage(),
     }
@@ -282,6 +294,46 @@ fn automation_command(args: &[String]) -> Result<(), String> {
             let status = block_on(automation::publish_now_for_cli())?;
             print_json(&status)
         }
+        _ => usage(),
+    }
+}
+
+fn api_command(args: &[String]) -> Result<(), String> {
+    match args.first().map(String::as_str) {
+        Some("help") | Some("--help") | Some("-h") => print_help(
+            "Repressurizer CLI local API commands\n\n  repressurizer-cli api status\n  repressurizer-cli api token\n  repressurizer-cli api serve [--port <port>]\n\nThe server binds to 127.0.0.1, requires a bearer token except /v1/health, and is disabled until enabled in Settings > Integrations.",
+        ),
+        Some("status") if args.len() == 1 => print_json(&api::status_for_cli()?),
+        Some("token") if args.len() == 1 => print_json(&api::token_for_cli()?),
+        Some("serve") if args.len() == 1 => api::serve_for_cli(None),
+        Some("serve") if args.len() == 3 && args[1] == "--port" => {
+            let port = args[2]
+                .parse::<u16>()
+                .map_err(|_| "--port must be a valid TCP port".to_string())?;
+            if port < 1024 {
+                return Err("--port must be between 1024 and 65535".to_string());
+            }
+            api::serve_for_cli(Some(port))
+        }
+        _ => usage(),
+    }
+}
+
+fn mcp_command(args: &[String]) -> Result<(), String> {
+    match args.first().map(String::as_str) {
+        Some("help") | Some("--help") | Some("-h") => print_help(
+            "Repressurizer CLI MCP commands\n\nLocal stdio server and setup helpers:\n  repressurizer-cli mcp status\n  repressurizer-cli mcp config\n  repressurizer-cli mcp doctor\n  repressurizer-cli mcp prompt [name]\n  repressurizer-cli mcp install <client_config.json>\n  repressurizer-cli mcp stdio\n\nThe available write tools follow the user-selected integration profile. Every mutation still requires confirm=true. Install merges only mcpServers.repressurizer and preserves other client entries.",
+        ),
+        Some("status") if args.len() == 1 => print_json(&mcp::status_for_cli()?),
+        Some("config") if args.len() == 1 => print_json(&mcp::config_for_cli()?),
+        Some("doctor") if args.len() == 1 => print_json(&mcp::doctor_for_cli()?),
+        Some("prompt") if args.len() == 1 || args.len() == 2 => {
+            print_json(&mcp::prompt_for_cli(args.get(1).map(String::as_str))?)
+        }
+        Some("install") if args.len() == 2 => {
+            print_json(&mcp::install_config_for_cli(&args[1])?)
+        }
+        Some("stdio") if args.len() == 1 => mcp::run_stdio(),
         _ => usage(),
     }
 }

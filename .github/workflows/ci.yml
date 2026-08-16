@@ -110,15 +110,21 @@ jobs:
             ${{ runner.os }}-rust-
 
       - name: Rust check
+        env:
+          TAURI_CONFIG: '{"bundle":{"externalBin":[]}}'
         run: cargo check --manifest-path src-tauri/Cargo.toml
 
       - name: Rust formatting
         run: cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
 
       - name: Rust lint
+        env:
+          TAURI_CONFIG: '{"bundle":{"externalBin":[]}}'
         run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 
       - name: Rust app tests
+        env:
+          TAURI_CONFIG: '{"bundle":{"externalBin":[]}}'
         run: cargo test --manifest-path src-tauri/Cargo.toml
 
       - name: Setup Bun for Linux desktop build

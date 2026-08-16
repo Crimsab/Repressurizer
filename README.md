@@ -54,10 +54,10 @@ Get the current stable build from the
 | --- | --- |
 | `Repressurizer_..._x64_en-US.msi` | Normal Windows installation with built-in updates. |
 | `Repressurizer-portable-windows-x64.zip` | Portable app without installation; update it manually. |
-| `Repressurizer-cli-windows-x64.zip` | Diagnostics, snapshots, cache checks, backups, and guarded Steam tooling. |
+| `Repressurizer-cli-windows-x64.zip` | Diagnostics, snapshots, cache checks, backups, guarded Steam tooling, and the MCP adapter. |
 | `Repressurizer_..._amd64.AppImage` | Portable Linux desktop app for x86_64 systems. |
 | `Repressurizer_..._amd64.deb` | Debian/Ubuntu package for x86_64 systems. |
-| `Repressurizer-cli-linux-x86_64.tar.gz` | Linux CLI for diagnostics, snapshots, cache checks, and backups. |
+| `Repressurizer-cli-linux-x86_64.tar.gz` | Linux CLI and MCP adapter for diagnostics, snapshots, cache checks, and backups. |
 | `Repressurizer_..._universal.dmg` | Universal macOS desktop app for Intel and Apple Silicon. |
 
 Windows artifacts are not Authenticode-signed, so SmartScreen may show an
@@ -157,6 +157,15 @@ GG.deals is disabled by default, uses the user's official API key, caches
 responses for 24 hours, and never scrapes the website. See the [Integrations
 guide](https://crimsab.github.io/Repressurizer/user-guide/steam-tools/) and
 [GG.deals setup](https://crimsab.github.io/Repressurizer/integrations/gg-deals/).
+
+The optional local MCP integration gives compatible agents access to the
+normalized library snapshot, collections, observed play history, and—only when
+the user selects it—guarded Repressurizer-domain actions. It is disabled by
+default and uses a bundled `repressurizer-mcp` stdio adapter that talks to the
+running app's private loopback endpoint. The same profile is available through
+the authenticated loopback HTTP API. See the [MCP integration
+guide](https://crimsab.github.io/Repressurizer/integrations/mcp/) and [local API
+guide](https://crimsab.github.io/Repressurizer/integrations/local-api/).
 
 ## Repressurizer and Depressurizer
 

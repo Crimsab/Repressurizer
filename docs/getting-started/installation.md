@@ -6,10 +6,10 @@ Download builds from the [latest GitHub release](https://github.com/Crimsab/Repr
 | --- | --- |
 | `Repressurizer_..._x64_en-US.msi` | You want the normal Windows installation and built-in updates. |
 | `Repressurizer-portable-windows-x64.zip` | You want to run the app without installing it. |
-| `Repressurizer-cli-windows-x64.zip` | You need scriptable diagnostics, snapshots, backups, or guarded Steam tooling. |
+| `Repressurizer-cli-windows-x64.zip` | You need scriptable diagnostics, snapshots, backups, guarded Steam tooling, or the MCP adapter. |
 | `Repressurizer_..._amd64.AppImage` | You want a portable Linux desktop app with built-in updates. |
 | `Repressurizer_..._amd64.deb` | You use Debian, Ubuntu, or a compatible x86_64 distribution. |
-| `Repressurizer-cli-linux-x86_64.tar.gz` | You need the Linux CLI without the desktop app. |
+| `Repressurizer-cli-linux-x86_64.tar.gz` | You need the Linux CLI and MCP adapter without the desktop app. |
 | `Repressurizer_..._universal.dmg` | You use an Intel or Apple Silicon Mac running macOS 11 or newer. |
 
 ## Windows installer
@@ -45,7 +45,9 @@ chmod +x Repressurizer_*_amd64.AppImage
 ```
 
 The AppImage is the Linux format supported by the in-app updater. A current
-x86_64 distribution with WebKitGTK 4.1 is recommended.
+x86_64 distribution with WebKitGTK 4.1 is recommended. The desktop bundle
+includes the `repressurizer-mcp` companion used by local agents when the MCP or
+API integration is enabled.
 
 ## Debian and Ubuntu
 
@@ -67,8 +69,8 @@ setup. Repressurizer needs the directory containing `userdata` and `config`, not
 an individual Steam library folder containing only `steamapps`.
 
 Steam Achievement Manager write actions remain Windows-only. Library loading,
-collection editing, backups, shortcuts, metadata, and exports are supported on
-Linux.
+collection editing, backups, shortcuts, metadata, exports, and the embedded MCP
+companion are supported on Linux.
 
 ## Steam Deck
 

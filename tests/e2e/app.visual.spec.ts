@@ -958,6 +958,68 @@ test("groups SAM and GG.deals in the Integrations settings", async ({ page }, te
   await testInfo.attach("settings-integrations-mobile", { path: mobileScreenshotPath, contentType: "image/png" });
 });
 
+test("explains and enables the local MCP connection", async ({ page }, testInfo) => {
+  await page.goto("/");
+
+  await page.getByRole("button", { name: "Settings" }).click();
+  const settingsDialog = page.locator(".fixed.inset-0").filter({
+    has: page.getByRole("heading", { name: "Settings" }),
+  });
+  await settingsDialog.getByRole("button", { name: "Integrations", exact: true }).click();
+  const mcp = settingsDialog.getByRole("button", { name: /MCP/ });
+  await mcp.click();
+  await expect(settingsDialog.getByLabel("SAM: Disabled")).toBeVisible();
+  await expect(settingsDialog.getByLabel("GG.deals: Disabled")).toBeVisible();
+  await expect(settingsDialog.getByLabel("MCP: Disabled")).toBeVisible();
+  const mcpControl = settingsDialog.getByRole("group", { name: /Enable local MCP/ });
+  await expect(mcpControl.getByRole("button", { name: "Disabled" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect(mcpControl.getByRole("button", { name: "Enabled" })).toHaveAttribute(
+    "aria-pressed",
+    "false",
+  );
+  await expect(settingsDialog.getByText("repressurizer-mcp")).toBeVisible();
+  await expect(settingsDialog.getByText("repressurizer-cli mcp doctor")).toBeVisible();
+  await expect(settingsDialog.getByLabel("Agent permissions")).toHaveValue("readOnly");
+  await expect(settingsDialog.getByRole("group", { name: /Enable local HTTP API/ })).toBeVisible();
+  await expect(settingsDialog.getByText(/Starts automatically inside Repressurizer/)).toBeVisible();
+  await expect(settingsDialog.getByText("repressurizer-cli api token")).toBeVisible();
+  await settingsDialog.getByLabel("Agent permissions").selectOption("manageLibrary");
+  await expect(settingsDialog.getByText(/Adds collection operations/)).toBeVisible();
+  await expect(settingsDialog.getByRole("button", { name: "Copy config command" })).toBeVisible();
+  await expect(settingsDialog.getByRole("button", { name: "Copy starter prompt" })).toBeVisible();
+
+  await mcpControl.getByRole("button", { name: "Enabled" }).click();
+  await expect(mcpControl.getByRole("button", { name: "Disabled" })).toHaveAttribute(
+    "aria-pressed",
+    "false",
+  );
+  await expect(mcpControl.getByRole("button", { name: "Enabled" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expectNoHorizontalOverflow(page);
+
+  const screenshotPath = testInfo.outputPath("settings-mcp-entry.png");
+  await page.screenshot({ path: screenshotPath, fullPage: true });
+  await testInfo.attach("settings-mcp-entry", { path: screenshotPath, contentType: "image/png" });
+
+  const settingsContent = settingsDialog.locator(".flex-1.overflow-auto").last();
+  await settingsContent.evaluate((element) => element.scrollTo({ top: element.scrollHeight, behavior: "instant" }));
+  const lowerScreenshotPath = testInfo.outputPath("settings-mcp-lower.png");
+  await page.screenshot({ path: lowerScreenshotPath, fullPage: true });
+  await testInfo.attach("settings-mcp-lower", { path: lowerScreenshotPath, contentType: "image/png" });
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await settingsContent.evaluate((element) => element.scrollTo({ top: element.scrollHeight, behavior: "instant" }));
+  await expectNoHorizontalOverflow(page);
+  const mobileScreenshotPath = testInfo.outputPath("settings-mcp-mobile.png");
+  await page.screenshot({ path: mobileScreenshotPath, fullPage: true });
+  await testInfo.attach("settings-mcp-mobile", { path: mobileScreenshotPath, contentType: "image/png" });
+});
+
 test("shows every generated release since the previously launched version once", async ({ page }, testInfo) => {
   await page.addInitScript(() => {
     if (window.sessionStorage.getItem("repressurizer-changelog-test-initialized") == null) {

@@ -119,6 +119,10 @@ const defaults: AppSettings = {
     includeWishlist: true,
     includeOwnership: true,
   },
+  mcpEnabled: false,
+  mcpPermissionMode: "readOnly",
+  apiEnabled: false,
+  apiPort: 47831,
   includeSteamFamilyNonGames: false,
 };
 
@@ -217,6 +221,11 @@ function normalizeSettings(raw: Partial<AppSettings>): AppSettings {
     categoryChipStyle: normalizeCategoryChipStyle(raw.categoryChipStyle),
     updateChannel: raw.updateChannel === "beta" ? "beta" : "stable",
     automationPublishPayload: normalizeAutomationPublishPayload(raw.automationPublishPayload),
+    mcpPermissionMode: raw.mcpPermissionMode === "manageLibrary" || raw.mcpPermissionMode === "full"
+      ? raw.mcpPermissionMode
+      : defaults.mcpPermissionMode,
+    apiEnabled: raw.apiEnabled === true,
+    apiPort: clampInteger(raw.apiPort, defaults.apiPort, 1024, 65535),
     proxySettings: {
       ...defaults.proxySettings,
       ...proxySettings,

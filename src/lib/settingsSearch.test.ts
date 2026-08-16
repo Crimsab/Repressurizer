@@ -21,6 +21,12 @@ const sections: SettingsSearchSection[] = [
     keywords: ["api key steam web api credential credentials token developer"],
   },
   {
+    id: "mcp",
+    tab: "tools",
+    label: "MCP",
+    keywords: ["model context protocol agent ai assistant read only stdio tools resources local"],
+  },
+  {
     id: "performance",
     tab: "data",
     label: "Fetch speed",
@@ -141,6 +147,7 @@ describe("settings search", () => {
     ["webook token", "automation"],
     ["depresurizer profile", "maintenance"],
     ["achievment manager", "steamtools"],
+    ["mcp agent", "mcp"],
     ["famly token", "family"],
     ["release notes", "changelog"],
     ["auto updater", "updates"],

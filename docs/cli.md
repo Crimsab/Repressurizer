@@ -1,6 +1,7 @@
 # Repressurizer CLI
 
-`repressurizer-cli` exposes read-only and backup-oriented operations for scripts and personal automation.
+`repressurizer-cli` exposes read-only, backup-oriented, and explicitly guarded
+local integration operations for scripts and personal automation.
 
 ```text
 repressurizer-cli help
@@ -19,6 +20,16 @@ repressurizer-cli snapshot export [output.json]
 repressurizer-cli snapshot validate <snapshot.json>
 repressurizer-cli automation status
 repressurizer-cli automation publish-now
+repressurizer-cli api status
+repressurizer-cli api token
+repressurizer-cli api serve [--port <port>]
+repressurizer-cli mcp status
+repressurizer-cli mcp config
+repressurizer-cli mcp doctor
+repressurizer-cli mcp prompt [name]
+repressurizer-cli mcp install <client_config.json>
+repressurizer-cli mcp stdio
+repressurizer-mcp [--self-test]
 repressurizer-cli sam help
 repressurizer-cli sam probe <steam_path> <app_id>
 repressurizer-cli sam schema <steam_path> <app_id>
@@ -40,6 +51,22 @@ Most commands print JSON so receivers can pipe the output into validation, dashb
 `settings show` prints an operational summary with secrets redacted. It reports whether API keys, publish bearer tokens, and the Steam Family Store token are configured, but never prints those secret values. Steam IDs are tail-redacted.
 
 `snapshot validate` checks a `repressurizer.library-snapshot.v1` file with the same Rust integration package receivers can use. It verifies schema invariants and checksum, prints a compact JSON summary on success, and exits non-zero on invalid snapshots.
+
+`api status` reports the embedded loopback runtime, and `api token` prints the
+current per-process bearer token locally. The listener starts automatically
+when API or MCP is enabled in Settings; `api serve` remains only as a legacy
+fallback for older installations. It binds only to 127.0.0.1 and CORS is
+disabled. See the [local API guide](integrations/local-api.md).
+
+The MCP commands follow the user-selected profile in desktop settings.
+`mcp status` reports that profile, `mcp config` prints an MCP client fragment
+that prefers the bundled `repressurizer-mcp` adapter, and `mcp doctor` checks
+the local installation without printing credentials. `mcp stdio` remains a
+compatibility adapter when the companion binary is not present. `mcp prompt`
+prints copy-ready agent instructions. To merge the generated server entry into
+a client JSON file, run `mcp install <path>`; the command preserves other
+`mcpServers` entries. Every MCP write still requires `confirm: true`; see the
+[MCP integration guide](integrations/mcp.md).
 
 SAM probe, schema, backup listing, and backup directory commands are read-only.
 

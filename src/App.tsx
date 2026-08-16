@@ -19,6 +19,11 @@ import { useHltbIgnoredStore } from "./stores/hltbIgnoredStore";
 import { useToastStore } from "./stores/toastStore";
 import { useFamilyStore } from "./stores/familyStore";
 import { usePlayHistoryStore } from "./stores/playHistoryStore";
+import {
+  markLibraryWindowHidden,
+  requestLibraryRefreshOnResume,
+  type LibraryResumeRefreshState,
+} from "./lib/libraryRefreshPolicy";
 import { useSteamAppIndexStore } from "./stores/steamAppIndexStore";
 import { useSteamRatingsStore } from "./stores/steamRatingsStore";
 import { useAppNameOverrideStore } from "./stores/appNameOverrideStore";
@@ -199,6 +204,11 @@ function AppContent() {
   const installUpdateRef = useRef<() => Promise<void>>(async () => {});
   const reloadLibraryRef = useRef<(notify?: boolean, startupBackup?: boolean) => Promise<void>>(async () => {});
   const publishAutomationRef = useRef<(notify?: boolean, force?: boolean) => Promise<void>>(async () => {});
+  const libraryRefreshRunningRef = useRef(false);
+  const libraryResumeRefreshStateRef = useRef<LibraryResumeRefreshState>({
+    hiddenAt: null,
+    lastRequestedAt: 0,
+  });
 
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showCloseChoice, setShowCloseChoice] = useState(false);
@@ -437,10 +447,21 @@ function AppContent() {
     }
   };
 
+  const requestLibraryRefreshAfterResume = () => {
+    const nextState = requestLibraryRefreshOnResume(
+      libraryResumeRefreshStateRef.current,
+      Date.now(),
+    );
+    if (!nextState) return;
+    libraryResumeRefreshStateRef.current = nextState;
+    void reloadLibraryRef.current(false).catch(() => {});
+  };
+
   const reloadLibraryFromStores = async (notify = false, startupBackup = false) => {
     const currentSettings = useSettingsStore.getState();
-    if (!currentSettings.setupComplete) return;
+    if (!currentSettings.setupComplete || libraryRefreshRunningRef.current) return;
 
+    libraryRefreshRunningRef.current = true;
     setReloading(true);
     setReloadError("");
     try {
@@ -478,7 +499,6 @@ function AppContent() {
         const current = Object.values(useGameStore.getState().games);
         if (current.length > 0) useGameStore.getState().setGames(current);
       }).catch(() => {});
-      setReloading(false);
 
       if (!currentSettings.onboardingComplete) {
         setShowOnboarding(true);
@@ -505,9 +525,11 @@ function AppContent() {
     } catch (e) {
       await appLog.error("Steam library refresh failed", { error: String(e) });
       setReloadError(String(e));
-      setReloading(false);
       toast.getState().error(`Failed to load library: ${e}`);
       await sendWorkflowNotification(`Failed to load library: ${e}`, notify, true);
+    } finally {
+      libraryRefreshRunningRef.current = false;
+      setReloading(false);
     }
   };
 
@@ -528,26 +550,50 @@ function AppContent() {
   }, [interactiveStartupReady, settings.steamPersonaName, settings.apiKey, settings.steamId64]);
 
   useEffect(() => {
-    let unlisten: (() => void) | undefined;
+    let unlistenClose: (() => void) | undefined;
     listen("repressurizer-close-requested", () => setShowCloseChoice(true))
       .then((fn) => {
-        unlisten = fn;
+        unlistenClose = fn;
       })
       .catch(() => {});
     return () => {
-      unlisten?.();
+      unlistenClose?.();
     };
   }, []);
 
   useEffect(() => {
-    let unlisten: (() => void) | undefined;
-    listen("repressurizer-window-shown", () => setWindowActivated(true))
+    let unlistenShown: (() => void) | undefined;
+    let unlistenHidden: (() => void) | undefined;
+    const handleHidden = () => {
+      libraryResumeRefreshStateRef.current = markLibraryWindowHidden(
+        libraryResumeRefreshStateRef.current,
+        Date.now(),
+      );
+    };
+    const handleShown = () => {
+      setWindowActivated(true);
+      requestLibraryRefreshAfterResume();
+    };
+    listen("repressurizer-window-shown", handleShown)
       .then((fn) => {
-        unlisten = fn;
+        unlistenShown = fn;
       })
       .catch(() => {});
+    listen("repressurizer-window-hidden", handleHidden)
+      .then((fn) => {
+        unlistenHidden = fn;
+      })
+      .catch(() => {});
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") handleHidden();
+      else requestLibraryRefreshAfterResume();
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => {
-      unlisten?.();
+      unlistenShown?.();
+      unlistenHidden?.();
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
   }, []);
 
