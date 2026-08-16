@@ -43,14 +43,33 @@ struct ApiGame {
 struct ApiPrices {
     #[serde(default)]
     currency: String,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_optional_price")]
     current_retail: Option<f64>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_optional_price")]
     current_keyshops: Option<f64>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_optional_price")]
     historical_retail: Option<f64>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_optional_price")]
     historical_keyshops: Option<f64>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(untagged)]
+enum ApiPriceValue {
+    Number(f64),
+    String(String),
+}
+
+fn deserialize_optional_price<'de, D>(deserializer: D) -> Result<Option<f64>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = Option::<ApiPriceValue>::deserialize(deserializer)?;
+    Ok(match value {
+        Some(ApiPriceValue::Number(price)) => Some(price),
+        Some(ApiPriceValue::String(price)) => price.trim().parse::<f64>().ok(),
+        None => None,
+    })
 }
 
 #[tauri::command]
@@ -205,6 +224,58 @@ mod tests {
                 historical_keyshops: Some(0.82),
             })
         );
+    }
+
+    #[test]
+    fn parses_prices_from_the_string_format_returned_by_gg_deals() {
+        let fixture = r#"{
+          "success": true,
+          "data": {
+            "620": {
+              "url": "https://gg.deals/game/portal-2/",
+              "prices": {
+                "currency": "€",
+                "currentRetail": "1.95",
+                "currentKeyshops": "1.37",
+                "historicalRetail": "0.97",
+                "historicalKeyshops": "0.82"
+              }
+            }
+          }
+        }"#;
+
+        let parsed = parse_api_response(fixture.as_bytes(), 620)
+            .unwrap()
+            .unwrap();
+        assert_eq!(parsed.current_retail, Some(1.95));
+        assert_eq!(parsed.current_keyshops, Some(1.37));
+        assert_eq!(parsed.historical_retail, Some(0.97));
+        assert_eq!(parsed.historical_keyshops, Some(0.82));
+    }
+
+    #[test]
+    fn ignores_empty_or_non_numeric_price_strings() {
+        let fixture = r#"{
+          "success": true,
+          "data": {
+            "620": {
+              "url": "https://gg.deals/game/portal-2/",
+              "prices": {
+                "currency": "€",
+                "currentRetail": "",
+                "currentKeyshops": "not-available",
+                "historicalRetail": null
+              }
+            }
+          }
+        }"#;
+
+        let parsed = parse_api_response(fixture.as_bytes(), 620)
+            .unwrap()
+            .unwrap();
+        assert_eq!(parsed.current_retail, None);
+        assert_eq!(parsed.current_keyshops, None);
+        assert_eq!(parsed.historical_retail, None);
     }
 
     #[test]
