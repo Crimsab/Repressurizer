@@ -91,7 +91,7 @@ jobs:
         if: steps.app_existing.outputs.exists == 'false'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh workflow run release.yml --ref "${{ steps.app_version.outputs.tag }}"
+        run: gh workflow run release.yml --ref "${{ steps.app_version.outputs.tag }}" -f release_tag="${{ steps.app_version.outputs.tag }}"
 
       - name: Read TypeScript integration version
         id: typescript_version
