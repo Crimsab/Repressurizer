@@ -453,7 +453,7 @@ export interface AppSettings {
   autoFetchHltbOnRefresh: boolean;
   libraryRefreshCacheMode: LibraryRefreshCacheMode;
   proxySettings: ProxySettings;
-  // Steam Tools lab
+  // Optional integrations (legacy storage keys retained for compatibility)
   steamToolsEnabled: boolean;
   steamToolsAchievementWritesEnabled: boolean;
   steamToolsCardFarmingEnabled: boolean;

@@ -261,14 +261,26 @@ function BackupRow({
   );
 }
 
-export function ChangelogPanel({ entries }: { entries: ChangelogEntry[] }) {
+export function ChangelogPanel({
+  entries,
+  showHeader = true,
+  maxEntries = 8,
+}: {
+  entries: ChangelogEntry[];
+  showHeader?: boolean;
+  maxEntries?: number;
+}) {
   const t = useT();
   return (
     <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3">
-      <p className="font-medium text-repressurizer-text">{t("settings.changelog.title")}</p>
-      <p className="mt-0.5 text-xs leading-relaxed text-repressurizer-text-faint">{t("settings.changelog.desc")}</p>
-      <div className="mt-3 divide-y divide-repressurizer-border-subtle overflow-hidden rounded-lg border border-repressurizer-border-subtle bg-repressurizer-surface/40">
-        {entries.slice(0, 8).map((entry, index) => {
+      {showHeader && (
+        <>
+          <p className="font-medium text-repressurizer-text">{t("settings.changelog.title")}</p>
+          <p className="mt-0.5 text-xs leading-relaxed text-repressurizer-text-faint">{t("settings.changelog.desc")}</p>
+        </>
+      )}
+      <div className={`${showHeader ? "mt-3" : ""} divide-y divide-repressurizer-border-subtle overflow-hidden rounded-lg border border-repressurizer-border-subtle bg-repressurizer-surface/40`}>
+        {entries.slice(0, maxEntries).map((entry, index) => {
           const userGroups = entry.groups.filter((group) => group.audience === "user" && group.items.length > 0);
           return (
             <details key={entry.version} open={index === 0} className="group/changelog [&[open]_.changelog-caret]:rotate-90">

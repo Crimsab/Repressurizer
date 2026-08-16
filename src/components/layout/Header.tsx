@@ -300,7 +300,7 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
 
         <div className="flex shrink-0 items-center gap-1.5">
           {/* View toggle */}
-          <div className="flex rounded-lg border border-repressurizer-border overflow-hidden">
+          <div className="hidden rounded-lg border border-repressurizer-border overflow-hidden min-[720px]:flex">
             <ToolbarIconButton
               label={t("header.gridView")}
               onClick={() => setViewMode("grid")}
@@ -326,7 +326,7 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
           </div>
 
           {/* Sort */}
-          <div className="relative" ref={sortMenuRef}>
+          <div className="relative hidden min-[720px]:block" ref={sortMenuRef}>
             <div className="flex rounded-lg border border-repressurizer-border overflow-hidden">
               <button
                 onClick={() => setShowSortMenu((v) => !v)}
@@ -378,7 +378,7 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
           </div>
 
           {/* Separator */}
-          <div className="mx-1 h-5 w-px bg-repressurizer-border" />
+          <div className="mx-1 hidden h-5 w-px bg-repressurizer-border min-[720px]:block" />
 
           {/* Undo / Redo / Discard */}
           {dirty && (

@@ -8,4 +8,4 @@ The user guide follows the main jobs inside Repressurizer:
 - Prepare [metadata and network caches](../cache-and-network.md).
 - Generate collections with [AutoCat](autocat.md).
 - [Export](export.md) filtered lists and stable snapshots.
-- Maintain [backups](backups.md) and optional [Steam Tools](steam-tools.md).
+- Maintain [backups](backups.md) and configure optional [Integrations](steam-tools.md).

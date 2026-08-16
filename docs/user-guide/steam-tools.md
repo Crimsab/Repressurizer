@@ -1,8 +1,11 @@
-# Steam Tools
+# Integrations
 
-Steam Tools are optional maintenance and integration features. They operate closer to local Steam state than normal browsing, so each action should be treated as an explicit maintenance operation.
+Open **Settings → Integrations** to configure optional connections without mixing their credentials and safety controls into the normal Steam settings. The page contains two accordion sections:
 
-## Before using a tool
+- **SAM** enables local achievement changes on Windows. These operations run close to local Steam state, require explicit confirmation, and create safety backups.
+- **GG.deals** enables current-price and historical-low data in game details using the user's own API key. See [GG.deals pricing](../integrations/gg-deals.md).
+
+## Before using SAM
 
 - Read the confirmation and affected-path preview.
 - Close Steam when the tool changes files Steam also owns.

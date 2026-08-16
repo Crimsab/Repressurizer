@@ -9,6 +9,11 @@ replace the default stable update.
 
 Use the stable channel for your normal library maintenance.
 
+After an update and relaunch, Repressurizer opens a one-time **What's new**
+dialog. It includes every generated release entry newer than the version last
+launched on that computer, so skipping one or more releases does not skip their
+notes. The full changelog remains available under **Settings → About**.
+
 On Windows, in-app installation is supported by the normal MSI installer. The
 portable ZIP can check its delivery mode but does not replace its executable in
 place; download a newer portable ZIP from GitHub Releases instead. Settings and

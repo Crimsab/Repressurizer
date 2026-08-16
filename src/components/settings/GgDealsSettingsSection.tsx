@@ -6,7 +6,13 @@ import { useSettingsStore } from "../../stores/settingsStore";
 import { useGgDealsStore } from "../../stores/ggDealsStore";
 import { ToggleRow } from "./SettingsControls";
 
-export function GgDealsSettingsSection({ onSaved }: { onSaved: (message: string) => void }) {
+export function GgDealsSettingsSection({
+  onSaved,
+  showHeading = true,
+}: {
+  onSaved: (message: string) => void;
+  showHeading?: boolean;
+}) {
   const t = useT();
   const enabled = useSettingsStore((state) => state.ggDealsEnabled);
   const savedApiKey = useSettingsStore((state) => state.ggDealsApiKey);
@@ -24,9 +30,11 @@ export function GgDealsSettingsSection({ onSaved }: { onSaved: (message: string)
 
   return (
     <div className="space-y-3">
-      <h3 className="text-[11px] font-medium uppercase tracking-wider text-repressurizer-text-faint">
-        GG.deals
-      </h3>
+      {showHeading && (
+        <h3 className="text-[11px] font-medium uppercase tracking-wider text-repressurizer-text-faint">
+          GG.deals
+        </h3>
+      )}
       <ToggleRow
         icon={<Tag size={15} weight="duotone" />}
         label={t("settings.ggDeals.enabled")}

@@ -3,11 +3,28 @@ import { installTauriMock } from "./tauriMock";
 import type { Page } from "@playwright/test";
 
 async function expectNoHorizontalOverflow(page: Page) {
-  const hasOverflow = await page.evaluate(() => {
+  const overflow = await page.evaluate(() => {
     const root = document.documentElement;
-    return root.scrollWidth > root.clientWidth + 1;
+    return {
+      clientWidth: root.clientWidth,
+      scrollWidth: root.scrollWidth,
+      offenders: [...document.querySelectorAll<HTMLElement>("body *")]
+        .filter((element) => {
+          const rect = element.getBoundingClientRect();
+          return rect.right > root.clientWidth + 1 || rect.left < -1;
+        })
+        .slice(0, 8)
+        .map((element) => ({
+          tag: element.tagName,
+          className: element.className,
+          left: Math.round(element.getBoundingClientRect().left),
+          right: Math.round(element.getBoundingClientRect().right),
+        })),
+    };
   });
-  expect(hasOverflow).toBe(false);
+  expect(overflow.scrollWidth, JSON.stringify(overflow)).toBeLessThanOrEqual(
+    overflow.clientWidth + 1
+  );
 }
 
 test.beforeEach(async ({ page }) => {
@@ -905,23 +922,61 @@ test("play history shows tracked deltas instead of lifetime playtime", async ({ 
   await expect(timeline.getByText("30.0h")).toBeHidden();
 });
 
-test("keeps Steam Tools in Settings instead of the home toolbar", async ({ page }, testInfo) => {
+test("groups SAM and GG.deals in the Integrations settings", async ({ page }, testInfo) => {
   await page.goto("/");
 
-  await expect(page.getByTitle("Steam Tools")).toBeHidden();
+  await expect(page.getByTitle("Integrations")).toBeHidden();
   await page.getByRole("button", { name: "Settings" }).click();
 
   const settingsDialog = page.locator(".fixed.inset-0").filter({
     has: page.getByRole("heading", { name: "Settings" }),
   });
-  await settingsDialog.getByRole("button", { name: "Steam Tools", exact: true }).click();
-  await expect(settingsDialog.getByRole("heading", { name: "Steam Tools" })).toBeVisible();
-  await expect(settingsDialog.getByText("SAM integration: Steam Achievement Manager")).toBeVisible();
+  await settingsDialog.getByRole("button", { name: "Integrations", exact: true }).click();
+  await expect(settingsDialog.getByRole("heading", { name: "Integrations" })).toBeVisible();
+  await expect(settingsDialog.getByRole("button", { name: /SAM/ })).toHaveAttribute("aria-expanded", "true");
+  await expect(settingsDialog.getByRole("button", { name: /GG\.deals/ })).toHaveAttribute("aria-expanded", "false");
+  await expect(settingsDialog.getByRole("switch", { name: "Enable SAM achievement changes" })).toBeVisible();
+
+  await settingsDialog.getByRole("button", { name: /GG\.deals/ }).click();
+  await expect(settingsDialog.getByRole("button", { name: /SAM/ })).toHaveAttribute("aria-expanded", "false");
+  await settingsDialog.getByRole("switch", { name: "Enable GG.deals pricing" }).click();
+  await expect(settingsDialog.getByLabel("GG.deals API key")).toBeVisible();
   await expectNoHorizontalOverflow(page);
 
-  const screenshotPath = testInfo.outputPath("settings-steam-tools-entry.png");
+  const screenshotPath = testInfo.outputPath("settings-integrations-entry.png");
   await page.screenshot({ path: screenshotPath, fullPage: true });
-  await testInfo.attach("settings-steam-tools-entry", { path: screenshotPath, contentType: "image/png" });
+  await testInfo.attach("settings-integrations-entry", { path: screenshotPath, contentType: "image/png" });
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  const mobilePanel = settingsDialog.locator('[data-resizable-dialog="settings"]');
+  await expect
+    .poll(() => mobilePanel.evaluate((element) => element.scrollWidth <= element.clientWidth + 1))
+    .toBe(true);
+  await expectNoHorizontalOverflow(page);
+  const mobileScreenshotPath = testInfo.outputPath("settings-integrations-mobile.png");
+  await page.screenshot({ path: mobileScreenshotPath, fullPage: true });
+  await testInfo.attach("settings-integrations-mobile", { path: mobileScreenshotPath, contentType: "image/png" });
+});
+
+test("shows every generated release since the previously launched version once", async ({ page }, testInfo) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem("repressurizer-last-seen-version", "0.6.1");
+  });
+
+  await page.goto("/");
+  const dialog = page.getByRole("dialog", { name: /What's new in v0\.6\.4/ });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByText("v0.6.3")).toBeVisible();
+  await expect(dialog.getByText("v0.6.2")).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+  const screenshotPath = testInfo.outputPath("update-changelog.png");
+  await page.screenshot({ path: screenshotPath, fullPage: true });
+  await testInfo.attach("update-changelog", { path: screenshotPath, contentType: "image/png" });
+  await dialog.getByRole("button", { name: "Done" }).click();
+  await expect(dialog).toBeHidden();
+
+  await page.reload();
+  await expect(page.getByRole("dialog", { name: /What's new/ })).toBeHidden();
 });
 
 test("settings search finds local-only visibility and generated changelog", async ({ page }) => {
@@ -986,7 +1041,7 @@ test("game achievement details show Steam Achievement Manager preflight separate
   await testInfo.attach("game-achievements-sam-bridge", { path: screenshotPath, contentType: "image/png" });
 });
 
-test("achievement write controls require explicit Steam Tools write opt-in", async ({ page }) => {
+test("achievement write controls require explicit SAM integration opt-in", async ({ page }) => {
   await page.addInitScript(() => {
     const raw = window.localStorage.getItem("repressurizer-settings");
     if (!raw) return;
@@ -1367,7 +1422,7 @@ test("achievement write controls stay visible while SAM action is running", asyn
   await expect(detail.getByRole("button", { name: "Unlock all (2)" })).toBeDisabled();
 });
 
-test("achievement details do not probe SAM while Steam Tools is disabled", async ({ page }) => {
+test("achievement details do not probe SAM while the integration is disabled", async ({ page }) => {
   await page.goto("/");
 
   await page.locator(".game-card").filter({ hasText: "Hades" }).dblclick();
@@ -1429,19 +1484,18 @@ test("opens organized settings tabs, automation logs, and Steam controls without
   await page.screenshot({ path: steamPath, fullPage: true });
   await testInfo.attach("settings-steam", { path: steamPath, contentType: "image/png" });
 
-  await settingsDialog.getByRole("button", { name: "Steam Tools", exact: true }).click();
-  await expect(settingsDialog.getByRole("heading", { name: "Steam Tools" })).toBeVisible();
-  await expect(settingsDialog.getByText("SAM integration: Steam Achievement Manager")).toBeVisible();
-  await expect(settingsDialog.getByText("Enable SAM achievement changes")).toBeHidden();
+  await settingsDialog.getByRole("button", { name: "Integrations", exact: true }).click();
+  await expect(settingsDialog.getByRole("heading", { name: "Integrations" })).toBeVisible();
+  await expect(settingsDialog.getByRole("button", { name: /SAM/ })).toBeVisible();
+  await expect(settingsDialog.getByText("Enable SAM achievement changes")).toBeVisible();
   await expect(settingsDialog.getByText("Allow card farming lab")).toBeHidden();
   await expect(settingsDialog.getByRole("switch")).toHaveCount(1);
-  await settingsDialog.getByRole("switch", { name: /SAM integration/ }).click();
-  await expect(settingsDialog.getByRole("switch", { name: /SAM integration/ })).toBeChecked();
-  await expect(settingsDialog.getByText("Enable SAM achievement changes")).toBeHidden();
+  await settingsDialog.getByRole("switch", { name: "Enable SAM achievement changes" }).click();
+  await expect(settingsDialog.getByRole("switch", { name: "Enable SAM achievement changes" })).toBeChecked();
 
-  const toolsPath = testInfo.outputPath("settings-steam-tools.png");
+  const toolsPath = testInfo.outputPath("settings-integrations.png");
   await page.screenshot({ path: toolsPath, fullPage: true });
-  await testInfo.attach("settings-steam-tools", { path: toolsPath, contentType: "image/png" });
+  await testInfo.attach("settings-integrations", { path: toolsPath, contentType: "image/png" });
 
   await settingsDialog.getByRole("button", { name: "Data", exact: true }).click();
   await expect(settingsDialog.getByText("Steam App Index")).toBeVisible();

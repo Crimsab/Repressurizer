@@ -128,7 +128,7 @@ nav:
       - Export: user-guide/export.md
       - Backups and restore: user-guide/backups.md
       - Steam Family: steam-family.md
-      - Steam Tools: user-guide/steam-tools.md
+      - Integrations: user-guide/steam-tools.md
       - Privacy: privacy.md
   - Recipes:
       - recipes/index.md

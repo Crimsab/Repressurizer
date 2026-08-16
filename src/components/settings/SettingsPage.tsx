@@ -69,7 +69,7 @@ import { AutomationSettingsSection } from "./automation/AutomationSettingsSectio
 import { CoreSettingsSection } from "./CoreSettingsSections";
 import { MaintenanceSettingsSection } from "./data/MaintenanceSettingsSection";
 import { useMaintenanceSettings } from "./data/useMaintenanceSettings";
-import { GgDealsSettingsSection } from "./GgDealsSettingsSection";
+import { IntegrationsSettingsSection } from "./IntegrationsSettingsSection";
 
 const AppearanceTab = lazy(() =>
   import("./AppearanceSettingsTab").then((module) => ({ default: module.AppearanceTab }))
@@ -292,11 +292,11 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
       {
         id: "steamtools",
         tab: "tools" as const,
-        label: t("settings.steamTools"),
+        label: t("steamTools.sam.title"),
         keywords: [
-          t("settings.steamTools"),
+          t("settings.integrations"),
           t("steamTools.sam.title"),
-          "sam achievement achievements achievement manager bridge steam tools lab unlock lock schema preflight",
+          "sam achievement achievements achievement manager bridge integrations steam tools unlock lock schema preflight",
         ],
       },
       {
@@ -368,7 +368,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
       },
       {
         id: "ggdeals",
-        tab: "steam" as const,
+        tab: "tools" as const,
         label: "GG.deals",
         keywords: [
           "gg.deals deals price history historical low retail keyshop api pricing offers sales sconti prezzi storico",
@@ -549,7 +549,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
       icon: <Warning size={14} />,
       badge: ignoredSettingsCount,
     },
-    { id: "tools", label: t("settings.steamTools"), icon: <Wrench size={14} /> },
+    { id: "tools", label: t("settings.integrations"), icon: <Wrench size={14} /> },
     { id: "about", label: t("settings.aboutTab"), icon: <Info size={14} /> },
   ];
   const filteredAutomationLogs = useMemo(() => {
@@ -706,8 +706,12 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                 <SteamFamilySettingsSection controller={steamFamilySettings} />
               )}
 
-              {isSectionVisible("steamtools") && (
-                <CoreSettingsSection section="steamtools" gameCount={gameCount} />
+              {(isSectionVisible("steamtools") || isSectionVisible("ggdeals")) && (
+                <IntegrationsSettingsSection
+                  showSam={isSectionVisible("steamtools")}
+                  showGgDeals={isSectionVisible("ggdeals")}
+                  onSaved={(savedMessage) => setMessage(savedMessage, 2000)}
+                />
               )}
 
               {isSectionVisible("display") && (
@@ -820,10 +824,6 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                   </button>
                 </div>
               </div>
-              )}
-
-              {isSectionVisible("ggdeals") && (
-                <GgDealsSettingsSection onSaved={(savedMessage) => setMessage(savedMessage, 2000)} />
               )}
 
               {isSectionVisible("maintenance") && (

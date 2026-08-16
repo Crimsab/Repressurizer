@@ -11,8 +11,8 @@ const sections: SettingsSearchSection[] = [
   {
     id: "steamtools",
     tab: "tools",
-    label: "Steam Tools",
-    keywords: ["sam achievement achievements achievement manager bridge steam tools lab unlock lock schema preflight"],
+    label: "Integrations",
+    keywords: ["sam achievement achievements achievement manager bridge integrations unlock lock schema preflight"],
   },
   {
     id: "api",

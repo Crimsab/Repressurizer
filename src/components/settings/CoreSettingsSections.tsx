@@ -1,4 +1,4 @@
-import { Eye, Heart, Trophy } from "@phosphor-icons/react";
+import { Eye, Heart } from "@phosphor-icons/react";
 import { useT } from "../../lib/i18n";
 import { useCategoryStore } from "../../stores/categoryStore";
 import { useSettingsStore } from "../../stores/settingsStore";
@@ -7,7 +7,7 @@ import { ToggleRow } from "./SettingsControls";
 
 interface CoreSettingsSectionsProps {
   gameCount: number;
-  section: "overview" | "steamtools" | "display" | "currency";
+  section: "overview" | "display" | "currency";
 }
 
 export function CoreSettingsSection({
@@ -62,30 +62,6 @@ export function CoreSettingsSection({
                 <span className="font-mono tabular-nums">{dynamicCount}</span> dynamic)
               </p>
             </div>
-          </div>
-        </div>
-      )}
-
-      {section === "steamtools" && (
-        <div className="space-y-3">
-          <h3 className="text-[11px] font-medium uppercase tracking-wider text-repressurizer-text-faint">
-            {t("settings.steamTools")}
-          </h3>
-          <div className="space-y-3">
-            <ToggleRow
-              icon={<Trophy size={15} weight="duotone" />}
-              label={t("steamTools.sam.title")}
-              description={t("settings.steamTools.achievementWrites.desc")}
-              checked={
-                settings.steamToolsEnabled && settings.steamToolsAchievementWritesEnabled
-              }
-              onChange={(value) =>
-                settings.setSettings({
-                  steamToolsEnabled: value,
-                  steamToolsAchievementWritesEnabled: value,
-                })
-              }
-            />
           </div>
         </div>
       )}

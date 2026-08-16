@@ -43,6 +43,13 @@ import { StatusBar } from "./components/layout/StatusBar";
 import { FilterBar } from "./components/layout/FilterBar";
 import { ToastContainer } from "./components/ui/Toast";
 import { DialogOverlay } from "./components/ui/DialogOverlay";
+import { UpdateChangelogDialog } from "./components/ui/UpdateChangelogDialog";
+import {
+  LAST_SEEN_VERSION_STORAGE_KEY,
+  changelogEntriesForUpgrade,
+  previousChangelogVersion,
+  type ChangelogEntry,
+} from "./lib/changelog";
 import { useShallow } from "zustand/react/shallow";
 import { WarningCircle, ArrowCounterClockwise, GameController, CloudArrowDown, X } from "@phosphor-icons/react";
 
@@ -197,6 +204,13 @@ function AppContent() {
   const [showCloseChoice, setShowCloseChoice] = useState(false);
   const [startupContext, setStartupContext] = useState<StartupContext | null>(null);
   const [windowActivated, setWindowActivated] = useState(false);
+  const [settingsHydrated, setSettingsHydrated] = useState(false);
+  const [updateChangelog, setUpdateChangelog] = useState<{
+    previousVersion: string;
+    currentVersion: string;
+    entries: ChangelogEntry[];
+  } | null>(null);
+  const versionCheckCompletedRef = useRef(false);
 
   const automationPublishConfigured =
     settings.automationPublishEnabled && settings.automationPublishUrl.trim().length > 0;
@@ -280,8 +294,34 @@ function AppContent() {
   }, [settings.updateChannel]);
 
   useEffect(() => {
-    hydrateSettingsFromDisk().catch(() => {});
+    hydrateSettingsFromDisk()
+      .catch(() => {})
+      .finally(() => setSettingsHydrated(true));
   }, [hydrateSettingsFromDisk]);
+
+  useEffect(() => {
+    if (!settingsHydrated || !interactiveStartupReady || versionCheckCompletedRef.current) return;
+    versionCheckCompletedRef.current = true;
+
+    try {
+      const storedVersion = window.localStorage.getItem(LAST_SEEN_VERSION_STORAGE_KEY);
+      const previousVersion = storedVersion
+        ?? (settings.setupComplete ? previousChangelogVersion(__APP_VERSION__) : null);
+      window.localStorage.setItem(LAST_SEEN_VERSION_STORAGE_KEY, __APP_VERSION__);
+      if (!previousVersion) return;
+
+      const entries = changelogEntriesForUpgrade(previousVersion, __APP_VERSION__);
+      if (entries.length > 0) {
+        setUpdateChangelog({
+          previousVersion,
+          currentVersion: __APP_VERSION__,
+          entries,
+        });
+      }
+    } catch {
+      // A disabled WebView storage backend should not block application startup.
+    }
+  }, [interactiveStartupReady, settings.setupComplete, settingsHydrated]);
 
   useEffect(() => {
     let cancelled = false;
@@ -738,6 +778,14 @@ function AppContent() {
             }}
           />
         </Suspense>
+      )}
+      {updateChangelog && (
+        <UpdateChangelogDialog
+          previousVersion={updateChangelog.previousVersion}
+          currentVersion={updateChangelog.currentVersion}
+          entries={updateChangelog.entries}
+          onClose={() => setUpdateChangelog(null)}
+        />
       )}
       {showCloseChoice && (
         <CloseChoiceDialog

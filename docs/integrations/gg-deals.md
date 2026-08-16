@@ -5,7 +5,7 @@ Repressurizer can optionally show GG.deals pricing in a game's detail page. The 
 ## Enable it
 
 1. Create or verify a GG.deals account and obtain an API key from [GG.deals API](https://gg.deals/api/).
-2. Open **Settings → Steam**.
+2. Open **Settings → Integrations → GG.deals**.
 3. Enable **GG.deals pricing**, paste the GG.deals API key, and save.
 4. Open a game detail page.
 
@@ -34,3 +34,5 @@ Changing the GG.deals key clears the price cache. The selected Repressurizer cur
 GG.deals describes its API as free for personal/hobby use with attribution. Check the current API page and terms before using Repressurizer in a commercial context.
 
 The API key is stored with the other local Repressurizer settings and sent directly to `api.gg.deals`. It is never placed in pricing cache records, application logs, automation exports, or diagnostics. Backend errors deliberately omit request URLs because the API authenticates with a query parameter.
+
+GG.deals currently serializes price amounts as JSON strings. Repressurizer accepts both string and numeric amounts so compatible API response changes do not make otherwise valid price data fail to load.
