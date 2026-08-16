@@ -185,7 +185,9 @@ export async function installTauriMock(page: Page) {
     };
 
     window.localStorage.setItem("repressurizer-settings", JSON.stringify(settings));
-    window.localStorage.setItem("repressurizer-last-seen-version", "0.6.4");
+    if (window.localStorage.getItem("repressurizer-last-seen-version") == null) {
+      window.localStorage.setItem("repressurizer-last-seen-version", "0.6.4");
+    }
     let autostartEnabled = settings.startOnLogin;
     const notifications: Array<{ title: string; body?: string }> = [];
     const readSettings = () => {

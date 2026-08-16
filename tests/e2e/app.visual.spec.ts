@@ -960,7 +960,10 @@ test("groups SAM and GG.deals in the Integrations settings", async ({ page }, te
 
 test("shows every generated release since the previously launched version once", async ({ page }, testInfo) => {
   await page.addInitScript(() => {
-    window.localStorage.setItem("repressurizer-last-seen-version", "0.6.1");
+    if (window.sessionStorage.getItem("repressurizer-changelog-test-initialized") == null) {
+      window.localStorage.setItem("repressurizer-last-seen-version", "0.6.1");
+      window.sessionStorage.setItem("repressurizer-changelog-test-initialized", "true");
+    }
   });
 
   await page.goto("/");
