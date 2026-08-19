@@ -58,7 +58,7 @@ uuid = { version = "1.24", features = ["v4"] }
 
 [target.'cfg(windows)'.dependencies]
 webview2-com = "0.38.2"
-windows-core = "0.61.2"
+windows-core = "0.62.2"
 
 [dev-dependencies]
 wiremock = "0.6"
