@@ -522,7 +522,12 @@ fn list_diary_backups() -> Result<Vec<DiaryBackupInfo>, String> {
             .map(|key| key.to_string())
             .filter(|key| folder.join(key).is_file())
             .collect();
-        backups.push(DiaryBackupInfo { name, description, created_at_ms, files });
+        backups.push(DiaryBackupInfo {
+            name,
+            description,
+            created_at_ms,
+            files,
+        });
     }
     backups.sort_by(|a, b| b.created_at_ms.cmp(&a.created_at_ms));
     Ok(backups)
@@ -531,7 +536,8 @@ fn list_diary_backups() -> Result<Vec<DiaryBackupInfo>, String> {
 #[tauri::command]
 fn create_diary_backup(description: String) -> Result<String, String> {
     let root = diary_backups_root()?;
-    std::fs::create_dir_all(&root).map_err(|error| format!("Failed to create diary backups folder: {error}"))?;
+    std::fs::create_dir_all(&root)
+        .map_err(|error| format!("Failed to create diary backups folder: {error}"))?;
     let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string();
     let mut name = format!("diary-backup-{timestamp}");
     let mut attempt = 1;
@@ -540,15 +546,18 @@ fn create_diary_backup(description: String) -> Result<String, String> {
         attempt += 1;
     }
     let folder = root.join(&name);
-    std::fs::create_dir_all(&folder).map_err(|error| format!("Failed to create diary backup folder: {error}"))?;
+    std::fs::create_dir_all(&folder)
+        .map_err(|error| format!("Failed to create diary backup folder: {error}"))?;
     let mut copied = 0;
     for key in DIARY_BACKUP_KEYS {
         let source = app_data::app_data_file_path(key)?;
         if !source.is_file() {
             continue;
         }
-        let data = std::fs::read(&source).map_err(|error| format!("Failed to read {key}: {error}"))?;
-        std::fs::write(folder.join(key), data).map_err(|error| format!("Failed to write {key} into backup: {error}"))?;
+        let data =
+            std::fs::read(&source).map_err(|error| format!("Failed to read {key}: {error}"))?;
+        std::fs::write(folder.join(key), data)
+            .map_err(|error| format!("Failed to write {key} into backup: {error}"))?;
         copied += 1;
     }
     if copied == 0 {
@@ -576,9 +585,15 @@ fn restore_diary_backup(name: String) -> Result<(), String> {
         if !backup_file.is_file() {
             continue;
         }
-        let data = std::fs::read(&backup_file).map_err(|error| format!("Failed to read {key} from backup: {error}"))?;
+        let data = std::fs::read(&backup_file)
+            .map_err(|error| format!("Failed to read {key} from backup: {error}"))?;
         let target = app_data::app_data_file_path(key)?;
-        write_text_file_atomic(&target, &String::from_utf8_lossy(&data), "app data file", app_data::should_sync_app_data(key))?;
+        write_text_file_atomic(
+            &target,
+            &String::from_utf8_lossy(&data),
+            "app data file",
+            app_data::should_sync_app_data(key),
+        )?;
         restored += 1;
     }
     if restored == 0 {
@@ -594,9 +609,9 @@ fn delete_diary_backup(name: String) -> Result<(), String> {
     if !folder.is_dir() {
         return Err("Diary backup not found".to_string());
     }
-    std::fs::remove_dir_all(&folder).map_err(|error| format!("Failed to delete diary backup: {error}"))
+    std::fs::remove_dir_all(&folder)
+        .map_err(|error| format!("Failed to delete diary backup: {error}"))
 }
-
 
 // Export writes run through std::fs so user-picked paths outside the
 // app-data scope are allowed (the fs plugin scope would forbid them).
@@ -610,16 +625,23 @@ fn write_export_file(path: String, contents: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn write_export_bundle(root: String, files: std::collections::HashMap<String, String>) -> Result<(), String> {
+fn write_export_bundle(
+    root: String,
+    files: std::collections::HashMap<String, String>,
+) -> Result<(), String> {
     let root_path = std::path::PathBuf::from(&root);
-    std::fs::create_dir_all(&root_path).map_err(|e| format!("Failed to create export folder: {e}"))?;
+    std::fs::create_dir_all(&root_path)
+        .map_err(|e| format!("Failed to create export folder: {e}"))?;
     for (relative, contents) in files {
-        if std::path::Path::new(&relative).is_absolute() || relative.split('/').any(|seg| seg == "..") {
+        if std::path::Path::new(&relative).is_absolute()
+            || relative.split('/').any(|seg| seg == "..")
+        {
             return Err(format!("Invalid export path: {relative}"));
         }
         let dest = root_path.join(&relative);
         if let Some(parent) = dest.parent() {
-            std::fs::create_dir_all(parent).map_err(|e| format!("Failed to create directory: {e}"))?;
+            std::fs::create_dir_all(parent)
+                .map_err(|e| format!("Failed to create directory: {e}"))?;
         }
         std::fs::write(&dest, contents).map_err(|e| format!("Failed to write {relative}: {e}"))?;
     }

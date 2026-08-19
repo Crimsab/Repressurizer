@@ -211,6 +211,9 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Prepare universal MCP sidecar
+        run: bun scripts/prepare-macos-mcp.ts
+
       - name: Run macOS detector and guard tests
         run: cargo test --manifest-path src-tauri/Cargo.toml steam
 
