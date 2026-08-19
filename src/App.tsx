@@ -27,7 +27,16 @@ import {
 import { useSteamAppIndexStore } from "./stores/steamAppIndexStore";
 import { useSteamRatingsStore } from "./stores/steamRatingsStore";
 import { useAppNameOverrideStore } from "./stores/appNameOverrideStore";
-import { fetchLibrary, loadCollections, createManualBackup, fetchPlayerSummary, hideMainWindow, quitApp, getStartupContext } from "./lib/tauri";
+import {
+  fetchLibrary,
+  loadCollections,
+  loadInstalledLibrary,
+  createManualBackup,
+  fetchPlayerSummary,
+  hideMainWindow,
+  quitApp,
+  getStartupContext,
+} from "./lib/tauri";
 import type { StartupContext } from "./lib/tauri";
 import { checkForAppUpdate, manualUpdateMessageKey } from "./lib/updater";
 import { mergeCollectionOnlyGames } from "./lib/libraryMerge";
@@ -44,6 +53,10 @@ import { useT } from "./lib/i18n";
 import { Header } from "./components/layout/Header";
 import { Sidebar } from "./components/layout/sidebar/Sidebar";
 import { GameGrid } from "./components/games/GameGrid";
+import { DiaryPage } from "./components/diary/DiaryPage";
+import { useDiaryStore } from "./stores/diaryStore";
+import { createDiaryBackup, deleteDiaryBackup, listDiaryBackups } from "./lib/tauri";
+import { DiaryFinishPrompt } from "./components/diary/DiaryFinishPrompt";
 import { StatusBar } from "./components/layout/StatusBar";
 import { FilterBar } from "./components/layout/FilterBar";
 import { ToastContainer } from "./components/ui/Toast";
@@ -167,13 +180,18 @@ function AppContent() {
     automationPublishEnabled: state.automationPublishEnabled,
     automationPublishUrl: state.automationPublishUrl,
     showFilterBar: state.showFilterBar,
+    showDiary: state.showDiary,
+    diaryFinishedPrompts: state.diaryFinishedPrompts,
     startOnLoginMode: state.startOnLoginMode,
     setSettings: state.setSettings,
     reset: state.reset,
   })));
   const t = useT();
+  const activeCategory = useCategoryStore((state) => state.activeCategory);
+  const setActiveCategory = useCategoryStore((state) => state.setActiveCategory);
   const gameCount = useGameStore((s) => Object.keys(s.games).length);
   const setGames = useGameStore((s) => s.setGames);
+  const setInstalledAppIds = useGameStore((s) => s.setInstalledAppIds);
   const hydrateDetailsCache = useGameStore((s) => s.hydrateDetailsCache);
   const hydrateHltbCache = useHltbStore((s) => s.hydrateCache);
   const hydrateFailedCache = useFailedGamesStore((s) => s.hydrateCache);
@@ -304,10 +322,42 @@ function AppContent() {
   }, [settings.updateChannel]);
 
   useEffect(() => {
+    if (!settings.showDiary && activeCategory === "diary") {
+      setActiveCategory("all");
+    }
+  }, [activeCategory, setActiveCategory, settings.showDiary]);
+
+  useEffect(() => {
     hydrateSettingsFromDisk()
       .catch(() => {})
       .finally(() => setSettingsHydrated(true));
   }, [hydrateSettingsFromDisk]);
+
+  const diaryAutoBackupRef = useRef(false);
+  useEffect(() => {
+    if (!settingsHydrated || diaryAutoBackupRef.current) return;
+    diaryAutoBackupRef.current = true;
+    void (async () => {
+      try {
+        await useDiaryStore.getState().hydrate();
+        const diary = useDiaryStore.getState();
+        const hasData = Object.keys(diary.journal).length > 0 || diary.pages.length > 0 || Object.keys(diary.achievements).length > 0;
+        if (!hasData) return;
+        const backups = await listDiaryBackups();
+        const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+        if (!backups.some((backup) => backup.created_at_ms > weekAgo)) {
+          await createDiaryBackup("Weekly auto-backup");
+        }
+        const rotated = await listDiaryBackups();
+        const autos = rotated.filter((backup) => backup.description === "Auto-backup" || backup.description === "Weekly auto-backup" || backup.description === "Daily auto-backup");
+        for (const stale of autos.slice(10)) {
+          await deleteDiaryBackup(stale.name).catch(() => {});
+        }
+      } catch {
+        // Backup failures must never block startup.
+      }
+    })();
+  }, [settingsHydrated]);
 
   useEffect(() => {
     if (!settingsHydrated || !interactiveStartupReady || versionCheckCompletedRef.current) return;
@@ -466,9 +516,10 @@ function AppContent() {
     setReloadError("");
     try {
       const previousGameIds = new Set(Object.keys(useGameStore.getState().games).map(Number));
-      const [games, collections] = await Promise.all([
+      const [games, collections, installedAppIds] = await Promise.all([
         fetchLibrary(currentSettings.apiKey, currentSettings.steamId64),
         loadCollections(currentSettings.steamPath, currentSettings.steamId3),
+        loadInstalledLibrary(currentSettings.steamPath).catch(() => null),
         useFamilyStore.getState().hydrate(),
         useAppNameOverrideStore.getState().hydrate(),
       ]);
@@ -493,6 +544,7 @@ function AppContent() {
         newGames: newGameCount,
       });
       setGames(mergedGames);
+      setInstalledAppIds(installedAppIds);
       usePlayHistoryStore.getState().observeLibrary(mergedGames);
       setCollections(collections);
       useSteamAppIndexStore.getState().ensureFresh(currentSettings.apiKey).then(() => {
@@ -794,12 +846,20 @@ function AppContent() {
           }}
         />
         <div className="flex flex-1 overflow-hidden">
-          <Sidebar />
+          <div className="hidden md:flex">
+            <Sidebar />
+          </div>
           <main className="flex flex-1 flex-col overflow-hidden">
-            {settings.showFilterBar !== false && <FilterBar />}
-            <div className="flex-1 overflow-auto p-4">
-              <GameGrid />
-            </div>
+            {activeCategory === "diary" && settings.showDiary ? (
+              <DiaryPage />
+            ) : (
+              <>
+                {settings.showFilterBar !== false && <FilterBar />}
+                <div className="flex-1 overflow-auto p-4">
+                  <GameGrid />
+                </div>
+              </>
+            )}
           </main>
         </div>
         {availableUpdate && (
@@ -825,6 +885,7 @@ function AppContent() {
           />
         </Suspense>
       )}
+      {settingsHydrated && settings.showDiary && settings.diaryFinishedPrompts && <DiaryFinishPrompt />}
       {updateChangelog && (
         <UpdateChangelogDialog
           previousVersion={updateChangelog.previousVersion}

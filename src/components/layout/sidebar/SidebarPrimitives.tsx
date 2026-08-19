@@ -14,26 +14,40 @@ export function SidebarItem({
   icon,
   label,
   count,
+  disabled = false,
 }: {
   active: boolean;
-  onClick: () => void;
+  onClick?: () => void;
   icon: ReactNode;
   label: string;
-  count: number;
+  count?: number;
+  disabled?: boolean;
 }) {
+  const hasCount = count !== undefined;
+
   return (
     <button
       onClick={onClick}
-      className={`grid min-h-8 w-full grid-cols-[1.25rem_minmax(0,1fr)_0.75rem_2.5rem] items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm transition-colors ${
+      disabled={disabled}
+      aria-disabled={disabled || undefined}
+      className={`grid min-h-8 w-full ${
+        hasCount
+          ? "grid-cols-[1.25rem_minmax(0,1fr)_0.75rem_2.5rem]"
+          : "grid-cols-[1.25rem_minmax(0,1fr)]"
+      } items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-sm transition-colors ${
         active
           ? "bg-repressurizer-accent/10 text-repressurizer-accent"
           : "text-repressurizer-text hover:bg-repressurizer-surface-hover"
-      }`}
+      } ${disabled ? "cursor-default text-repressurizer-text-muted hover:bg-transparent" : ""}`}
     >
-      <span className={`flex h-5 w-5 items-center justify-center ${active ? "text-repressurizer-accent" : "text-repressurizer-text-faint"}`}>{icon}</span>
+      <span className={`flex h-5 w-5 items-center justify-center ${active ? "text-repressurizer-accent" : disabled ? "text-repressurizer-text-muted" : "text-repressurizer-text-faint"}`}>{icon}</span>
       <span className="min-w-0 truncate">{label}</span>
-      <span aria-hidden="true" />
-      <span className="text-right font-mono text-[10px] text-repressurizer-text-faint tabular-nums">{count}</span>
+      {hasCount && (
+        <>
+          <span aria-hidden="true" />
+          <span className="text-right font-mono text-[10px] text-repressurizer-text-faint tabular-nums">{count}</span>
+        </>
+      )}
     </button>
   );
 }

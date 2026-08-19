@@ -20,6 +20,7 @@ import {
   X,
   ArrowsMerge,
   UsersThree,
+  Notebook,
 } from "@phosphor-icons/react";
 import { useT } from "../../../lib/i18n";
 import { SteamImage } from "../../games/SteamImage";
@@ -85,6 +86,7 @@ export function Sidebar() {
   const pinFavorites = useSettingsStore((s) => s.pinFavorites);
   const showSmartLists = useSettingsStore((s) => s.showSmartLists);
   const showNowPlaying = useSettingsStore((s) => s.showNowPlaying);
+  const showDiary = useSettingsStore((s) => s.showDiary);
   const sidebarWidth = useSettingsStore((s) => s.sidebarWidth);
   const categoryColors = useSettingsStore((s) => s.categoryColors ?? {});
   const setSettings = useSettingsStore((s) => s.setSettings);
@@ -297,6 +299,21 @@ export function Sidebar() {
             label={t("sidebar.uncategorized")}
             count={uncategorizedCount}
           />
+        )}
+
+        {(showDiary || showSmartLists) && <div className="my-2 mx-2 border-t border-repressurizer-border-subtle" />}
+
+        {/* Workspace */}
+        {showDiary && (
+          <>
+            <p className="mb-1 px-2.5 text-[10px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("sidebar.workspace")}</p>
+            <SidebarItem
+              active={activeCategory === "diary"}
+              onClick={() => setActiveCategory("diary")}
+              icon={<Notebook size={15} weight={activeCategory === "diary" ? "fill" : "duotone"} />}
+              label={t("sidebar.diary")}
+            />
+          </>
         )}
 
         {showSmartLists && (

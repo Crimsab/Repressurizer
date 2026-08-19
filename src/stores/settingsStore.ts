@@ -46,6 +46,9 @@ const defaults: AppSettings = {
   showSmartLists: true,
   showEmptyLists: false,
   showNowPlaying: true,
+  showDiary: true,
+  diaryFinishedPrompts: true,
+  diaryRatingEmojis: ["😫", "😖", "😕", "😐", "🙂", "😊", "😄", "🤩", "🔥", "🏆"],
   showFilterBar: true,
   hideCollectionOnlyGames: false,
   showDetailHltb: true,
@@ -207,6 +210,10 @@ function normalizeSettings(raw: Partial<AppSettings>): AppSettings {
   return {
     ...defaults,
     ...raw,
+    diaryRatingEmojis: Array.from({ length: 10 }, (_, index) => {
+      const value = raw.diaryRatingEmojis?.[index];
+      return typeof value === "string" && value.trim() ? Array.from(value.trim()).slice(0, 4).join("") : defaults.diaryRatingEmojis[index];
+    }),
     hltbConcurrency: clampInteger(raw.hltbConcurrency, defaults.hltbConcurrency, 1, 10),
     achievementsConcurrency: clampInteger(raw.achievementsConcurrency, defaults.achievementsConcurrency, 1, 10),
     steamDetailsDelayMs: clampInteger(raw.steamDetailsDelayMs, defaults.steamDetailsDelayMs, 100, 30_000),

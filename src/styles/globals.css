@@ -240,3 +240,66 @@ body {
 .drag-over-category {
   border-top: 2px solid var(--color-repressurizer-accent);
 }
+
+/* Diary rating slider: visible grabbable thumb */
+.diary-rating-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  outline: none;
+}
+.diary-rating-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgb(16 185 129);
+  border: 3px solid white;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+  cursor: grab;
+  transition: transform 0.1s ease;
+}
+.diary-rating-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+}
+.diary-rating-slider::-webkit-slider-thumb:active {
+  cursor: grabbing;
+  transform: scale(1.25);
+}
+.diary-rating-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgb(16 185 129);
+  border: 3px solid white;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+  cursor: grab;
+}
+
+/* Diary markdown rendered view */
+.diary-markdown h1 { font-size: 1.5rem; font-weight: 700; color: white; margin: 1rem 0 0.5rem; }
+.diary-markdown h2 { font-size: 1.2rem; font-weight: 600; color: white; margin: 0.8rem 0 0.4rem; }
+.diary-markdown h3 { font-size: 1rem; font-weight: 600; color: white; margin: 0.6rem 0 0.3rem; }
+.diary-markdown p { margin: 0.4rem 0; }
+.diary-markdown ul, .diary-markdown ol { margin: 0.4rem 0; padding-left: 1.4rem; }
+.diary-markdown li { margin: 0.15rem 0; }
+.diary-markdown code { background: rgba(255,255,255,0.08); padding: 0.1rem 0.35rem; border-radius: 4px; font-size: 0.85em; }
+.diary-markdown pre { background: rgba(0,0,0,0.3); padding: 0.8rem; border-radius: 8px; overflow-x: auto; margin: 0.6rem 0; }
+.diary-markdown pre code { background: transparent; padding: 0; }
+.diary-markdown blockquote { border-left: 3px solid rgba(126,184,255,0.4); padding-left: 0.8rem; margin: 0.5rem 0; color: #a0a0a8; }
+.diary-markdown table { border-collapse: collapse; margin: 0.6rem 0; width: 100%; }
+.diary-markdown th { text-align: left; border-bottom: 2px solid rgba(255,255,255,0.15); padding: 0.35rem 0.6rem; font-weight: 600; color: white; }
+.diary-markdown td { border-bottom: 1px solid rgba(255,255,255,0.07); padding: 0.3rem 0.6rem; }
+.diary-markdown a { color: rgb(126,184,255); text-decoration: underline; }
+.diary-markdown hr { border: none; border-top: 1px solid rgba(255,255,255,0.1); margin: 1rem 0; }
+.diary-markdown img { max-width: 100%; border-radius: 8px; }
+
+/* Ensure markdown text is selectable (right-click copy works) */
+.diary-markdown {
+  user-select: text;
+  -webkit-user-select: text;
+}
+.diary-markdown * {
+  user-select: text;
+  -webkit-user-select: text;
+}
