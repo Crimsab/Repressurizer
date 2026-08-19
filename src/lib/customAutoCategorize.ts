@@ -74,6 +74,23 @@ export interface CustomNumericMetadataCondition extends CustomConditionBase {
   steamReviewScoreMode?: "positivePercent" | "wilson";
 }
 
+export interface CustomDiaryCondition extends CustomConditionBase {
+  kind: "diary";
+  field: "status" | "rating" | "hasJournal" | "hasPages";
+  status?: "backlog" | "playing" | "finished" | "abandoned" | "archived";
+  state?: "require" | "exclude";
+  minRating?: number;
+  maxRating?: number;
+}
+
+export interface DiaryAutoCatSnapshot {
+  entries: Record<number, { decision?: string; markedBacklog?: boolean }>;
+  statuses: Record<number, string>;
+  ratings: Record<number, { rating?: number }>;
+  journal: Record<number, unknown[]>;
+  pageAppIds: Set<number>;
+}
+
 export type CustomRuleConditionV1 =
   | CustomCategoryCondition
   | CustomSpecialCondition
@@ -82,7 +99,8 @@ export type CustomRuleConditionV1 =
   | CustomHltbCondition
   | CustomMetadataTextCondition
   | CustomPlatformCondition
-  | CustomNumericMetadataCondition;
+  | CustomNumericMetadataCondition
+  | CustomDiaryCondition;
 
 export interface CustomAutoCatConfigV1 {
   schema: "repressurizer.customAutoCat";
@@ -120,6 +138,7 @@ interface EvaluateCustomAutoCatInput {
   ratings: Record<number, SteamReviewSummary>;
   hltbTimeMode: HltbTimeMode;
   detailsCacheMaxAgeDays?: number;
+  diary?: DiaryAutoCatSnapshot;
 }
 
 type MissingReason = "hltb" | "details" | "ratings" | "invalid";
@@ -375,6 +394,17 @@ function normalizeCondition(raw: unknown): CustomRuleConditionV1 | null {
       steamReviewScoreMode: source.steamReviewScoreMode === "wilson" ? "wilson" : "positivePercent",
     };
   }
+  if (source.kind === "diary") {
+    return {
+      ...base,
+      kind: "diary",
+      field: source.field === "rating" || source.field === "hasJournal" || source.field === "hasPages" ? source.field : "status",
+      status: ["backlog", "playing", "finished", "abandoned", "archived"].includes(String(source.status)) ? source.status : "finished",
+      state: source.state === "exclude" ? "exclude" : "require",
+      minRating: optionalNumber(source.minRating),
+      maxRating: optionalNumber(source.maxRating),
+    };
+  }
 
   return null;
 }
@@ -390,6 +420,7 @@ function evaluateCondition(
   if (condition.kind === "special") return evaluateSpecialCondition(condition, game.appid, index);
   if (condition.kind === "title") return evaluateTitleCondition(condition, game, input.details[game.appid], config);
   if (condition.kind === "playtime") return matchesRange(game.playtime_forever / 60, condition.minHours, condition.maxHoursExclusive) ? "match" : "noMatch";
+  if (condition.kind === "diary") return evaluateDiaryCondition(condition, game, input.diary);
   if (condition.kind === "hltb") {
     const hours = getHltbHours(input.hltbData[game.appid], condition.mode || input.hltbTimeMode);
     if (hours == null) return missing(condition, config, "hltb");
@@ -412,6 +443,32 @@ function evaluateCondition(
     return evaluateDetailsNumberCondition(condition, detail, config);
   }
   return { missing: "invalid", behavior: "exclude" };
+}
+
+function evaluateDiaryCondition(condition: CustomDiaryCondition, game: OwnedGame, diary: DiaryAutoCatSnapshot | undefined): ConditionOutcome {
+  const snapshot = diary ?? { entries: {}, statuses: {}, ratings: {}, journal: {}, pageAppIds: new Set<number>() };
+  if (condition.field === "rating") {
+    const rating = snapshot.ratings[game.appid]?.rating ?? 0;
+    return rating > 0 && matchesInclusiveRange(rating, condition.minRating, condition.maxRating) ? "match" : "noMatch";
+  }
+  if (condition.field === "hasJournal" || condition.field === "hasPages") {
+    const has = condition.field === "hasJournal" ? (snapshot.journal[game.appid]?.length ?? 0) > 0 : snapshot.pageAppIds.has(game.appid);
+    return condition.state === "exclude" ? (!has ? "match" : "noMatch") : (has ? "match" : "noMatch");
+  }
+  const decision = snapshot.entries[game.appid]?.decision;
+  const rawStatus = snapshot.statuses[game.appid] ?? "none";
+  const status = decision === "archived"
+    ? "archived"
+    : rawStatus === "abandoned"
+      ? "abandoned"
+      : rawStatus === "beaten" || rawStatus === "completed"
+        ? "finished"
+        : snapshot.entries[game.appid]?.markedBacklog
+          ? "backlog"
+          : rawStatus === "playing" || game.playtime_forever > 0
+            ? "playing"
+            : "backlog";
+  return status === (condition.status ?? "finished") ? "match" : "noMatch";
 }
 
 function evaluateCategoryCondition(condition: CustomCategoryCondition, appId: number, index: CategoryIndex): ConditionOutcome {

@@ -14,6 +14,9 @@ import {
 import { useBackgroundFetchStore } from "../../../stores/backgroundFetchStore";
 import { useHltbStore } from "../../../stores/hltbStore";
 import { useSteamRatingsStore } from "../../../stores/steamRatingsStore";
+import { useDiaryStore } from "../../../stores/diaryStore";
+import { useStatusStore } from "../../../stores/statusStore";
+import { useReviewStore } from "../../../stores/reviewStore";
 import { useHltbIgnoredStore } from "../../../stores/hltbIgnoredStore";
 import { useFailedGamesStore } from "../../../stores/failedGamesStore";
 import {
@@ -139,6 +142,11 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
   const hltbData = useHltbStore((s) => s.data);
   const ignoredHltbFails = useHltbIgnoredStore((s) => s.fails);
   const hltbTimeMode = useSettingsStore((s) => s.hltbTimeMode);
+  const diaryEntries = useDiaryStore((s) => s.entries);
+  const diaryJournal = useDiaryStore((s) => s.journal);
+  const diaryPages = useDiaryStore((s) => s.pages);
+  const gameStatuses = useStatusStore((s) => s.statuses);
+  const userReviews = useReviewStore((s) => s.reviews);
   const detailsCacheMaxAgeDays = useSettingsStore((s) => s.detailsCacheMaxAgeDays);
 
   const persist = useAutoCategorizeStore();
@@ -598,6 +606,13 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
         ratings: ratingsForRun,
         hltbTimeMode,
         detailsCacheMaxAgeDays,
+        diary: {
+          entries: diaryEntries,
+          statuses: gameStatuses,
+          ratings: userReviews,
+          journal: diaryJournal,
+          pageAppIds: new Set(diaryPages.flatMap((page) => page.scope === "all" ? Object.keys(games).map(Number) : page.appIds)),
+        },
       });
     }
 
@@ -694,7 +709,7 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
     }
 
     return withProcessedAppIds(await runScoreCategorizer(allDetails, true), allDetails.map((detail) => detail.app_id));
-  }, [collections, details, detailsCacheMaxAgeDays, games, hltbData, ignoredHltbFails, hltbTimeMode]);
+  }, [collections, details, detailsCacheMaxAgeDays, diaryEntries, diaryJournal, diaryPages, gameStatuses, games, hltbData, ignoredHltbFails, hltbTimeMode, userReviews]);
 
   const runCategorizer = useCallback(async (
     options: { cachedOnly?: boolean; skippedDetails?: number } = {}

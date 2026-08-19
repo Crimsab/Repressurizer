@@ -6,6 +6,7 @@ import {
   type CustomAutoCatConfigV1,
   type CustomCategoryCondition,
   type CustomConditionBase,
+  type CustomDiaryCondition,
   type CustomHltbCondition,
   type CustomMetadataTextCondition,
   type CustomNumericMetadataCondition,
@@ -34,7 +35,8 @@ type AddConditionKind =
   | "hltb"
   | "metadataText"
   | "platform"
-  | "metadataNumber";
+  | "metadataNumber"
+  | "diary";
 type AddConditionMenuValue = AddConditionKind | "__add";
 
 const ADD_CONDITION_OPTIONS: Array<{ value: AddConditionKind; label: string; description: string }> = [
@@ -46,6 +48,7 @@ const ADD_CONDITION_OPTIONS: Array<{ value: AddConditionKind; label: string; des
   { value: "metadataText", label: "Store metadata", description: "Genre, tag, flag, language, studio" },
   { value: "platform", label: "Platform support", description: "Windows, macOS, Linux" },
   { value: "metadataNumber", label: "Numeric metadata", description: "Year, Metacritic, Steam reviews" },
+  { value: "diary", label: "Diary", description: "Status, rating, journal, or pages" },
 ];
 const ADD_CONDITION_MENU_OPTIONS: Array<{ value: AddConditionMenuValue; label: string; description?: string; disabled?: boolean }> = [
   { value: "__add", label: "Add condition", disabled: true },
@@ -281,6 +284,9 @@ function ConditionRow({
       )}
       {condition.kind === "metadataNumber" && (
         <MetadataNumberConditionEditor condition={condition} onChange={onChange} />
+      )}
+      {condition.kind === "diary" && (
+        <DiaryConditionEditor condition={condition} onChange={onChange} />
       )}
     </div>
   );
@@ -573,6 +579,19 @@ function MetadataNumberConditionEditor({
   );
 }
 
+function DiaryConditionEditor({ condition, onChange }: { condition: CustomDiaryCondition; onChange: (condition: CustomRuleConditionV1) => void }) {
+  const fields = [
+    { value: "status" as const, label: "Game status" },
+    { value: "rating" as const, label: "Your rating" },
+    { value: "hasJournal" as const, label: "Has journal entries" },
+    { value: "hasPages" as const, label: "Has diary pages" },
+  ];
+  return <div className="grid gap-2 sm:grid-cols-[180px_minmax(0,1fr)]">
+    <SelectMenu<CustomDiaryCondition["field"]> value={condition.field} options={fields} onChange={(field) => onChange({ ...condition, field })} size="sm" />
+    {condition.field === "status" ? <SelectMenu<NonNullable<CustomDiaryCondition["status"]>> value={condition.status ?? "finished"} options={[{ value: "backlog", label: "To play" }, { value: "playing", label: "In progress" }, { value: "finished", label: "Finished" }, { value: "abandoned", label: "Abandoned" }, { value: "archived", label: "Archived" }]} onChange={(status) => onChange({ ...condition, status })} size="sm" /> : condition.field === "rating" ? <div className="grid grid-cols-2 gap-2"><NumberInput label="min (1–10)" value={condition.minRating} onChange={(minRating) => onChange({ ...condition, minRating })} /><NumberInput label="max (1–10)" value={condition.maxRating} onChange={(maxRating) => onChange({ ...condition, maxRating })} /></div> : <SelectMenu<NonNullable<CustomDiaryCondition["state"]>> value={condition.state ?? "require"} options={[{ value: "require", label: "require" }, { value: "exclude", label: "exclude" }]} onChange={(state) => onChange({ ...condition, state })} size="sm" />}
+  </div>;
+}
+
 function NumberInput({ label, value, onChange }: { label: string; value?: number; onChange: (value: number | undefined) => void }) {
   return (
     <label className="block">
@@ -605,6 +624,7 @@ function defaultCondition(kind: AddConditionKind): CustomRuleConditionV1 {
     return { ...baseCondition(), kind: "metadataText", field: "genre", mode: "any", values: [], match: "contains" };
   }
   if (kind === "platform") return { ...baseCondition(), kind: "platform", mode: "any", values: ["windows"] };
+  if (kind === "diary") return { ...baseCondition(), kind: "diary", field: "status", status: "finished", state: "require" };
   return { ...baseCondition(), kind: "metadataNumber", field: "metacritic", min: 80 };
 }
 
@@ -632,6 +652,7 @@ function conditionLabel(kind: CustomRuleConditionV1["kind"]): string {
   if (kind === "metadataText") return "Store metadata";
   if (kind === "metadataNumber") return "Numeric metadata";
   if (kind === "hltb") return "HLTB";
+  if (kind === "diary") return "Diary";
   return kind.charAt(0).toUpperCase() + kind.slice(1);
 }
 

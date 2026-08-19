@@ -194,4 +194,52 @@ describe("evaluateCustomAutoCat", () => {
     expect(result.assignments["Windows RPG"]).toEqual([1]);
     expect(result.custom_diagnostics?.skippedMissingDetails).toBe(2);
   });
+
+  it("matches Diary status, rating, journal, and page conditions", () => {
+    const result = evaluateCustomAutoCat({
+      config: config("Finished journaled favorites", [
+        { id: "status", kind: "diary", field: "status", status: "finished" },
+        { id: "rating", kind: "diary", field: "rating", minRating: 8 },
+        { id: "journal", kind: "diary", field: "hasJournal", state: "require" },
+        { id: "pages", kind: "diary", field: "hasPages", state: "require" },
+      ]),
+      games,
+      details: {},
+      collections: [],
+      hltbData: {},
+      ratings: {},
+      hltbTimeMode: "main_story",
+      diary: {
+        entries: {},
+        statuses: { 1: "completed", 2: "completed" },
+        ratings: { 1: { rating: 9 }, 2: { rating: 7 } },
+        journal: { 1: [{}], 2: [{}] },
+        pageAppIds: new Set([1, 2]),
+      },
+    });
+
+    expect(result.assignments["Finished journaled favorites"]).toEqual([1]);
+  });
+
+  it("treats a marked-backlog played game as backlog", () => {
+    const playedGames = [game(10, "Played unmarked", 5), game(11, "Played marked backlog", 6), game(12, "Unplayed", 0)];
+    const result = evaluateCustomAutoCat({
+      config: config("Explicit backlog", [{ id: "status", kind: "diary", field: "status", status: "backlog" }]),
+      games: playedGames,
+      details: {},
+      collections: [],
+      hltbData: {},
+      ratings: {},
+      hltbTimeMode: "main_story",
+      diary: {
+        entries: { 11: { decision: "backlog", markedBacklog: true } },
+        statuses: {},
+        ratings: {},
+        journal: {},
+        pageAppIds: new Set<number>(),
+      },
+    });
+
+    expect(result.assignments["Explicit backlog"]).toEqual([11, 12]);
+  });
 });
