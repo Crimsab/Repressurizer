@@ -12,6 +12,7 @@ import {
   type ExportFieldKey,
   type ExportFilters,
   type ExportFormat,
+  type ExportInstallationFilter,
   type ExportPlayedFilter,
   type ExportPresenceFilter,
   type ExportScope,
@@ -100,6 +101,7 @@ const FIELD_OPTIONS: { value: ExportFieldKey; label: TranslationKey }[] = [
   { value: "publishers", label: "export.field.publishers" },
   { value: "platforms", label: "export.field.platforms" },
   { value: "price", label: "export.field.price" },
+  { value: "installed", label: "export.field.installed" },
   { value: "collectionOnly", label: "export.field.collectionOnly" },
 ];
 
@@ -115,6 +117,7 @@ const DEFAULT_FILTERS: ExportFilters = {
   detailsPresence: "all",
   collectionOnly: "include",
   played: "all",
+  installation: "all",
 };
 
 function numberOrNull(value: string): number | null {
@@ -129,6 +132,8 @@ function toggleInList<T extends string>(list: readonly T[], value: T): T[] {
 
 export function ExportDialog({ onClose }: ExportDialogProps) {
   const games = useGameStore((s) => s.games);
+  const installedAppIds = useGameStore((s) => s.installedAppIds);
+  const installedLibraryReady = useGameStore((s) => s.installedLibraryReady);
   const details = useGameStore((s) => s.details);
   const hltbData = useHltbStore((s) => s.data);
   const statuses = useStatusStore((s) => s.statuses);
@@ -217,6 +222,8 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
       details,
       hltbData,
       statuses,
+      installedAppIds,
+      installedLibraryReady,
       hltbTimeMode: settings.hltbTimeMode,
       categoryColors: settings.categoryColors,
       appVersion: __APP_VERSION__,
@@ -238,6 +245,8 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
       details,
       hltbData,
       statuses,
+      installedAppIds,
+      installedLibraryReady,
       settings.hltbTimeMode,
       settings.categoryColors,
       settings.steamId64,
@@ -276,6 +285,12 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
     { value: "include", label: t("export.filter.include") },
     { value: "exclude", label: t("export.filter.exclude") },
     { value: "only", label: t("export.filter.only") },
+  ];
+
+  const installationOptions: SelectMenuOption<ExportInstallationFilter>[] = [
+    { value: "all", label: t("export.filter.all") },
+    { value: "installed", label: t("export.filter.installedOnly") },
+    { value: "not_installed", label: t("export.filter.notInstalledOnly") },
   ];
 
   const handleExport = async () => {
@@ -565,6 +580,15 @@ export function ExportDialog({ onClose }: ExportDialogProps) {
                     options={playedOptions}
                     onChange={(played) => updateFilters({ played })}
                     label={t("export.filter.played")}
+                    size="sm"
+                    className="min-w-0"
+                  />
+                  <SelectMenu<ExportInstallationFilter>
+                    value={filters.installation ?? "all"}
+                    options={installationOptions}
+                    onChange={(installation) => updateFilters({ installation })}
+                    label={t("export.filter.installation")}
+                    disabled={!installedLibraryReady}
                     size="sm"
                     className="min-w-0"
                   />

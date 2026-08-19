@@ -170,6 +170,10 @@ export async function loadLocalLicenseLibrary(
   return invoke<LocalLicenseApp[]>("load_local_license_library", { steamPath, steamId3 });
 }
 
+export async function loadInstalledLibrary(steamPath: string): Promise<number[]> {
+  return invoke<number[]>("load_installed_library", { steamPath });
+}
+
 export async function importDepressurizerProfile(
   path: string
 ): Promise<DepressurizerProfileImport> {
@@ -653,6 +657,29 @@ export async function loadAppData(key: string): Promise<string | null> {
 
 export async function saveAppData(key: string, data: string): Promise<void> {
   return invoke<void>("save_app_data", { key, data });
+}
+
+export interface DiaryBackupInfo {
+  name: string;
+  description: string;
+  created_at_ms: number;
+  files: string[];
+}
+
+export async function listDiaryBackups(): Promise<DiaryBackupInfo[]> {
+  return invoke<DiaryBackupInfo[]>("list_diary_backups");
+}
+
+export async function createDiaryBackup(description: string): Promise<string> {
+  return invoke<string>("create_diary_backup", { description });
+}
+
+export async function restoreDiaryBackup(name: string): Promise<void> {
+  return invoke<void>("restore_diary_backup", { name });
+}
+
+export async function deleteDiaryBackup(name: string): Promise<void> {
+  return invoke<void>("delete_diary_backup", { name });
 }
 
 export async function hideMainWindow(): Promise<void> {

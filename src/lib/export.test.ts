@@ -173,6 +173,39 @@ describe("manual export", () => {
     });
   });
 
+  it("filters by local installation state and can include it as an export field", () => {
+    const installed = JSON.parse(
+      generateExport({
+        scope: "all",
+        format: "json",
+        games,
+        collections,
+        installedAppIds: [1],
+        installedLibraryReady: true,
+        fields: ["name", "installed"],
+        filters: { installation: "installed" },
+      })
+    );
+    const notInstalled = JSON.parse(
+      generateExport({
+        scope: "all",
+        format: "json",
+        games,
+        collections,
+        installedAppIds: [1],
+        installedLibraryReady: true,
+        fields: ["name", "installed"],
+        filters: { installation: "not_installed" },
+      })
+    );
+
+    expect(installed).toEqual([{ name: "Alpha", installed: true }]);
+    expect(notInstalled).toEqual([
+      { name: "Beta", installed: false },
+      { name: "Gamma", installed: false },
+    ]);
+  });
+
   it("writes category CSV exports as a valid table", () => {
     const csv = generateExport({
       scope: "categories",

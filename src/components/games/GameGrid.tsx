@@ -64,6 +64,8 @@ export function GameGrid() {
   const clearSelection = useGameStore((s) => s.clearSelection);
   const rangeSelectGames = useGameStore((s) => s.rangeSelectGames);
   const filters = useGameStore((s) => s.filters);
+  const installedAppIds = useGameStore((s) => s.installedAppIds);
+  const installedLibraryReady = useGameStore((s) => s.installedLibraryReady);
   const statuses = useStatusStore((s) => s.statuses);
   const allGameTags = useTagsStore((s) => s.tags);
   const hltbData = useHltbStore((s) => s.data);
@@ -97,6 +99,7 @@ export function GameGrid() {
     () => savedAdvancedFilters.find((filter) => filter.id === activeAdvancedFilterId) ?? null,
     [savedAdvancedFilters, activeAdvancedFilterId]
   );
+  const installedAppIdSet = useMemo(() => new Set(installedAppIds), [installedAppIds]);
 
   const handleContextMenu = useCallback((e: React.MouseEvent, game: OwnedGame) => {
     e.preventDefault();
@@ -150,6 +153,11 @@ export function GameGrid() {
 
     if (hideCollectionOnlyGames && !filters.onlyCollectionOnly) {
       gameList = gameList.filter((g) => !g.is_collection_only);
+    }
+
+    if (installedLibraryReady && filters.installation !== "all") {
+      const wantInstalled = filters.installation === "installed";
+      gameList = gameList.filter((g) => installedAppIdSet.has(g.appid) === wantInstalled);
     }
 
     if (searchQuery.trim()) {
@@ -343,7 +351,7 @@ export function GameGrid() {
     });
 
     return gameList;
-  }, [games, activeCategory, collections, familyApps, searchQuery, sortBy, sortAsc, filters, activeAdvancedFilter, statuses, allGameTags, hltbData, hltbTimeMode, achievementSummaries, details, reviews, steamRatings, hideCollectionOnlyGames, currency, duplicateAppIds, delistedAppIds]);
+  }, [games, activeCategory, collections, familyApps, searchQuery, sortBy, sortAsc, filters, activeAdvancedFilter, statuses, allGameTags, hltbData, hltbTimeMode, achievementSummaries, details, reviews, steamRatings, hideCollectionOnlyGames, currency, duplicateAppIds, delistedAppIds, installedLibraryReady, installedAppIdSet]);
 
   const orderedIds = useMemo(() => filteredGames.map((g) => g.appid), [filteredGames]);
 

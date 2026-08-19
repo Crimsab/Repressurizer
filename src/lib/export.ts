@@ -3,7 +3,14 @@ import { generateLibrarySnapshotJson } from "./automationExport";
 import { getCategoryColor } from "./categoryColors";
 import { getHltbHours, hltbModeLabel } from "./hltb";
 import { bestAvailableReleaseDate } from "./releaseDates";
-import type { AchievementSummary, GameDetails, HltbTimeMode, OwnedGame, SteamCollection } from "./types";
+import type {
+  AchievementSummary,
+  GameDetails,
+  HltbTimeMode,
+  InstallationFilter,
+  OwnedGame,
+  SteamCollection,
+} from "./types";
 import type { FamilyLibraryApp, HltbData, WishlistItem } from "./tauri";
 import type { GameStatus } from "../stores/statusStore";
 
@@ -12,6 +19,7 @@ export type ExportFormat = "json" | "csv" | "txt" | "md";
 export type ExportPresenceFilter = "all" | "with" | "without";
 export type ExportCollectionOnlyFilter = "include" | "exclude" | "only";
 export type ExportPlayedFilter = "all" | "played" | "unplayed";
+export type ExportInstallationFilter = InstallationFilter;
 
 export type ExportFieldKey =
   | "appid"
@@ -29,6 +37,7 @@ export type ExportFieldKey =
   | "publishers"
   | "platforms"
   | "price"
+  | "installed"
   | "collectionOnly";
 
 export interface ExportFilters {
@@ -41,6 +50,7 @@ export interface ExportFilters {
   detailsPresence?: ExportPresenceFilter;
   collectionOnly?: ExportCollectionOnlyFilter;
   played?: ExportPlayedFilter;
+  installation?: ExportInstallationFilter;
 }
 
 export interface ExportOptions {
@@ -54,6 +64,10 @@ export interface ExportOptions {
   categoryKeys?: readonly string[];
   /** User status map, used for status fields and status filters. */
   statuses?: Record<number, GameStatus>;
+  /** App IDs with a local Steam app manifest. */
+  installedAppIds?: readonly number[];
+  /** False/undefined keeps installation filters and fields unknown instead of guessing. */
+  installedLibraryReady?: boolean;
   details?: Record<number, GameDetails>;
   hltbData?: Record<number, HltbData>;
   achievements?: Record<number, AchievementSummary>;
@@ -124,6 +138,7 @@ interface ExportGameRecord {
     country_code?: string | null;
     is_free: boolean;
   } | null;
+  installed: boolean | null;
   collection_only: boolean;
   has_details: boolean;
 }
@@ -272,6 +287,13 @@ const FIELD_DEFINITIONS: ExportFieldDefinition[] = [
     cellValue: (r) => r.price?.display ?? "",
   },
   {
+    key: "installed",
+    label: "Installed",
+    jsonKey: "installed",
+    jsonValue: (r) => r.installed,
+    cellValue: (r) => (r.installed == null ? "" : r.installed ? "yes" : "no"),
+  },
+  {
     key: "collectionOnly",
     label: "Local Only",
     jsonKey: "collection_only",
@@ -306,6 +328,7 @@ function normalizeFilters(filters: ExportFilters | undefined): Required<ExportFi
     detailsPresence: filters?.detailsPresence ?? "all",
     collectionOnly: filters?.collectionOnly ?? "include",
     played: filters?.played ?? "all",
+    installation: filters?.installation ?? "all",
   };
 }
 
@@ -423,7 +446,8 @@ function getGamesForScope(opts: ExportOptions, pickedCollections = pickCollectio
 function buildRecord(
   game: OwnedGame,
   opts: ExportOptions,
-  categoryCollections: SteamCollection[]
+  categoryCollections: SteamCollection[],
+  installedAppIdSet: ReadonlySet<number>,
 ): ExportGameRecord {
   const hltbMode = opts.hltbTimeMode ?? "main_story";
   const hltb = opts.hltbData?.[game.appid];
@@ -463,6 +487,7 @@ function buildRecord(
     publishers: asList(details?.publishers),
     platforms: platformList(details),
     price: priceDisplay(details),
+    installed: opts.installedLibraryReady ? installedAppIdSet.has(game.appid) : null,
     collection_only: Boolean(game.is_collection_only),
     has_details: Boolean(details),
   };
@@ -486,12 +511,20 @@ function matchesExportFilters(record: ExportGameRecord, filters: Required<Export
   if (filters.collectionOnly === "only" && !record.collection_only) return false;
   if (filters.played === "played" && record.playtime_minutes <= 0) return false;
   if (filters.played === "unplayed" && record.playtime_minutes > 0) return false;
+  if (
+    filters.installation !== "all" &&
+    record.installed !== null &&
+    record.installed !== (filters.installation === "installed")
+  ) {
+    return false;
+  }
   return true;
 }
 
 function buildExportDataset(opts: ExportOptions): ExportDataset {
   const fields = selectedFields(opts);
   const filters = normalizeFilters(opts.filters);
+  const installedAppIdSet = new Set(opts.installedAppIds ?? []);
   const pickedCollections = pickCollections(opts);
   const categoryCollections =
     opts.scope === "categories" || opts.scope === "categories_pick" || opts.scope === "category"
@@ -509,7 +542,7 @@ function buildExportDataset(opts: ExportOptions): ExportDataset {
       for (const game of sourceGames) sourceAppIds.add(game.appid);
       const missingAppIds = collection.added.filter((id) => !opts.games[id]);
       const rows = sourceGames
-        .map((game) => buildRecord(game, opts, categoryCollections))
+        .map((game) => buildRecord(game, opts, categoryCollections, installedAppIdSet))
         .filter((record) => matchesExportFilters(record, filters));
 
       if (opts.skipEmptyCategories && rows.length === 0) {
@@ -542,7 +575,7 @@ function buildExportDataset(opts: ExportOptions): ExportDataset {
 
   const sourceGames = getGamesForScope(opts, pickedCollections);
   const games = sourceGames
-    .map((game) => buildRecord(game, opts, categoryCollections))
+    .map((game) => buildRecord(game, opts, categoryCollections, installedAppIdSet))
     .filter((record) => matchesExportFilters(record, filters));
 
   return {

@@ -1,6 +1,12 @@
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
-import type { OwnedGame, GameDetails, GamePriceOverview, StoreReleaseDateResult } from "../lib/types";
+import type {
+  GameDetails,
+  GamePriceOverview,
+  InstallationFilter,
+  OwnedGame,
+  StoreReleaseDateResult,
+} from "../lib/types";
 import type { GameStatus } from "./statusStore";
 import { displayNameFromDetails, isPlaceholderGameName } from "../lib/libraryMerge";
 import { useSteamAppIndexStore } from "./steamAppIndexStore";
@@ -97,6 +103,7 @@ function markDetailsCacheFresh(details: GameDetails, previous?: GameDetails): Ga
 export interface FilterState {
   minHours: number | null;
   maxHours: number | null;
+  installation: InstallationFilter;
   statuses: GameStatus[]; // empty = all statuses
   onlyUnplayed: boolean;
   tagFilter: string[];    // empty = all tags
@@ -119,6 +126,7 @@ export interface FilterState {
 const DEFAULT_FILTERS: FilterState = {
   minHours: null,
   maxHours: null,
+  installation: "all",
   statuses: [],
   onlyUnplayed: false,
   tagFilter: [],
@@ -183,6 +191,8 @@ function bestMergedName(appId: number, existingName: string | null | undefined, 
 
 interface GameState {
   games: Record<number, OwnedGame>;
+  installedAppIds: number[];
+  installedLibraryReady: boolean;
   details: Record<number, GameDetails>;
   loading: boolean;
   error: string | null;
@@ -195,6 +205,7 @@ interface GameState {
 
   setGames: (games: OwnedGame[]) => void;
   mergeGames: (games: OwnedGame[]) => void;
+  setInstalledAppIds: (appIds: readonly number[] | null) => void;
   setDetails: (appId: number, details: GameDetails) => void;
   setBulkDetails: (details: GameDetails[]) => void;
   setBulkPriceSnapshots: (prices: GamePriceOverview[]) => void;
@@ -225,6 +236,8 @@ interface GameState {
 
 export const useGameStore = create<GameState>((set, get) => ({
   games: {},
+  installedAppIds: [],
+  installedLibraryReady: false,
   details: {},
   loading: false,
   error: null,
@@ -280,6 +293,20 @@ export const useGameStore = create<GameState>((set, get) => ({
       }
       return { games: map };
     }),
+
+  setInstalledAppIds: (appIds) => {
+    if (appIds === null) {
+      set({ installedAppIds: [], installedLibraryReady: false });
+      return;
+    }
+
+    const normalized = [...new Set(
+      appIds
+        .filter((appId) => Number.isFinite(appId) && appId > 0)
+        .map((appId) => Math.trunc(appId))
+    )].sort((a, b) => a - b);
+    set({ installedAppIds: normalized, installedLibraryReady: true });
+  },
 
   setDetails: (appId, details) =>
     set((state) => {
@@ -484,6 +511,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     return (
       f.minHours !== null ||
       f.maxHours !== null ||
+      f.installation !== "all" ||
       f.statuses.length > 0 ||
       f.onlyUnplayed ||
       f.tagFilter.length > 0 ||

@@ -331,6 +331,7 @@ export type AppTheme = "dark" | "dim" | "light";
 export type AppLocale = string;
 export type AppStartupMode = "tray" | "window";
 export type LibraryRefreshCacheMode = "none" | "basic" | "full";
+export type InstallationFilter = "all" | "installed" | "not_installed";
 export type AutomationPublishLogStatus = "success" | "failed" | "skipped";
 export type AutomationPublishCategoryMode = "all" | "custom";
 export type ProxyType = "http" | "https" | "socks5";
@@ -434,6 +435,9 @@ export interface AppSettings {
   showSmartLists: boolean;
   showEmptyLists: boolean;
   showNowPlaying: boolean;
+  showDiary: boolean;
+  diaryFinishedPrompts: boolean;
+  diaryRatingEmojis: string[];
   showFilterBar: boolean;
   hideCollectionOnlyGames: boolean;
   showDetailHltb: boolean;

@@ -2,6 +2,8 @@
 
 Plain text search ignores common punctuation differences, so `stalker` can match `S.T.A.L.K.E.R.` titles. Regex and structured filters are available when a title search is not enough.
 
+The toolbar also includes an **Installation** filter with **All**, **Installed only**, and **Not installed**. It becomes available after Repressurizer scans the configured Steam libraries for local `appmanifest_<appid>.acf` files.
+
 ## Examples
 
 ```text

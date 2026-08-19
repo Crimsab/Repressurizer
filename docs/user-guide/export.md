@@ -2,7 +2,7 @@
 
 The export dialog writes filtered library data as TXT, Markdown, JSON, or CSV.
 
-You can choose fields, include or skip categories, constrain playtime and HLTB ranges, select statuses, require metadata, and decide how local-only games are handled.
+You can choose fields, include or skip categories, constrain playtime and HLTB ranges, select statuses, filter by installed or not-installed games, require metadata, and decide how local-only games are handled. The optional **Installed** field is exported as `true`/`false` in JSON and `yes`/`no` in CSV or text formats.
 
 ![Export dialog](../assets/export.png)
 

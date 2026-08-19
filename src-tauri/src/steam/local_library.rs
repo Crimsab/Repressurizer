@@ -1,7 +1,7 @@
 use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 const PACKAGEINFO_MAGIC_27: u32 = 0x06_56_55_27;
 const PACKAGEINFO_MAGIC_28: u32 = 0x06_56_55_28;
@@ -86,6 +86,148 @@ pub fn load_local_license_library(
     }
 
     Ok(apps.into_iter().collect())
+}
+
+/// Return the app IDs for Steam games that have a local app manifest.
+///
+/// Steam can keep games in more than one library, so include the configured
+/// Steam root and the paths listed in libraryfolders.vdf. A manifest filename
+/// is the most stable local signal that an app is installed; its contents are
+/// deliberately not parsed here because Steam may rewrite them while the
+/// client is running.
+#[tauri::command]
+pub fn load_installed_library(steam_path: String) -> Result<Vec<u64>, String> {
+    let trimmed = steam_path.trim();
+    if trimmed.is_empty() {
+        return Err("Steam path is required to scan installed games".to_string());
+    }
+
+    let steam_root = PathBuf::from(trimmed);
+    if !steam_root.is_dir() {
+        return Err(format!(
+            "Steam installation directory does not exist: {}",
+            steam_root.display()
+        ));
+    }
+    if !steam_root.join("steamapps").is_dir() {
+        return Err(format!(
+            "Steam apps directory does not exist: {}",
+            steam_root.join("steamapps").display()
+        ));
+    }
+
+    let mut installed = BTreeSet::new();
+    for library_root in steam_library_roots(&steam_root) {
+        let steamapps = library_root.join("steamapps");
+        let Ok(entries) = fs::read_dir(&steamapps) else {
+            continue;
+        };
+
+        for entry in entries.flatten() {
+            let Ok(file_type) = entry.file_type() else {
+                continue;
+            };
+            if !file_type.is_file() {
+                continue;
+            }
+            if let Some(appid) = appid_from_manifest_name(&entry.path()) {
+                installed.insert(appid);
+            }
+        }
+    }
+
+    Ok(installed.into_iter().collect())
+}
+
+fn steam_library_roots(steam_root: &Path) -> Vec<PathBuf> {
+    let mut roots = BTreeSet::from([steam_root.to_path_buf()]);
+    let vdf_paths = [
+        steam_root.join("steamapps").join("libraryfolders.vdf"),
+        steam_root.join("config").join("libraryfolders.vdf"),
+    ];
+
+    for path in vdf_paths {
+        let Ok(content) = fs::read_to_string(path) else {
+            continue;
+        };
+        for library_path in parse_vdf_path_values(&content) {
+            let candidate = PathBuf::from(library_path);
+            roots.insert(if candidate.is_absolute() {
+                candidate
+            } else {
+                steam_root.join(candidate)
+            });
+        }
+    }
+
+    roots.into_iter().collect()
+}
+
+fn parse_vdf_path_values(content: &str) -> Vec<String> {
+    content
+        .lines()
+        .filter_map(|line| {
+            let values = parse_vdf_quoted_strings(line);
+            (values.len() >= 2 && values[0].eq_ignore_ascii_case("path"))
+                .then(|| values[1].trim().to_string())
+        })
+        .filter(|value| !value.is_empty())
+        .collect()
+}
+
+fn parse_vdf_quoted_strings(line: &str) -> Vec<String> {
+    let mut values = Vec::new();
+    let mut current = String::new();
+    let mut in_quotes = false;
+    let mut escaped = false;
+
+    for character in line.chars() {
+        if !in_quotes {
+            if character == '"' {
+                current.clear();
+                in_quotes = true;
+            }
+            continue;
+        }
+
+        if escaped {
+            current.push(match character {
+                'n' => '\n',
+                'r' => '\r',
+                't' => '\t',
+                '\\' => '\\',
+                '"' => '"',
+                other => other,
+            });
+            escaped = false;
+        } else if character == '\\' {
+            escaped = true;
+        } else if character == '"' {
+            values.push(current.clone());
+            current.clear();
+            in_quotes = false;
+        } else {
+            current.push(character);
+        }
+    }
+
+    if in_quotes && escaped {
+        current.push('\\');
+    }
+    if in_quotes {
+        values.push(current);
+    }
+    values
+}
+
+fn appid_from_manifest_name(path: &Path) -> Option<u64> {
+    let filename = path.file_name()?.to_str()?;
+    let appid = filename.strip_prefix("appmanifest_")?;
+    let appid = appid
+        .strip_suffix(".acf")
+        .or_else(|| appid.strip_suffix(".ACF"))?;
+    let appid = appid.parse::<u64>().ok()?;
+    (appid > 0).then_some(appid)
 }
 
 pub fn parse_licensecache(data: &[u8], account_id: i32) -> Result<Vec<u32>, String> {
@@ -471,6 +613,51 @@ mod tests {
             ]
         );
 
+        fs::remove_dir_all(steam_path).unwrap();
+    }
+
+    #[test]
+    fn finds_installed_appids_across_configured_steam_libraries() {
+        let steam_path = temp_steam_dir("installed-library");
+        let primary_steamapps = steam_path.join("steamapps");
+        let secondary_library = steam_path.join("library-two");
+        let secondary_steamapps = secondary_library.join("steamapps");
+        fs::create_dir_all(&primary_steamapps).unwrap();
+        fs::create_dir_all(&secondary_steamapps).unwrap();
+
+        fs::write(primary_steamapps.join("appmanifest_10.acf"), "manifest").unwrap();
+        fs::write(primary_steamapps.join("appmanifest_10.acf.tmp"), "ignored").unwrap();
+        fs::write(secondary_steamapps.join("appmanifest_20.acf"), "manifest").unwrap();
+        fs::write(primary_steamapps.join("not-a-manifest.acf"), "ignored").unwrap();
+
+        let encoded_library_path = secondary_library.to_string_lossy().replace('\\', "\\\\");
+        fs::write(
+            primary_steamapps.join("libraryfolders.vdf"),
+            format!(
+                "\"libraryfolders\"\n{{\n  \"0\" {{\n    \"path\" \"{encoded_library_path}\"\n  }}\n}}\n"
+            ),
+        )
+        .unwrap();
+
+        let installed = load_installed_library(steam_path.to_string_lossy().into_owned()).unwrap();
+
+        assert_eq!(installed, vec![10, 20]);
+        fs::remove_dir_all(steam_path).unwrap();
+    }
+
+    #[test]
+    fn parses_escaped_vdf_paths() {
+        let values = parse_vdf_path_values("  \"path\" \"C:\\\\Games\\\\Steam\"");
+
+        assert_eq!(values, vec!["C:\\Games\\Steam"]);
+    }
+
+    #[test]
+    fn rejects_a_directory_without_steamapps() {
+        let steam_path = temp_steam_dir("not-steam");
+        fs::create_dir_all(&steam_path).unwrap();
+
+        assert!(load_installed_library(steam_path.to_string_lossy().into_owned()).is_err());
         fs::remove_dir_all(steam_path).unwrap();
     }
 

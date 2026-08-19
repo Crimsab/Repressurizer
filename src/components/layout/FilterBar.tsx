@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useGameStore, type FilterState } from "../../stores/gameStore";
+import type { InstallationFilter } from "../../lib/types";
 import { useCategoryStore } from "../../stores/categoryStore";
 import {
   useAdvancedFilterStore,
@@ -21,6 +22,7 @@ export function FilterBar() {
   const t = useT();
   const filters = useGameStore((s) => s.filters);
   const setFilters = useGameStore((s) => s.setFilters);
+  const installedLibraryReady = useGameStore((s) => s.installedLibraryReady);
   const resetFilters = useGameStore((s) => s.resetFilters);
   const hasActiveFilters = useGameStore((s) => s.hasActiveFilters());
   const activeSavedFilterId = useAdvancedFilterStore((s) => s.activeFilterId);
@@ -99,6 +101,24 @@ export function FilterBar() {
       >
         {t("filter.unplayedOnly")}
       </button>
+
+      <div className="flex shrink-0 items-center gap-1.5">
+        <span className="text-[11px] text-repressurizer-text-faint">{t("filter.installation.title")}:</span>
+        <SelectMenu<InstallationFilter>
+          value={filters.installation}
+          options={[
+            { value: "all", label: t("filter.installation.all") },
+            { value: "installed", label: t("filter.installation.installed") },
+            { value: "not_installed", label: t("filter.installation.notInstalled") },
+          ]}
+          onChange={(installation) => setFilters({ installation })}
+          ariaLabel={t("filter.installation.title")}
+          disabled={!installedLibraryReady}
+          size="sm"
+          className="w-24"
+          buttonClassName="h-7 bg-repressurizer-bg px-2 text-[11px]"
+        />
+      </div>
 
       {/* Status filter */}
       <div className="flex gap-1">
