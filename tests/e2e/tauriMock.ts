@@ -46,6 +46,8 @@ export async function installTauriMock(page: Page) {
       showSmartLists: true,
       showEmptyLists: false,
       showNowPlaying: true,
+      showDiary: true,
+      diaryFinishedPrompts: false,
       showFilterBar: true,
       hltbConcurrency: 5,
       achievementsConcurrency: 5,
@@ -180,11 +182,33 @@ export async function installTauriMock(page: Page) {
             previousPlaytime: 1735,
             currentPlaytime: 1800,
           },
+          {
+            id: "632470-1775000050-90",
+            appid: 632470,
+            name: "Disco Elysium - The Final Cut",
+            minutes: 90,
+            playedAt: 1_775_000_050,
+            observedAt: 1_775_000_100,
+            previousPlaytime: 630,
+            currentPlaytime: 720,
+          },
+          {
+            id: "12100-1775100000-60",
+            appid: 12100,
+            name: "Grand Theft Auto III",
+            minutes: 60,
+            playedAt: 1_775_100_000,
+            observedAt: 1_775_100_050,
+            previousPlaytime: 30,
+            currentPlaytime: 90,
+          },
         ],
       }),
     };
 
     window.localStorage.setItem("repressurizer-settings", JSON.stringify(settings));
+    const diaryBackups: Array<{ name: string; description: string; created_at_ms: number; files: string[] }> = [];
+    let diaryBackupCounter = 0;
     if (window.localStorage.getItem("repressurizer-last-seen-version") == null) {
       window.localStorage.setItem("repressurizer-last-seen-version", "0.6.4");
     }
@@ -351,6 +375,8 @@ export async function installTauriMock(page: Page) {
             }
           case "fetch_library":
             return games;
+          case "load_installed_library":
+            return [632470, 1145360, 39140];
           case "fetch_steam_app_list":
             if (!args?.apiKey) throw new Error("Steam Web API key is required");
             return [
@@ -470,6 +496,43 @@ export async function installTauriMock(page: Page) {
               );
             }
             return null;
+          case "write_export_file":
+            window.localStorage.setItem("repressurizer-last-written-text", String(args?.contents ?? ""));
+            window.localStorage.setItem("repressurizer-last-export-path", String(args?.path ?? ""));
+            return null;
+          case "write_export_bundle": {
+            const files = (args?.files ?? {}) as Record<string, string>;
+            window.localStorage.setItem("repressurizer-last-export-bundle", JSON.stringify(Object.keys(files)));
+            window.localStorage.setItem("repressurizer-last-written-text", files["index.json"] ?? "");
+            window.localStorage.setItem("repressurizer-last-export-path", String(args?.root ?? ""));
+            return null;
+          }
+          case "list_diary_backups":
+            return diaryBackups;
+          case "create_diary_backup": {
+            diaryBackupCounter += 1;
+            const backupName = `diary-backup-20260819_12000${diaryBackupCounter}`;
+            diaryBackups.unshift({
+              name: backupName,
+              description: String(args?.description ?? ""),
+              created_at_ms: Date.now(),
+              files: ["diary.json", "diary-templates.json", "diary-status-events.json", "diary-achievements.json", "reviews.json", "notes.json", "statuses.json"],
+            });
+            window.localStorage.setItem("repressurizer-last-diary-backup", backupName);
+            return backupName;
+          }
+          case "restore_diary_backup": {
+            const restored = diaryBackups.find((backup) => backup.name === String(args?.name ?? ""));
+            if (!restored) throw new Error("Diary backup not found");
+            window.localStorage.setItem("repressurizer-last-diary-restore", restored.name);
+            return null;
+          }
+          case "delete_diary_backup": {
+            const index = diaryBackups.findIndex((backup) => backup.name === String(args?.name ?? ""));
+            if (index === -1) throw new Error("Diary backup not found");
+            diaryBackups.splice(index, 1);
+            return null;
+          }
           case "fetch_hltb":
             return { main_story: 12, main_extra: 18, completionist: 30 };
           case "run_flags_categorizer": {

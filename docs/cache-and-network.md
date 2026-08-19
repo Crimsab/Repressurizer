@@ -98,6 +98,10 @@ You can:
 - Hide them globally with the Hide local-only games setting in Appearance visibility.
 - Keep them visible when you need to clean old collections.
 
+## Installed Status
+
+The Installation filter and the optional Installed export field use a local-only scan of the configured Steam libraries. A game is considered installed when Steam has an `appmanifest_<appid>.acf` file in the main library or in a library listed by `libraryfolders.vdf`; no network request is made. The scan runs with the normal library refresh. If the Steam path cannot be read, the filter stays disabled and exports leave the value unknown instead of guessing.
+
 ## Troubleshooting
 
 If details or prices look stale, run Prepare cache or use the relevant refresh button in the game details panel.

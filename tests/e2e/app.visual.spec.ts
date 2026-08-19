@@ -27,6 +27,24 @@ async function expectNoHorizontalOverflow(page: Page) {
   );
 }
 
+
+async function pointerDragToColumn(page: import("@playwright/test").Page, cardTestId: string, columnIdentifier: string) {
+  const card = page.getByTestId(cardTestId);
+  const column = columnIdentifier.startsWith("diary-kanban-column-")
+    ? page.getByTestId(columnIdentifier)
+    : page.locator(`[data-column-name="${columnIdentifier}"]`);
+  const cardBox = await card.boundingBox();
+  const columnBox = await column.boundingBox();
+  if (!cardBox || !columnBox) throw new Error(`Missing box for ${cardTestId} or ${columnIdentifier}`);
+  await page.mouse.move(cardBox.x + cardBox.width / 2, cardBox.y + 5);
+  await page.mouse.down();
+  await page.mouse.move(cardBox.x + cardBox.width / 2 + 15, cardBox.y + 25, { steps: 5 });
+  await page.mouse.move(columnBox.x + columnBox.width / 2, columnBox.y + columnBox.height / 2, { steps: 12 });
+  await page.waitForTimeout(100);
+  await page.mouse.up();
+  await page.waitForTimeout(200);
+}
+
 test.beforeEach(async ({ page }) => {
   await installTauriMock(page);
 });
@@ -81,7 +99,7 @@ test("loads the main library surface with mocked Steam data", async ({ page }, t
   await page.goto("/");
 
   await expect(page.getByRole("heading", { name: "Repressurizer" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "All" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^All\s+\d+$/ })).toBeVisible();
   await expect(page.getByText("Disco Elysium")).toBeVisible();
   await expect(page.getByText("Hades")).toBeVisible();
   await expect(page.getByText("It Takes Two")).toBeVisible();
@@ -91,6 +109,8 @@ test("loads the main library surface with mocked Steam data", async ({ page }, t
   await expect(page.getByRole("heading", { name: "FINAL FANTASY VII", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Grand Theft Auto III", exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Grand Theft Auto III – The Definitive Edition", exact: true })).toBeVisible();
+  await expect(page.getByText("Workspace", { exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Diary" })).toBeEnabled();
   await expect(page.getByRole("button", { name: "Steam Family" })).toBeVisible();
 
   await expectNoHorizontalOverflow(page);
@@ -115,6 +135,408 @@ test("loads the main library surface with mocked Steam data", async ({ page }, t
   const screenshotPath = testInfo.outputPath("dashboard.png");
   await page.screenshot({ path: screenshotPath, fullPage: true });
   await testInfo.attach("dashboard", { path: screenshotPath, contentType: "image/png" });
+});
+
+test("opens the gaming backlog diary workspace", async ({ page }, testInfo) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Diary" }).click();
+
+  await expect(page.getByTestId("diary-workspace")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Diary", exact: true })).toBeVisible();
+  await expect(page.getByRole("searchbox", { name: "Search your backlog" })).toBeVisible();
+  await expect(page.getByRole("group", { name: "Filter by status" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Filter by category:/ })).toBeVisible();
+  await expect(page.getByTestId("diary-game-632470")).toBeVisible();
+  await expect(page.getByTestId("diary-library-grid")).toBeVisible();
+  await page.getByTestId("diary-view-list").click();
+  await expect(page.getByTestId("diary-library-list")).toBeVisible();
+
+  await page.getByTestId("diary-game-632470").click();
+  await page.getByRole("button", { name: "Play now" }).click();
+  await expect(page.getByTestId("diary-section-rail")).toBeVisible();
+  await expect(page.getByText("Pages", { exact: true })).toBeVisible();
+  await expect(page.getByTestId("diary-game-632470")).toContainText("In progress");
+
+  const resizeHandle = page.getByRole("button", { name: "Resize game list" });
+  const beforeWidth = await page.getByTestId("diary-game-list").evaluate((element) => element.parentElement?.getBoundingClientRect().width ?? 0);
+  const handleBox = await resizeHandle.boundingBox();
+  if (handleBox) {
+    await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + 80);
+    await page.mouse.down();
+    await page.mouse.move(handleBox.x + 34, handleBox.y + 80);
+    await page.mouse.up();
+    await expect.poll(() => page.getByTestId("diary-game-list").evaluate((element) => element.parentElement?.getBoundingClientRect().width ?? 0)).toBeGreaterThan(beforeWidth + 20);
+  }
+
+  await expectNoHorizontalOverflow(page);
+  const screenshotPath = testInfo.outputPath("diary-workspace.png");
+  await page.screenshot({ path: screenshotPath, fullPage: true });
+  await testInfo.attach("diary-workspace", { path: screenshotPath, contentType: "image/png" });
+});
+
+test("finish prompts only fire for observed threshold crossings and support skip-all", async ({ page }) => {
+  await page.goto("/");
+  await page.evaluate(async () => {
+    const { useHltbStore } = await import("/src/stores/hltbStore.ts");
+    const { useSettingsStore } = await import("/src/stores/settingsStore.ts");
+    const { useCategoryStore } = await import("/src/stores/categoryStore.ts");
+    useHltbStore.getState().setBulkData({
+      // Disco Elysium: 12h played, session crossed the 11h estimate -> prompt.
+      632470: { main_story: 11, main_extra: null, completionist: null },
+      // Hades: 30h played against a 100h estimate -> no prompt.
+      1145360: { main_story: 100, main_extra: null, completionist: null },
+      // GTA III: 1.5h played, session crossed the 1h estimate -> prompt.
+      12100: { main_story: 1, main_extra: null, completionist: null },
+    });
+    useSettingsStore.getState().setSettings({ showDiary: true, diaryFinishedPrompts: true });
+    useCategoryStore.getState().setActiveCategory("all");
+  });
+
+  const prompt = page.getByRole("dialog", { name: "Mark this game as finished?" });
+  await expect(prompt).toBeVisible();
+  await expect(prompt).toContainText("Disco Elysium");
+  // GTA III is queued behind the active Disco Elysium prompt.
+  await expect(prompt.getByTestId("diary-finishprompt-pending")).toContainText("1");
+  await expect(prompt.getByTestId("diary-finishprompt-skip-all")).toBeVisible();
+
+  // The rating reaches any value from 1 to 10.
+  await prompt.getByRole("button", { name: /Your rating 7:/ }).click();
+  await expect(prompt.getByText("7/10")).toBeVisible();
+
+  await prompt.getByTestId("diary-finishprompt-skip-all").click();
+  await expect(prompt).toHaveCount(0);
+  await page.waitForTimeout(400);
+  await expect(prompt).toHaveCount(0);
+
+  await page.evaluate(async () => {
+    const { useCategoryStore } = await import("/src/stores/categoryStore.ts");
+    const { useSettingsStore } = await import("/src/stores/settingsStore.ts");
+    useCategoryStore.getState().setActiveCategory("diary");
+    useSettingsStore.getState().setSettings({ showDiary: false });
+  });
+  await expect(page.getByRole("button", { name: "Diary" })).toHaveCount(0);
+  await expect(page.getByTestId("diary-workspace")).toHaveCount(0);
+});
+
+test("Diary uses real game art, scoped Markdown pages, 1-10 scores, and timestamped notes", async ({ page }, testInfo) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Diary" }).click();
+  await page.evaluate(async () => {
+    const { useHltbStore } = await import("/src/stores/hltbStore.ts");
+    useHltbStore.getState().setBulkData({ 632470: { main_story: 24, main_extra: 31, completionist: 46 } });
+  });
+  await page.getByTestId("diary-game-632470").click();
+
+  await expect(page.getByTestId("diary-hero-image")).toBeVisible();
+  await expect(page.getByTestId("diary-hero-image").locator("img")).toHaveAttribute("src", /632470/);
+  await expect(page.getByTestId("diary-rating-input")).toBeVisible();
+  await page.getByTestId("diary-rating-input").fill("8");
+  await expect(page.getByText("8/10", { exact: true }).first()).toBeVisible();
+  await expect(page.getByTestId("diary-inspector")).toContainText("24h");
+
+  await page.getByTestId("diary-add-section").click();
+  await page.getByTestId("diary-section-name").fill("Quotes");
+  await page.getByRole("combobox", { name: "Start with" }).selectOption("default-quotes");
+  await page.getByTestId("diary-page-scope").selectOption("all");
+  await page.getByRole("button", { name: "Create page" }).click();
+  const editor = page.getByTestId("diary-markdown-editor");
+  await expect(editor).toBeVisible();
+  await editor.fill("# Quotes\n\n> The Pale still sings.\n\n| Moment | Score |\n| --- | --- |\n| Finale | 10 |\n\n- [x] Finished");
+  await expect(page.getByText("Saved automatically", { exact: true })).toBeVisible({ timeout: 3_000 });
+  await expect(page.getByRole("button", { name: "Undo" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Redo" })).toBeVisible();
+  const pageScreenshotPath = testInfo.outputPath("diary-markdown-page.png");
+  await page.screenshot({ path: pageScreenshotPath, fullPage: true });
+  await testInfo.attach("diary-markdown-page", { path: pageScreenshotPath, contentType: "image/png" });
+
+  await page.getByTestId("diary-section-overview").click();
+  await page.getByTestId("diary-overview-edit").click();
+  await page.getByRole("textbox", { name: "Overview" }).fill("## Final thoughts\n\nThe dialogue still hits harder than I expected.");
+  await expect(page.getByText("Saved automatically", { exact: true })).toBeVisible({ timeout: 3_000 });
+  await page.getByTestId("diary-game-1145360").click();
+  await page.getByTestId("diary-game-632470").click();
+  await page.getByTestId("diary-overview-edit").click();
+  await expect(page.getByRole("textbox", { name: "Overview" })).toHaveValue(/Final thoughts/);
+  await page.getByRole("button", { name: "Version history" }).click();
+  await expect(page.getByRole("button", { name: "Restore" }).first()).toBeVisible();
+  await page.getByRole("button", { name: "Version history" }).click();
+  await page.getByTestId("diary-section-journal").click();
+  await page.getByRole("textbox", { name: "Quick note / recap" }).fill("The tribunal changed everything.");
+  await page.locator('input[type="datetime-local"]').fill("2026-11-17T20:00");
+  await page.getByRole("button", { name: "Add note" }).click();
+  await expect(page.getByText("The tribunal changed everything.", { exact: true })).toBeVisible();
+  await expect(page.getByText(/At 12h played/)).toBeVisible();
+  await page.getByRole("button", { name: "Export Diary" }).click();
+  const exportDialog = page.getByRole("dialog", { name: "Export Diary" });
+  await exportDialog.getByTestId("diary-export-run").click();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("repressurizer-last-written-text") ?? "")).toContain('"games"');
+  // Folder layout writes a bundle through the Rust command.
+  await exportDialog.getByRole("button", { name: "Folder archive" }).click();
+  await exportDialog.getByTestId("diary-export-run").click();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("repressurizer-last-export-bundle") ?? "")).toContain("index.json");
+  await exportDialog.getByRole("button", { name: "Close" }).click();
+  await page.waitForTimeout(350);
+  const journalScreenshotPath = testInfo.outputPath("diary-notebook.png");
+  await page.screenshot({ path: journalScreenshotPath, fullPage: true });
+  await testInfo.attach("diary-notebook", { path: journalScreenshotPath, contentType: "image/png" });
+  await page.getByRole("button", { name: "View options" }).click();
+  await page.getByRole("button", { name: /Date format:/ }).click();
+  await page.getByRole("option", { name: "ISO 8601" }).click();
+  await page.waitForTimeout(200);
+  await expect(page.getByText("2026-11-17 20:00", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "View options" }).click();
+
+  await page.getByTestId("diary-game-1145360").click();
+  await expect(page.getByTestId("diary-hero-image").locator("img")).toHaveAttribute("src", /1145360/);
+  await expect(page.getByRole("button", { name: "Quotes" })).toBeVisible();
+  await expect(page.getByText("Open games", { exact: true })).toHaveCount(0);
+  await page.waitForTimeout(350);
+
+  const screenshotPath = testInfo.outputPath("diary-notebook-tabs.png");
+  await page.screenshot({ path: screenshotPath, fullPage: true });
+  await testInfo.attach("diary-journal-tabs", { path: screenshotPath, contentType: "image/png" });
+});
+
+test("Diary templates resolve game data and support persistent CRUD", async ({ page }, testInfo) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Diary" }).click();
+  await page.getByTestId("diary-game-632470").click();
+  await page.getByTestId("diary-overview-edit").click();
+  const overview = page.getByRole("textbox", { name: "Overview" });
+
+  await page.getByRole("button", { name: "Templates", exact: true }).click();
+  await page.getByRole("button", { name: /^Advanced review/ }).click();
+  await expect(overview).toHaveValue(/# Review — Disco Elysium - The Final Cut/);
+  await expect(overview).toHaveValue(/Playtime \| 12h/);
+  await expect(overview).toHaveValue(/Last played/);
+
+  await page.getByRole("button", { name: "Templates", exact: true }).click();
+  await page.getByRole("button", { name: "Manage templates" }).click();
+  let dialog = page.getByRole("dialog", { name: "Manage templates" });
+  await expect(dialog).toBeVisible();
+  const screenshotPath = testInfo.outputPath("diary-template-manager.png");
+  await page.screenshot({ path: screenshotPath, fullPage: true });
+  await testInfo.attach("diary-template-manager", { path: screenshotPath, contentType: "image/png" });
+
+  await dialog.getByRole("button", { name: "New template", exact: true }).click();
+  await dialog.getByTestId("diary-template-name").fill("Session wrap-up");
+  await dialog.getByTestId("diary-template-description").fill("A compact custom recap");
+  await dialog.getByTestId("diary-template-markdown").fill("## <game_title>\n\nPlayed: <playtime>\n\n<custom_tag>");
+  await dialog.getByRole("button", { name: "<rating>", exact: true }).dragTo(dialog.getByTestId("diary-template-markdown"));
+  await expect(dialog.getByTestId("diary-template-markdown")).toHaveValue(/<rating>/);
+  await dialog.getByRole("button", { name: "Save template" }).click();
+  await expect(dialog.getByRole("button", { name: /^Session wrap-up/ })).toBeVisible();
+  await dialog.getByTestId("diary-template-description").fill("Updated custom recap");
+  await dialog.getByRole("button", { name: "Save template" }).click();
+  await dialog.getByRole("button", { name: "Use template" }).click();
+  await expect(overview).toHaveValue(/Played: 12h/);
+  await expect(overview).toHaveValue(/<custom_tag>/);
+
+  await page.reload();
+  await page.getByRole("button", { name: "Diary" }).click();
+  await page.getByTestId("diary-game-632470").click();
+  await page.getByTestId("diary-overview-edit").click();
+  await page.getByRole("button", { name: "Templates", exact: true }).click();
+  await expect(page.getByRole("button", { name: /^Session wrap-up/ })).toBeVisible();
+  await page.getByRole("button", { name: "Manage templates" }).click();
+  dialog = page.getByRole("dialog", { name: "Manage templates" });
+  await dialog.getByRole("button", { name: /^Advanced review/ }).click();
+  await dialog.getByRole("button", { name: "Duplicate" }).click();
+  await expect(dialog.getByTestId("diary-template-name")).toHaveValue(/Copy/);
+  page.once("dialog", (confirmation) => confirmation.accept());
+  await dialog.getByRole("button", { name: "Delete" }).click();
+  await dialog.getByRole("button", { name: /^Session wrap-up/ }).click();
+  page.once("dialog", (confirmation) => confirmation.accept());
+  await dialog.getByRole("button", { name: "Delete" }).click();
+  await expect(dialog.getByRole("button", { name: /^Session wrap-up/ })).toHaveCount(0);
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+});
+
+test("Diary kanban board moves cards and the timeline lists diary events", async ({ page }, testInfo) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Diary" }).click();
+  await expect(page.getByTestId("diary-workspace")).toBeVisible();
+
+  await page.getByTestId("diary-view-kanban").click();
+  await expect(page.getByTestId("diary-kanban")).toBeVisible();
+  await expect(page.getByTestId("diary-kanban-column-backlog")).toContainText("Outer Wilds");
+  await expect(page.getByTestId("diary-kanban-column-playing")).toContainText("Disco Elysium");
+
+  await pointerDragToColumn(page, "diary-kanban-card-753640", "diary-kanban-column-finished");
+  await expect(page.getByTestId("diary-kanban-column-finished")).toContainText("Outer Wilds");
+  await expect(page.getByTestId("diary-kanban-column-backlog")).not.toContainText("Outer Wilds");
+
+  // Multi-select via ctrl-click, then move everything through the right-click menu.
+  await page.getByTestId("diary-kanban-card-1145360").click();
+  await expect(page.getByTestId("diary-kanban-selection")).toContainText("1");
+  await page.getByTestId("diary-kanban-card-632470").click({ modifiers: ["Control"] });
+  await expect(page.getByTestId("diary-kanban-selection")).toContainText("2");
+  await page.getByTestId("diary-kanban-card-1145360").click({ button: "right" });
+  await expect(page.getByTestId("diary-kanban-context-menu")).toBeVisible();
+  await page.getByTestId("diary-kanban-move-finished").click();
+  await expect(page.getByTestId("diary-kanban-column-finished")).toContainText("Hades");
+  await expect(page.getByTestId("diary-kanban-column-finished")).toContainText("Disco Elysium");
+  await expect(page.getByTestId("diary-kanban-selection")).toHaveCount(0);
+
+  // Double-click opens the game notebook.
+  await page.getByTestId("diary-kanban-card-753640").dblclick();
+  await expect(page.getByTestId("diary-hero-image")).toBeVisible();
+  await expect(page.getByTestId("diary-hero-image").locator("img")).toHaveAttribute("src", /753640/);
+  await page.getByRole("button", { name: "All diary games" }).click();
+  await expect(page.getByTestId("diary-library")).toBeVisible();
+
+  // Column headers are always tinted with the column color (defaults mirror statuses).
+  await page.getByTestId("diary-view-kanban").click();
+  await expect(page.getByTestId("diary-kanban-column-header-backlog")).toHaveAttribute("style", /rgba\(251, 191, 36/);
+
+  // The dedicated Columns popover customizes colors and visibility.
+  await page.getByTestId("diary-kanban-columns-button").click();
+  await expect(page.getByTestId("diary-kanban-columns-popover")).toBeVisible();
+  await page.getByTestId("diary-column-color-finished").click();
+  await page.getByRole("button", { name: "#34d399" }).click();
+  await expect(page.getByTestId("diary-kanban-column-header-finished")).toHaveAttribute("style", /rgba\(52, 211, 153/);
+  await page.getByTestId("diary-kanban-columns-button").click();
+  await page.getByTestId("diary-kanban-columns-button").click();
+  await page.getByLabel("Show column: Abandoned").uncheck();
+  await page.getByTestId("diary-kanban-columns-button").click();
+  await expect(page.getByTestId("diary-kanban-column-abandoned")).toHaveCount(0);
+
+  // WIP limit still lives in the view options.
+  await page.getByRole("button", { name: "View options" }).click();
+  await page.getByLabel("Max games in progress").fill("1");
+  await page.getByRole("button", { name: "View options" }).click();
+  await expect(page.getByTestId("diary-kanban-wip-over")).toBeVisible();
+
+  // Custom columns: create one, fill it through the per-column add-game search and drag.
+  await page.getByTestId("diary-kanban-columns-button").click();
+  await page.getByTestId("diary-kanban-new-column-name").fill("To buy");
+  await page.getByTestId("diary-kanban-new-column-add").click();
+  await page.getByTestId("diary-kanban-columns-button").click();
+  const toBuy = page.locator('[data-column-name="To buy"]');
+  await expect(toBuy).toBeVisible();
+  await toBuy.getByRole("button", { name: "Add game: To buy" }).click();
+  await page.getByTestId("diary-kanban-addgame-search").fill("Outer");
+  await page.getByTestId("diary-kanban-addgame-row-753640").click();
+  await expect(toBuy).toContainText("Outer Wilds");
+  await pointerDragToColumn(page, "diary-kanban-card-1145360", "To buy");
+  await expect(toBuy).toContainText("Hades");
+
+  const kanbanScreenshotPath = testInfo.outputPath("diary-kanban.png");
+  await page.screenshot({ path: kanbanScreenshotPath, fullPage: true });
+  await testInfo.attach("diary-kanban", { path: kanbanScreenshotPath, contentType: "image/png" });
+
+  // Timeline: three layouts plus event filters.
+  await page.getByTestId("diary-view-timeline").click();
+  await expect(page.getByTestId("diary-timeline")).toBeVisible();
+  await expect(page.locator('[data-testid="diary-timeline-event-rail"][data-kind="session"]').filter({ hasText: "Hades" })).toBeVisible();
+  await page.getByTestId("diary-timeline-layout-cards").click();
+  await expect(page.getByTestId("diary-timeline-game-1145360").first()).toBeVisible();
+  await expect(page.getByTestId("diary-timeline-game-1145360").first()).toBeVisible();
+  await expect(page.locator('[data-testid="diary-timeline-event-cardsrow"][data-kind="session"]').first()).toBeVisible();
+  await page.getByTestId("diary-timeline-layout-compact").click();
+  await expect(page.locator('[data-testid="diary-timeline-event-compact"][data-kind="session"]').filter({ hasText: "Hades" })).toBeVisible();
+  await page.getByTestId("diary-timeline-layout-rail").click();
+  await expect(page.locator('[data-testid="diary-timeline-event-rail"][data-kind="status"]').filter({ hasText: "Hades" })).toBeVisible();
+
+  // Days collapse like accordions, and the rail groups each game's events together.
+  const dayToggle = page.locator('[data-testid^="diary-timeline-day-toggle-"]').first();
+  await dayToggle.click();
+  await expect(page.locator('[data-testid="diary-timeline-event-rail"][data-kind="status"]')).toHaveCount(0);
+  await expect(page.locator('[data-testid="diary-timeline-event-rail"][data-kind="session"]').first()).toBeVisible();
+  await dayToggle.click();
+  await expect(page.locator('[data-testid="diary-timeline-event-rail"][data-kind="status"]')).not.toHaveCount(0);
+  const hadesGroupToggles = page.getByRole("button", { name: /Show or hide this game's events: Hades/ });
+  const hadesToggleCount = await hadesGroupToggles.count();
+  for (let index = 0; index < hadesToggleCount; index += 1) await hadesGroupToggles.nth(index).click();
+  await expect(page.locator('[data-testid="diary-timeline-event-rail"][data-kind="session"]').filter({ hasText: "Hades" })).toHaveCount(0);
+  for (let index = 0; index < hadesToggleCount; index += 1) await hadesGroupToggles.nth(index).click();
+  await expect(page.locator('[data-testid="diary-timeline-event-rail"][data-kind="session"]').filter({ hasText: "Hades" })).toBeVisible();
+
+  // Achievement unlock dates load on demand from the sync button and appear per game.
+  await page.getByTestId("diary-timeline-sync").click();
+  await expect(page.locator('[data-testid="diary-timeline-event-rail"][data-kind="achievement"]').filter({ hasText: "Begin" }).first()).toBeVisible();
+  await page.getByTestId("diary-timeline-filter-achievement").click();
+  await expect(page.locator('[data-testid="diary-timeline-event-rail"][data-kind="achievement"]')).toHaveCount(0);
+  await page.getByTestId("diary-timeline-filter-achievement").click();
+
+  await page.getByTestId("diary-timeline-filter-session").click();
+  await expect(page.locator('[data-testid="diary-timeline-event-rail"][data-kind="session"]')).toHaveCount(0);
+  await page.getByTestId("diary-timeline-filter-session").click();
+  await expect(page.locator('[data-testid="diary-timeline-event-rail"][data-kind="session"]').filter({ hasText: "Hades" })).toBeVisible();
+
+  const timelineScreenshotPath = testInfo.outputPath("diary-timeline.png");
+  await page.screenshot({ path: timelineScreenshotPath, fullPage: true });
+  await testInfo.attach("diary-timeline", { path: timelineScreenshotPath, contentType: "image/png" });
+
+  await page.locator('[data-testid="diary-timeline-event-rail"][data-kind="session"]').filter({ hasText: "Hades" }).getByRole("button", { name: /Hades/ }).first().click();
+  await expect(page.getByTestId("diary-hero-image")).toBeVisible();
+  await expect(page.getByTestId("diary-hero-image").locator("img")).toHaveAttribute("src", /1145360/);
+});
+
+test("diary extras: months, game timeline, custom chip, full-text search, persisted filters", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Diary" }).click();
+  await page.evaluate(async () => {
+    const { useDiaryStore } = await import("/src/stores/diaryStore.ts");
+    useDiaryStore.getState().addJournalEntry(632470, "Uniquetribunalword for search", Date.now(), 720);
+    const columnId = useDiaryStore.getState().addCustomColumn("Wishlist", "#34d399");
+    if (columnId) useDiaryStore.getState().setCustomAssignment(1145360, columnId);
+    useDiaryStore.getState().setAchievements(1145360, [
+      { apiName: "ACH_X", name: "First Blood", unlockedAt: Math.floor(Date.now() / 1000) - 3600, icon: null },
+    ]);
+  });
+
+  // Full-text search finds a game through its diary content, not just metadata.
+  await page.getByRole("searchbox", { name: "Search your backlog" }).fill("uniquetribunalword");
+  await expect(page.getByTestId("diary-game-632470")).toBeVisible();
+  await expect(page.getByTestId("diary-game-1145360")).toHaveCount(0);
+  await page.getByRole("searchbox", { name: "Search your backlog" }).fill("");
+
+  // Notebook: custom column chip with removal, plus the per-game timeline tab.
+  await page.getByTestId("diary-game-1145360").click();
+  await expect(page.getByTestId("diary-custom-column-chip")).toContainText("Wishlist");
+  await page.getByTestId("diary-section-gametimeline").click();
+  await expect(page.getByTestId("diary-gametimeline")).toBeVisible();
+  await expect(page.getByTestId("diary-gametimeline")).toContainText("65 min session");
+  await page.getByTestId("diary-section-overview").click();
+  await page.getByTestId("diary-custom-column-chip").getByRole("button").click();
+  await expect(page.getByTestId("diary-custom-column-chip")).toHaveCount(0);
+  await page.getByRole("button", { name: "All diary games" }).click();
+
+  // Timeline: month stepper and filters persisted across view switches.
+  await page.getByTestId("diary-view-timeline").click();
+  await expect(page.getByTestId("diary-timeline-months")).toBeVisible();
+  await expect(page.getByTestId("diary-timeline-months")).toContainText("August");
+  await page.getByRole("button", { name: "Previous month" }).click();
+  await expect(page.getByTestId("diary-timeline-months")).toContainText("April");
+  await page.getByRole("button", { name: "Next month" }).click();
+  await expect(page.getByTestId("diary-timeline-months")).toContainText("August");
+
+  await page.getByTestId("diary-timeline-filter-achievement").click();
+  await expect(page.getByTestId("diary-timeline").locator('[data-kind="achievement"]')).toHaveCount(0);
+  await page.getByTestId("diary-view-kanban").click();
+  await page.getByTestId("diary-view-timeline").click();
+  await expect(page.getByTestId("diary-timeline").locator('[data-kind="achievement"]')).toHaveCount(0);
+  await page.getByTestId("diary-timeline-filter-achievement").click();
+  await expect(page.getByTestId("diary-timeline").locator('[data-kind="achievement"]').first()).toBeVisible();
+});
+
+test("diary backups can be created, listed, and deleted", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Diary" }).click();
+  await page.getByTestId("diary-backup-button").click();
+  const dialog = page.getByRole("dialog", { name: "Diary backups" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByText("No diary backups yet.")).toBeVisible();
+
+  await dialog.getByLabel("Backup description (optional)").fill("Before kanban rework");
+  await page.getByTestId("diary-backup-create").click();
+  await expect(page.getByTestId("diary-backup-list")).toContainText("Before kanban rework");
+  await expect(page.getByTestId("diary-backup-list")).toContainText("7 files");
+
+  page.once("dialog", (confirmation) => confirmation.accept());
+  await page.getByTestId("diary-backup-list").getByRole("button", { name: /^Delete: diary-backup-/ }).click();
+  await expect(dialog.getByText("No diary backups yet.")).toBeVisible();
 });
 
 test("portable builds explain manual updates without offering in-place installation", async ({ page }, testInfo) => {
@@ -161,6 +583,14 @@ test("shows accessible toolbar tooltips with available shortcuts", async ({ page
   const settings = page.getByRole("button", { name: "Settings" });
   await settings.hover();
   await expect(page.getByRole("tooltip", { name: "Settings" })).toBeVisible();
+
+  const settingsBox = await settings.boundingBox();
+  const tooltipBox = await page.getByRole("tooltip", { name: "Settings" }).boundingBox();
+  expect(settingsBox).not.toBeNull();
+  expect(tooltipBox).not.toBeNull();
+  expect(Math.abs(
+    (tooltipBox!.x + tooltipBox!.width / 2) - (settingsBox!.x + settingsBox!.width / 2),
+  )).toBeLessThan(100);
 
   await page.evaluate(async () => {
     const { useCategoryStore } = await import("/src/stores/categoryStore.ts");
@@ -222,6 +652,38 @@ test("supports regex search and advanced duplicate filters", async ({ page }) =>
   await expect(page.getByRole("heading", { name: "Grand Theft Auto III – The Definitive Edition", exact: true })).toBeVisible();
   await expect(page.getByText("Disco Elysium")).toBeHidden();
   await expect(page.locator(".game-card")).toHaveCount(2);
+});
+
+test("filters the library and export preview by installation state", async ({ page }) => {
+  await page.goto("/");
+
+  const installation = () => page.getByRole("button", { name: /^Installation:/ });
+  await expect(installation()).toHaveAccessibleName("Installation: All");
+  await expect(installation()).toBeEnabled();
+  await installation().click();
+  await page.getByRole("listbox").getByRole("option", { name: "Installed only", exact: true }).click();
+
+  await expect(page.locator(".game-card")).toHaveCount(3);
+  await expect(page.locator(".game-card").filter({ hasText: "Disco Elysium" })).toHaveCount(1);
+  await expect(page.locator(".game-card").filter({ hasText: "Hades" })).toHaveCount(1);
+  await expect(page.locator(".game-card").filter({ hasText: "FINAL FANTASY VII" }).first()).toHaveCount(1);
+  await expect(page.locator(".game-card").filter({ hasText: "Outer Wilds" })).toHaveCount(0);
+
+  await installation().click();
+  await page.getByRole("listbox").getByRole("option", { name: "Not installed", exact: true }).click();
+  await expect(page.locator(".game-card")).toHaveCount(8);
+  await expect(page.locator(".game-card").filter({ hasText: "Disco Elysium" })).toHaveCount(0);
+  await expect(page.locator(".game-card").filter({ hasText: "Outer Wilds" })).toHaveCount(1);
+
+  await page.getByRole("button", { name: "Export", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Export" });
+  const exportInstallation = dialog.getByRole("button", { name: "Installation: All", exact: true });
+  await expect(exportInstallation).toBeEnabled();
+  await exportInstallation.click();
+  await dialog.getByRole("listbox").getByRole("option", { name: "Installed only", exact: true }).click();
+
+  const previewGames = dialog.getByText("Games", { exact: true }).locator("..");
+  await expect(previewGames.getByText("3", { exact: true })).toBeVisible();
 });
 
 test("keeps advanced category filters compact and searchable", async ({ page }) => {
@@ -406,6 +868,9 @@ test("AutoCat custom rule creates one category from a title condition", async ({
     has: page.getByRole("heading", { name: "Auto-Categorize" }),
   });
   await dialog.getByRole("button", { name: /Custom rule/ }).click();
+  await dialog.getByRole("button", { name: "Add custom condition" }).click();
+  await expect(dialog.getByRole("option", { name: /Diary/ })).toBeVisible();
+  await page.keyboard.press("Escape");
   await dialog.getByPlaceholder("Short RPG not in Backlog").fill("Hades Custom");
   await dialog.getByRole("button", { name: "Title starts" }).click();
   await dialog.locator('input[value="A"]').fill("Hades");
@@ -982,12 +1447,13 @@ test("explains and enables the local MCP connection", async ({ page }, testInfo)
   );
   await expect(settingsDialog.getByText("repressurizer-mcp")).toBeVisible();
   await expect(settingsDialog.getByText("repressurizer-cli mcp doctor")).toBeVisible();
-  await expect(settingsDialog.getByLabel("Agent permissions")).toHaveValue("readOnly");
+  const permissionMenu = settingsDialog.getByRole("button", { name: "Agent permissions: Read-only" });
+  await expect(permissionMenu).toBeVisible();
   await expect(settingsDialog.getByRole("group", { name: /Enable local HTTP API/ })).toBeVisible();
-  await expect(settingsDialog.getByText(/Starts automatically inside Repressurizer/)).toBeVisible();
   await expect(settingsDialog.getByText("repressurizer-cli api token")).toBeVisible();
-  await settingsDialog.getByLabel("Agent permissions").selectOption("manageLibrary");
-  await expect(settingsDialog.getByText(/Adds collection operations/)).toBeVisible();
+  await permissionMenu.click();
+  await settingsDialog.getByRole("option", { name: "Manage library" }).click();
+  await expect(settingsDialog.getByText(/collection edits/)).toBeVisible();
   await expect(settingsDialog.getByRole("button", { name: "Copy config command" })).toBeVisible();
   await expect(settingsDialog.getByRole("button", { name: "Copy starter prompt" })).toBeVisible();
 
@@ -1054,9 +1520,10 @@ test("settings search finds local-only visibility and generated changelog", asyn
   const search = settingsDialog.getByPlaceholder("Search settings, tokens, HLTB, tray, exports...");
 
   await expect(search).toHaveAttribute("type", "text");
-  await search.fill("lcoal");
-  await expect(settingsDialog.getByRole("button", { name: "Visibility" })).toBeVisible();
-  await settingsDialog.getByRole("button", { name: "Visibility" }).click();
+  await search.fill("empty lists");
+  const visibilityAccordion = settingsDialog.locator("button[aria-expanded]").filter({ hasText: "Visibility" });
+  await expect(visibilityAccordion).toBeVisible();
+  await visibilityAccordion.click();
   await expect(settingsDialog.getByText("Hide local-only games")).toBeVisible();
 
   await search.fill("socks5 proxy");
@@ -1604,6 +2071,7 @@ test("opens organized settings tabs, automation logs, and Steam controls without
   expect(Math.abs((generalPanelBox?.height ?? 0) - (initialPanelBox?.height ?? 0))).toBeLessThanOrEqual(1);
 
   await settingsDialog.getByRole("button", { name: "Appearance", exact: true }).click();
+  await settingsDialog.getByRole("button", { name: "Visibility", exact: true }).click();
   await expect(settingsDialog.getByRole("switch", { name: "Show empty lists" })).toBeVisible();
   await expect(settingsDialog.getByRole("heading", { name: "System Tray" })).toBeHidden();
   const appearancePanelBox = await settingsPanel.boundingBox();
@@ -1766,6 +2234,7 @@ test("uses the color picker as the primary custom accent control", async ({ page
   await page.getByRole("button", { name: "Settings" }).click();
   await page.getByRole("button", { name: "Appearance" }).click();
 
+  await page.getByRole("button", { name: "Accent Color" }).click();
   await page.getByLabel("Pick accent color").first().click();
   const picker = page.locator('input[type="color"]').first();
   await expect(picker).toBeAttached();
@@ -1796,6 +2265,10 @@ test("keeps selected appearance controls legible in light theme", async ({ page 
   await page.goto("/");
   await page.getByRole("button", { name: "Settings" }).click();
   await page.getByRole("button", { name: "Appearance" }).click();
+
+  // Appearance sections are collapsible: expand Theme and Language first.
+  await page.getByRole("button", { name: "Theme", exact: true }).click();
+  await page.getByRole("button", { name: "Language", exact: true }).click();
 
   const lightButton = page.getByRole("button", { name: "Light" });
   await expect(lightButton).toBeVisible();
