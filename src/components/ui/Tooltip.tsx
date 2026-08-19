@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 interface TooltipProps {
@@ -9,6 +9,13 @@ interface TooltipProps {
   overflowSelector?: string;
 }
 
+interface TooltipPosition {
+  anchorCenter: number;
+  left: number;
+  top: number;
+  above: boolean;
+}
+
 export function Tooltip({
   content,
   children,
@@ -17,7 +24,8 @@ export function Tooltip({
   overflowSelector,
 }: TooltipProps) {
   const triggerRef = useRef<HTMLSpanElement>(null);
-  const [position, setPosition] = useState<{ left: number; top: number; above: boolean } | null>(null);
+  const tooltipRef = useRef<HTMLSpanElement>(null);
+  const [position, setPosition] = useState<TooltipPosition | null>(null);
 
   const hide = () => setPosition(null);
   const show = () => {
@@ -31,12 +39,27 @@ export function Tooltip({
     }
     const rect = trigger.getBoundingClientRect();
     const above = rect.bottom + 48 > window.innerHeight;
+    const anchorCenter = rect.left + rect.width / 2;
     setPosition({
-      left: Math.min(Math.max(rect.left, 8), window.innerWidth - 328),
+      // The final left edge is corrected after the portal has laid out and we
+      // know the tooltip's actual width. This initial value keeps the first
+      // paint close to the trigger instead of assuming every label is 328px.
+      left: Math.max(8, rect.left),
+      anchorCenter,
       top: above ? rect.top - 8 : rect.bottom + 8,
       above,
     });
   };
+
+  useLayoutEffect(() => {
+    if (!position || !tooltipRef.current) return;
+    const width = tooltipRef.current.getBoundingClientRect().width;
+    const margin = 8;
+    const maxLeft = Math.max(margin, window.innerWidth - width - margin);
+    const left = Math.min(Math.max(position.anchorCenter - width / 2, margin), maxLeft);
+    if (Math.abs(position.left - left) < 0.5) return;
+    setPosition((current) => (current ? { ...current, left } : current));
+  }, [content, position]);
 
   useEffect(() => {
     if (!position) return;
@@ -66,6 +89,7 @@ export function Tooltip({
       </span>
       {position && typeof document !== "undefined" && createPortal(
         <span
+          ref={tooltipRef}
           role="tooltip"
           className="pointer-events-none fixed z-[120] max-w-xs rounded-lg border border-repressurizer-border bg-repressurizer-surface-raised px-2.5 py-1.5 text-xs leading-snug text-repressurizer-text shadow-[0_8px_24px_rgba(0,0,0,0.45)]"
           style={{

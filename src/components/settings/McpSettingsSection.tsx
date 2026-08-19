@@ -1,17 +1,18 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ChatText,
   CheckCircle,
-  ClipboardText,
   CopySimple,
-  GlobeHemisphereWest,
   MinusCircle,
   Robot,
   ShieldCheck,
-  Stethoscope,
+  Terminal,
+  Warning,
 } from "@phosphor-icons/react";
 import { useT } from "../../lib/i18n";
 import { useSettingsStore } from "../../stores/settingsStore";
+import { getStartupContext } from "../../lib/tauri";
+import { SelectMenu } from "../ui/SelectMenu";
 
 const MCP_STARTER_PROMPT = `Use the Repressurizer MCP server to help with my Steam library. Start with get_library_context for a compact overview, or use library_summary and get_play_history separately. Then use search_games, get_game, list_collections, or recommend_games as needed. Treat play history as observed activity only: never invent a historical first-launch date. Follow the user's selected integration profile. Before any write, show the exact change and wait for explicit confirmation; never access arbitrary files, shell commands, or network resources.`;
 
@@ -19,6 +20,19 @@ export function McpSettingsSection() {
   const t = useT();
   const settings = useSettingsStore();
   const [copied, setCopied] = useState<"config" | "prompt" | null>(null);
+  const [portable, setPortable] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    getStartupContext()
+      .then((context) => {
+        if (!cancelled) setPortable(context.updaterKind === "windows-portable");
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const copy = async (kind: "config" | "prompt", value: string) => {
     try {
@@ -30,92 +44,70 @@ export function McpSettingsSection() {
     }
   };
 
+  const permissionOptions = [
+    { value: "readOnly" as const, label: t("settings.mcp.permission.readOnly") },
+    { value: "manageLibrary" as const, label: t("settings.mcp.permission.manageLibrary") },
+    { value: "full" as const, label: t("settings.mcp.permission.full") },
+  ];
+
   return (
     <div className="space-y-3">
+      {portable && (
+        <div data-testid="mcp-portable-note" className="flex items-start gap-2.5 rounded-xl border border-amber-400/30 bg-amber-400/10 px-4 py-3">
+          <Warning size={16} weight="duotone" className="mt-0.5 shrink-0 text-amber-300" />
+          <p className="text-xs leading-relaxed text-amber-200">{t("settings.mcp.portableNote")}</p>
+        </div>
+      )}
       <McpToggleRow
-        checked={settings.mcpEnabled}
+        checked={settings.mcpEnabled && !portable}
         label={t("settings.mcp.enabled")}
         description={t("settings.mcp.enabled.desc")}
         enabledLabel={t("settings.integration.enabled")}
         disabledLabel={t("settings.integration.disabled")}
+        disabled={portable}
         onChange={(value) => settings.setSettings({ mcpEnabled: value })}
       />
       <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3">
-        <div className="flex items-start gap-3">
-          <ShieldCheck size={16} weight="duotone" className="mt-0.5 shrink-0 text-repressurizer-accent" />
-          <div className="min-w-0 flex-1">
-            <label htmlFor="mcp-permission-mode" className="text-sm text-repressurizer-text">
-              {t("settings.mcp.permission")}
-            </label>
-            <p className="mt-0.5 text-xs leading-relaxed text-repressurizer-text-faint">
-              {t("settings.mcp.permission.desc")}
-            </p>
-            <select
-              id="mcp-permission-mode"
-              value={settings.mcpPermissionMode}
-              onChange={(event) =>
-                settings.setSettings({
-                  mcpPermissionMode: event.target.value as typeof settings.mcpPermissionMode,
-                })
-              }
-              className="mt-3 min-h-9 w-full rounded-lg border border-repressurizer-border bg-repressurizer-surface px-3 text-xs text-repressurizer-text outline-none focus:border-repressurizer-accent sm:w-auto"
-            >
-              <option value="readOnly">{t("settings.mcp.permission.readOnly")}</option>
-              <option value="manageLibrary">{t("settings.mcp.permission.manageLibrary")}</option>
-              <option value="full">{t("settings.mcp.permission.full")}</option>
-            </select>
-            <p className="mt-2 text-xs leading-relaxed text-repressurizer-text-faint">
-              {settings.mcpPermissionMode === "readOnly"
-                ? t("settings.mcp.permission.readOnly.desc")
-                : settings.mcpPermissionMode === "manageLibrary"
-                  ? t("settings.mcp.permission.manageLibrary.desc")
-                  : t("settings.mcp.permission.full.desc")}
-            </p>
-          </div>
+        <div className="flex items-center justify-between gap-3">
+          <span className="flex min-w-0 items-center gap-2.5">
+            <ShieldCheck size={16} weight="duotone" className="shrink-0 text-repressurizer-accent" />
+            <span className="truncate text-sm text-repressurizer-text">{t("settings.mcp.permission")}</span>
+          </span>
+          <SelectMenu
+            value={settings.mcpPermissionMode}
+            options={permissionOptions}
+            onChange={(mcpPermissionMode) => settings.setSettings({ mcpPermissionMode })}
+            ariaLabel={t("settings.mcp.permission")}
+            size="sm"
+            className="w-44 shrink-0"
+          />
         </div>
+        <p className="mt-2 text-xs leading-relaxed text-repressurizer-text-faint">
+          {settings.mcpPermissionMode === "readOnly"
+            ? t("settings.mcp.permission.readOnly.desc")
+            : settings.mcpPermissionMode === "manageLibrary"
+              ? t("settings.mcp.permission.manageLibrary.desc")
+              : t("settings.mcp.permission.full.desc")}
+        </p>
       </div>
       <McpToggleRow
-        checked={settings.apiEnabled}
+        checked={settings.apiEnabled && !portable}
         label={t("settings.mcp.api")}
         description={t("settings.mcp.api.desc")}
         enabledLabel={t("settings.integration.enabled")}
         disabledLabel={t("settings.integration.disabled")}
+        disabled={portable}
         onChange={(value) => settings.setSettings({ apiEnabled: value })}
       />
-      <div className="rounded-lg border border-repressurizer-border-subtle bg-repressurizer-bg px-3 py-2.5">
-        <div className="flex items-start gap-2">
-          <GlobeHemisphereWest size={16} weight="duotone" className="mt-0.5 shrink-0 text-repressurizer-accent" />
-          <div className="min-w-0">
-            <p className="text-xs font-medium text-repressurizer-text">{t("settings.mcp.api.command")}</p>
-            <p className="mt-1 text-xs leading-relaxed text-repressurizer-text-faint">
-              {t("settings.mcp.api.automatic")}
-            </p>
-            <p className="mt-2 text-xs leading-relaxed text-repressurizer-text-faint">
-              {t("settings.mcp.api.note")}
-            </p>
-            <code className="mt-2 block break-all font-mono text-[11px] text-repressurizer-text-muted">
-              repressurizer-cli api token
-            </code>
-          </div>
-        </div>
-      </div>
-      <div className="rounded-lg border border-repressurizer-border-subtle bg-repressurizer-bg px-3 py-2.5">
-        <p className="text-xs font-medium text-repressurizer-text">
-          {t("settings.mcp.command")}
-        </p>
-        <code className="mt-1 block break-all font-mono text-[11px] text-repressurizer-text-muted">
-          repressurizer-mcp
-        </code>
-      </div>
-      <div className="rounded-lg border border-repressurizer-border-subtle bg-repressurizer-bg px-3 py-3">
-        <div className="flex items-start gap-2">
-          <ClipboardText size={16} weight="duotone" className="mt-0.5 shrink-0 text-repressurizer-accent" />
-          <div className="min-w-0">
-            <p className="text-xs font-medium text-repressurizer-text">{t("settings.mcp.setup")}</p>
-            <p className="mt-0.5 text-xs leading-relaxed text-repressurizer-text-faint">
-              {t("settings.mcp.setup.desc")}
-            </p>
-          </div>
+      <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3">
+        <span className="flex items-center gap-2 text-xs font-medium text-repressurizer-text">
+          <Terminal size={14} weight="duotone" className="text-repressurizer-accent" />
+          {t("settings.mcp.cli")}
+        </span>
+        <div className="mt-2 space-y-1">
+          {["repressurizer-mcp", "repressurizer-cli mcp doctor", "repressurizer-cli api token"].map((command) => (
+            <code key={command} className="block break-all font-mono text-[11px] text-repressurizer-text-muted">{command}</code>
+          ))}
         </div>
         <div className="mt-3 flex flex-wrap gap-2">
           <button
@@ -136,20 +128,6 @@ export function McpSettingsSection() {
           </button>
         </div>
       </div>
-      <div className="rounded-lg border border-repressurizer-border-subtle bg-repressurizer-bg px-3 py-2.5">
-        <div className="flex items-start gap-2">
-          <Stethoscope size={16} weight="duotone" className="mt-0.5 shrink-0 text-repressurizer-text-muted" />
-          <div className="min-w-0">
-            <p className="text-xs font-medium text-repressurizer-text">{t("settings.mcp.doctor")}</p>
-            <code className="mt-1 block break-all font-mono text-[11px] text-repressurizer-text-muted">
-              repressurizer-cli mcp doctor
-            </code>
-          </div>
-        </div>
-      </div>
-      <p className="text-xs leading-relaxed text-repressurizer-text-faint">
-        {t("settings.mcp.confirmation")}
-      </p>
     </div>
   );
 }
@@ -160,6 +138,7 @@ function McpToggleRow({
   description,
   enabledLabel,
   disabledLabel,
+  disabled = false,
   onChange,
 }: {
   checked: boolean;
@@ -167,6 +146,7 @@ function McpToggleRow({
   description: string;
   enabledLabel: string;
   disabledLabel: string;
+  disabled?: boolean;
   onChange: (value: boolean) => void;
 }) {
   return (
@@ -175,7 +155,7 @@ function McpToggleRow({
         checked
           ? "border-repressurizer-accent/60 bg-repressurizer-accent/5"
           : "border-repressurizer-border-subtle bg-repressurizer-bg"
-      }`}
+      } ${disabled ? "opacity-60" : ""}`}
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <div className="flex min-w-0 items-start gap-3">
@@ -198,6 +178,7 @@ function McpToggleRow({
           <button
             type="button"
             aria-pressed={!checked}
+            disabled={disabled}
             onClick={() => onChange(false)}
             className={`inline-flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-md px-3 text-xs font-semibold transition-colors sm:flex-none ${
               !checked
@@ -211,6 +192,7 @@ function McpToggleRow({
           <button
             type="button"
             aria-pressed={checked}
+            disabled={disabled}
             onClick={() => onChange(true)}
             className={`inline-flex min-h-9 flex-1 items-center justify-center gap-1.5 rounded-md px-3 text-xs font-semibold transition-colors sm:flex-none ${
               checked

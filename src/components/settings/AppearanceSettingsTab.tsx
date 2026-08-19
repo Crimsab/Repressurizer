@@ -4,9 +4,14 @@ import {
   CloudMoon,
   Database,
   Eye,
+  BellRinging,
+  CaretDown,
   Funnel,
+  Globe,
+  SidebarSimple,
   Monitor,
   Moon,
+  Notebook,
   Palette,
   Star,
   Stack,
@@ -45,6 +50,35 @@ const CATEGORY_CHIP_FALLBACK_PREVIEW_SAMPLES = [
   { name: "Long category label", color: "#A78BFA" },
 ] as const;
 
+
+function AppearanceSection({ id, icon, title, isSectionVisible, children }: {
+  id: string;
+  icon: ReactNode;
+  title: string;
+  isSectionVisible: (id: string) => boolean;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  if (!isSectionVisible(id)) return null;
+  return (
+    <section className="overflow-hidden rounded-xl border border-repressurizer-border-subtle bg-repressurizer-surface/35">
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        className="focus-ring flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-repressurizer-surface-hover/50"
+      >
+        <span className="flex min-w-0 items-center gap-2.5">
+          <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-repressurizer-accent/10 text-repressurizer-accent">{icon}</span>
+          <span className="truncate text-sm font-semibold text-white">{title}</span>
+        </span>
+        <CaretDown size={14} className={`shrink-0 text-repressurizer-text-faint transition-transform duration-150 ${open ? "" : "-rotate-90"}`} />
+      </button>
+      {open && <div className="border-t border-repressurizer-border-subtle px-4 py-4">{children}</div>}
+    </section>
+  );
+}
+
 export function AppearanceTab({ isSectionVisible }: { isSectionVisible: (id: string) => boolean }) {
   const {
     accentColor,
@@ -52,6 +86,9 @@ export function AppearanceTab({ isSectionVisible }: { isSectionVisible: (id: str
     showSmartLists,
     showEmptyLists,
     showNowPlaying,
+    showDiary,
+    diaryFinishedPrompts,
+    diaryRatingEmojis,
     showFilterBar,
     hideCollectionOnlyGames,
     showDetailHltb,
@@ -165,9 +202,8 @@ export function AppearanceTab({ isSectionVisible }: { isSectionVisible: (id: str
   return (
     <div className="space-y-6">
       {/* Accent color */}
-      {isSectionVisible("accent") && (
+      <AppearanceSection id="accent" icon={<Palette size={15} />} title={t("appearance.accentColor")} isSectionVisible={isSectionVisible}>
       <div className="space-y-3">
-        <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("appearance.accentColor")}</h3>
         <p className="text-xs text-repressurizer-text-faint -mt-1">{t("appearance.accentColor.desc")}</p>
 
         <div className="relative rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-3 py-3">
@@ -278,14 +314,13 @@ export function AppearanceTab({ isSectionVisible }: { isSectionVisible: (id: str
           )}
         </div>
       </div>
-      )}
+      </AppearanceSection>
 
       {/* Category chip style */}
-      {isSectionVisible("categoryChips") && (
+      <AppearanceSection id="categoryChips" icon={<Stack size={15} />} title={t("appearance.categoryChips")} isSectionVisible={isSectionVisible}>
       <div className="space-y-3">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("appearance.categoryChips")}</h3>
             <p className="mt-1 text-xs text-repressurizer-text-faint">{t("appearance.categoryChips.desc")}</p>
           </div>
           <span className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-bg px-2 py-1 text-[10px] font-medium text-repressurizer-text-muted">
@@ -434,12 +469,11 @@ export function AppearanceTab({ isSectionVisible }: { isSectionVisible: (id: str
           </div>
         </div>
       </div>
-      )}
+      </AppearanceSection>
 
       {/* UI visibility */}
-      {isSectionVisible("visibility") && (
+      <AppearanceSection id="visibility" icon={<Eye size={15} />} title={t("appearance.visibility")} isSectionVisible={isSectionVisible}>
       <div className="space-y-3">
-        <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("appearance.visibility")}</h3>
         <ToggleRow
           icon={<Stack size={15} weight="duotone" />}
           label={t("appearance.smartLists")}
@@ -461,6 +495,46 @@ export function AppearanceTab({ isSectionVisible }: { isSectionVisible: (id: str
           checked={showNowPlaying}
           onChange={(v) => setSettings({ showNowPlaying: v })}
         />
+        <ToggleRow
+          icon={<Notebook size={15} weight="duotone" />}
+          label={t("appearance.diary")}
+          description={t("appearance.diary.desc")}
+          checked={showDiary}
+          onChange={(v) => setSettings({ showDiary: v })}
+        />
+        <ToggleRow
+          icon={<BellRinging size={15} weight="duotone" />}
+          label={t("appearance.diaryFinishedPrompts")}
+          description={t("appearance.diaryFinishedPrompts.desc")}
+          checked={diaryFinishedPrompts}
+          disabled={!showDiary}
+          onChange={(v) => setSettings({ diaryFinishedPrompts: v })}
+        />
+        {showDiary && (
+          <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg/45 p-3">
+            <div className="mb-3">
+              <p className="text-xs font-medium text-repressurizer-text">{t("appearance.diaryRatingEmojis")}</p>
+              <p className="mt-0.5 text-[11px] text-repressurizer-text-faint">{t("appearance.diaryRatingEmojis.desc")}</p>
+            </div>
+            <div className="grid grid-cols-5 gap-2 sm:grid-cols-10">
+              {diaryRatingEmojis.map((emoji, index) => (
+                <label key={index} className="text-center">
+                  <span className="mb-1 block font-mono text-[9px] text-repressurizer-text-faint">{index + 1}</span>
+                  <input
+                    value={emoji}
+                    onChange={(event) => {
+                      const next = [...diaryRatingEmojis];
+                      next[index] = event.target.value;
+                      setSettings({ diaryRatingEmojis: next });
+                    }}
+                    aria-label={`${t("appearance.diaryRatingEmojis")} ${index + 1}`}
+                    className="h-9 w-full rounded-lg border border-repressurizer-border bg-repressurizer-surface text-center text-lg outline-none transition-colors focus:border-repressurizer-accent/60"
+                  />
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
         <ToggleRow
           icon={<Funnel size={15} weight="duotone" />}
           label={t("appearance.filterBar")}
@@ -497,12 +571,11 @@ export function AppearanceTab({ isSectionVisible }: { isSectionVisible: (id: str
           onChange={(v) => setSettings({ showDetailPrice: v })}
         />
       </div>
-      )}
+      </AppearanceSection>
 
       {/* Theme */}
-      {isSectionVisible("theme") && (
+      <AppearanceSection id="theme" icon={<Moon size={15} />} title={t("appearance.theme")} isSectionVisible={isSectionVisible}>
       <div className="space-y-3">
-        <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("appearance.theme")}</h3>
         <div className="flex gap-2">
           {([
             { value: "dark", label: t("appearance.theme.dark"), icon: <Moon size={16} weight="duotone" /> },
@@ -527,12 +600,11 @@ export function AppearanceTab({ isSectionVisible }: { isSectionVisible: (id: str
           ))}
         </div>
       </div>
-      )}
+      </AppearanceSection>
 
       {/* Language */}
-      {isSectionVisible("language") && (
+      <AppearanceSection id="language" icon={<Globe size={15} />} title={t("appearance.language")} isSectionVisible={isSectionVisible}>
       <div className="space-y-3">
-        <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("appearance.language")}</h3>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {SUPPORTED_LOCALES.map((locale) => (
             <button
@@ -550,12 +622,11 @@ export function AppearanceTab({ isSectionVisible }: { isSectionVisible: (id: str
           ))}
         </div>
       </div>
-      )}
+      </AppearanceSection>
 
       {/* Sidebar width */}
-      {isSectionVisible("sidebar") && (
+      <AppearanceSection id="sidebar" icon={<SidebarSimple size={15} />} title={t("appearance.sidebarWidth")} isSectionVisible={isSectionVisible}>
       <div className="space-y-3">
-        <h3 className="text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">{t("appearance.sidebarWidth")}</h3>
         <div className="flex items-center gap-3">
           <input
             type="range"
@@ -572,7 +643,7 @@ export function AppearanceTab({ isSectionVisible }: { isSectionVisible: (id: str
         </div>
         <p className="text-xs text-repressurizer-text-faint">{t("appearance.sidebarWidth.desc")}</p>
       </div>
-      )}
+      </AppearanceSection>
 
     </div>
   );

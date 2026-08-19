@@ -380,7 +380,6 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
         label: t("settings.integration.mcp"),
         keywords: [
           t("settings.mcp.enabled"),
-          t("settings.mcp.command"),
           t("settings.mcp.permission"),
           t("settings.mcp.api"),
           "mcp model context protocol agent ai assistant permissions read only manage library full stdio http api tools resources local",
@@ -475,6 +474,10 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
           t("filter.localCollectionOnly"),
           t("appearance.filterBar"),
           t("appearance.nowPlaying"),
+          t("appearance.diary"),
+          t("appearance.diary.desc"),
+          t("appearance.diaryFinishedPrompts"),
+          t("appearance.diaryFinishedPrompts.desc"),
           "visibility panels ui empty zero sidebar uncategorized local only local-only local collection collection-only solo locali raccolta locale nascondi hide",
         ],
       },

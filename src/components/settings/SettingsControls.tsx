@@ -44,26 +44,34 @@ export function ToggleRow({
   description,
   checked,
   onChange,
+  disabled = false,
 }: {
   icon: ReactNode;
   label: string;
   description: string;
   checked: boolean;
   onChange: (value: boolean) => void;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       role="switch"
       aria-checked={checked}
-      onClick={() => onChange(!checked)}
-      className={`btn-press flex w-full cursor-pointer items-start gap-3 rounded-xl border px-4 py-3 text-left transition-colors ${
-        checked
-          ? "border-repressurizer-accent bg-repressurizer-accent/10"
-          : "border-repressurizer-border-subtle bg-repressurizer-bg hover:border-repressurizer-border"
+      aria-disabled={disabled}
+      disabled={disabled}
+      onClick={() => {
+        if (!disabled) onChange(!checked);
+      }}
+      className={`btn-press flex w-full items-start gap-3 rounded-xl border px-4 py-3 text-left transition-colors ${
+        disabled
+          ? "cursor-not-allowed border-repressurizer-border-subtle bg-repressurizer-bg opacity-50"
+          : checked
+            ? "border-repressurizer-accent bg-repressurizer-accent/10"
+            : "cursor-pointer border-repressurizer-border-subtle bg-repressurizer-bg hover:border-repressurizer-border"
       }`}
     >
-      <span className={`mt-0.5 ${checked ? "text-repressurizer-accent" : "text-repressurizer-text-faint"}`}>{icon}</span>
+      <span className={`mt-0.5 ${checked && !disabled ? "text-repressurizer-accent" : "text-repressurizer-text-faint"}`}>{icon}</span>
       <div className="min-w-0 flex-1">
         <p className="text-sm text-repressurizer-text">{label}</p>
         <p className="mt-0.5 text-xs leading-relaxed text-repressurizer-text-faint">{description}</p>
