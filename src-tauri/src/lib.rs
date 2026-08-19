@@ -452,6 +452,180 @@ fn save_app_data(app: tauri::AppHandle, key: String, data: String) -> Result<(),
     write_text_file_atomic(&path, &data, "app data file", should_sync_app_data(&key))
 }
 
+// Diary backups — folder snapshots of user-authored diary data.
+const DIARY_BACKUP_KEYS: [&str; 8] = [
+    "diary.json",
+    "diary-templates.json",
+    "diary-status-events.json",
+    "diary-achievements.json",
+    "diary-board.json",
+    "reviews.json",
+    "notes.json",
+    "statuses.json",
+];
+
+#[derive(Serialize)]
+struct DiaryBackupInfo {
+    name: String,
+    description: String,
+    created_at_ms: u128,
+    files: Vec<String>,
+}
+
+fn diary_backups_root() -> Result<PathBuf, String> {
+    app_data::app_data_dir()
+        .map(|dir| dir.join("diary-backups"))
+        .ok_or("Could not resolve Repressurizer app data directory".to_string())
+}
+
+fn validate_diary_backup_name(name: &str) -> Result<(), String> {
+    if name.is_empty()
+        || !name.starts_with("diary-backup-")
+        || !name
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
+    {
+        return Err("Invalid diary backup name".to_string());
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn list_diary_backups() -> Result<Vec<DiaryBackupInfo>, String> {
+    let root = diary_backups_root()?;
+    let mut backups = Vec::new();
+    let entries = match std::fs::read_dir(&root) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(backups),
+        Err(error) => return Err(format!("Failed to read diary backups: {error}")),
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().to_string();
+        if validate_diary_backup_name(&name).is_err() {
+            continue;
+        }
+        let folder = entry.path();
+        if !folder.is_dir() {
+            continue;
+        }
+        let description = std::fs::read_to_string(folder.join("description.txt"))
+            .map(|text| text.trim().to_string())
+            .unwrap_or_default();
+        let created_at_ms = std::fs::metadata(&folder)
+            .and_then(|meta| meta.modified())
+            .ok()
+            .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+            .map(|duration| duration.as_millis())
+            .unwrap_or(0);
+        let files = DIARY_BACKUP_KEYS
+            .iter()
+            .map(|key| key.to_string())
+            .filter(|key| folder.join(key).is_file())
+            .collect();
+        backups.push(DiaryBackupInfo { name, description, created_at_ms, files });
+    }
+    backups.sort_by(|a, b| b.created_at_ms.cmp(&a.created_at_ms));
+    Ok(backups)
+}
+
+#[tauri::command]
+fn create_diary_backup(description: String) -> Result<String, String> {
+    let root = diary_backups_root()?;
+    std::fs::create_dir_all(&root).map_err(|error| format!("Failed to create diary backups folder: {error}"))?;
+    let timestamp = chrono::Utc::now().format("%Y%m%d_%H%M%S").to_string();
+    let mut name = format!("diary-backup-{timestamp}");
+    let mut attempt = 1;
+    while root.join(&name).exists() && attempt < 10_000 {
+        name = format!("diary-backup-{timestamp}-{attempt}");
+        attempt += 1;
+    }
+    let folder = root.join(&name);
+    std::fs::create_dir_all(&folder).map_err(|error| format!("Failed to create diary backup folder: {error}"))?;
+    let mut copied = 0;
+    for key in DIARY_BACKUP_KEYS {
+        let source = app_data::app_data_file_path(key)?;
+        if !source.is_file() {
+            continue;
+        }
+        let data = std::fs::read(&source).map_err(|error| format!("Failed to read {key}: {error}"))?;
+        std::fs::write(folder.join(key), data).map_err(|error| format!("Failed to write {key} into backup: {error}"))?;
+        copied += 1;
+    }
+    if copied == 0 {
+        let _ = std::fs::remove_dir_all(&folder);
+        return Err("No diary data files found to back up".to_string());
+    }
+    let trimmed = description.trim().chars().take(240).collect::<String>();
+    if !trimmed.is_empty() {
+        let _ = std::fs::write(folder.join("description.txt"), trimmed);
+    }
+    Ok(name)
+}
+
+#[tauri::command]
+fn restore_diary_backup(name: String) -> Result<(), String> {
+    validate_diary_backup_name(&name)?;
+    let root = diary_backups_root()?;
+    let folder = root.join(&name);
+    if !folder.is_dir() {
+        return Err("Diary backup not found".to_string());
+    }
+    let mut restored = 0;
+    for key in DIARY_BACKUP_KEYS {
+        let backup_file = folder.join(key);
+        if !backup_file.is_file() {
+            continue;
+        }
+        let data = std::fs::read(&backup_file).map_err(|error| format!("Failed to read {key} from backup: {error}"))?;
+        let target = app_data::app_data_file_path(key)?;
+        write_text_file_atomic(&target, &String::from_utf8_lossy(&data), "app data file", app_data::should_sync_app_data(key))?;
+        restored += 1;
+    }
+    if restored == 0 {
+        return Err("Diary backup contains no data files".to_string());
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn delete_diary_backup(name: String) -> Result<(), String> {
+    validate_diary_backup_name(&name)?;
+    let folder = diary_backups_root()?.join(&name);
+    if !folder.is_dir() {
+        return Err("Diary backup not found".to_string());
+    }
+    std::fs::remove_dir_all(&folder).map_err(|error| format!("Failed to delete diary backup: {error}"))
+}
+
+
+// Export writes run through std::fs so user-picked paths outside the
+// app-data scope are allowed (the fs plugin scope would forbid them).
+#[tauri::command]
+fn write_export_file(path: String, contents: String) -> Result<(), String> {
+    let target = std::path::PathBuf::from(&path);
+    if let Some(parent) = target.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| format!("Failed to create directory: {e}"))?;
+    }
+    std::fs::write(&target, contents).map_err(|e| format!("Failed to write {path}: {e}"))
+}
+
+#[tauri::command]
+fn write_export_bundle(root: String, files: std::collections::HashMap<String, String>) -> Result<(), String> {
+    let root_path = std::path::PathBuf::from(&root);
+    std::fs::create_dir_all(&root_path).map_err(|e| format!("Failed to create export folder: {e}"))?;
+    for (relative, contents) in files {
+        if std::path::Path::new(&relative).is_absolute() || relative.split('/').any(|seg| seg == "..") {
+            return Err(format!("Invalid export path: {relative}"));
+        }
+        let dest = root_path.join(&relative);
+        if let Some(parent) = dest.parent() {
+            std::fs::create_dir_all(parent).map_err(|e| format!("Failed to create directory: {e}"))?;
+        }
+        std::fs::write(&dest, contents).map_err(|e| format!("Failed to write {relative}: {e}"))?;
+    }
+    Ok(())
+}
+
 #[tauri::command]
 fn hide_main_window(app: tauri::AppHandle) {
     hide_main_window_handle(&app);
@@ -885,6 +1059,7 @@ pub fn run() {
             steam::shortcuts::save_shortcuts,
             steam::legacy_sharedconfig::load_legacy_sharedconfig,
             steam::local_library::load_local_license_library,
+            steam::local_library::load_installed_library,
             steam_api::fetch_wishlist,
             steam_api::fetch_family_library,
             steam_api::resolve_vanity_url,
@@ -920,6 +1095,12 @@ pub fn run() {
             post_json_export,
             load_app_data,
             save_app_data,
+            write_export_file,
+            write_export_bundle,
+            list_diary_backups,
+            create_diary_backup,
+            restore_diary_backup,
+            delete_diary_backup,
             local_integration_status,
             hltb::fetch_hltb,
         ])

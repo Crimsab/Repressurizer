@@ -5,6 +5,7 @@
   "permissions": [
     "core:default",
     "fs:allow-write-text-file",
+    "fs:allow-mkdir",
     "dialog:default",
     "dialog:allow-confirm",
     "dialog:allow-open",
