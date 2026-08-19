@@ -1495,8 +1495,9 @@ test("shows every generated release since the previously launched version once",
   });
 
   await page.goto("/");
-  const dialog = page.getByRole("dialog", { name: /What's new in v0\.6\.4/ });
+  const dialog = page.getByRole("dialog", { name: /What's new in v0\.7\.0/ });
   await expect(dialog).toBeVisible();
+  await expect(dialog.getByText("v0.6.4")).toBeVisible();
   await expect(dialog.getByText("v0.6.3")).toBeVisible();
   await expect(dialog.getByText("v0.6.2")).toBeVisible();
   await expectNoHorizontalOverflow(page);

@@ -4,6 +4,38 @@ All notable user-facing changes are generated from release tags and Conventional
 
 Run `bun run changelog:write` after changing release tags or commit history.
 
+## 0.7.0 - 2026-08-20
+
+### Added
+
+- Settings: collapsible appearance sections and leaner MCP panel ([47d3f4e](https://github.com/Crimsab/Repressurizer/commit/47d3f4e))
+- Diary: organized backups and robust export writers ([c0bec2f](https://github.com/Crimsab/Repressurizer/commit/c0bec2f))
+- Diary: Timeline with three layouts and achievements ([9ccbe63](https://github.com/Crimsab/Repressurizer/commit/9ccbe63))
+- Diary: Kanban board with custom columns and drag & drop ([d8c0fd2](https://github.com/Crimsab/Repressurizer/commit/d8c0fd2))
+- Diary: Diary workspace with notebook, pages, journal and ratings ([c1f38ec](https://github.com/Crimsab/Repressurizer/commit/c1f38ec))
+- AutoCat: Diary conditions to custom rules ([7118208](https://github.com/Crimsab/Repressurizer/commit/7118208))
+- Steam: detect locally installed games and add installation filters ([1ceede6](https://github.com/Crimsab/Repressurizer/commit/1ceede6))
+- Integrations: local API and MCP adapter ([64b6df9](https://github.com/Crimsab/Repressurizer/commit/64b6df9))
+
+### Fixed
+
+- Release: pass release tag to workflow dispatch ([1415843](https://github.com/Crimsab/Repressurizer/commit/1415843))
+
+[Release](https://github.com/Crimsab/Repressurizer/releases/tag/v0.7.0) · [Compare](https://github.com/Crimsab/Repressurizer/compare/v0.6.4...v0.7.0)
+
+## 0.6.4 - 2026-08-16
+
+### Added
+
+- Settings: integration panels and update changelog ([34b151c](https://github.com/Crimsab/Repressurizer/commit/34b151c))
+
+### Fixed
+
+- Gg Deals: accept string price responses ([c454e83](https://github.com/Crimsab/Repressurizer/commit/c454e83))
+- Preview: build MSI-compatible Windows previews ([4d500d1](https://github.com/Crimsab/Repressurizer/commit/4d500d1))
+
+[Release](https://github.com/Crimsab/Repressurizer/releases/tag/v0.6.4) · [Compare](https://github.com/Crimsab/Repressurizer/compare/v0.6.3...v0.6.4)
+
 ## 0.6.3 - 2026-08-15
 
 ### Fixed

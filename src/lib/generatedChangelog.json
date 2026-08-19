@@ -4,6 +4,149 @@
   "repository": "Crimsab/Repressurizer",
   "entries": [
     {
+      "version": "0.7.0",
+      "date": "2026-08-20",
+      "releaseUrl": "https://github.com/Crimsab/Repressurizer/releases/tag/v0.7.0",
+      "compareUrl": "https://github.com/Crimsab/Repressurizer/compare/v0.6.4...v0.7.0",
+      "groups": [
+        {
+          "title": "Added",
+          "audience": "user",
+          "items": [
+            {
+              "text": "Settings: collapsible appearance sections and leaner MCP panel",
+              "sha": "47d3f4e",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/47d3f4e"
+            },
+            {
+              "text": "Diary: organized backups and robust export writers",
+              "sha": "c0bec2f",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/c0bec2f"
+            },
+            {
+              "text": "Diary: Timeline with three layouts and achievements",
+              "sha": "9ccbe63",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/9ccbe63"
+            },
+            {
+              "text": "Diary: Kanban board with custom columns and drag & drop",
+              "sha": "d8c0fd2",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/d8c0fd2"
+            },
+            {
+              "text": "Diary: Diary workspace with notebook, pages, journal and ratings",
+              "sha": "c1f38ec",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/c1f38ec"
+            },
+            {
+              "text": "AutoCat: Diary conditions to custom rules",
+              "sha": "7118208",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/7118208"
+            },
+            {
+              "text": "Steam: detect locally installed games and add installation filters",
+              "sha": "1ceede6",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/1ceede6"
+            },
+            {
+              "text": "Integrations: local API and MCP adapter",
+              "sha": "64b6df9",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/64b6df9"
+            }
+          ]
+        },
+        {
+          "title": "Fixed",
+          "audience": "user",
+          "items": [
+            {
+              "text": "Release: pass release tag to workflow dispatch",
+              "sha": "1415843",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/1415843"
+            }
+          ]
+        },
+        {
+          "title": "Internal",
+          "audience": "internal",
+          "items": [
+            {
+              "text": "Release: generate changelog for 0.7.0",
+              "sha": "52edf4e",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/52edf4e"
+            },
+            {
+              "text": "Remove unused keys and localize Markdown label",
+              "sha": "c393c7a",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/c393c7a"
+            },
+            {
+              "text": "Diary: e2e coverage for Diary views and docs updates",
+              "sha": "dcf295b",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/dcf295b"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "version": "0.6.4",
+      "date": "2026-08-16",
+      "releaseUrl": "https://github.com/Crimsab/Repressurizer/releases/tag/v0.6.4",
+      "compareUrl": "https://github.com/Crimsab/Repressurizer/compare/v0.6.3...v0.6.4",
+      "groups": [
+        {
+          "title": "Added",
+          "audience": "user",
+          "items": [
+            {
+              "text": "Settings: integration panels and update changelog",
+              "sha": "34b151c",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/34b151c"
+            }
+          ]
+        },
+        {
+          "title": "Fixed",
+          "audience": "user",
+          "items": [
+            {
+              "text": "Gg Deals: accept string price responses",
+              "sha": "c454e83",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/c454e83"
+            },
+            {
+              "text": "Preview: build MSI-compatible Windows previews",
+              "sha": "4d500d1",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/4d500d1"
+            }
+          ]
+        },
+        {
+          "title": "Documentation",
+          "audience": "internal",
+          "items": [
+            {
+              "text": "Document cross-platform release support",
+              "sha": "fcdfd1a",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/fcdfd1a"
+            }
+          ]
+        },
+        {
+          "title": "Internal",
+          "audience": "internal",
+          "items": [
+            {
+              "text": "E2e: preserve changelog state across reloads",
+              "sha": "a0ec250",
+              "url": "https://github.com/Crimsab/Repressurizer/commit/a0ec250"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "version": "0.6.3",
       "date": "2026-08-15",
       "releaseUrl": "https://github.com/Crimsab/Repressurizer/releases/tag/v0.6.3",
@@ -505,122 +648,6 @@
               "text": "Publish clean releases automatically",
               "sha": "4386d7c",
               "url": "https://github.com/Crimsab/Repressurizer/commit/4386d7c"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "version": "0.5.4",
-      "date": "2026-07-18",
-      "releaseUrl": "https://github.com/Crimsab/Repressurizer/releases/tag/v0.5.4",
-      "compareUrl": "https://github.com/Crimsab/Repressurizer/compare/v0.5.3...v0.5.4",
-      "groups": [
-        {
-          "title": "Fixed",
-          "audience": "user",
-          "items": [
-            {
-              "text": "Wait for CI before releasing tags",
-              "sha": "bf9a682",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/bf9a682"
-            },
-            {
-              "text": "Queue overlapping metadata refreshes",
-              "sha": "a21e39c",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/a21e39c"
-            },
-            {
-              "text": "Queue original dates after direct detail fetches",
-              "sha": "95b548c",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/95b548c"
-            }
-          ]
-        },
-        {
-          "title": "Internal",
-          "audience": "internal",
-          "items": [
-            {
-              "text": "Cover queued original dates after direct detail fetches",
-              "sha": "ba21a59",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/ba21a59"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "version": "0.5.3",
-      "date": "2026-07-17",
-      "releaseUrl": "https://github.com/Crimsab/Repressurizer/releases/tag/v0.5.3",
-      "compareUrl": "https://github.com/Crimsab/Repressurizer/compare/v0.5.2...v0.5.3",
-      "groups": [
-        {
-          "title": "Fixed",
-          "audience": "user",
-          "items": [
-            {
-              "text": "Queue metadata refreshes during active scans",
-              "sha": "538047e",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/538047e"
-            },
-            {
-              "text": "Polish documentation rendering and accessibility",
-              "sha": "beb7d4d",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/beb7d4d"
-            }
-          ]
-        },
-        {
-          "title": "Documentation",
-          "audience": "internal",
-          "items": [
-            {
-              "text": "Enrich site and publish redesigned readme",
-              "sha": "482eec7",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/482eec7"
-            },
-            {
-              "text": "Publish documentation site and harden releases",
-              "sha": "1328ca6",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/1328ca6"
-            }
-          ]
-        },
-        {
-          "title": "Internal",
-          "audience": "internal",
-          "items": [
-            {
-              "text": "Bump actions/setup-node from 6.5.0 to 7.0.0 (#27)",
-              "sha": "5e08ac0",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/5e08ac0"
-            },
-            {
-              "text": "Bump actions/upload-pages-artifact from 4.0.0 to 5.0.0 (#28)",
-              "sha": "d5c80aa",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/d5c80aa"
-            },
-            {
-              "text": "Bump actions/cache/restore from 5.1.0 to 6.1.0 (#26)",
-              "sha": "a4e1f1f",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/a4e1f1f"
-            },
-            {
-              "text": "Bump actions/cache from 5.1.0 to 6.1.0 (#29)",
-              "sha": "f21b4ea",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/f21b4ea"
-            },
-            {
-              "text": "Bump actions/checkout from 6.0.3 to 7.0.0 (#30)",
-              "sha": "52a85be",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/52a85be"
-            },
-            {
-              "text": "Cover documentation button hover states",
-              "sha": "7e9f836",
-              "url": "https://github.com/Crimsab/Repressurizer/commit/7e9f836"
             }
           ]
         }
