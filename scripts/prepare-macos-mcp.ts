@@ -53,5 +53,12 @@ await mkdir(binariesRoot, { recursive: true });
 const bundled = join(binariesRoot, "repressurizer-mcp-universal-apple-darwin");
 await copyFile(universal, bundled);
 await chmod(bundled, 0o755);
+// Host-triple copies so plain `cargo test`/`cargo build` (which resolve
+// externalBin against the host triple) also find the sidecar.
+for (const target of targets) {
+  const perArch = join(binariesRoot, `repressurizer-mcp-${target}`);
+  await copyFile(join(targetRoot, target, "release", "repressurizer-mcp"), perArch);
+  await chmod(perArch, 0o755);
+}
 
 console.log("Prepared universal MCP adapter before the Tauri bundle build.");
