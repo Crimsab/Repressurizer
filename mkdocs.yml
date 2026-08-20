@@ -123,6 +123,7 @@ nav:
       - Collections: user-guide/collections.md
       - Search and filters: user-guide/search-and-filters.md
       - What to play next: user-guide/what-to-play-next.md
+      - Diary: user-guide/diary.md
       - Metadata cache and network: cache-and-network.md
       - AutoCat: user-guide/autocat.md
       - Export: user-guide/export.md
@@ -145,6 +146,8 @@ nav:
       - integrations/index.md
       - CLI: cli.md
       - Automation export: automation-export.md
+      - Local API: integrations/local-api.md
+      - MCP: integrations/mcp.md
       - GG.deals pricing: integrations/gg-deals.md
       - Snapshot schema: integrations/repressurizer-snapshot-v1.md
       - Receiver example: integrations/receiver-example.md

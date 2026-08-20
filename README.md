@@ -108,6 +108,15 @@ missing:true
 See the [search and filters reference](https://crimsab.github.io/Repressurizer/user-guide/search-and-filters/)
 for operators and metadata requirements.
 
+## Track your library in the Diary
+
+The Diary is a local workspace for game notes and progress: journal entries,
+scoped or global Markdown pages, ratings, and a status per game with priorities
+and decisions. Browse the library as a grid, list, **Kanban** board, or
+**Timeline**, and keep everything in one place without touching Steam.
+
+See the [Diary guide](https://crimsab.github.io/Repressurizer/user-guide/diary/).
+
 ## Build useful AutoCat collections
 
 AutoCat can create or update collections from local playtime, cached Steam
