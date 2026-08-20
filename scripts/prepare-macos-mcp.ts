@@ -29,6 +29,8 @@ for (const target of targets) {
       "--release",
       "--bin",
       "repressurizer-mcp",
+      "--features",
+      "mcp-sidecar",
       "--target",
       target,
     ],

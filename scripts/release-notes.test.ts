@@ -50,6 +50,37 @@ describe("release notes", () => {
     expect(notes).toContain("Repressurizer_*_amd64.deb");
     expect(notes).toContain("Repressurizer-cli-linux-x86_64.tar.gz");
   });
+
+  it("marks the 0.7.0 feature release as a big update", () => {
+    const repository = mkdtempSync(join(tmpdir(), "repressurizer-release-notes-big-update-"));
+    temporaryRepositories.push(repository);
+
+    git(repository, "init", "--initial-branch=main");
+    git(repository, "config", "user.name", "Crimsab");
+    git(repository, "config", "user.email", "121881650+Crimsab@users.noreply.github.com");
+
+    commit(repository, "base.txt", "base", "chore: release 0.6.4");
+    git(repository, "tag", "v0.6.4");
+    commit(repository, "feature.txt", "feature", "feat: add the Diary workspace");
+    git(repository, "tag", "v0.7.0");
+
+    const output = join(repository, "release-notes.md");
+    const script = resolve(process.cwd(), "scripts/release-notes.ts");
+    const result = spawnSync("bun", [
+      script,
+      "--repo",
+      "Crimsab/Repressurizer",
+      "--tag",
+      "v0.7.0",
+      "--out",
+      output,
+    ], { cwd: repository, encoding: "utf8" });
+
+    expect(result.status, result.stderr).toBe(0);
+    const notes = readFileSync(output, "utf8");
+    expect(notes).toContain("## Big update");
+    expect(notes).toContain("This is a big update with a complete Diary workspace");
+  });
 });
 
 function commit(repository: string, filename: string, contents: string, message: string): void {

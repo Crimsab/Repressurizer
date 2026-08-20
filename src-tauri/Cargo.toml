@@ -9,6 +9,7 @@ default-run = "repressurizer"
 [features]
 no-sam = []
 sam-sidecar = []
+mcp-sidecar = []
 
 [[bin]]
 name = "repressurizer-sam"
@@ -18,6 +19,7 @@ required-features = ["sam-sidecar"]
 [[bin]]
 name = "repressurizer-mcp"
 path = "src/bin/repressurizer-mcp.rs"
+required-features = ["mcp-sidecar"]
 
 [lib]
 name = "repressurizer_lib"

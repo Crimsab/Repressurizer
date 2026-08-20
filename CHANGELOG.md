@@ -6,6 +6,8 @@ Run `bun run changelog:write` after changing release tags or commit history.
 
 ## 0.7.0 - 2026-08-20
 
+> **Big update:** This release adds a complete Diary workspace, richer AutoCat rules, local API and MCP integrations, local installation detection, and more convenient settings and export tools.
+
 ### Added
 
 - Settings: collapsible appearance sections and leaner MCP panel ([47d3f4e](https://github.com/Crimsab/Repressurizer/commit/47d3f4e))

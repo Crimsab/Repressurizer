@@ -1541,8 +1541,10 @@ test("settings search finds local-only visibility and generated changelog", asyn
 
   await search.fill("changelog");
   await expect(settingsDialog.getByText("Changelog").first()).toBeVisible();
-  await expect(settingsDialog.getByText("v0.6.3")).toBeVisible();
-  await expect(settingsDialog.getByText("Windows: use MSI installer to avoid NSIS false positives")).toBeVisible();
+  const changelogEntry = settingsDialog.locator("details").filter({ hasText: "v0.6.3" });
+  await expect(changelogEntry).toBeVisible();
+  await changelogEntry.locator("summary").click();
+  await expect(changelogEntry.getByText("Windows: use MSI installer to avoid NSIS false positives")).toBeVisible();
 });
 
 test("game achievement details show Steam Achievement Manager preflight separately from Steam Web API data", async ({ page }, testInfo) => {

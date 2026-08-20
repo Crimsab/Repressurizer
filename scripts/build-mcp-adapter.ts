@@ -53,6 +53,8 @@ const command = [
   "--release",
   "--bin",
   "repressurizer-mcp",
+  "--features",
+  "mcp-sidecar",
   ...targetArgs,
 ];
 

@@ -1,5 +1,6 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import { releaseHighlight } from "./release-highlights";
 
 type GroupAudience = "user" | "internal";
 
@@ -219,6 +220,8 @@ function renderMarkdown(entriesDescending: ChangelogEntry[]): string {
 
   for (const entry of entriesDescending) {
     lines.push(`## ${entry.version} - ${entry.date}`, "");
+    const highlight = releaseHighlight(entry.version);
+    if (highlight) lines.push(`> **Big update:** ${highlight}`, "");
     for (const group of entry.groups.filter((item) => item.audience === "user")) {
       lines.push(`### ${group.title}`, "");
       for (const item of group.items) {

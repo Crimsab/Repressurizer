@@ -1,4 +1,5 @@
 import { writeFileSync } from "node:fs";
+import { releaseHighlight } from "./release-highlights";
 
 type Commit = {
   sha: string;
@@ -33,8 +34,10 @@ const compareUrl = previousTag
   : `https://github.com/${repo}/releases/tag/${tag}`;
 
 const mainNotes = buildCommitNotes(repo, tag, previousTag, compareUrl);
+const highlight = releaseHighlight(tag);
 
 const releaseNotes = [
+  highlight ? `## Big update\n\n${highlight}\n` : null,
   mainNotes,
   "---",
   "## Downloads",
@@ -53,7 +56,7 @@ const releaseNotes = [
   "",
   "On Windows, use the MSI installer for a normal installation with built-in updates or the portable ZIP for a self-contained executable that you update manually. On Linux, use the AppImage for a portable app with built-in updates or the Debian package for system installation. The CLI archives support scriptable diagnostics, snapshot validation/export, and automation publishing; guarded SAM write commands remain Windows-only.",
   ""
-].join("\n");
+].filter((section): section is string => section !== null).join("\n");
 
 writeFileSync(out, releaseNotes, "utf8");
 console.log(`Wrote ${out}`);

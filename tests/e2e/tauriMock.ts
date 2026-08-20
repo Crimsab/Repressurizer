@@ -1,4 +1,12 @@
 import type { Page, Route } from "@playwright/test";
+import { readFileSync } from "node:fs";
+
+// Seed the "last seen version" marker with the currently bundled app version so
+// the "What's new" changelog dialog never opens during the default e2e run.
+// Tests that exercise the dialog override this value explicitly.
+const currentAppVersion = (
+  JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8")) as { version: string }
+).version;
 
 export async function installTauriMock(page: Page) {
   const fulfillSteamHeader = async (route: Route) => {
@@ -29,7 +37,7 @@ export async function installTauriMock(page: Page) {
     await page.route("https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/**/capsule_231x87.jpg*", fulfillSteamHeader);
   }
 
-  await page.addInitScript(() => {
+  await page.addInitScript((currentVersion) => {
     const settings = {
       steamPath: "C:\\\\Program Files (x86)\\\\Steam",
       steamId3: "123456",
@@ -210,7 +218,7 @@ export async function installTauriMock(page: Page) {
     const diaryBackups: Array<{ name: string; description: string; created_at_ms: number; files: string[] }> = [];
     let diaryBackupCounter = 0;
     if (window.localStorage.getItem("repressurizer-last-seen-version") == null) {
-      window.localStorage.setItem("repressurizer-last-seen-version", "0.6.4");
+      window.localStorage.setItem("repressurizer-last-seen-version", currentVersion);
     }
     let autostartEnabled = settings.startOnLogin;
     const notifications: Array<{ title: string; body?: string }> = [];
@@ -839,5 +847,5 @@ export async function installTauriMock(page: Page) {
     ).__TAURI_EVENT_PLUGIN_INTERNALS__ = {
       unregisterListener: () => {},
     };
-  });
+  }, currentAppVersion);
 }
