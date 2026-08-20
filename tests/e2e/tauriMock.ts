@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 // Seed the "last seen version" marker with the currently bundled app version so
 // the "What's new" changelog dialog never opens during the default e2e run.
 // Tests that exercise the dialog override this value explicitly.
-const currentAppVersion = (
+export const currentAppVersion = (
   JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8")) as { version: string }
 ).version;
 

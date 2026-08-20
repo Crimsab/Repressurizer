@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { installTauriMock } from "./tauriMock";
+import { currentAppVersion, installTauriMock } from "./tauriMock";
 import type { Page } from "@playwright/test";
 
 async function expectNoHorizontalOverflow(page: Page) {
@@ -476,15 +476,16 @@ test("Diary kanban board moves cards and the timeline lists diary events", async
 test("diary extras: months, game timeline, custom chip, full-text search, persisted filters", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Diary" }).click();
-  await page.evaluate(async () => {
+  const testNow = Date.parse("2026-08-20T12:00:00Z");
+  await page.evaluate(async (now) => {
     const { useDiaryStore } = await import("/src/stores/diaryStore.ts");
-    useDiaryStore.getState().addJournalEntry(632470, "Uniquetribunalword for search", Date.now(), 720);
+    useDiaryStore.getState().addJournalEntry(632470, "Uniquetribunalword for search", now, 720);
     const columnId = useDiaryStore.getState().addCustomColumn("Wishlist", "#34d399");
     if (columnId) useDiaryStore.getState().setCustomAssignment(1145360, columnId);
     useDiaryStore.getState().setAchievements(1145360, [
-      { apiName: "ACH_X", name: "First Blood", unlockedAt: Math.floor(Date.now() / 1000) - 3600, icon: null },
+      { apiName: "ACH_X", name: "First Blood", unlockedAt: Math.floor(now / 1000) - 3600, icon: null },
     ]);
-  });
+  }, testNow);
 
   // Full-text search finds a game through its diary content, not just metadata.
   await page.getByRole("searchbox", { name: "Search your backlog" }).fill("uniquetribunalword");
@@ -1495,7 +1496,7 @@ test("shows every generated release since the previously launched version once",
   });
 
   await page.goto("/");
-  const dialog = page.getByRole("dialog", { name: /What's new in v0\.7\.0/ });
+  const dialog = page.getByRole("dialog", { name: new RegExp(`What's new in v${currentAppVersion}`) });
   await expect(dialog).toBeVisible();
   await expect(dialog.getByText("v0.6.4")).toBeVisible();
   await expect(dialog.getByText("v0.6.3")).toBeVisible();
