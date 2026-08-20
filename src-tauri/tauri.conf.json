@@ -48,6 +48,9 @@
   },
   "plugins": {
     "updater": {
+      "windows": {
+        "installMode": "passive"
+      },
       "endpoints": [
         "https://github.com/Crimsab/Repressurizer/releases/download/updater-manifests/{{target}}.json"
       ],

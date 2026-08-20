@@ -64,3 +64,10 @@ windows-core = "0.61.2"
 
 [dev-dependencies]
 wiremock = "0.6"
+
+# The crates.io 2.10.1 release exits immediately after calling
+# `ShellExecuteW`, even when Windows rejects the installer launch. Pin the
+# upstream fix until the checked release is published so an update failure is
+# returned to the app instead of silently closing it.
+[patch.crates-io]
+tauri-plugin-updater = { git = "https://github.com/tauri-apps/plugins-workspace", rev = "db9c5998feff9384f9cbbefcbe0d45937c00a1fc" }
