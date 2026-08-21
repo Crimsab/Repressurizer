@@ -30,6 +30,16 @@ export interface DiaryEntry {
   markedBacklog?: boolean;
 }
 
+/** The minimal Diary state needed to make a batch action reversible. */
+export interface DiaryBulkSnapshot {
+  entries: Record<number, DiaryEntry | undefined>;
+  queue: number[];
+  board: Record<number, number | undefined>;
+  customAssignments: Record<number, string | undefined>;
+  /** Full event log so a bulk undo does not leave phantom status changes in Timeline. */
+  statusEvents?: DiaryStatusEvent[];
+}
+
 /** A recorded diary status transition, used by the Timeline view. */
 export interface DiaryStatusEvent {
   id: string;
@@ -120,11 +130,22 @@ interface DiaryState {
   removeCustomColumn: (columnId: string) => void;
   /** Moves a game onto a custom column, or back to status-driven columns when null. */
   setCustomAssignment: (appId: number, columnId: string | null) => void;
+  /** Applies one decision to a batch of games and updates the play queue once. */
+  setBulkDecision: (appIds: number[], decision: DiaryDecision) => void;
+  setBulkPriority: (appIds: number[], priority: DiaryPriority) => void;
+  captureBulkSnapshot: (appIds: number[]) => DiaryBulkSnapshot;
+  restoreBulkSnapshot: (snapshot: DiaryBulkSnapshot) => void;
+  /** Clears Diary placement metadata while preserving notes, pages and history. */
+  clearBulkDiaryState: (appIds: number[]) => void;
   setDecision: (appId: number, decision: DiaryDecision) => void;
   setPriority: (appId: number, priority: DiaryPriority) => void;
+  /** Marks or clears the explicit backlog override for a batch of games. */
+  setBulkMarkedBacklog: (appIds: number[], marked: boolean) => void;
   setMarkedBacklog: (appId: number, marked: boolean) => void;
   /** Appends a status transition to the diary event log (dedupes repeats). */
   logStatusEvent: (appId: number, status: string) => void;
+  logStatusEvents: (events: Array<{ appId: number; status: string }>) => void;
+  setBulkCustomAssignment: (appIds: number[], columnId: string | null) => void;
   /** Persists the manual order of one Kanban column: ranks are the array index. */
   setBoardOrder: (orderedAppIds: number[]) => void;
   removeFromQueue: (appId: number) => void;
@@ -437,6 +458,21 @@ function persistDiary(entries: Record<number, DiaryEntry>, queue: number[], fini
 
 function entryWithDefaults(entry: DiaryEntry | undefined): DiaryEntry { return { ...DEFAULT_ENTRY, ...entry }; }
 function makeId(): string { return typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`; }
+/** Merge persisted data without discarding a local edit made while hydration was in flight. */
+function mergeRuntimeRecord<T extends object>(initial: T, persisted: T, current: T): T {
+  const merged: Record<string, unknown> = {
+    ...(initial as Record<string, unknown>),
+    ...(persisted as Record<string, unknown>),
+  };
+  const initialRecord = initial as Record<string, unknown>;
+  const currentRecord = current as Record<string, unknown>;
+  for (const key of new Set([...Object.keys(initialRecord), ...Object.keys(currentRecord)])) {
+    if (currentRecord[key] === initialRecord[key]) continue;
+    if (Object.prototype.hasOwnProperty.call(currentRecord, key)) merged[key] = currentRecord[key];
+    else delete merged[key];
+  }
+  return merged as T;
+}
 function appendRevision(revisions: DiaryRevision[], input: Omit<DiaryRevision, "id" | "createdAt"> & { createdAt?: number }): DiaryRevision[] {
   const latest = revisions.find((revision) => revision.target === input.target && revision.targetId === input.targetId);
   if (latest && latest.markdown === input.markdown && latest.title === input.title) return revisions;
@@ -469,7 +505,7 @@ export const useDiaryStore = create<DiaryState>((set, get) => ({
 
   hydrate: async () => {
     if (get().hydrated) return;
-    const local = { entries: get().entries, queue: get().queue, finishPrompts: get().finishPrompts, journal: get().journal, pages: get().pages, revisions: get().revisions, board: get().board, templates: get().templates };
+    const local = { entries: get().entries, queue: get().queue, finishPrompts: get().finishPrompts, journal: get().journal, pages: get().pages, revisions: get().revisions, board: get().board, boardPrefs: get().boardPrefs, templates: get().templates };
     try {
       const [diaryResult, templateResult, eventsResult, boardPrefsResult, achievementsResult] = await Promise.allSettled([loadAppData(APP_DATA_KEY), loadAppData(TEMPLATE_APP_DATA_KEY), loadAppData(STATUS_EVENTS_APP_DATA_KEY), loadAppData(BOARD_PREFS_APP_DATA_KEY), loadAppData(ACHIEVEMENTS_APP_DATA_KEY)]);
       const raw = diaryResult.status === "fulfilled" ? diaryResult.value : null;
@@ -487,16 +523,21 @@ export const useDiaryStore = create<DiaryState>((set, get) => ({
         } catch {}
       }
       const persisted = normalizePersisted(raw ? (JSON.parse(raw) as PersistedDiary) : null);
-      const entries = { ...local.entries, ...persisted.entries };
-      const queue = persisted.queue.length > 0 ? persisted.queue : local.queue;
-      const finishPrompts = { ...local.finishPrompts, ...persisted.finishPrompts };
-      const journal = { ...local.journal, ...persisted.journal };
-      const pages = [...local.pages, ...persisted.pages.filter((page) => !local.pages.some((localPage) => localPage.id === page.id))];
-      const revisions = [...local.revisions, ...persisted.revisions.filter((revision) => !local.revisions.some((localRevision) => localRevision.id === revision.id))].sort((a, b) => b.createdAt - a.createdAt).slice(0, 500);
-      const board = { ...local.board, ...persisted.board };
+      const runtime = get();
+      const entries = mergeRuntimeRecord(local.entries, persisted.entries, runtime.entries);
+      const queue = runtime.queue !== local.queue ? [...runtime.queue] : persisted.queue.length > 0 ? persisted.queue : local.queue;
+      const finishPrompts = mergeRuntimeRecord(local.finishPrompts, persisted.finishPrompts, runtime.finishPrompts);
+      const journal = mergeRuntimeRecord(local.journal, persisted.journal, runtime.journal);
+      const pages = runtime.pages !== local.pages
+        ? [...runtime.pages, ...persisted.pages.filter((page) => !runtime.pages.some((runtimePage) => runtimePage.id === page.id))]
+        : [...local.pages, ...persisted.pages.filter((page) => !local.pages.some((localPage) => localPage.id === page.id))];
+      const revisions = (runtime.revisions !== local.revisions
+        ? [...runtime.revisions, ...persisted.revisions.filter((revision) => !runtime.revisions.some((runtimeRevision) => runtimeRevision.id === revision.id))]
+        : [...local.revisions, ...persisted.revisions.filter((revision) => !local.revisions.some((localRevision) => localRevision.id === revision.id))])
+        .sort((a, b) => b.createdAt - a.createdAt).slice(0, 500);
+      const board = mergeRuntimeRecord(local.board, persisted.board, runtime.board);
       const persistedTemplates = rawTemplates ? (JSON.parse(rawTemplates) as unknown) : [];
       const remoteTemplates = Array.isArray(persistedTemplates) ? persistedTemplates.map(normalizeTemplate).filter((template): template is DiaryTemplate => template !== null) : [];
-      const templates = [...local.templates, ...remoteTemplates.filter((template) => !local.templates.some((localTemplate) => localTemplate.id === template.id))].slice(0, 200);
       let statusEvents = get().statusEvents;
       if (rawEvents) {
         try {
@@ -506,9 +547,13 @@ export const useDiaryStore = create<DiaryState>((set, get) => ({
           statusEvents = [...statusEvents, ...remoteEvents.filter((event) => !seen.has(event.id))].sort((a, b) => b.at - a.at).slice(0, 1000);
         } catch {}
       }
-      const boardPrefs = rawBoardPrefs ? (() => {
+      const hydratedBoardPrefs = rawBoardPrefs ? (() => {
         try { return normalizeBoardPrefs(JSON.parse(rawBoardPrefs)); } catch { return get().boardPrefs; }
       })() : get().boardPrefs;
+      const boardPrefs = runtime.boardPrefs !== local.boardPrefs ? runtime.boardPrefs : hydratedBoardPrefs;
+      const templates = runtime.templates !== local.templates
+        ? [...runtime.templates, ...remoteTemplates.filter((template) => !runtime.templates.some((runtimeTemplate) => runtimeTemplate.id === template.id))].slice(0, 200)
+        : [...local.templates, ...remoteTemplates.filter((template) => !local.templates.some((localTemplate) => localTemplate.id === template.id))].slice(0, 200);
       set({ entries, queue, finishPrompts, journal, pages, revisions, board, statusEvents, achievements, achievementsSyncedAt, boardPrefs, templates, hydrated: true });
       persistDiary(entries, queue, finishPrompts, journal, pages, revisions, board);
       persistStatusEvents(statusEvents);
@@ -518,12 +563,111 @@ export const useDiaryStore = create<DiaryState>((set, get) => ({
     } catch { set({ hydrated: true }); }
   },
 
+  setBulkDecision: (appIds, decision) => set((state) => {
+    const ids = [...new Set(appIds.filter((appId) => Number.isFinite(appId)).map((appId) => Math.trunc(appId)))];
+    if (ids.length === 0) return state;
+    const idSet = new Set(ids);
+    const now = Date.now();
+    const entries = { ...state.entries };
+    for (const appId of ids) entries[appId] = { ...entryWithDefaults(entries[appId]), decision, updatedAt: now };
+    let queue = state.queue.filter((id) => !idSet.has(id));
+    if (decision === "next") queue = [...ids, ...queue];
+    persistDiary(entries, queue, state.finishPrompts, state.journal, state.pages, state.revisions, state.board);
+    return { entries, queue };
+  }),
+  setBulkPriority: (appIds, priority) => set((state) => {
+    const ids = [...new Set(appIds.filter((appId) => Number.isFinite(appId)).map((appId) => Math.trunc(appId)))];
+    if (ids.length === 0) return state;
+    const now = Date.now();
+    const entries = { ...state.entries };
+    for (const appId of ids) entries[appId] = { ...entryWithDefaults(entries[appId]), priority, updatedAt: now };
+    persistDiary(entries, state.queue, state.finishPrompts, state.journal, state.pages, state.revisions, state.board);
+    return { entries };
+  }),
+  captureBulkSnapshot: (appIds) => {
+    const state = get();
+    const ids = [...new Set(appIds.filter((appId) => Number.isFinite(appId)).map((appId) => Math.trunc(appId)))];
+    return {
+      entries: Object.fromEntries(ids.map((appId) => [appId, state.entries[appId]])),
+      queue: [...state.queue],
+      board: Object.fromEntries(ids.map((appId) => [appId, state.board[appId]])),
+      customAssignments: Object.fromEntries(ids.map((appId) => [appId, state.boardPrefs.customAssignments[appId]])),
+      statusEvents: [...state.statusEvents],
+    };
+  },
+  restoreBulkSnapshot: (snapshot) => set((state) => {
+    const entries = { ...state.entries };
+    for (const [rawAppId, entry] of Object.entries(snapshot.entries)) {
+      const appId = Number(rawAppId);
+      if (!Number.isFinite(appId)) continue;
+      if (entry) entries[appId] = entry;
+      else delete entries[appId];
+    }
+    const board = { ...state.board };
+    for (const [rawAppId, rank] of Object.entries(snapshot.board)) {
+      const appId = Number(rawAppId);
+      if (!Number.isFinite(appId)) continue;
+      if (typeof rank === "number" && Number.isFinite(rank)) board[appId] = rank;
+      else delete board[appId];
+    }
+    const customAssignments = { ...state.boardPrefs.customAssignments };
+    for (const [rawAppId, columnId] of Object.entries(snapshot.customAssignments)) {
+      const appId = Number(rawAppId);
+      if (!Number.isFinite(appId)) continue;
+      if (typeof columnId === "string" && columnId) customAssignments[appId] = columnId;
+      else delete customAssignments[appId];
+    }
+    const boardPrefs = { ...state.boardPrefs, customAssignments };
+    persistDiary(entries, snapshot.queue, state.finishPrompts, state.journal, state.pages, state.revisions, board);
+    persistBoardPrefs(boardPrefs);
+    if (snapshot.statusEvents) persistStatusEvents(snapshot.statusEvents);
+    return { entries, queue: [...snapshot.queue], board, boardPrefs, ...(snapshot.statusEvents ? { statusEvents: [...snapshot.statusEvents] } : {}) };
+  }),
+  clearBulkDiaryState: (appIds) => set((state) => {
+    const ids = [...new Set(appIds.filter((appId) => Number.isFinite(appId)).map((appId) => Math.trunc(appId)))];
+    if (ids.length === 0) return state;
+    const idSet = new Set(ids);
+    const entries = { ...state.entries };
+    const board = { ...state.board };
+    const customAssignments = { ...state.boardPrefs.customAssignments };
+    for (const appId of ids) {
+      delete entries[appId];
+      delete board[appId];
+      delete customAssignments[appId];
+    }
+    const queue = state.queue.filter((appId) => !idSet.has(appId));
+    const boardPrefs = { ...state.boardPrefs, customAssignments };
+    persistDiary(entries, queue, state.finishPrompts, state.journal, state.pages, state.revisions, board);
+    persistBoardPrefs(boardPrefs);
+    return { entries, queue, board, boardPrefs };
+  }),
   setDecision: (appId, decision) => set((state) => { const entries = { ...state.entries, [appId]: { ...entryWithDefaults(state.entries[appId]), decision, updatedAt: Date.now() } }; let queue = state.queue.filter((id) => id !== appId); if (decision === "next") queue = [appId, ...queue]; persistDiary(entries, queue, state.finishPrompts, state.journal, state.pages, state.revisions, state.board); return { entries, queue }; }),
   setPriority: (appId, priority) => set((state) => { const entries = { ...state.entries, [appId]: { ...entryWithDefaults(state.entries[appId]), priority, updatedAt: Date.now() } }; persistDiary(entries, state.queue, state.finishPrompts, state.journal, state.pages, state.revisions, state.board); return { entries }; }),
+  setBulkMarkedBacklog: (appIds, marked) => set((state) => {
+    const ids = [...new Set(appIds.filter((appId) => Number.isFinite(appId)).map((appId) => Math.trunc(appId)))];
+    if (ids.length === 0) return state;
+    const now = Date.now();
+    const entries = { ...state.entries };
+    for (const appId of ids) {
+      const current = entryWithDefaults(entries[appId]);
+      if (marked) entries[appId] = { ...current, markedBacklog: true, updatedAt: now };
+      else {
+        const { markedBacklog: _markedBacklog, ...withoutBacklog } = current;
+        entries[appId] = { ...withoutBacklog, updatedAt: now };
+      }
+    }
+    persistDiary(entries, state.queue, state.finishPrompts, state.journal, state.pages, state.revisions, state.board);
+    return { entries };
+  }),
   setMarkedBacklog: (appId, marked) => set((state) => {
     const current = entryWithDefaults(state.entries[appId]);
     if ((current.markedBacklog === true) === marked) return state;
-    const entry: DiaryEntry = { ...current, updatedAt: Date.now(), ...(marked ? { markedBacklog: true } : {}) };
+    let entry: DiaryEntry;
+    if (marked) entry = { ...current, markedBacklog: true, updatedAt: Date.now() };
+    else {
+      const { markedBacklog: _markedBacklog, ...withoutBacklog } = current;
+      entry = { ...withoutBacklog, updatedAt: Date.now() };
+    }
     const entries = { ...state.entries, [appId]: entry };
     persistDiary(entries, state.queue, state.finishPrompts, state.journal, state.pages, state.revisions, state.board);
     return { entries };
@@ -533,6 +677,20 @@ export const useDiaryStore = create<DiaryState>((set, get) => ({
     if (latest && latest.status === status) return state;
     const event: DiaryStatusEvent = { id: makeId(), appId, status, at: Date.now() };
     const statusEvents = [event, ...state.statusEvents].sort((a, b) => b.at - a.at).slice(0, 1000);
+    persistStatusEvents(statusEvents);
+    return { statusEvents };
+  }),
+  logStatusEvents: (events) => set((state) => {
+    if (events.length === 0) return state;
+    let statusEvents = [...state.statusEvents];
+    const now = Date.now();
+    for (const { appId, status } of events) {
+      if (!Number.isFinite(appId) || !status) continue;
+      const latest = statusEvents.find((event) => event.appId === appId);
+      if (latest && latest.status === status) continue;
+      statusEvents = [{ id: makeId(), appId, status, at: now }, ...statusEvents];
+    }
+    statusEvents = statusEvents.sort((a, b) => b.at - a.at).slice(0, 1000);
     persistStatusEvents(statusEvents);
     return { statusEvents };
   }),
@@ -597,6 +755,18 @@ export const useDiaryStore = create<DiaryState>((set, get) => ({
     const customAssignments = { ...state.boardPrefs.customAssignments };
     if (columnId === null) delete customAssignments[appId];
     else customAssignments[appId] = columnId;
+    const boardPrefs = { ...state.boardPrefs, customAssignments };
+    persistBoardPrefs(boardPrefs);
+    return { boardPrefs };
+  }),
+  setBulkCustomAssignment: (appIds, columnId) => set((state) => {
+    const ids = [...new Set(appIds.filter((appId) => Number.isFinite(appId)).map((appId) => Math.trunc(appId)))];
+    if (ids.length === 0) return state;
+    const customAssignments = { ...state.boardPrefs.customAssignments };
+    for (const appId of ids) {
+      if (columnId === null) delete customAssignments[appId];
+      else customAssignments[appId] = columnId;
+    }
     const boardPrefs = { ...state.boardPrefs, customAssignments };
     persistBoardPrefs(boardPrefs);
     return { boardPrefs };

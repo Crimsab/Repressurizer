@@ -350,7 +350,7 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
             </div>
 
             {showSortMenu && (
-              <div className="absolute top-full mt-1.5 left-0 z-50 min-w-[200px] animate-fade-in rounded-xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_8px_32px_rgba(0,0,0,0.5)]">
+              <div className="absolute top-full mt-1.5 left-0 z-50 min-w-[200px] animate-fade-in rounded-xl border border-repressurizer-border bg-repressurizer-surface shadow-pop">
                 <div className="p-1.5">
                   {SORT_OPTIONS.map((opt) => (
                     <button
@@ -499,7 +499,7 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
               <div
                 role="menu"
                 aria-label={t("toolbar.more")}
-                className="absolute right-0 top-full z-50 mt-1.5 w-56 rounded-xl border border-repressurizer-border bg-repressurizer-surface p-1.5 shadow-[0_8px_32px_rgba(0,0,0,0.5)]"
+                className="absolute right-0 top-full z-50 mt-1.5 w-56 rounded-xl border border-repressurizer-border bg-repressurizer-surface p-1.5 shadow-pop"
               >
                 {secondaryTools.map(({ key, label, Icon, open, loader }) => (
                   <button
@@ -654,7 +654,7 @@ function SavePreviewDialog({
       initialFocusRef={titleRef}
       className="fixed inset-0 z-[70] flex items-center justify-center bg-black/60 p-6 backdrop-blur-sm"
     >
-      <div className="w-full max-w-xl animate-fade-in rounded-2xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_24px_64px_rgba(0,0,0,0.6)]">
+      <div className="w-full max-w-xl animate-fade-in rounded-2xl border border-repressurizer-border bg-repressurizer-surface shadow-dialog">
         <div className="border-b border-repressurizer-border px-5 py-4">
           <h2 ref={titleRef} tabIndex={-1} className="text-base font-semibold tracking-tight text-white focus:outline-none">
             {t("savePreview.title")}

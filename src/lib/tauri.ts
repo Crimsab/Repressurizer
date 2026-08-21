@@ -678,6 +678,14 @@ export async function restoreDiaryBackup(name: string): Promise<void> {
   return invoke<void>("restore_diary_backup", { name });
 }
 
+export async function readDiaryBackupFile(name: string, key: string): Promise<string | null> {
+  return invoke<string | null>("read_diary_backup_file", { name, key });
+}
+
+export async function restoreDiaryBackupFiles(name: string, keys: string[]): Promise<string[]> {
+  return invoke<string[]>("restore_diary_backup_files", { name, keys });
+}
+
 export async function deleteDiaryBackup(name: string): Promise<void> {
   return invoke<void>("delete_diary_backup", { name });
 }

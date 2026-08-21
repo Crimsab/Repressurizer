@@ -1,7 +1,8 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { createPortal } from "react-dom";
-import { ArrowUpRight, GameController, MagnifyingGlass, Plus, Trash, Warning, X } from "@phosphor-icons/react";
+import { Archive, ArrowUpRight, CheckSquareOffset, GameController, MagnifyingGlass, Plus, Trash, Warning, X } from "@phosphor-icons/react";
 import { SteamImage } from "../games/SteamImage";
+import { SelectMenu } from "../ui/SelectMenu";
 import { useT } from "../../lib/i18n";
 import type { OwnedGame, GameDetails } from "../../lib/types";
 import type { DiaryBoardPrefs, DiaryCustomColumn, DiaryEntry, DiaryJournalEntry, DiaryPriority, DiarySection } from "../../stores/diaryStore";
@@ -26,12 +27,12 @@ export interface BoardColumn {
   custom?: DiaryCustomColumn;
 }
 
-export function buildBoardColumns(boardPrefs: DiaryBoardPrefs, showArchived: boolean, t: ReturnType<typeof useT>): BoardColumn[] {
+export function buildBoardColumns(boardPrefs: DiaryBoardPrefs, showArchived: boolean, t: ReturnType<typeof useT>, forceStatus?: DiaryViewStatus): BoardColumn[] {
   const hidden = new Set(boardPrefs.hiddenColumns);
   const list: BoardColumn[] = [];
   for (const status of STATUS_KEYS) {
-    if (status === "archived" && !showArchived) continue;
-    if (hidden.has(status)) continue;
+    if (status === "archived" && !showArchived && forceStatus !== status) continue;
+    if (hidden.has(status) && forceStatus !== status) continue;
     list.push({ key: status, label: t(STATUS_LABELS[status]), color: boardPrefs.columnColors[status] ?? DEFAULT_COLUMN_COLORS[status], kind: "status", status });
   }
   for (const custom of boardPrefs.customColumns) {
@@ -74,7 +75,7 @@ function colorWithAlpha(hex: string, alpha: number): string {
 
 const PRIORITY_EDGE: Record<DiaryPriority, string | null> = { high: "#fb7185", normal: null, low: "#64748b" };
 
-export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, details, entries, statuses, reviews, journal, pages, board, boardPrefs, language, showArchived, wipLimit, t, onApplyStatus, onSetBoardOrder, onSetPriority, onOpenGame, onSetColumnColor, onToggleColumnHidden, onAddCustomColumn, onRenameCustomColumn, onRemoveCustomColumn, onSetCustomAssignment }: {
+export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, details, entries, statuses, reviews, journal, pages, board, boardPrefs, language, showArchived, forceStatus, wipLimit, t, onBulkStatusChange, onBulkPriorityChange, onRemoveGames, onMoveGames, onOpenGame, onSetColumnColor, onToggleColumnHidden, onAddCustomColumn, onRenameCustomColumn, onRemoveCustomColumn }: {
   games: OwnedGame[];
   details: Record<number, GameDetails>;
   entries: Record<number, DiaryEntry>;
@@ -86,11 +87,16 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, details,
   boardPrefs: DiaryBoardPrefs;
   language: string;
   showArchived: boolean;
+  forceStatus?: DiaryViewStatus;
   wipLimit: number;
   t: ReturnType<typeof useT>;
   onApplyStatus: (appId: number, status: DiaryViewStatus) => void;
   onSetBoardOrder: (orderedAppIds: number[]) => void;
   onSetPriority: (appId: number, priority: DiaryPriority) => void;
+  onBulkStatusChange: (appIds: number[], status: DiaryViewStatus) => void;
+  onBulkPriorityChange: (appIds: number[], priority: DiaryPriority) => void;
+  onRemoveGames: (appIds: number[]) => void;
+  onMoveGames: (appIds: number[], column: BoardColumn, orderedAppIds: number[]) => void;
   onOpenGame: (appId: number) => void;
   onSetColumnColor: (columnKey: string, color: string | null) => void;
   onToggleColumnHidden: (columnKey: string) => void;
@@ -114,8 +120,9 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, details,
   const suppressClickRef = useRef(false);
   const rafRef = useRef<number | null>(null);
   const ghostPosRef = useRef<{ x: number; y: number } | null>(null);
+  const ghostElementRef = useRef<HTMLDivElement | null>(null);
 
-  const columns = useMemo(() => buildBoardColumns(boardPrefs, showArchived, t), [boardPrefs, showArchived, t]);
+  const columns = useMemo(() => buildBoardColumns(boardPrefs, showArchived, t, forceStatus), [boardPrefs, forceStatus, showArchived, t]);
 
   const columnOfGame = useMemo(() => {
     const byCustom = new Map(boardPrefs.customColumns.map((custom) => [custom.id, custom]));
@@ -148,24 +155,63 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, details,
     return byColumn;
   }, [board, columnOfGame, columns, games]);
 
+  const sectionCountByAppId = useMemo(() => {
+    const counts = new Map<number, number>();
+    const globalCount = pages.reduce((count, page) => count + (page.scope === "all" ? 1 : 0), 0);
+    if (globalCount > 0) for (const game of games) counts.set(game.appid, globalCount);
+    for (const page of pages) {
+      if (page.scope === "all") continue;
+      for (const appId of page.appIds) counts.set(appId, (counts.get(appId) ?? 0) + 1);
+    }
+    return counts;
+  }, [games, pages]);
+
   const moveIds = useCallback((appIds: number[], column: BoardColumn, insertAt?: number) => {
     const currentIds = (grouped.get(column.key) ?? []).map((game) => game.appid);
-    const targetIds = currentIds.filter((id) => !appIds.includes(id));
+    const movingSet = new Set(appIds);
+    const targetIds = currentIds.filter((id) => !movingSet.has(id));
     const at = Math.max(0, Math.min(insertAt ?? targetIds.length, targetIds.length));
-    for (const appId of appIds) {
-      if (column.kind === "custom" && column.custom) onSetCustomAssignment(appId, column.custom.id);
-      else {
-        onSetCustomAssignment(appId, null);
-        if (column.status) onApplyStatus(appId, column.status);
-      }
-    }
-    onSetBoardOrder([...targetIds.slice(0, at), ...appIds, ...targetIds.slice(at)]);
+    const orderedAppIds = [...targetIds.slice(0, at), ...appIds, ...targetIds.slice(at)];
+    onMoveGames(appIds, column, orderedAppIds);
     setSelection(new Set());
     setContextMenu(null);
     setAddGamePopover(null);
-  }, [grouped, onApplyStatus, onSetBoardOrder, onSetCustomAssignment]);
+  }, [grouped, onMoveGames]);
 
-  const toggleCardSelection = (appId: number, columnKey: string, index: number, mode: "replace" | "toggle" | "range") => {
+  const selectAllInColumn = useCallback((columnKey: string) => {
+    const columnIds = (grouped.get(columnKey) ?? []).map((game) => game.appid);
+    setSelection((current) => {
+      const next = new Set(current);
+      for (const appId of columnIds) next.add(appId);
+      return next;
+    });
+    setLastClicked(columnIds.length > 0 ? { columnKey, index: columnIds.length - 1 } : null);
+  }, [grouped]);
+
+  const toggleColumnSelection = useCallback((columnKey: string) => {
+    const columnIds = (grouped.get(columnKey) ?? []).map((game) => game.appid);
+    if (columnIds.length === 0) return;
+    setSelection((current) => {
+      const allSelected = columnIds.every((appId) => current.has(appId));
+      const next = new Set(current);
+      for (const appId of columnIds) {
+        if (allSelected) next.delete(appId);
+        else next.add(appId);
+      }
+      return next;
+    });
+    setLastClicked({ columnKey, index: columnIds.length - 1 });
+  }, [grouped]);
+
+  const handleColumnKeyDown = useCallback((event: ReactKeyboardEvent<HTMLElement>, columnKey: string) => {
+    if (!(event.ctrlKey || event.metaKey) || event.key.toLowerCase() !== "a") return;
+    const target = event.target as HTMLElement;
+    if (target.closest("input, textarea, select, [contenteditable='true']")) return;
+    event.preventDefault();
+    selectAllInColumn(columnKey);
+  }, [selectAllInColumn]);
+
+  const toggleCardSelection = useCallback((appId: number, columnKey: string, index: number, mode: "replace" | "toggle" | "range") => {
     const columnIds = (grouped.get(columnKey) ?? []).map((game) => game.appid);
     setSelection((current) => {
       if (mode === "replace") return new Set([appId]);
@@ -181,7 +227,7 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, details,
       return new Set(columnIds.slice(from, to + 1));
     });
     setLastClicked({ columnKey, index });
-  };
+  }, [grouped, lastClicked]);
 
   const columnRectsRef = useRef<Array<{ key: string; left: number; right: number; top: number; bottom: number; cards: Array<{ top: number; bottom: number }> }>>([]);
 
@@ -236,10 +282,15 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, details,
         rafRef.current = null;
         const position = ghostPosRef.current;
         if (!position) return;
-        setGhost((current) => (current ? { ...current, x: position.x, y: position.y } : current));
+        if (ghostElementRef.current) {
+          ghostElementRef.current.style.transform = `translate3d(${position.x + 10}px, ${position.y + 8}px, 0)`;
+        }
         const columnKey = findColumnKeyAt(position.x, position.y);
-        if (columnKey) setDropTarget({ columnKey, index: findDropIndex(columnKey, position.y) });
-        else setDropTarget(null);
+        const nextTarget = columnKey ? { columnKey, index: findDropIndex(columnKey, position.y) } : null;
+        setDropTarget((current) => {
+          if (current?.columnKey === nextTarget?.columnKey && current?.index === nextTarget?.index) return current;
+          return nextTarget;
+        });
       });
     };
     const onPointerUp = (event: PointerEvent) => {
@@ -270,7 +321,7 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, details,
     };
   }, [columns, draggingAppId, moveIds, selection]);
 
-  const openContextMenu = (event: ReactMouseEvent, appId: number) => {
+  const openContextMenu = useCallback((event: ReactMouseEvent, appId: number) => {
     event.preventDefault();
     event.stopPropagation();
     const appIds = selection.has(appId) ? [...selection] : [appId];
@@ -281,7 +332,25 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, details,
       y: Math.min(event.clientY, window.innerHeight - 340),
       appIds,
     });
-  };
+  }, [selection]);
+
+  const handleCardOpen = useCallback((appId: number) => {
+    setSelection(new Set());
+    onOpenGame(appId);
+  }, [onOpenGame]);
+
+  const handleCardSelect = useCallback((appId: number, columnKey: string, index: number, mode: "replace" | "toggle" | "range") => {
+    if (!suppressClickRef.current) toggleCardSelection(appId, columnKey, index, mode);
+  }, [toggleCardSelection]);
+
+  const handleCardContextMenu = useCallback((event: ReactMouseEvent, appId: number) => {
+    openContextMenu(event, appId);
+  }, [openContextMenu]);
+
+  const handleCardPointerDown = useCallback((appId: number, event: ReactPointerEvent) => {
+    if (event.button !== 0) return;
+    dragRef.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, appId };
+  }, []);
 
   const openColumnMenu = (event: ReactMouseEvent, columnKey: string) => {
     if ((event.target as HTMLElement).closest("[data-kanban-card]")) return;
@@ -319,12 +388,14 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, details,
   return (
     <div data-testid="diary-kanban" className="relative flex min-h-0 flex-1 flex-col">
       {selection.size > 0 && draggingAppId === null && (
-        <div data-testid="diary-kanban-selection" className="absolute inset-x-0 bottom-3 z-20 flex justify-center">
-          <div className="inline-flex items-center gap-2 rounded-xl border border-repressurizer-accent/40 bg-repressurizer-surface px-3 py-2 shadow-[0_8px_28px_rgba(0,0,0,0.5)] backdrop-blur">
-            <span className="font-mono text-[11px] font-semibold tabular-nums text-repressurizer-accent">{selection.size}</span>
-            <span className="text-[11px] text-repressurizer-text-muted">{t("diary.kanban.selection", { count: selection.size })}</span>
-            <span className="mx-1 h-4 w-px bg-repressurizer-border-subtle" />
-            <button type="button" data-testid="diary-kanban-selection-move" aria-label={t("diary.kanban.moveTo")} className="focus-ring rounded-md px-2 py-1 text-[10px] font-medium text-repressurizer-accent transition-colors hover:bg-repressurizer-accent/10"
+        <div data-testid="diary-kanban-selection" className="absolute inset-x-0 bottom-3 z-20 flex justify-center px-4">
+          <div className="animate-fade-in inline-flex max-w-full flex-wrap items-center justify-center gap-x-1 gap-y-1.5 rounded-xl border border-repressurizer-accent/35 bg-repressurizer-surface-raised/95 py-1.5 pl-1 pr-1.5 shadow-dialog backdrop-blur-md">
+            <span className="ml-1 mr-0.5 inline-flex items-center gap-1.5">
+              <span className="inline-flex min-w-6 items-center justify-center rounded-md bg-repressurizer-accent/15 px-1.5 py-0.5 font-mono text-[11px] font-semibold tabular-nums text-repressurizer-accent">{selection.size}</span>
+              <span className="text-[11px] text-repressurizer-text-muted">{t("diary.kanban.selection", { count: selection.size })}</span>
+            </span>
+            <span aria-hidden="true" className="mx-0.5 h-4 w-px bg-repressurizer-border" />
+            <button type="button" data-testid="diary-kanban-selection-move" aria-label={t("diary.kanban.moveTo")} className="focus-ring rounded-md px-2 py-1 text-[10px] font-medium text-repressurizer-text-muted transition-colors hover:bg-repressurizer-surface-hover hover:text-white"
               onClick={(event) => {
                 const rect = event.currentTarget.getBoundingClientRect();
                 setContextMenu({ x: Math.max(8, rect.left - 100), y: rect.top - 320, appIds: [...selection] });
@@ -332,11 +403,68 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, details,
             >
               {t("diary.kanban.moveTo")}
             </button>
-            <button type="button" aria-label={t("diary.kanban.clearSelection")} onClick={() => setSelection(new Set())} className="focus-ring rounded-md p-1 text-repressurizer-text-faint transition-colors hover:bg-repressurizer-surface-hover hover:text-white"><X size={12} /></button>
+            <div data-testid="diary-kanban-selection-status" className="w-[132px] shrink-0">
+              <SelectMenu<"" | DiaryViewStatus>
+                value=""
+                options={[
+                  { value: "", label: t("diary.kanban.changeStatus") },
+                  ...STATUS_KEYS.map((status) => ({ value: status, label: t(STATUS_LABELS[status]) })),
+                ]}
+                onChange={(status) => {
+                  if (!status) return;
+                  onBulkStatusChange([...selection], status);
+                  setSelection(new Set());
+                }}
+                ariaLabel={t("diary.kanban.changeStatus")}
+                placeholder={t("diary.kanban.changeStatus")}
+                size="sm"
+                buttonClassName="h-7 rounded-md px-2 text-[10px]"
+              />
+            </div>
+            <div data-testid="diary-kanban-selection-priority" className="w-[132px] shrink-0">
+              <SelectMenu<"" | DiaryPriority>
+                value=""
+                options={[
+                  { value: "", label: t("diary.kanban.changePriority") },
+                  ...(["high", "normal", "low"] as DiaryPriority[]).map((priority) => ({ value: priority, label: t(`diary.priority.${priority}`) })),
+                ]}
+                onChange={(priority) => {
+                  if (!priority) return;
+                  onBulkPriorityChange([...selection], priority);
+                  setSelection(new Set());
+                }}
+                ariaLabel={t("diary.kanban.changePriority")}
+                placeholder={t("diary.kanban.changePriority")}
+                size="sm"
+                buttonClassName="h-7 rounded-md px-2 text-[10px]"
+              />
+            </div>
+            <button
+              type="button"
+              data-testid="diary-kanban-selection-archive"
+              aria-label={t("diary.kanban.archiveSelected")}
+              onClick={() => { onBulkStatusChange([...selection], "archived"); setSelection(new Set()); }}
+              className="focus-ring inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium text-amber-300 transition-colors hover:bg-amber-400/15"
+            >
+              <Archive size={12} />
+              {t("diary.kanban.archiveSelected")}
+            </button>
+            <button
+              type="button"
+              data-testid="diary-kanban-selection-remove"
+              aria-label={t("diary.kanban.removeSelected")}
+              onClick={() => { onRemoveGames([...selection]); setSelection(new Set()); }}
+              className="focus-ring inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium text-repressurizer-danger transition-colors hover:bg-repressurizer-danger/15"
+            >
+              <Trash size={12} />
+              {t("diary.kanban.removeSelected")}
+            </button>
+            <span aria-hidden="true" className="mx-0.5 h-4 w-px bg-repressurizer-border" />
+            <button type="button" aria-label={t("diary.kanban.clearSelection")} onClick={() => setSelection(new Set())} className="focus-ring rounded-md p-1.5 text-repressurizer-text-faint transition-colors hover:bg-repressurizer-surface-hover hover:text-white"><X size={12} /></button>
           </div>
         </div>
       )}
-      <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto p-4 sm:p-6" role="list" aria-label={t("diary.kanban.board")}>
+      <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto p-4 sm:p-6" role="list" aria-label={t("diary.kanban.board")} aria-multiselectable="true">
         {columns.map((column) => {
           const columnGames = grouped.get(column.key) ?? [];
           const overLimit = column.status === "playing" && wipLimit > 0 && columnGames.length > wipLimit;
@@ -345,21 +473,28 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, details,
             <section
               key={column.key}
               data-column-key={column.key}
-              data-testid={`diary-kanban-column-${column.key}`}
+              data-testid={isDropTarget ? "diary-kanban-drop-target" : `diary-kanban-column-${column.key}`}
               data-column-name={column.label}
               aria-label={column.label}
               onContextMenu={(event) => openColumnMenu(event, column.key)}
-              style={{ borderColor: `${column.color}99`, backgroundColor: `${column.color}0d` }}
-              className={`flex min-h-0 min-w-[230px] max-w-[380px] flex-1 basis-0 flex-col overflow-hidden rounded-xl border transition-colors ${isDropTarget ? "bg-repressurizer-accent/[0.08]" : "bg-repressurizer-surface/30"}`}
+              onKeyDown={(event) => handleColumnKeyDown(event, column.key)}
+              onPointerDown={(event) => {
+                const target = event.target as HTMLElement;
+                if (!target.closest("[data-kanban-card], button, input, textarea, select")) event.currentTarget.focus();
+              }}
+              tabIndex={0}
+              style={{ borderColor: `${column.color}80`, backgroundColor: `${column.color}0d` }}
+              className={`flex min-h-0 min-w-[230px] max-w-[380px] flex-1 basis-0 flex-col overflow-hidden rounded-xl border transition-[background-color,border-color,box-shadow] ${isDropTarget ? "bg-repressurizer-accent/[0.08] shadow-[0_0_0_1px_rgba(16,185,129,0.35),0_0_28px_rgba(16,185,129,0.14)] ring-2 ring-inset ring-repressurizer-accent/70" : "shadow-pop-sm"}`}
             >
               <header
                 data-testid={`diary-kanban-column-header-${column.key}`}
-                className="flex shrink-0 items-center justify-between gap-2 border-b px-3 py-2.5"
-                style={{ backgroundColor: `${column.color}26`, borderBottomColor: `${column.color}66` }}
+                className="flex shrink-0 items-center justify-between gap-2 border-b px-3 py-2"
+                style={{ backgroundColor: `${column.color}26`, borderBottomColor: `${column.color}59` }}
               >
                 <span className="flex min-w-0 items-center gap-2">
                   <span aria-hidden="true" style={{ backgroundColor: column.color }} className="h-1.5 w-1.5 shrink-0 rounded-full" />
                   <span className="truncate text-[11px] font-semibold uppercase tracking-[0.1em]" style={{ color: column.color }}>{column.label}</span>
+                  {isDropTarget && <span className="rounded-full bg-repressurizer-accent/15 px-1.5 py-0.5 text-[9px] font-medium normal-case tracking-normal text-repressurizer-accent">{t("diary.kanban.dropHere")}</span>}
                 </span>
                 <span className="flex shrink-0 items-center gap-1">
                   <button
@@ -378,6 +513,18 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, details,
                   >
                     <Plus size={12} weight="bold" />
                   </button>
+                  <button
+                    type="button"
+                    data-testid={`diary-kanban-select-all-${column.key}`}
+                    aria-label={`${columnGames.length > 0 && columnGames.every((game) => selection.has(game.appid)) ? t("diary.kanban.deselectAll") : t("diary.kanban.selectAll")}: ${column.label}`}
+                    title={columnGames.length > 0 && columnGames.every((game) => selection.has(game.appid)) ? t("diary.kanban.deselectAll") : t("diary.kanban.selectAll")}
+                    aria-pressed={columnGames.length > 0 && columnGames.every((game) => selection.has(game.appid))}
+                    disabled={columnGames.length === 0}
+                    onClick={() => toggleColumnSelection(column.key)}
+                    className="focus-ring rounded-md p-1 text-repressurizer-text-faint transition-colors hover:bg-repressurizer-surface-hover hover:text-white disabled:cursor-not-allowed disabled:opacity-30"
+                  >
+                    <CheckSquareOffset size={12} />
+                  </button>
                   {overLimit ? (
                     <span data-testid="diary-kanban-wip-over" title={t("diary.kanban.wipOver")} style={{ borderColor: colorWithAlpha(column.color, 0.55), backgroundColor: colorWithAlpha(column.color, 0.14), color: column.color }} className="inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 font-mono text-[10px] tabular-nums"><Warning size={10} weight="fill" />{columnGames.length}/{wipLimit}</span>
                   ) : (
@@ -387,34 +534,33 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, details,
               </header>
               <div className="min-h-0 flex-1 space-y-1.5 overflow-y-auto p-2">
                 {columnGames.length === 0 && dropTarget?.columnKey !== column.key && (
-                  <p className="rounded-lg border border-dashed border-repressurizer-border-subtle px-3 py-6 text-center text-[10px] text-repressurizer-text-faint">{t("diary.kanban.empty")}</p>
+                  <p className="rounded-lg border border-dashed border-repressurizer-border/70 bg-black/[0.04] px-3 py-6 text-center text-[10px] text-repressurizer-text-faint">{t("diary.kanban.empty")}</p>
                 )}
                 {columnGames.map((game, index) => (
                   <div key={game.appid}>
-                    {dropTarget?.columnKey === column.key && dropTarget.index === index && draggingAppId !== null && <div aria-hidden="true" className="mb-1.5 h-1 rounded-full bg-repressurizer-accent" />}
+                    {dropTarget?.columnKey === column.key && dropTarget.index === index && draggingAppId !== null && <div data-testid="diary-kanban-drop-marker" aria-hidden="true" className="kanban-drop-marker mb-1.5 h-1 rounded-full bg-repressurizer-accent shadow-[0_0_12px_rgba(16,185,129,0.7)]" />}
                     <KanbanCard
                       game={game}
                       detail={details[game.appid]}
                       entry={entries[game.appid]}
                       rating={reviews[game.appid]?.rating ?? 0}
                       journalCount={journal[game.appid]?.length ?? 0}
-                      sectionCount={pages.filter((page) => page.scope === "all" || page.appIds.includes(game.appid)).length}
+                      sectionCount={sectionCountByAppId.get(game.appid) ?? 0}
                       language={language}
                       dragging={draggingAppId === game.appid}
                       selected={selection.has(game.appid)}
                       accentColor={column.color}
                       t={t}
-                      onOpen={() => { setSelection(new Set()); onOpenGame(game.appid); }}
-                      onSelect={(mode) => { if (!suppressClickRef.current) toggleCardSelection(game.appid, column.key, index, mode); }}
-                      onContextMenuOpen={(event) => openContextMenu(event, game.appid)}
-                      onPointerDown={(appId, event) => {
-                        if (event.button !== 0) return;
-                        dragRef.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, appId };
-                      }}
+                      columnKey={column.key}
+                      columnIndex={index}
+                      onOpen={handleCardOpen}
+                      onSelect={handleCardSelect}
+                      onContextMenuOpen={handleCardContextMenu}
+                      onPointerDown={handleCardPointerDown}
                     />
                   </div>
                 ))}
-                {dropTarget?.columnKey === column.key && dropTarget.index >= columnGames.length && draggingAppId !== null && <div aria-hidden="true" className="h-1 rounded-full bg-repressurizer-accent" />}
+                {dropTarget?.columnKey === column.key && dropTarget.index >= columnGames.length && draggingAppId !== null && <div data-testid="diary-kanban-drop-marker" aria-hidden="true" className="kanban-drop-marker h-1 rounded-full bg-repressurizer-accent shadow-[0_0_12px_rgba(16,185,129,0.7)]" />}
               </div>
             </section>
           );
@@ -449,8 +595,8 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, details,
         </div>
       </div>
       {ghost && createPortal(
-        <div className="pointer-events-none fixed z-[70] flex items-center gap-2 rounded-lg border border-repressurizer-accent/50 bg-repressurizer-surface px-2 py-1.5 opacity-90 shadow-[0_12px_32px_rgba(0,0,0,0.5)]" style={{ left: ghost.x + 10, top: ghost.y + 8 }}>
-          <span className="h-6 w-[42px] shrink-0 overflow-hidden rounded bg-repressurizer-bg">
+        <div ref={ghostElementRef} className="pointer-events-none fixed left-0 top-0 z-[70] flex rotate-2 scale-[1.04] items-center gap-2 rounded-lg border border-repressurizer-accent/60 bg-repressurizer-surface-raised px-2 py-1.5 opacity-95 shadow-dialog" style={{ transform: `translate3d(${ghost.x + 10}px, ${ghost.y + 8}px, 0)` }}>
+          <span className="h-6 w-[42px] shrink-0 overflow-hidden rounded bg-repressurizer-bg ring-1 ring-white/10">
             <SteamImage appId={ghost.appId} alt="" kind="capsule" className="h-full w-full object-cover" />
           </span>
           <span className="max-w-40 truncate text-[11px] font-medium text-white">{String(games.find((game) => game.appid === ghost.appId)?.name ?? "")}</span>
@@ -458,7 +604,7 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, details,
         document.body,
       )}
       {contextMenu && (
-        <div data-kanban-context-menu role="menu" aria-label={t("diary.kanban.contextMenu")} data-testid="diary-kanban-context-menu" className="fixed z-50 w-60 overflow-hidden rounded-xl border border-repressurizer-border bg-repressurizer-surface py-1.5 shadow-[0_20px_60px_rgba(0,0,0,0.55)]" style={{ left: contextMenu.x, top: contextMenu.y }}>
+        <div data-kanban-context-menu role="menu" aria-label={t("diary.kanban.contextMenu")} data-testid="diary-kanban-context-menu" className="animate-fade-in fixed z-50 w-60 overflow-hidden rounded-xl border border-repressurizer-border bg-repressurizer-surface-raised/95 py-1.5 shadow-dialog backdrop-blur-md" style={{ left: contextMenu.x, top: contextMenu.y }}>
           <p className="truncate border-b border-repressurizer-border-subtle px-3 pb-1.5 pt-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-repressurizer-text-faint">
             {contextMenuGame ? String(contextMenuGame.name ?? "") : t("diary.kanban.selection", { count: contextMenu.appIds.length })}
           </p>
@@ -475,14 +621,14 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, details,
           <p className="px-3 pb-1 pt-2 text-[9px] font-semibold uppercase tracking-[0.14em] text-repressurizer-text-faint">{t("diary.priority")}</p>
           <div className="flex gap-1 px-2.5 pb-1">
             {(["high", "normal", "low"] as DiaryPriority[]).map((priority) => (
-              <button key={priority} type="button" role="menuitem" onClick={() => { for (const appId of contextMenu.appIds) onSetPriority(appId, priority); setContextMenu(null); }} className={`focus-ring flex-1 rounded-md border px-2 py-1.5 text-[10px] font-medium transition-colors ${priority === "high" ? "border-rose-400/30 bg-rose-400/10 text-rose-300 hover:bg-rose-400/20" : priority === "low" ? "border-repressurizer-border bg-repressurizer-surface text-repressurizer-text-faint hover:text-repressurizer-text" : "border-amber-400/25 bg-amber-400/10 text-amber-200 hover:bg-amber-400/20"}`}>{t(`diary.priority.${priority}`)}</button>
+              <button key={priority} type="button" role="menuitem" onClick={() => { onBulkPriorityChange(contextMenu.appIds, priority); setContextMenu(null); }} className={`focus-ring flex-1 rounded-md border px-2 py-1.5 text-[10px] font-medium transition-colors ${priority === "high" ? "border-rose-400/30 bg-rose-400/10 text-rose-300 hover:bg-rose-400/20" : priority === "low" ? "border-repressurizer-border bg-repressurizer-surface text-repressurizer-text-faint hover:text-repressurizer-text" : "border-amber-400/25 bg-amber-400/10 text-amber-200 hover:bg-amber-400/20"}`}>{t(`diary.priority.${priority}`)}</button>
             ))}
           </div>
           <button type="button" role="menuitem" onClick={() => { setSelection(new Set()); setContextMenu(null); }} className="mt-1 flex w-full items-center gap-2 border-t border-repressurizer-border-subtle px-3 py-2 text-left text-xs text-repressurizer-text-faint transition-colors hover:bg-repressurizer-surface-hover hover:text-repressurizer-text">{t("diary.kanban.clearSelection")}</button>
         </div>
       )}
       {columnMenu && columnMenuColumn && createPortal(
-        <div data-kanban-column-menu role="menu" aria-label={`${t("diary.kanban.columnMenu")}: ${columnMenuColumn.label}`} data-testid="diary-kanban-column-menu" className="fixed z-50 w-64 overflow-hidden rounded-xl border border-repressurizer-border bg-repressurizer-surface py-1.5 shadow-[0_20px_60px_rgba(0,0,0,0.55)]" style={{ left: columnMenu.x, top: columnMenu.y }}>
+        <div data-kanban-column-menu role="menu" aria-label={`${t("diary.kanban.columnMenu")}: ${columnMenuColumn.label}`} data-testid="diary-kanban-column-menu" className="animate-fade-in fixed z-50 w-64 overflow-hidden rounded-xl border border-repressurizer-border bg-repressurizer-surface-raised/95 py-1.5 shadow-dialog backdrop-blur-md" style={{ left: columnMenu.x, top: columnMenu.y }}>
           <p className="truncate border-b border-repressurizer-border-subtle px-3 pb-1.5 pt-1 text-[10px] font-semibold uppercase tracking-[0.12em]" style={{ color: columnMenuColumn.color }}>{columnMenuColumn.label}</p>
           <button
             type="button"
@@ -534,7 +680,7 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, details,
       )}
       {columnsPopover && createPortal(
         <>
-          <div data-kanban-columns-popover data-testid="diary-kanban-columns-popover" className="fixed z-50 max-h-[70vh] w-72 overflow-y-auto rounded-xl border border-repressurizer-border bg-repressurizer-surface p-3 shadow-[0_18px_44px_rgba(0,0,0,0.45)]" style={{ left: columnsPopover.x, top: columnsPopover.y }}>
+          <div data-kanban-columns-popover data-testid="diary-kanban-columns-popover" className="animate-fade-in fixed z-50 max-h-[70vh] w-72 overflow-y-auto rounded-xl border border-repressurizer-border bg-repressurizer-surface-raised/95 p-3 shadow-pop backdrop-blur-md" style={{ left: columnsPopover.x, top: columnsPopover.y }}>
             <p className="mb-1.5 px-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-repressurizer-text-faint">{t("diary.kanban.statusColumns")}</p>
             <div className="space-y-0.5">
               {STATUS_KEYS.map((status) => (
@@ -588,7 +734,7 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, details,
       )}
       {addGamePopover && createPortal(
         <>
-          <div data-kanban-addgame-popover data-testid="diary-kanban-addgame-popover" className="fixed z-50 w-[288px] overflow-hidden rounded-xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_18px_44px_rgba(0,0,0,0.45)]" style={{ left: addGamePopover.anchor.x, top: addGamePopover.anchor.y }}>
+          <div data-kanban-addgame-popover data-testid="diary-kanban-addgame-popover" className="animate-fade-in fixed z-50 w-[288px] overflow-hidden rounded-xl border border-repressurizer-border bg-repressurizer-surface-raised/95 shadow-pop backdrop-blur-md" style={{ left: addGamePopover.anchor.x, top: addGamePopover.anchor.y }}>
             <div className="border-b border-repressurizer-border-subtle px-3 py-2.5">
               <p className="truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-repressurizer-text-faint">{t("diary.kanban.addGame")}: {addGamePopover.column.label}</p>
               <label className="mt-2 flex items-center gap-2 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-bg px-2.5 py-1.5 transition-colors focus-within:border-repressurizer-accent/50">
@@ -656,7 +802,7 @@ function ColumnColorButton({ color, label, testId, isCustom, t, onSetColor }: { 
         style={{ backgroundColor: draft }}
       />
       {anchor && createPortal(
-        <span data-column-color-popover className="fixed z-[95] block w-56 rounded-lg border border-repressurizer-border bg-repressurizer-bg p-2.5 shadow-[0_14px_38px_rgba(0,0,0,0.5)]" style={{ left: anchor.x, top: anchor.y }}>
+        <span data-column-color-popover className="animate-fade-in fixed z-[95] block w-56 rounded-xl border border-repressurizer-border bg-repressurizer-bg p-2.5 shadow-pop" style={{ left: anchor.x, top: anchor.y }}>
           <label className="mb-2 flex cursor-pointer items-center gap-2.5">
             <span className="relative block h-9 w-9 shrink-0 overflow-hidden rounded-lg border border-repressurizer-border">
               <span className="block h-full w-full" style={{ backgroundColor: draft }} />
@@ -740,7 +886,7 @@ function NewColumnRow({ t, onCreate }: { t: ReturnType<typeof useT>; onCreate: (
   );
 }
 
-function KanbanCard({ game, detail, entry, rating, journalCount, sectionCount, language, dragging, selected, accentColor, t, onOpen, onSelect, onContextMenuOpen, onPointerDown }: {
+const KanbanCard = memo(function KanbanCard({ game, detail, entry, rating, journalCount, sectionCount, language, dragging, selected, accentColor, t, columnKey, columnIndex, onOpen, onSelect, onContextMenuOpen, onPointerDown }: {
   game: OwnedGame;
   detail: GameDetails | undefined;
   entry: DiaryEntry | undefined;
@@ -752,9 +898,11 @@ function KanbanCard({ game, detail, entry, rating, journalCount, sectionCount, l
   selected: boolean;
   accentColor: string;
   t: ReturnType<typeof useT>;
-  onOpen: () => void;
-  onSelect: (mode: "replace" | "toggle" | "range") => void;
-  onContextMenuOpen: (event: ReactMouseEvent) => void;
+  columnKey: string;
+  columnIndex: number;
+  onOpen: (appId: number) => void;
+  onSelect: (appId: number, columnKey: string, index: number, mode: "replace" | "toggle" | "range") => void;
+  onContextMenuOpen: (event: ReactMouseEvent, appId: number) => void;
   onPointerDown: (appId: number, event: ReactPointerEvent) => void;
 }) {
   const priority = entry?.priority ?? "normal";
@@ -766,24 +914,26 @@ function KanbanCard({ game, detail, entry, rating, journalCount, sectionCount, l
   return (
     <div
       data-testid={`diary-kanban-card-${game.appid}`}
+      data-kanban-card
       data-selected={selected ? "true" : "false"}
       aria-selected={selected}
+      tabIndex={0}
       title={`${String(game.name ?? "")} — ${t("diary.kanban.openHint")}`}
       style={style}
-      className={`group/card relative cursor-grab touch-none select-none rounded-lg border bg-repressurizer-surface p-2 text-left shadow-sm transition-colors active:cursor-grabbing ${dragging ? "opacity-40" : selected ? "" : "border-repressurizer-border hover:border-repressurizer-accent/40"}`}
+      className={`group/card card-lift focus-ring relative cursor-grab touch-none select-none rounded-lg border bg-repressurizer-surface p-2.5 text-left shadow-pop-sm active:cursor-grabbing ${dragging ? "opacity-40" : selected ? "" : "border-repressurizer-border-subtle hover:border-repressurizer-accent/45 hover:bg-repressurizer-surface-hover/70 hover:shadow-pop"}`}
       onPointerDown={(event) => onPointerDown(game.appid, event)}
       onClick={(event) => {
-        onSelect(event.shiftKey ? "range" : event.ctrlKey || event.metaKey ? "toggle" : "replace");
+        onSelect(game.appid, columnKey, columnIndex, event.shiftKey ? "range" : event.ctrlKey || event.metaKey ? "toggle" : "replace");
       }}
-      onDoubleClick={onOpen}
-      onContextMenu={onContextMenuOpen}
+      onDoubleClick={() => onOpen(game.appid)}
+      onContextMenu={(event) => onContextMenuOpen(event, game.appid)}
     >
       <button
         type="button"
         aria-label={`${t("diary.openGame")}: ${game.name ?? ""}`}
         title={t("diary.openGame")}
-        onClick={(event) => { event.stopPropagation(); onOpen(); }}
-        className="focus-ring absolute right-1 top-1 rounded-md bg-repressurizer-bg/90 p-1 text-repressurizer-accent opacity-0 shadow-sm transition-opacity group-hover/card:opacity-100"
+        onClick={(event) => { event.stopPropagation(); onOpen(game.appid); }}
+        className="focus-ring absolute right-1 top-1 rounded-md bg-repressurizer-bg/90 p-1 text-repressurizer-accent opacity-0 shadow-pop-sm ring-1 ring-white/10 transition-opacity hover:bg-repressurizer-accent/20 group-hover/card:opacity-100 focus-visible:opacity-100"
       >
         <ArrowUpRight size={11} weight="bold" />
       </button>
@@ -806,4 +956,4 @@ function KanbanCard({ game, detail, entry, rating, journalCount, sectionCount, l
       </div>
     </div>
   );
-}
+});

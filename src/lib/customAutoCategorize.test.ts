@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  conditionIssue,
   evaluateCustomAutoCat,
+  findIncompleteConditionIds,
   type CustomAutoCatConfigV1,
   type CustomRuleConditionV1,
 } from "./customAutoCategorize";
@@ -54,12 +56,12 @@ function collection(key: string, name: string, added: number[]): SteamCollection
   };
 }
 
-function config(categoryName: string, conditions: CustomRuleConditionV1[]): CustomAutoCatConfigV1 {
+function config(categoryName: string, conditions: CustomRuleConditionV1[], op: "all" | "any" = "all"): CustomAutoCatConfigV1 {
   return {
     schema: "repressurizer.customAutoCat",
     version: 1,
     output: { categoryName },
-    logic: { op: "all", conditions },
+    logic: { op, conditions },
     defaults: { missingData: "skipPreserve" },
   };
 }
@@ -155,6 +157,93 @@ describe("evaluateCustomAutoCat", () => {
     expect(result.assignments["Under 10h"]).toEqual([10]);
   });
 
+  it("combines title, HLTB, and Steam playtime for a Kanban-style match", () => {
+    const result = evaluateCustomAutoCat({
+      config: config("Ready to finish", [
+        { id: "title", kind: "title", op: "startsWith", value: "N" },
+        { id: "hltb", kind: "hltb", mode: "main_story", maxHoursExclusive: 10 },
+        { id: "playtime", kind: "playtime", minHours: 20 },
+      ]),
+      games: {
+        20: game(20, "Night in the Woods", 20),
+        21: game(21, "Night Call", 19),
+        22: game(22, "Outer Wilds", 30),
+      },
+      details: {},
+      collections: [],
+      hltbData: {
+        20: { main_story: 9, main_extra: null, completionist: null },
+        21: { main_story: 8, main_extra: null, completionist: null },
+        22: { main_story: 8, main_extra: null, completionist: null },
+      },
+      ratings: {},
+      hltbTimeMode: "main_story",
+    });
+
+    expect(result.assignments["Ready to finish"]).toEqual([20]);
+  });
+
+  it("supports OR rules without letting a missing branch hide a known match", () => {
+    const result = evaluateCustomAutoCat({
+      config: config("A or short", [
+        { id: "title", kind: "title", op: "startsWith", value: "A" },
+        { id: "hltb", kind: "hltb", mode: "main_story", maxHoursExclusive: 5 },
+      ], "any"),
+      games: {
+        30: game(30, "Alpha", 0),
+        31: game(31, "Beta", 0),
+        32: game(32, "Gamma", 0),
+      },
+      details: {},
+      collections: [],
+      hltbData: {
+        31: { main_story: 3, main_extra: null, completionist: null },
+      },
+      ratings: {},
+      hltbTimeMode: "main_story",
+    });
+
+    expect(result.assignments["A or short"]).toEqual([30, 31]);
+  });
+
+  it("supports mixed AND/OR connectors with AND precedence", () => {
+    const result = evaluateCustomAutoCat({
+      config: {
+        ...config("Mixed rule", [
+          { id: "title", kind: "title", op: "startsWith", value: "Night" },
+          { id: "hltb", kind: "hltb", mode: "main_story", maxHoursExclusive: 10 },
+          { id: "playtime", kind: "playtime", minHours: 20 },
+        ]),
+        logic: {
+          op: "all",
+          connectors: ["and", "or"],
+          conditions: [
+            { id: "title", kind: "title", op: "startsWith", value: "Night" },
+            { id: "hltb", kind: "hltb", mode: "main_story", maxHoursExclusive: 10 },
+            { id: "playtime", kind: "playtime", minHours: 20 },
+          ],
+        },
+      },
+      games: {
+        40: game(40, "Night in the Woods", 2),
+        41: game(41, "Night Call", 20),
+        42: game(42, "Outer Wilds", 20),
+      },
+      details: {},
+      collections: [],
+      hltbData: {
+        40: { main_story: 9, main_extra: null, completionist: null },
+        41: { main_story: 12, main_extra: null, completionist: null },
+        42: { main_story: 9, main_extra: null, completionist: null },
+      },
+      ratings: {},
+      hltbTimeMode: "main_story",
+    });
+
+    // (Night AND under 10h) OR at least 20h played.
+    expect(result.assignments["Mixed rule"]).toEqual([40, 41, 42]);
+  });
+
   it("matches uncategorized games while ignoring the custom output category itself", () => {
     const result = evaluateCustomAutoCat({
       config: config("Uncategorized short", [
@@ -241,5 +330,44 @@ describe("evaluateCustomAutoCat", () => {
     });
 
     expect(result.assignments["Explicit backlog"]).toEqual([11, 12]);
+  });
+});
+
+describe("findIncompleteConditionIds", () => {
+  it("flags empty title, category, metadata, platform, and invalid regex conditions", () => {
+    const ids = findIncompleteConditionIds(
+      config("X", [
+        { id: "t", kind: "title", op: "contains", value: "   " },
+        { id: "r", kind: "title", op: "regex", value: "[" },
+        { id: "c", kind: "category", mode: "inAny", categories: [] },
+        { id: "m", kind: "metadataText", field: "genre", mode: "any", values: [], match: "contains" },
+        { id: "p", kind: "platform", mode: "any", values: [] },
+        { id: "ok", kind: "playtime", minHours: 1, maxHoursExclusive: 5 },
+      ])
+    );
+    expect(ids).toEqual(["t", "r", "c", "m", "p"]);
+  });
+
+  it("ignores disabled and complete conditions", () => {
+    const ids = findIncompleteConditionIds(
+      config("X", [
+        { id: "off", kind: "title", op: "contains", value: "", enabled: false },
+        { id: "ok", kind: "title", op: "startsWith", value: "Hades" },
+      ])
+    );
+    expect(ids).toEqual([]);
+  });
+});
+
+describe("conditionIssue", () => {
+  it("reports the specific reason a row is incomplete", () => {
+    expect(conditionIssue({ id: "t", kind: "title", op: "contains", value: " " })).toBe("titleEmpty");
+    expect(conditionIssue({ id: "r", kind: "title", op: "regex", value: "[" })).toBe("regexInvalid");
+    expect(conditionIssue({ id: "r2", kind: "title", op: "regex", value: "^H" })).toBeNull();
+    expect(conditionIssue({ id: "c", kind: "category", mode: "inAny", categories: [] })).toBe("categoriesEmpty");
+    expect(
+      conditionIssue({ id: "p", kind: "platform", mode: "any", values: [] })
+    ).toBe("valuesEmpty");
+    expect(conditionIssue({ id: "ok", kind: "playtime", minHours: 1, maxHoursExclusive: 5 })).toBeNull();
   });
 });

@@ -53,3 +53,52 @@ pub fn categorize_by_genre(games: &[GameDetails], config: &GenreConfig) -> Categ
         assignments,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::steam::api::PlatformSupport;
+
+    fn details(app_id: u64, genres: &[&str]) -> GameDetails {
+        GameDetails {
+            app_id,
+            name: format!("Game {app_id}"),
+            genres: genres.iter().map(|value| (*value).to_string()).collect(),
+            tags: Vec::new(),
+            categories: Vec::new(),
+            release_date: None,
+            store_release_date: None,
+            store_release_date_fetched_at: None,
+            metacritic_score: None,
+            developers: Vec::new(),
+            publishers: Vec::new(),
+            supported_languages: Vec::new(),
+            platforms: PlatformSupport::default(),
+            header_image: None,
+            capsule_image: None,
+            price_initial: None,
+            price_final: None,
+            price_currency: None,
+            price_country_code: None,
+            is_free: false,
+        }
+    }
+
+    #[test]
+    fn respects_case_insensitive_ignored_genres_and_limit() {
+        let result = categorize_by_genre(
+            &[details(1, &["Action", "RPG", "Utilities"])],
+            &GenreConfig {
+                prefix: Some("(Genre) ".to_string()),
+                max_categories: Some(1),
+                ignored_genres: vec!["utilities".to_string()],
+            },
+        );
+
+        assert_eq!(result.games_processed, 1);
+        assert_eq!(result.games_categorized, 1);
+        assert_eq!(result.assignments["(Genre) Action"], vec![1]);
+        assert!(!result.assignments.contains_key("(Genre) RPG"));
+        assert!(!result.assignments.contains_key("(Genre) Utilities"));
+    }
+}

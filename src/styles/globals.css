@@ -11,6 +11,11 @@
   --color-repressurizer-border: #27272a;
   --color-repressurizer-border-subtle: #1e1e22;
 
+  /* ── Elevation ── */
+  --shadow-pop-sm: 0 2px 10px rgba(0, 0, 0, 0.28), 0 0 0 1px rgba(255, 255, 255, 0.02);
+  --shadow-pop: 0 10px 32px -6px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.03);
+  --shadow-dialog: 0 24px 70px -12px rgba(0, 0, 0, 0.65), 0 4px 16px rgba(0, 0, 0, 0.4);
+
   /* ── Text ── */
   --color-repressurizer-text: #e4e4e7;
   --color-repressurizer-text-muted: #a1a1aa;
@@ -302,4 +307,36 @@ body {
 .diary-markdown * {
   user-select: text;
   -webkit-user-select: text;
+}
+
+/* ── Kanban drop marker pulse ── */
+@keyframes drop-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+.kanban-drop-marker {
+  animation: drop-pulse 1s ease-in-out infinite;
+}
+
+/* ── Card hover lift (transform-only, GPU friendly) ── */
+.card-lift {
+  transition: transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+}
+.card-lift:hover {
+  transform: translateY(-1px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-lift,
+  .card-lift:hover {
+    transition: none;
+    transform: none;
+  }
+  .kanban-drop-marker,
+  .animate-stagger,
+  .animate-fade-in,
+  .animate-toast-in {
+    animation: none;
+  }
 }

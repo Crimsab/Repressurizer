@@ -102,6 +102,9 @@ export type CustomRuleConditionV1 =
   | CustomNumericMetadataCondition
   | CustomDiaryCondition;
 
+/** Logical connector used between two adjacent enabled conditions. */
+export type CustomRuleConnector = "and" | "or";
+
 export interface CustomAutoCatConfigV1 {
   schema: "repressurizer.customAutoCat";
   version: 1;
@@ -109,8 +112,10 @@ export interface CustomAutoCatConfigV1 {
     categoryName: string;
   };
   logic: {
-    op: "all";
+    op: "all" | "any";
     conditions: CustomRuleConditionV1[];
+    /** Optional per-gap connectors. Older configs use `op` for every gap. */
+    connectors?: CustomRuleConnector[];
   };
   defaults?: {
     missingData?: CustomMissingDataBehavior;
@@ -162,6 +167,7 @@ export function normalizeCustomAutoCatConfig(raw: unknown): CustomAutoCatConfigV
   const conditions = Array.isArray(source.logic?.conditions)
     ? source.logic.conditions.map(normalizeCondition).filter((item): item is CustomRuleConditionV1 => !!item)
     : [];
+  const op = source.logic?.op === "any" ? "any" : "all";
 
   return {
     schema: "repressurizer.customAutoCat",
@@ -170,14 +176,59 @@ export function normalizeCustomAutoCatConfig(raw: unknown): CustomAutoCatConfigV
       categoryName: String(source.output?.categoryName ?? "").slice(0, 120),
     },
     logic: {
-      op: "all",
+      op,
       conditions,
+      connectors: normalizeRuleConnectors(source.logic?.connectors, conditions.length, op),
     },
     defaults: {
       missingData: normalizeMissingData(source.defaults?.missingData),
       caseSensitiveText: Boolean(source.defaults?.caseSensitiveText),
     },
   };
+}
+
+/**
+ * Return one connector for each gap between conditions. The optional
+ * `enabledOnly` form compresses gaps around disabled rows so a disabled
+ * condition never changes the meaning of the remaining expression.
+ */
+export function customRuleConnectors(
+  config: Pick<CustomAutoCatConfigV1, "logic">,
+  enabledOnly = false,
+): CustomRuleConnector[] {
+  const conditions = config.logic.conditions ?? [];
+  const fallback: CustomRuleConnector = config.logic.op === "any" ? "or" : "and";
+  const raw = Array.isArray(config.logic.connectors) ? config.logic.connectors : [];
+  const connectorAt = (index: number): CustomRuleConnector => raw[index] === "or" ? "or" : raw[index] === "and" ? "and" : fallback;
+
+  if (!enabledOnly) {
+    return Array.from({ length: Math.max(0, conditions.length - 1) }, (_, index) => connectorAt(index));
+  }
+
+  const enabledIndexes = conditions
+    .map((condition, index) => condition.enabled === false ? -1 : index)
+    .filter((index): index is number => index >= 0);
+  return enabledIndexes.slice(1).map((currentIndex) => connectorAt(currentIndex - 1));
+}
+
+export function customRuleHasMixedConnectors(
+  config: Pick<CustomAutoCatConfigV1, "logic">,
+  enabledOnly = false,
+): boolean {
+  const connectors = customRuleConnectors(config, enabledOnly);
+  return connectors.length > 1 && connectors.some((connector) => connector !== connectors[0]);
+}
+
+function normalizeRuleConnectors(
+  raw: unknown,
+  conditionCount: number,
+  op: "all" | "any",
+): CustomRuleConnector[] {
+  const fallback: CustomRuleConnector = op === "any" ? "or" : "and";
+  const source = Array.isArray(raw) ? raw : [];
+  return Array.from({ length: Math.max(0, conditionCount - 1) }, (_, index) =>
+    source[index] === "or" ? "or" : source[index] === "and" ? "and" : fallback
+  );
 }
 
 export function cloneDefaultCustomConfig(): CustomAutoCatConfigV1 {
@@ -273,24 +324,59 @@ export function evaluateCustomAutoCat(input: EvaluateCustomAutoCatInput): Catego
   const index = buildCategoryIndex(input.collections, categoryName, Object.keys(input.games).map(Number));
   const assignments: Record<string, number[]> = { [categoryName]: [] };
   const processedAppIds: number[] = [];
+  const connectors = customRuleConnectors(config, true);
+  const mixedConnectors = customRuleHasMixedConnectors(config, true);
+  const uniformOp = connectors.length > 0 && connectors.every((connector) => connector === "or")
+    ? "any"
+    : connectors.length > 0 && connectors.every((connector) => connector === "and")
+      ? "all"
+      : config.logic.op;
 
   for (const game of Object.values(input.games)) {
-    let matched = true;
+    if (mixedConnectors) {
+      const outcomes = conditions.map((condition) => evaluateCondition(condition, game, input, config, index));
+      const matchedState = evaluateMixedOutcomes(outcomes, connectors, diagnostics);
+      if (matchedState === "unknown") continue;
+      processedAppIds.push(game.appid);
+      diagnostics.evaluated += 1;
+      if (matchedState === "match") {
+        assignments[categoryName].push(game.appid);
+        diagnostics.matched += 1;
+      }
+      continue;
+    }
+
+    const matches = uniformOp === "any" ? false : true;
+    let matched = matches;
     let preserveSkipped = false;
 
     for (const condition of conditions) {
       const outcome = evaluateCondition(condition, game, input, config, index);
-      if (outcome === "match") continue;
+      if (outcome === "match") {
+        if (uniformOp === "any") matched = true;
+        continue;
+      }
       if (outcome === "noMatch") {
-        matched = false;
-        break;
+        if (uniformOp === "all") {
+          matched = false;
+          break;
+        }
+        continue;
       }
 
       countMissing(diagnostics, outcome.missing);
-      matched = false;
-      preserveSkipped = outcome.behavior === "skipPreserve";
-      break;
+      if (uniformOp === "all") {
+        matched = false;
+        preserveSkipped = outcome.behavior === "skipPreserve";
+        break;
+      }
+      if (outcome.behavior === "skipPreserve") preserveSkipped = true;
     }
+
+    // An OR rule can still match when one branch has missing data, as long as
+    // another known branch matches. For AND, any missing branch makes the
+    // result indeterminate and is preserved according to its policy.
+    if (uniformOp === "any" && matched) preserveSkipped = false;
 
     if (!preserveSkipped) {
       processedAppIds.push(game.appid);
@@ -308,6 +394,54 @@ export function evaluateCustomAutoCat(input: EvaluateCustomAutoCatInput): Catego
     games_categorized: assignments[categoryName].length,
     processed_app_ids: processedAppIds,
   }, diagnostics);
+}
+
+type TriState = "match" | "noMatch" | "unknown";
+
+/**
+ * Evaluate an explicit mixed connector expression. AND binds more tightly
+ * than OR, so `A AND B OR C` is read as `(A AND B) OR C`. Unknown values from
+ * missing data stay conservative: a rule is only applied when its result is
+ * definitely true or definitely false.
+ */
+function evaluateMixedOutcomes(
+  outcomes: ConditionOutcome[],
+  connectors: CustomRuleConnector[],
+  diagnostics: CustomRuleDiagnostics,
+): TriState {
+  const values = outcomes.map((outcome): TriState => {
+    if (outcome === "match") return "match";
+    if (outcome === "noMatch") return "noMatch";
+    countMissing(diagnostics, outcome.missing);
+    return outcome.behavior === "skipPreserve" ? "unknown" : "noMatch";
+  });
+  if (values.length === 0) return "noMatch";
+
+  const terms: TriState[] = [];
+  let current = values[0];
+  for (let index = 1; index < values.length; index += 1) {
+    const connector = connectors[index - 1] ?? "and";
+    if (connector === "and") {
+      current = triAnd(current, values[index]);
+    } else {
+      terms.push(current);
+      current = values[index];
+    }
+  }
+  terms.push(current);
+  return terms.reduce(triOr);
+}
+
+function triAnd(left: TriState, right: TriState): TriState {
+  if (left === "noMatch" || right === "noMatch") return "noMatch";
+  if (left === "unknown" || right === "unknown") return "unknown";
+  return "match";
+}
+
+function triOr(left: TriState, right: TriState): TriState {
+  if (left === "match" || right === "match") return "match";
+  if (left === "unknown" || right === "unknown") return "unknown";
+  return "noMatch";
 }
 
 function enabledConditions(config: CustomAutoCatConfigV1): CustomRuleConditionV1[] {
@@ -664,6 +798,46 @@ function validateConditions(conditions: CustomRuleConditionV1[], collections: St
     if (condition.kind === "platform" && condition.values.length === 0) messages.push("Platform condition needs at least one platform.");
   }
   return [...new Set(messages)];
+}
+
+export type CustomConditionIssue = "titleEmpty" | "regexInvalid" | "categoriesEmpty" | "valuesEmpty";
+
+/**
+ * Why an enabled condition is still incomplete and would make the rule run
+ * into its invalid-state guard, or null when the row is ready.
+ */
+export function conditionIssue(condition: CustomRuleConditionV1): CustomConditionIssue | null {
+  if (condition.kind === "title") {
+    if (!condition.value.trim()) return "titleEmpty";
+    if (condition.op === "regex" && !isValidRegex(condition.value, normalizeRegexFlags(condition.regexFlags))) {
+      return "regexInvalid";
+    }
+    return null;
+  }
+  if (condition.kind === "category") return condition.categories.length === 0 ? "categoriesEmpty" : null;
+  if (condition.kind === "metadataText" || condition.kind === "platform") {
+    return condition.values.length === 0 ? "valuesEmpty" : null;
+  }
+  return null;
+}
+
+/**
+ * Ids of enabled conditions that are incomplete and would make the rule run
+ * into its invalid-state guard. Used by the rule builder for inline validation.
+ */
+export function findIncompleteConditionIds(config: CustomAutoCatConfigV1): string[] {
+  return enabledConditions(config)
+    .filter((condition) => conditionIssue(condition) !== null)
+    .map((condition) => condition.id);
+}
+
+function isValidRegex(source: string, flags: string): boolean {
+  try {
+    new RegExp(source, flags);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function staleCategoryRefs(config: CustomAutoCatConfigV1, collections: SteamCollection[]): CategoryRef[] {

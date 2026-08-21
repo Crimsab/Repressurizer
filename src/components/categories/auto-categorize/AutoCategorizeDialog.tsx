@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import {
   isDetailsCacheCurrent,
   useGameStore,
@@ -10,15 +10,18 @@ import {
   DEFAULT_STEAM_RATING_CONFIG,
   type AutoCategorizePreset,
   type AutoCategorizePresetConfig,
+  type AutoCategorizeDiaryAction,
 } from "../../../stores/autoCategorizeStore";
 import { useBackgroundFetchStore } from "../../../stores/backgroundFetchStore";
 import { useHltbStore } from "../../../stores/hltbStore";
 import { useSteamRatingsStore } from "../../../stores/steamRatingsStore";
 import { useDiaryStore } from "../../../stores/diaryStore";
-import { useStatusStore } from "../../../stores/statusStore";
+import { useStatusStore, type GameStatus } from "../../../stores/statusStore";
+import { useToastStore } from "../../../stores/toastStore";
 import { useReviewStore } from "../../../stores/reviewStore";
 import { useHltbIgnoredStore } from "../../../stores/hltbIgnoredStore";
 import { useFailedGamesStore } from "../../../stores/failedGamesStore";
+import { DEFAULT_COLUMN_COLORS, STATUS_LABELS, type DiaryViewStatus } from "../../diary/diaryShared";
 import {
   yearCategorizationReleaseDate,
 } from "../../../lib/releaseDates";
@@ -30,6 +33,13 @@ import {
 } from "../../../lib/autoCategorizeApply";
 import { combineAutoCategorizePresetResults } from "../../../lib/autoCategorizePresetResults";
 import {
+  diaryGroupColumnLabel,
+  normalizeDiaryColumnName,
+  sanitizeDiaryColumnLabel,
+  suggestDiaryRuleColumnName,
+  uniquifyDiaryColumnLabel,
+} from "../../../lib/diaryAutoCatNaming";
+import {
   buildAutoCategorizeDiff,
   type AutoCategorizeDiffRule,
 } from "../../../lib/autoCategorizeDiff";
@@ -39,6 +49,7 @@ import {
 } from "../../../lib/autoCategorizePreview";
 import { DialogOverlay } from "../../ui/DialogOverlay";
 import { ResizableDialogPanel } from "../../ui/ResizableDialogPanel";
+import { SelectMenu } from "../../ui/SelectMenu";
 import {
   categorizeBySteamRating,
   isSteamRatingFresh,
@@ -47,6 +58,7 @@ import {
 import {
   customRatingIdsNeedingFetch,
   evaluateCustomAutoCat,
+  findIncompleteConditionIds,
   normalizeCustomAutoCatConfig,
   type CustomAutoCatConfigV1,
 } from "../../../lib/customAutoCategorize";
@@ -121,8 +133,20 @@ import { ConfigureStep } from "./AutoCategorizeConfigureStep";
 // Main dialog
 // ============================================================
 
+export type AutoCategorizeTarget = "collections" | "diary";
+
 interface AutoCategorizeDialogProps {
   onClose: () => void;
+  initialTarget?: AutoCategorizeTarget;
+}
+
+interface DiaryAutoCatColumn {
+  key: string;
+  label: string;
+  color: string;
+  kind: "status" | "custom";
+  status?: DiaryViewStatus;
+  customId?: string;
 }
 
 function detailIdsEligibleForFetch(ids: number[]): number[] {
@@ -130,7 +154,7 @@ function detailIdsEligibleForFetch(ids: number[]): number[] {
   return ids.filter((id) => !isIgnored(id));
 }
 
-export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
+export function AutoCategorizeDialog({ onClose, initialTarget = "collections" }: AutoCategorizeDialogProps) {
   const t = useT();
   const games = useGameStore((s) => s.games);
   const details = useGameStore((s) => s.details);
@@ -145,7 +169,19 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
   const diaryEntries = useDiaryStore((s) => s.entries);
   const diaryJournal = useDiaryStore((s) => s.journal);
   const diaryPages = useDiaryStore((s) => s.pages);
+  const diaryBoardPrefs = useDiaryStore((s) => s.boardPrefs);
+  const addCustomColumn = useDiaryStore((s) => s.addCustomColumn);
+  const removeCustomColumn = useDiaryStore((s) => s.removeCustomColumn);
+  const captureBulkSnapshot = useDiaryStore((s) => s.captureBulkSnapshot);
+  const restoreBulkSnapshot = useDiaryStore((s) => s.restoreBulkSnapshot);
+  const setBulkDecision = useDiaryStore((s) => s.setBulkDecision);
+  const setBulkMarkedBacklog = useDiaryStore((s) => s.setBulkMarkedBacklog);
+  const setBulkCustomAssignment = useDiaryStore((s) => s.setBulkCustomAssignment);
+  const logStatusEvents = useDiaryStore((s) => s.logStatusEvents);
   const gameStatuses = useStatusStore((s) => s.statuses);
+  const setBulkStatus = useStatusStore((s) => s.setBulkStatus);
+  const captureStatusSnapshot = useStatusStore((s) => s.captureSnapshot);
+  const restoreStatusSnapshot = useStatusStore((s) => s.restoreSnapshot);
   const userReviews = useReviewStore((s) => s.reviews);
   const detailsCacheMaxAgeDays = useSettingsStore((s) => s.detailsCacheMaxAgeDays);
 
@@ -167,10 +203,11 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
 
   // Local step — "fetch" isn't persisted; "done" resets to "choose" on reopen
   const [step, setStep] = useState<Step>(() => {
+    if (initialTarget !== "collections") return "choose";
     if (persist.lastStep === "done") return "choose";
     return persist.lastStep;
   });
-  const [type, setType] = useState<CategorizerType>(persist.lastType);
+  const [type, setType] = useState<CategorizerType>(initialTarget === "diary" ? "custom" : persist.lastType);
   const [hoursConfig, setHoursConfig] = useState<HoursConfig>(persist.hoursConfig);
   const [genreConfig, setGenreConfig] = useState<GenreConfig>(persist.genreConfig);
   const [tagsConfig, setTagsConfig] = useState<TagsConfig>(persist.tagsConfig);
@@ -192,6 +229,15 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
   });
   const [presetName, setPresetName] = useState("");
   const [loadedPresetId, setLoadedPresetId] = useState<string | null>(null);
+  const [target, setTarget] = useState<AutoCategorizeTarget>(initialTarget);
+  const [diaryTargetColumn, setDiaryTargetColumn] = useState("backlog");
+  const [diaryAction, setDiaryAction] = useState<AutoCategorizeDiaryAction>("existingColumn");
+  const [diaryNewColumnName, setDiaryNewColumnName] = useState("");
+  const [diaryNewColumnColor, setDiaryNewColumnColor] = useState("#8b5cf6");
+  const [diaryAutoColumnPrefix, setDiaryAutoColumnPrefix] = useState("");
+  const [diaryAutoColumnLimit, setDiaryAutoColumnLimit] = useState(8);
+  const [diaryAutoColumnReuse, setDiaryAutoColumnReuse] = useState(true);
+  const [diaryMoveMatches, setDiaryMoveMatches] = useState(true);
 
   // Whether we're waiting for a details fetch to complete before running categorizer
   const [waitingForFetch, setWaitingForFetch] = useState(false);
@@ -199,16 +245,75 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
   const [pendingPresetRun, setPendingPresetRun] = useState<AutoCategorizePreset[] | null>(null);
 
   const [fetchError, setFetchError] = useState("");
-  const [result, setResult] = useState<CategorizeResult | null>(persist.lastResult);
+  const [result, setResult] = useState<CategorizeResult | null>(initialTarget === "collections" ? persist.lastResult : null);
   const [previewContext, setPreviewContext] = useState<PreviewSortContext | null>(null);
   const [previewRules, setPreviewRules] = useState<AutoCategorizeDiffRule[]>([]);
   const [previewNotice, setPreviewNotice] = useState("");
   const [runError, setRunError] = useState("");
+  const [diaryUndo, setDiaryUndo] = useState<(() => void) | null>(null);
+  const [diaryUndoNotice, setDiaryUndoNotice] = useState("");
+  const [diaryAppliedSummary, setDiaryAppliedSummary] = useState("");
 
   const metadata = useMemo(
     () => buildAutoCatMetadata(Object.values(details).filter(isDetailsCacheCurrent)),
     [details]
   );
+
+  const diaryColumns = useMemo<DiaryAutoCatColumn[]>(() => {
+    const statuses: DiaryViewStatus[] = ["backlog", "playing", "abandoned", "finished", "archived"];
+    return [
+      ...statuses
+        .map((status) => ({
+        key: status,
+        label: t(STATUS_LABELS[status]),
+        color: diaryBoardPrefs.columnColors[status] ?? DEFAULT_COLUMN_COLORS[status],
+        kind: "status" as const,
+        status,
+      })),
+      ...diaryBoardPrefs.customColumns
+        .map((column) => ({
+        key: column.id,
+        label: column.name,
+        color: diaryBoardPrefs.columnColors[column.id] ?? column.color,
+        kind: "custom" as const,
+        customId: column.id,
+      })),
+    ];
+  }, [diaryBoardPrefs.columnColors, diaryBoardPrefs.customColumns, diaryBoardPrefs.hiddenColumns, t]);
+
+  useEffect(() => {
+    if (!diaryColumns.some((column) => column.key === diaryTargetColumn)) {
+      setDiaryTargetColumn(diaryColumns[0]?.key ?? "backlog");
+    }
+  }, [diaryColumns, diaryTargetColumn]);
+
+  // Deterministic, offline default for the "Create a new column" naming field:
+  // derived from the rule source/conditions and editable by the user.
+  const suggestedNewColumnName = useMemo(() => {
+    if (target !== "diary") return "";
+    return suggestDiaryRuleColumnName({
+      type,
+      config: customConfig,
+      sourceLabel: categorizerLabel(type, t),
+    }).slice(0, 24);
+  }, [customConfig, t, target, type]);
+
+  const lastSuggestedNameRef = useRef("");
+  useEffect(() => {
+    if (target !== "diary" || diaryAction === "existingColumn") {
+      lastSuggestedNameRef.current = "";
+      return;
+    }
+    const suggestion = suggestedNewColumnName;
+    const previous = lastSuggestedNameRef.current;
+    lastSuggestedNameRef.current = suggestion;
+    setDiaryNewColumnName((current) => {
+      const trimmed = current.trim();
+      // Follow the derived default until the user edits the field by hand.
+      if (trimmed.length === 0 || trimmed === previous.trim()) return suggestion;
+      return current;
+    });
+  }, [diaryAction, suggestedNewColumnName, target]);
 
   // When a background fetch completes and we were waiting: run categorizer.
   useEffect(() => {
@@ -248,6 +353,31 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
   const gotoStep = (s: Step) => {
     setStep(s);
     if (s !== "fetch") persist.set({ lastStep: s });
+  };
+
+  const changeTarget = (nextTarget: AutoCategorizeTarget) => {
+    if (nextTarget === target) return;
+    setTarget(nextTarget);
+    if (nextTarget === "diary") {
+      setType("custom");
+      persist.set({ lastType: "custom" });
+    }
+    if (nextTarget === "collections") setDiaryAction("existingColumn");
+    setDiaryUndo(null);
+    setDiaryUndoNotice("");
+    setDiaryAppliedSummary("");
+    setResult(null);
+    setPreviewContext(null);
+    setPreviewRules([]);
+    setPreviewNotice("");
+    setRunError("");
+    persist.set({ lastResult: null });
+    gotoStep("choose");
+  };
+
+  const handleDiaryActionChange = (nextAction: AutoCategorizeDiaryAction) => {
+    setDiaryAction(nextAction);
+    setDiaryMoveMatches(true);
   };
 
   // ---- Step: choose ----
@@ -300,6 +430,18 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
   const handleLoadPreset = (preset: AutoCategorizePreset) => {
     setType(preset.type);
     applyPresetConfig(preset);
+    if (preset.target) setTarget(preset.target);
+    if (preset.diaryColumn) setDiaryTargetColumn(preset.diaryColumn);
+    setDiaryAction(preset.diaryAction ?? "existingColumn");
+    setDiaryNewColumnName(preset.diaryNewColumnName ?? "");
+    setDiaryNewColumnColor(preset.diaryNewColumnColor ?? "#8b5cf6");
+    setDiaryAutoColumnPrefix(preset.diaryAutoColumnPrefix ?? "");
+    setDiaryAutoColumnLimit(preset.diaryAutoColumnLimit ?? 8);
+    setDiaryAutoColumnReuse(preset.diaryAutoColumnReuse ?? true);
+    setDiaryMoveMatches(preset.diaryMoveMatches ?? true);
+    setDiaryUndo(null);
+    setDiaryUndoNotice("");
+    setDiaryAppliedSummary("");
     setPresetName(preset.name);
     setLoadedPresetId(preset.id);
     persist.set({ lastType: preset.type });
@@ -401,6 +543,15 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
       config: currentConfig(),
       createdAt: persist.presets.find((item) => item.id === loadedPresetId)?.createdAt ?? now,
       updatedAt: now,
+      target,
+      diaryColumn: target === "diary" ? diaryTargetColumn : undefined,
+      diaryAction: target === "diary" ? diaryAction : undefined,
+      diaryNewColumnName: target === "diary" && diaryAction === "newColumn" ? diaryNewColumnName.trim().slice(0, 24) : undefined,
+      diaryNewColumnColor: target === "diary" && diaryAction === "newColumn" ? diaryNewColumnColor : undefined,
+      diaryAutoColumnPrefix: target === "diary" && diaryAction === "autoColumns" ? diaryAutoColumnPrefix.trim().slice(0, 16) : undefined,
+      diaryAutoColumnLimit: target === "diary" && diaryAction === "autoColumns" ? Math.min(12, Math.max(1, Math.floor(diaryAutoColumnLimit))) : undefined,
+      diaryAutoColumnReuse: target === "diary" && diaryAction === "autoColumns" ? diaryAutoColumnReuse : undefined,
+      diaryMoveMatches: target === "diary" ? diaryMoveMatches : undefined,
     };
     const existing = persist.presets.findIndex((item) => item.id === preset.id);
     const presets =
@@ -412,11 +563,53 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
     setPresetName(name);
   };
 
+  const preparePresetDestination = useCallback((presets: AutoCategorizePreset[]): boolean => {
+    const destinations = new Set(presets.map((preset) => preset.target ?? "collections"));
+    const diaryPresets = presets.filter((preset) => (preset.target ?? "collections") === "diary");
+    const diaryActions = new Set(diaryPresets.map((preset) => preset.diaryAction ?? "existingColumn"));
+    const diaryColumnsForRun = new Set(diaryPresets.map((preset) => preset.diaryColumn ?? "backlog"));
+    const diaryNewNames = new Set(diaryPresets.map((preset) => preset.diaryNewColumnName?.trim()).filter(Boolean));
+    const diaryAutoPrefixes = new Set(diaryPresets.map((preset) => preset.diaryAutoColumnPrefix?.trim() ?? ""));
+    const diaryAutoLimits = new Set(diaryPresets.map((preset) => preset.diaryAutoColumnLimit ?? 8));
+    const diaryAutoReuse = new Set(diaryPresets.map((preset) => preset.diaryAutoColumnReuse ?? true));
+    const diaryMove = new Set(diaryPresets.map((preset) => preset.diaryMoveMatches ?? true));
+    if (
+      destinations.size > 1 ||
+      diaryActions.size > 1 ||
+      (diaryActions.has("existingColumn") && diaryColumnsForRun.size > 1) ||
+      (diaryActions.has("newColumn") && diaryNewNames.size > 1) ||
+      (diaryActions.has("autoColumns") && (diaryAutoPrefixes.size > 1 || diaryAutoLimits.size > 1 || diaryAutoReuse.size > 1)) ||
+      diaryMove.size > 1
+    ) {
+      setRunError(t("auto.presets.mixedDestination"));
+      return false;
+    }
+    const destination = [...destinations][0] ?? "collections";
+    if (destination !== target) setTarget(destination);
+    if (destination === "diary") {
+      const diaryPreset = diaryPresets[0];
+      const action = diaryPreset?.diaryAction ?? "existingColumn";
+      setDiaryAction(action);
+      if (action === "existingColumn") setDiaryTargetColumn([...diaryColumnsForRun][0] ?? "backlog");
+      else if (action === "newColumn") {
+        setDiaryNewColumnName(diaryPreset?.diaryNewColumnName ?? "");
+        setDiaryNewColumnColor(diaryPreset?.diaryNewColumnColor ?? "#8b5cf6");
+      } else {
+        setDiaryAutoColumnPrefix(diaryPreset?.diaryAutoColumnPrefix ?? "");
+        setDiaryAutoColumnLimit(diaryPreset?.diaryAutoColumnLimit ?? 8);
+        setDiaryAutoColumnReuse(diaryPreset?.diaryAutoColumnReuse ?? true);
+      }
+      setDiaryMoveMatches(diaryPreset?.diaryMoveMatches ?? true);
+    }
+    return true;
+  }, [t, target]);
+
   const handleRunPresets = async () => {
     const presets = [...persist.presets];
     if (presets.length === 0) return;
 
     setRunError("");
+    if (!preparePresetDestination(presets)) return;
     setFetchError("");
     setWaitingForFetch(false);
 
@@ -432,6 +625,7 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
   const handleRunPresetsCachedOnly = async () => {
     const presets = [...persist.presets];
     if (presets.length === 0) return;
+    if (!preparePresetDestination(presets)) return;
     const currentRatings = presets.some((preset) => categorizerNeedsRatings(preset.type, preset.config))
       ? await ensureSteamRatingsHydrated()
       : ratings;
@@ -454,7 +648,18 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
   };
 
   // ---- Step: configure → run ----
+  const guardIncompleteCustomConditions = (): boolean => {
+    if (type !== "custom") return false;
+    const incomplete = findIncompleteConditionIds(normalizeCustomAutoCatConfig(customConfig)).length;
+    if (incomplete > 0) {
+      setRunError(t("auto.custom.incompleteWarning", { count: incomplete }));
+      return true;
+    }
+    return false;
+  };
+
   const handleConfigure = async () => {
+    if (guardIncompleteCustomConditions()) return;
     persist.set({
       hoursConfig,
       genreConfig,
@@ -542,6 +747,7 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
   };
 
   const handleConfigureCachedOnly = async () => {
+    if (guardIncompleteCustomConditions()) return;
     persist.set({
       hoursConfig,
       genreConfig,
@@ -804,9 +1010,138 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
     return exportAutoCategorizeDiffToDisk(document);
   };
 
+  const applyDiaryTarget = useCallback((appIds: number[], columnKey: string) => {
+    const ids = [...new Set(appIds.filter((appId) => Number.isFinite(appId)).map((appId) => Math.trunc(appId)))];
+    const column = diaryColumns.find((candidate) => candidate.key === columnKey);
+    if (ids.length === 0 || !column) return;
+
+    if (column.kind === "custom" && column.customId) {
+      setBulkCustomAssignment(ids, column.customId);
+      return;
+    }
+
+    setBulkCustomAssignment(ids, null);
+    const status = column.status;
+    if (!status) return;
+    const statusEvents: Array<{ appId: number; status: string }> = [];
+    const applyStatus = (gameStatus: GameStatus, decision: "backlog" | "next" | "archived", markedBacklog: boolean) => {
+      setBulkStatus(ids, gameStatus);
+      setBulkDecision(ids, decision);
+      setBulkMarkedBacklog(ids, markedBacklog);
+      for (const appId of ids) statusEvents.push({ appId, status });
+    };
+
+    if (status === "backlog") applyStatus("none", "backlog", true);
+    else if (status === "playing") applyStatus("playing", "next", false);
+    else if (status === "finished") applyStatus("completed", "backlog", false);
+    else if (status === "abandoned") applyStatus("abandoned", "backlog", false);
+    else {
+      setBulkDecision(ids, "archived");
+      setBulkMarkedBacklog(ids, false);
+      for (const appId of ids) statusEvents.push({ appId, status });
+    }
+    if (statusEvents.length > 0) logStatusEvents(statusEvents);
+  }, [diaryColumns, logStatusEvents, setBulkCustomAssignment, setBulkDecision, setBulkMarkedBacklog, setBulkStatus]);
+
   const handleApply = async () => {
     if (!result) return;
     setRunError("");
+
+    if (target === "diary") {
+      const groupedIds = Object.entries(result.assignments)
+        .map(([group, ids]) => [group, [...new Set(ids.filter((appId) => Number.isFinite(appId)).map((appId) => Math.trunc(appId)))]] as const)
+        .filter(([, ids]) => ids.length > 0);
+      const appIds = [...new Set(groupedIds.flatMap(([, ids]) => ids))];
+      if (appIds.length === 0) {
+        setDiaryUndo(null);
+        setDiaryUndoNotice("");
+        gotoStep("done");
+        return;
+      }
+
+      // Keep both the Diary placement and the progress status. Undo therefore
+      // restores the exact pre-run state, including queue order and custom
+      // assignments, instead of guessing from the current column.
+      const diarySnapshot = captureBulkSnapshot(appIds);
+      const statusSnapshot = captureStatusSnapshot(appIds);
+      const createdColumnIds: string[] = [];
+      let undone = false;
+      const undoDiaryRun = () => {
+        if (undone) return;
+        undone = true;
+        restoreStatusSnapshot(statusSnapshot);
+        restoreBulkSnapshot(diarySnapshot);
+        for (const columnId of createdColumnIds) removeCustomColumn(columnId);
+        setDiaryUndo(null);
+        setDiaryUndoNotice(t("auto.diary.undoDone"));
+      };
+
+      if (diaryAction === "newColumn") {
+        const requestedName = sanitizeDiaryColumnLabel(
+          diaryNewColumnName.trim() || suggestedNewColumnName
+        );
+        const color = /^#[0-9a-fA-F]{6}$/.test(diaryNewColumnColor) ? diaryNewColumnColor : "#8b5cf6";
+        if (!requestedName) {
+          setRunError(t("auto.diaryNewColumnError"));
+          return;
+        }
+        const existing = diaryBoardPrefs.customColumns.find((column) => column.name.trim().toLocaleLowerCase() === requestedName.toLocaleLowerCase());
+        const columnId = existing?.id ?? addCustomColumn(requestedName, color);
+        if (!columnId) {
+          setRunError(t("auto.diaryNewColumnError"));
+          return;
+        }
+        if (!existing) createdColumnIds.push(columnId);
+        if (diaryMoveMatches) setBulkCustomAssignment(appIds, columnId);
+      } else if (diaryAction === "autoColumns") {
+        const limit = Math.min(12, Math.max(1, Math.floor(diaryAutoColumnLimit) || 8));
+        const prefix = diaryAutoColumnPrefix.trim();
+        const groupsToApply = groupedIds.slice(0, limit);
+        const palette = ["#8b5cf6", "#0ea5e9", "#f59e0b", "#10b981", "#ec4899", "#f97316", "#14b8a6", "#eab308"];
+        const knownColumns = [...diaryBoardPrefs.customColumns];
+        // Collision-safe labels: track every name (existing + planned) so two
+        // groups never collapse into one ambiguous local column.
+        const takenNames = new Set(knownColumns.map((column) => normalizeDiaryColumnName(column.name)));
+        for (const [[groupName, ids], index] of groupsToApply.map((group, index) => [group, index] as const)) {
+          const cleanGroupName = groupName.trim() || t("auto.diaryAction.auto");
+          const baseLabel = diaryGroupColumnLabel(cleanGroupName, prefix);
+          const existing = diaryAutoColumnReuse
+            ? knownColumns.find((column) => normalizeDiaryColumnName(column.name) === normalizeDiaryColumnName(baseLabel))
+            : undefined;
+          let requestedName = baseLabel;
+          if (!existing) {
+            requestedName = uniquifyDiaryColumnLabel(baseLabel, takenNames);
+            takenNames.add(normalizeDiaryColumnName(requestedName));
+          }
+          const columnId = existing?.id ?? addCustomColumn(requestedName, palette[index % palette.length]);
+          if (!columnId) continue;
+          if (!existing) {
+            createdColumnIds.push(columnId);
+            knownColumns.push({ id: columnId, name: requestedName, color: palette[index % palette.length] });
+          }
+          if (diaryMoveMatches) setBulkCustomAssignment([...ids], columnId);
+        }
+        const omitted = Math.max(0, groupedIds.length - groupsToApply.length);
+        setDiaryUndoNotice(omitted > 0 ? t("auto.diaryAutoColumnLimitNotice", { count: omitted }) : "");
+      } else {
+        applyDiaryTarget(appIds, diaryTargetColumn);
+      }
+
+      setDiaryAppliedSummary(
+        diaryAction === "existingColumn" || diaryMoveMatches
+          ? t("auto.diary.applied", { count: appIds.length })
+          : t("auto.diary.createdOnly", { count: createdColumnIds.length }),
+      );
+      setDiaryUndo(() => undoDiaryRun);
+      useToastStore.getState().addAction(
+        "success",
+        t("auto.diary.applied", { count: appIds.length }),
+        t("common.undo"),
+        undoDiaryRun,
+      );
+      gotoStep("done");
+      return;
+    }
 
     if (!steamPath.trim() || !steamId3.trim()) {
       setRunError(t("auto.backupUnavailable"));
@@ -841,14 +1176,14 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
     <DialogOverlay
       label={t("auto.title")}
       onClose={onClose}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-md"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <ResizableDialogPanel
         dialogId="auto-categorize"
         defaultSize={{ width: 920, height: 760 }}
         minSize={{ width: 640, height: 480 }}
-        className="relative flex min-h-0 flex-col overflow-hidden rounded-2xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_24px_64px_rgba(0,0,0,0.6)] animate-fade-in"
+        className="relative flex min-h-0 flex-col overflow-hidden rounded-2xl border border-repressurizer-border bg-repressurizer-surface animate-fade-in shadow-dialog"
       >
         {({ sizeControls }) => (
           <>
@@ -866,14 +1201,34 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
           </div>
         </div>
 
+        <div className="flex flex-wrap items-center gap-3 border-b border-repressurizer-border-subtle bg-repressurizer-bg/35 px-6 py-2.5">
+          <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-repressurizer-text-faint">
+            <span>{t("auto.destination")}</span>
+            <SelectMenu<AutoCategorizeTarget>
+              value={target}
+              options={[
+                { value: "collections", label: t("auto.destination.collections") },
+                { value: "diary", label: t("auto.destination.diary") },
+              ]}
+              onChange={changeTarget}
+              ariaLabel={t("auto.destination")}
+              testId="autocat-destination"
+              size="sm"
+              className="min-w-[196px]"
+              buttonClassName="normal-case tracking-normal font-normal"
+            />
+          </div>
+        </div>
+
         {/* Steps indicator */}
         <StepBar step={step} />
 
         {/* Content */}
         <div className="min-h-0 flex-1 overflow-auto p-6">
           {step === "choose" && (
-            <ChooseStep
-              presets={persist.presets}
+              <ChooseStep
+                presets={persist.presets}
+                diaryMode={target === "diary"}
               onChoose={handleChoose}
               onRunPresets={handleRunPresets}
               onRunPresetsCachedOnly={handleRunPresetsCachedOnly}
@@ -899,6 +1254,7 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
               hltbConfig={hltbConfig} setHltbConfig={setHltbConfig}
               customConfig={customConfig} setCustomConfig={setCustomConfig}
               collections={collections}
+              diaryMode={target === "diary"}
               metadata={metadata}
               presetName={presetName}
               setPresetName={setPresetName}
@@ -962,15 +1318,46 @@ export function AutoCategorizeDialog({ onClose }: AutoCategorizeDialogProps) {
             <PreviewStep
               result={result}
               context={previewContext}
+              previewRules={previewRules}
               notice={previewNotice}
               error={runError}
+              destinationLabel={target === "diary"
+                ? diaryAction === "newColumn"
+                  ? diaryNewColumnName.trim() || t("auto.diaryNewColumn.pending")
+                  : diaryAction === "autoColumns"
+                    ? t("auto.diaryAction.auto")
+                    : diaryColumns.find((column) => column.key === diaryTargetColumn)?.label
+                : undefined}
+              diaryPreview={target === "diary"}
+              diaryThenPanel={target === "diary" ? (
+                <DiaryThenPanel
+                  action={diaryAction}
+                  onActionChange={handleDiaryActionChange}
+                  columns={diaryColumns}
+                  targetColumn={diaryTargetColumn}
+                  onTargetColumnChange={setDiaryTargetColumn}
+                  newColumnName={diaryNewColumnName}
+                  onNewColumnNameChange={setDiaryNewColumnName}
+                  newColumnColor={diaryNewColumnColor}
+                  onNewColumnColorChange={setDiaryNewColumnColor}
+                  autoColumnPrefix={diaryAutoColumnPrefix}
+                  onAutoColumnPrefixChange={setDiaryAutoColumnPrefix}
+                  autoColumnLimit={diaryAutoColumnLimit}
+                  onAutoColumnLimitChange={setDiaryAutoColumnLimit}
+                  autoColumnReuse={diaryAutoColumnReuse}
+                  onAutoColumnReuseChange={setDiaryAutoColumnReuse}
+                  moveMatches={diaryMoveMatches}
+                  onMoveMatchesChange={setDiaryMoveMatches}
+                  matchCount={result.games_categorized}
+                />
+              ) : undefined}
               onBack={() => gotoStep("configure")}
               onExport={handleExportDiff}
               onApply={handleApply}
             />
           )}
           {step === "done" && (
-            <DoneStep result={result!} onClose={onClose} />
+            <DoneStep result={result!} onClose={onClose} onUndo={diaryUndo ?? undefined} undoNotice={diaryUndoNotice} summary={target === "diary" ? diaryAppliedSummary : undefined} />
           )}
         </div>
           </>
@@ -1017,6 +1404,180 @@ function StepBar({ step }: { step: Step }) {
           )}
         </div>
       ))}
+    </div>
+  );
+}
+
+function DiaryThenPanel({
+  action,
+  onActionChange,
+  columns,
+  targetColumn,
+  onTargetColumnChange,
+  newColumnName,
+  onNewColumnNameChange,
+  newColumnColor,
+  onNewColumnColorChange,
+  autoColumnPrefix,
+  onAutoColumnPrefixChange,
+  autoColumnLimit,
+  onAutoColumnLimitChange,
+  autoColumnReuse,
+  onAutoColumnReuseChange,
+  moveMatches,
+  onMoveMatchesChange,
+  matchCount,
+}: {
+  action: AutoCategorizeDiaryAction;
+  onActionChange: (action: AutoCategorizeDiaryAction) => void;
+  columns: DiaryAutoCatColumn[];
+  targetColumn: string;
+  onTargetColumnChange: (column: string) => void;
+  newColumnName: string;
+  onNewColumnNameChange: (name: string) => void;
+  newColumnColor: string;
+  onNewColumnColorChange: (color: string) => void;
+  autoColumnPrefix: string;
+  onAutoColumnPrefixChange: (prefix: string) => void;
+  autoColumnLimit: number;
+  onAutoColumnLimitChange: (limit: number) => void;
+  autoColumnReuse: boolean;
+  onAutoColumnReuseChange: (reuse: boolean) => void;
+  moveMatches: boolean;
+  onMoveMatchesChange: (move: boolean) => void;
+  matchCount: number;
+}) {
+  const t = useT();
+  const createsColumn = action !== "existingColumn";
+
+  return (
+    <div className="space-y-3 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-bg p-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-repressurizer-text-faint">{t("auto.diary.thenAction")}</span>
+        <SelectMenu<AutoCategorizeDiaryAction>
+          value={action}
+          options={[
+            { value: "existingColumn", label: t("auto.diaryAction.existing") },
+            { value: "newColumn", label: t("auto.diaryAction.new") },
+            { value: "autoColumns", label: t("auto.diaryAction.auto") },
+          ]}
+          onChange={onActionChange}
+          ariaLabel={t("auto.diaryAction")}
+          testId="autocat-diary-action"
+          size="sm"
+          className="min-w-[210px]"
+          buttonClassName="normal-case tracking-normal font-normal"
+        />
+      </div>
+
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <label className="flex items-center gap-2 text-sm text-repressurizer-text">
+          <input
+            type="checkbox"
+            checked={createsColumn}
+            disabled
+            data-testid="autocat-create-column"
+            className="accent-repressurizer-accent"
+          />
+          <span>{t("auto.diary.createColumn")}</span>
+        </label>
+        <label className="flex items-center gap-2 text-sm text-repressurizer-text">
+          <input
+            type="checkbox"
+            checked={action === "existingColumn" || moveMatches}
+            disabled={action === "existingColumn"}
+            onChange={(event) => onMoveMatchesChange(event.target.checked)}
+            data-testid="autocat-move-matches"
+            className="accent-repressurizer-accent"
+          />
+          <span>{t("auto.diary.moveMatches", { count: matchCount })}</span>
+        </label>
+      </div>
+
+      {action === "existingColumn" && (
+        <div className="grid gap-2 sm:grid-cols-[auto_minmax(0,220px)] sm:items-center">
+          <span className="text-xs text-repressurizer-text-muted">{t("auto.diaryColumn")}</span>
+          <SelectMenu<string>
+            value={targetColumn}
+            options={columns.map((column) => ({ value: column.key, label: column.label }))}
+            onChange={onTargetColumnChange}
+            ariaLabel={t("auto.diaryColumn")}
+            testId="autocat-diary-column"
+            size="sm"
+            className="w-full max-w-[280px]"
+            buttonClassName="max-w-[280px] normal-case tracking-normal font-normal"
+          />
+        </div>
+      )}
+
+      {action === "newColumn" && (
+        <div className="space-y-1.5">
+          <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+            <label className="flex min-w-0 items-center gap-2">
+              <span className="shrink-0 text-xs text-repressurizer-text-muted">{t("auto.diaryNewColumn")}</span>
+              <input
+                value={newColumnName}
+                onChange={(event) => onNewColumnNameChange(event.target.value.slice(0, 24))}
+                placeholder={t("auto.diaryNewColumn.placeholder")}
+                aria-label={t("auto.diaryNewColumn")}
+                data-testid="autocat-new-column-name"
+                className="h-8 w-full min-w-0 rounded-lg border border-repressurizer-border bg-repressurizer-surface px-2.5 text-xs text-repressurizer-text outline-none placeholder:text-repressurizer-text-faint focus:border-repressurizer-accent"
+              />
+            </label>
+            <input
+              type="color"
+              value={newColumnColor}
+              onChange={(event) => onNewColumnColorChange(event.target.value)}
+              aria-label={t("auto.diaryNewColumn.color")}
+              data-testid="autocat-new-column-color"
+              className="h-8 w-9 shrink-0 cursor-pointer rounded-md border border-repressurizer-border bg-repressurizer-surface p-1"
+            />
+          </div>
+          <p data-testid="autocat-new-column-suggested" className="text-[11px] leading-relaxed text-repressurizer-text-faint">
+            {t("auto.diaryNewColumn.suggestedHint")}
+          </p>
+        </div>
+      )}
+
+      {action === "autoColumns" && (
+        <div className="grid gap-2 text-xs text-repressurizer-text-muted sm:grid-cols-[minmax(0,1fr)_auto_auto] sm:items-center">
+          <label className="flex min-w-0 items-center gap-2">
+            <span className="shrink-0">{t("auto.diaryAutoColumnPrefix")}</span>
+            <input
+              value={autoColumnPrefix}
+              onChange={(event) => onAutoColumnPrefixChange(event.target.value.slice(0, 16))}
+              placeholder={t("auto.diaryAutoColumnPrefix.placeholder")}
+              aria-label={t("auto.diaryAutoColumnPrefix")}
+              data-testid="autocat-auto-column-prefix"
+              className="h-8 w-full min-w-0 rounded-lg border border-repressurizer-border bg-repressurizer-surface px-2.5 text-xs text-repressurizer-text outline-none placeholder:text-repressurizer-text-faint focus:border-repressurizer-accent"
+            />
+          </label>
+          <label className="flex items-center gap-2">
+            <span className="shrink-0">{t("auto.diaryAutoColumnLimit")}</span>
+            <input
+              type="number"
+              min={1}
+              max={12}
+              value={autoColumnLimit}
+              onChange={(event) => onAutoColumnLimitChange(Math.min(12, Math.max(1, Number(event.target.value) || 1)))}
+              aria-label={t("auto.diaryAutoColumnLimit")}
+              data-testid="autocat-auto-column-limit"
+              className="h-8 w-16 rounded-lg border border-repressurizer-border bg-repressurizer-surface px-2.5 text-xs text-repressurizer-text outline-none focus:border-repressurizer-accent"
+            />
+          </label>
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={autoColumnReuse}
+              onChange={(event) => onAutoColumnReuseChange(event.target.checked)}
+              aria-label={t("auto.diaryAutoColumnReuse")}
+              data-testid="autocat-auto-column-reuse"
+              className="accent-repressurizer-accent"
+            />
+            <span>{t("auto.diaryAutoColumnReuse")}</span>
+          </label>
+        </div>
+      )}
     </div>
   );
 }

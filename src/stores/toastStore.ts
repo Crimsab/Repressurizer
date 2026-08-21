@@ -7,11 +7,14 @@ export interface Toast {
   type: ToastType;
   message: string;
   duration?: number; // ms, default 4000
+  actionLabel?: string;
+  onAction?: () => void;
 }
 
 interface ToastState {
   toasts: Toast[];
   add: (type: ToastType, message: string, duration?: number) => void;
+  addAction: (type: ToastType, message: string, actionLabel: string, onAction: () => void, duration?: number) => void;
   remove: (id: string) => void;
   success: (message: string) => void;
   error: (message: string) => void;
@@ -27,6 +30,16 @@ export const useToastStore = create<ToastState>((set) => ({
   add: (type, message, duration = 4000) => {
     const id = `toast-${++counter}`;
     set((s) => ({ toasts: [...s.toasts, { id, type, message, duration }] }));
+    if (duration > 0) {
+      setTimeout(() => {
+        set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }));
+      }, duration);
+    }
+  },
+
+  addAction: (type, message, actionLabel, onAction, duration = 8000) => {
+    const id = `toast-${++counter}`;
+    set((s) => ({ toasts: [...s.toasts, { id, type, message, duration, actionLabel, onAction }] }));
     if (duration > 0) {
       setTimeout(() => {
         set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }));

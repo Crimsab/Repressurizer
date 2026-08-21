@@ -45,7 +45,7 @@ export function ConfigureStep({
   languageConfig, setLanguageConfig,
   platformConfig, setPlatformConfig, nameConfig, setNameConfig,
   ratingConfig, setRatingConfig,
-  hltbConfig, setHltbConfig, customConfig, setCustomConfig, collections, metadata, presetName, setPresetName, onSavePreset,
+  hltbConfig, setHltbConfig, customConfig, setCustomConfig, collections, metadata, diaryMode = false, presetName, setPresetName, onSavePreset,
   loadedPresetId, error, onBack, onNext, onCachedOnly, cachedOnlyAvailable, cachedOnlyMissingCount,
 }: {
   type: CategorizerType;
@@ -63,6 +63,7 @@ export function ConfigureStep({
   customConfig: CustomAutoCatConfigV1; setCustomConfig: (c: CustomAutoCatConfigV1) => void;
   collections: SteamCollection[];
   metadata: AutoCatMetadata;
+  diaryMode?: boolean;
   presetName: string;
   setPresetName: (name: string) => void;
   onSavePreset: () => void;
@@ -118,7 +119,7 @@ export function ConfigureStep({
       {type === "platform" && <PlatformConfigForm config={platformConfig} onChange={setPlatformConfig} />}
       {type === "name" && <NameConfigForm config={nameConfig} onChange={setNameConfig} />}
       {type === "rating" && <SteamRatingConfigForm config={ratingConfig} onChange={setRatingConfig} />}
-      {type === "custom" && <CustomRuleBuilder config={customConfig} onChange={setCustomConfig} collections={collections} />}
+      {type === "custom" && <CustomRuleBuilder config={customConfig} onChange={setCustomConfig} collections={collections} diaryMode={diaryMode} />}
       {type === "score" && (
         <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg p-4 text-sm text-repressurizer-text-muted">
           <p className="font-medium text-repressurizer-text mb-2">{t("auto.metacriticBuckets")}</p>

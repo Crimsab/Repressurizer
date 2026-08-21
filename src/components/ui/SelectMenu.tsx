@@ -23,6 +23,7 @@ interface SelectMenuProps<T extends string> {
   labelClassName?: string;
   buttonClassName?: string;
   menuClassName?: string;
+  testId?: string;
 }
 
 interface MenuPosition {
@@ -49,6 +50,7 @@ export function SelectMenu<T extends string>({
   labelClassName,
   buttonClassName,
   menuClassName,
+  testId,
 }: SelectMenuProps<T>) {
   const menuId = useId();
   const buttonRef = useRef<HTMLButtonElement | null>(null);
@@ -184,7 +186,7 @@ export function SelectMenu<T extends string>({
             bottom: position.bottom,
           }}
           className={cn(
-            "z-[90] overflow-auto rounded-lg border border-repressurizer-border bg-repressurizer-bg py-1 shadow-[0_16px_40px_rgba(0,0,0,0.45)]",
+            "animate-fade-in-stable z-[90] overflow-auto rounded-xl border border-repressurizer-border bg-repressurizer-surface py-1 shadow-pop",
             menuClassName
           )}
         >
@@ -204,14 +206,15 @@ export function SelectMenu<T extends string>({
                   buttonRef.current?.focus();
                 }}
                 className={cn(
-                  "flex w-full items-start gap-2 px-3 py-1.5 text-left text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-45",
+                  "relative flex w-full items-start gap-2 px-3 py-1.5 text-left text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-45",
                   active
-                    ? "bg-repressurizer-accent/15 text-repressurizer-accent"
+                    ? "bg-repressurizer-accent/[0.12] font-medium text-repressurizer-accent"
                     : "text-repressurizer-text-muted hover:bg-repressurizer-surface-hover hover:text-white"
                 )}
               >
+                {active && <span aria-hidden="true" className="absolute inset-y-1 left-0 w-0.5 rounded-full bg-repressurizer-accent" />}
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate">{option.label}</span>
+                  <span className="block truncate leading-none">{option.label}</span>
                   {option.description && (
                     <span className="mt-0.5 block truncate text-[10px] text-repressurizer-text-faint">
                       {option.description}
@@ -247,6 +250,7 @@ export function SelectMenu<T extends string>({
         aria-controls={open ? menuId : undefined}
         aria-expanded={open}
         disabled={disabled}
+        data-testid={testId}
         onClick={() => setOpen((next) => !next)}
         onKeyDown={(event) => {
           if (event.key === "ArrowDown" || event.key === "ArrowUp") {
@@ -255,15 +259,15 @@ export function SelectMenu<T extends string>({
           }
         }}
         className={cn(
-          "btn-press flex w-full items-center gap-2 rounded-lg border text-left font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-45",
+          "btn-press flex w-full items-center gap-2 rounded-lg border text-left font-medium transition-[background-color,border-color,box-shadow,color] disabled:cursor-not-allowed disabled:opacity-45",
           buttonSizeClass,
           open
-            ? "border-repressurizer-accent bg-repressurizer-accent/10 text-repressurizer-accent"
-            : "border-repressurizer-border bg-repressurizer-bg text-repressurizer-text hover:bg-repressurizer-surface-hover hover:text-white",
+            ? "border-repressurizer-accent/70 bg-repressurizer-accent/10 text-repressurizer-accent shadow-[0_0_0_1px_rgba(16,185,129,0.35)]"
+            : "border-repressurizer-border bg-repressurizer-surface/60 text-repressurizer-text hover:border-repressurizer-border hover:bg-repressurizer-surface-hover hover:text-white",
           buttonClassName
         )}
       >
-        <span className="min-w-0 flex-1 truncate">{selectedLabel}</span>
+        <span className="min-w-0 flex-1 truncate leading-none">{selectedLabel}</span>
         <CaretDown
           size={12}
           className={cn("shrink-0 text-repressurizer-text-faint transition-transform", open && "rotate-180")}

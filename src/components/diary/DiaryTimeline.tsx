@@ -187,7 +187,7 @@ export const DiaryTimeline = memo(function DiaryTimeline({ games, visibleAppIds,
 
   return (
     <div ref={scrollRef} onScroll={handleTimelineScroll} data-testid="diary-timeline" className="min-h-0 flex-1 overflow-y-auto">
-      <div className="sticky top-0 z-10 flex h-10 shrink-0 items-center gap-2 border-b border-repressurizer-border-subtle bg-repressurizer-bg/95 px-4 backdrop-blur sm:px-6">
+      <div className="sticky top-0 z-10 flex h-11 shrink-0 items-center gap-2 border-b border-repressurizer-border-subtle bg-repressurizer-bg/95 px-4 backdrop-blur sm:px-6">
         <div role="group" aria-label={t("diary.timeline.filters")} className="flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto">
           <Clock size={13} className="mr-0.5 shrink-0 text-repressurizer-accent" />
           {KIND_FILTERS.map(({ value, labelKey, icon: Icon }) => (
@@ -197,7 +197,7 @@ export const DiaryTimeline = memo(function DiaryTimeline({ games, visibleAppIds,
               aria-pressed={enabledKinds.has(value)}
               data-testid={`diary-timeline-filter-${value}`}
               onClick={() => toggleKind(value)}
-              className={`focus-ring inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${enabledKinds.has(value) ? "border-repressurizer-accent/40 bg-repressurizer-accent/10 text-repressurizer-accent" : "border-repressurizer-border bg-repressurizer-surface text-repressurizer-text-faint hover:text-repressurizer-text"}`}
+              className={`focus-ring inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${enabledKinds.has(value) ? "border-repressurizer-accent/55 bg-repressurizer-accent/[0.12] text-repressurizer-accent" : "border-transparent bg-repressurizer-surface/40 text-repressurizer-text-faint hover:bg-repressurizer-surface-hover hover:text-repressurizer-text"}`}
             >
               <Icon size={12} />
               {t(labelKey)}
@@ -212,31 +212,33 @@ export const DiaryTimeline = memo(function DiaryTimeline({ games, visibleAppIds,
           disabled={achievementsSyncing !== null}
           title={t("diary.timeline.achievements.sync")}
           aria-label={t("diary.timeline.achievements.sync")}
-          className="focus-ring flex shrink-0 items-center gap-1.5 rounded-lg border border-repressurizer-border bg-repressurizer-surface px-2 py-1.5 text-[10px] font-medium text-repressurizer-text-muted transition-colors hover:text-repressurizer-accent disabled:opacity-60"
+          className="focus-ring flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-transparent bg-repressurizer-surface/60 px-2.5 text-[10px] font-medium text-repressurizer-text-muted transition-colors hover:border-repressurizer-border hover:bg-repressurizer-surface-hover hover:text-white disabled:opacity-60"
         >
           <Trophy size={13} className={achievementsSyncing !== null ? "animate-pulse text-repressurizer-accent" : ""} />
+          <span className="hidden xl:inline">{t("diary.timeline.achievements")}</span>
           {achievementsSyncing !== null && <span className="font-mono tabular-nums">{achievementsSyncing.done}/{achievementsSyncing.total}</span>}
         </button>
         {months.length > 1 && (
-          <div role="group" aria-label={t("diary.timeline.month")} data-testid="diary-timeline-months" className="flex shrink-0 items-center gap-0.5 rounded-lg border border-repressurizer-border bg-repressurizer-surface px-0.5 py-0.5">
-            <button type="button" aria-label={t("diary.timeline.monthPrev")} data-testid="diary-timeline-month-prev" disabled={monthIndex < 0 || monthIndex >= months.length - 1} onClick={() => monthIndex >= 0 && monthIndex < months.length - 1 && scrollToMonth(months[monthIndex + 1].key)} className="focus-ring rounded-md p-1 text-repressurizer-text-faint transition-colors hover:text-repressurizer-text disabled:opacity-30"><CaretLeft size={12} /></button>
-            <span className="whitespace-nowrap px-0.5 text-[10px] font-semibold text-repressurizer-text-muted">{monthLabel}</span>
-            <button type="button" aria-label={t("diary.timeline.monthNext")} data-testid="diary-timeline-month-next" disabled={monthIndex <= 0} onClick={() => monthIndex > 0 && scrollToMonth(months[monthIndex - 1].key)} className="focus-ring rounded-md p-1 text-repressurizer-text-faint transition-colors hover:text-repressurizer-text disabled:opacity-30"><CaretRight size={12} /></button>
+          <div role="group" aria-label={t("diary.timeline.month")} data-testid="diary-timeline-months" className="flex h-8 shrink-0 items-center gap-0.5 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-surface/60 px-0.5">
+            <button type="button" aria-label={t("diary.timeline.monthPrev")} data-testid="diary-timeline-month-prev" disabled={monthIndex < 0 || monthIndex >= months.length - 1} onClick={() => monthIndex >= 0 && monthIndex < months.length - 1 && scrollToMonth(months[monthIndex + 1].key)} className="focus-ring rounded-md p-1.5 text-repressurizer-text-faint transition-colors hover:bg-repressurizer-surface-hover hover:text-white disabled:opacity-30"><CaretLeft size={12} /></button>
+            <span className="whitespace-nowrap px-1 text-[10px] font-semibold text-repressurizer-text-muted">{monthLabel}</span>
+            <button type="button" aria-label={t("diary.timeline.monthNext")} data-testid="diary-timeline-month-next" disabled={monthIndex <= 0} onClick={() => monthIndex > 0 && scrollToMonth(months[monthIndex - 1].key)} className="focus-ring rounded-md p-1.5 text-repressurizer-text-faint transition-colors hover:bg-repressurizer-surface-hover hover:text-white disabled:opacity-30"><CaretRight size={12} /></button>
           </div>
         )}
-        <div role="group" aria-label={t("diary.timeline.layout")} className="flex shrink-0 items-center gap-0.5 rounded-lg border border-repressurizer-border bg-repressurizer-surface p-0.5">
+        <div role="group" aria-label={t("diary.timeline.layout")} className="flex h-8 shrink-0 items-center gap-0.5 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-bg/70 p-0.5">
           {LAYOUT_OPTIONS.map(({ value, labelKey, icon: Icon }) => (
-            <button key={value} type="button" aria-pressed={preferences.timelineLayout === value} data-testid={`diary-timeline-layout-${value}`} title={t(labelKey)} aria-label={t(labelKey)} onClick={() => onLayoutChange(value)} className={`focus-ring rounded-md p-1.5 transition-colors ${preferences.timelineLayout === value ? "bg-repressurizer-accent/15 text-repressurizer-accent" : "text-repressurizer-text-faint hover:text-repressurizer-text"}`}>
-              <Icon size={13} />
+            <button key={value} type="button" aria-pressed={preferences.timelineLayout === value} data-testid={`diary-timeline-layout-${value}`} title={t(labelKey)} aria-label={t(labelKey)} onClick={() => onLayoutChange(value)} className={`focus-ring inline-flex h-full items-center gap-1 rounded-md px-2 text-[10px] transition-colors ${preferences.timelineLayout === value ? "bg-repressurizer-surface-raised font-semibold text-white shadow-pop-sm" : "font-medium text-repressurizer-text-faint hover:text-repressurizer-text"}`}>
+              <Icon size={13} className={preferences.timelineLayout === value ? "text-repressurizer-accent" : ""} />
+              <span className="hidden xl:inline">{t(labelKey)}</span>
             </button>
           ))}
         </div>
       </div>
       {days.length === 0 ? (
         <div className="flex min-h-[420px] flex-col items-center justify-center px-6 text-center">
-          <CalendarBlank size={34} weight="duotone" className="mb-3 text-repressurizer-text-faint" />
+          <span className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-dashed border-repressurizer-border bg-repressurizer-surface/40"><CalendarBlank size={26} weight="duotone" className="text-repressurizer-text-faint" /></span>
           <p className="text-sm font-medium text-repressurizer-text">{t("diary.timeline.empty")}</p>
-          <p className="mt-1 text-xs text-repressurizer-text-faint">{t("diary.timeline.empty.desc")}</p>
+          <p className="mt-1 max-w-xs text-xs leading-relaxed text-repressurizer-text-faint">{t("diary.timeline.empty.desc")}</p>
         </div>
       ) : (
         <div className="px-4 py-4 sm:px-6">
@@ -272,7 +274,7 @@ export const DiaryTimeline = memo(function DiaryTimeline({ games, visibleAppIds,
                       aria-expanded={!dayCollapsed}
                       aria-label={`${t("diary.timeline.toggleDay")}: ${labels.gutterPrimary}`}
                       onClick={() => toggleSetEntry(setCollapsedDays, day.key)}
-                      className={`sticky top-[52px] z-[5] flex w-full flex-col items-center gap-0.5 self-start rounded-lg border px-2 py-2.5 text-center backdrop-blur transition-colors hover:border-repressurizer-accent/40 ${dayCollapsed ? "border-repressurizer-border-subtle bg-repressurizer-surface/50 opacity-75" : "border-repressurizer-border bg-repressurizer-surface/80"}`}
+                      className={`sticky top-[56px] z-[5] flex w-full flex-col items-center gap-0.5 self-start rounded-xl border px-2 py-2.5 text-center shadow-pop-sm backdrop-blur transition-colors hover:border-repressurizer-accent/40 ${dayCollapsed ? "border-repressurizer-border-subtle bg-repressurizer-surface/50 opacity-75" : labels.isToday ? "border-repressurizer-accent/45 bg-repressurizer-accent/[0.07] shadow-[0_0_0_1px_rgba(16,185,129,0.18),0_2px_10px_rgba(0,0,0,0.28)]" : "border-repressurizer-border-subtle bg-repressurizer-surface/80"}`}
                     >
                       <p className="text-[15px] font-bold leading-tight text-white">{labels.gutterPrimary}</p>
                       <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-repressurizer-text-faint">{labels.gutterSecondary}</p>
@@ -290,7 +292,7 @@ export const DiaryTimeline = memo(function DiaryTimeline({ games, visibleAppIds,
                           return (
                             <li key={group.key}>
                               <div
-                                className="relative flex min-w-0 items-center gap-3 rounded-xl border border-repressurizer-border-subtle bg-repressurizer-surface/60 py-1.5 pl-2 pr-3 shadow-[0_1px_3px_rgba(0,0,0,0.2)]"
+                                className="relative flex min-w-0 items-center gap-3 rounded-xl border border-repressurizer-border-subtle bg-repressurizer-surface/60 py-1.5 pl-2 pr-3 shadow-pop-sm transition-colors hover:border-repressurizer-border"
                                 data-testid={`diary-timeline-game-${group.appId ?? "all"}`}
                                 onContextMenu={group.appId !== null && onGameContextMenu ? (event) => { event.preventDefault(); onGameContextMenu(group.appId!, event.clientX, event.clientY); } : undefined}
                               >
@@ -349,7 +351,7 @@ export const DiaryTimeline = memo(function DiaryTimeline({ games, visibleAppIds,
                           const groupEvents = group.events.filter((event) => enabledKinds.has(event.kind));
                           if (groupEvents.length === 0) return null;
                           return (
-                            <div key={group.key} data-testid={`diary-timeline-game-${group.appId ?? "all"}`} className="overflow-hidden rounded-2xl border border-repressurizer-border bg-repressurizer-surface/55 shadow-[0_2px_10px_rgba(0,0,0,0.25)]">
+                            <div key={group.key} data-testid={`diary-timeline-game-${group.appId ?? "all"}`} className="overflow-hidden rounded-xl border border-repressurizer-border-subtle bg-repressurizer-surface/55 shadow-pop-sm transition-colors hover:border-repressurizer-border">
                               <div className="flex w-full items-center gap-4 p-3.5 transition-colors hover:bg-repressurizer-surface/70">
                                 <button
                                   type="button"

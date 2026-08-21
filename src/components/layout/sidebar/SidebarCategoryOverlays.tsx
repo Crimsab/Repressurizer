@@ -87,7 +87,7 @@ export function CategoryContextMenu({
       <div
         ref={ref}
         style={style}
-        className="min-w-[180px] animate-fade-in rounded-xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_8px_32px_rgba(0,0,0,0.5)]"
+        className="min-w-[180px] animate-fade-in rounded-xl border border-repressurizer-border bg-repressurizer-surface shadow-pop"
       >
         <div className="border-b border-repressurizer-border px-3 py-2">
           <p className="truncate text-sm font-medium text-white">
@@ -143,7 +143,7 @@ export function CategoryContextMenu({
     <div
       ref={ref}
       style={style}
-      className="min-w-[180px] animate-fade-in rounded-xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_8px_32px_rgba(0,0,0,0.5)]"
+      className="min-w-[180px] animate-fade-in rounded-xl border border-repressurizer-border bg-repressurizer-surface shadow-pop"
     >
       <div className="border-b border-repressurizer-border px-3 py-2">
         <p className="truncate text-sm font-medium text-white">
@@ -328,7 +328,7 @@ export function DeleteConfirmDialog({
       onClose={onCancel}
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
     >
-      <div className="w-full max-w-xs animate-fade-in rounded-xl border border-repressurizer-border bg-repressurizer-surface p-5 shadow-[0_16px_48px_rgba(0,0,0,0.5)]">
+      <div className="w-full max-w-xs animate-fade-in rounded-xl border border-repressurizer-border bg-repressurizer-surface p-5 shadow-pop">
         <p className="mb-1 text-sm font-medium text-white">
           {isBatch
             ? t("category.deleteSelectedConfirm", { count: names.length })
