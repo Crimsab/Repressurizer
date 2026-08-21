@@ -52,3 +52,45 @@ pub fn categorize_by_hours(games: &[OwnedGame], config: &HoursConfig) -> Categor
         assignments,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn game(appid: u64, minutes: u64) -> OwnedGame {
+        OwnedGame {
+            appid,
+            name: format!("Game {appid}"),
+            playtime_forever: minutes,
+            img_icon_url: None,
+            rtime_last_played: 0,
+        }
+    }
+
+    #[test]
+    fn assigns_first_matching_playtime_bucket_and_open_ended_rule() {
+        let result = categorize_by_hours(
+            &[game(1, 30), game(2, 60), game(3, 180)],
+            &HoursConfig {
+                prefix: Some("(Hours) ".to_string()),
+                rules: vec![
+                    HoursRule {
+                        name: "Short".to_string(),
+                        min_hours: 0.0,
+                        max_hours: 1.0,
+                    },
+                    HoursRule {
+                        name: "Long".to_string(),
+                        min_hours: 1.0,
+                        max_hours: 0.0,
+                    },
+                ],
+            },
+        );
+
+        assert_eq!(result.games_processed, 3);
+        assert_eq!(result.games_categorized, 3);
+        assert_eq!(result.assignments["(Hours) Short"], vec![1]);
+        assert_eq!(result.assignments["(Hours) Long"], vec![2, 3]);
+    }
+}

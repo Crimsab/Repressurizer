@@ -158,3 +158,55 @@ pub fn categorize_by_score(games: &[GameScore], config: &ScoreConfig) -> Categor
         assignments,
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn matches_score_and_review_ranges_with_prefix() {
+        let result = categorize_by_score(
+            &[
+                GameScore {
+                    app_id: 1,
+                    review_score: 95,
+                    review_count: 600,
+                },
+                GameScore {
+                    app_id: 2,
+                    review_score: 80,
+                    review_count: 50,
+                },
+                GameScore {
+                    app_id: 3,
+                    review_score: 80,
+                    review_count: 0,
+                },
+            ],
+            &ScoreConfig {
+                prefix: Some("(Score) ".to_string()),
+                rules: vec![
+                    ScoreRule {
+                        name: "Top".to_string(),
+                        min_score: 90,
+                        max_score: 100,
+                        min_reviews: 100,
+                        max_reviews: 0,
+                    },
+                    ScoreRule {
+                        name: "Good".to_string(),
+                        min_score: 75,
+                        max_score: 89,
+                        min_reviews: 1,
+                        max_reviews: 100,
+                    },
+                ],
+            },
+        );
+
+        assert_eq!(result.games_processed, 3);
+        assert_eq!(result.games_categorized, 2);
+        assert_eq!(result.assignments["(Score) Top"], vec![1]);
+        assert_eq!(result.assignments["(Score) Good"], vec![2]);
+    }
+}

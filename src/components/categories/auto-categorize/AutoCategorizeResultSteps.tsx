@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { isValidElement, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   ArrowLeft,
   Check,
@@ -11,6 +11,7 @@ import { useGameStore } from "../../../stores/gameStore";
 import { useHltbStore } from "../../../stores/hltbStore";
 import {
   normalizeCustomAutoCatConfig,
+  type CustomAutoCatConfigV1,
   type CustomHltbCondition,
 } from "../../../lib/customAutoCategorize";
 import { getHltbHours, hltbModeLabel } from "../../../lib/hltb";
@@ -19,8 +20,17 @@ import {
   type PreviewSortContext,
   type PreviewSortMode,
 } from "../../../lib/autoCategorizePreview";
+import type { AutoCategorizeDiffRule } from "../../../lib/autoCategorizeDiff";
 import type { CategorizeResult, HltbData } from "../../../lib/tauri";
 import { useT } from "../../../lib/i18n";
+import { describeRuleExpression, ruleSourceLabel } from "../../../lib/customRuleText";
+import { diaryGroupColumnLabel } from "../../../lib/diaryAutoCatNaming";
+import type { AutoCategorizeDiaryAction } from "../../../stores/autoCategorizeStore";
+
+type DiaryThenPanelProps = {
+  action?: AutoCategorizeDiaryAction;
+  autoColumnPrefix?: string;
+};
 
 export function FetchStep({ progress, total, error, waiting, coolingDown, cooldownSecs, message }: {
   progress: number;
@@ -81,11 +91,27 @@ export function FetchStep({ progress, total, error, waiting, coolingDown, cooldo
 // Step: Preview
 // ============================================================
 
-export function PreviewStep({ result, context, notice, error, onBack, onExport, onApply }: {
+export function PreviewStep({
+  result,
+  context,
+  previewRules,
+  notice,
+  error,
+  destinationLabel,
+  diaryPreview = false,
+  diaryThenPanel,
+  onBack,
+  onExport,
+  onApply,
+}: {
   result: CategorizeResult;
   context: PreviewSortContext | null;
+  previewRules?: AutoCategorizeDiffRule[];
   notice: string;
   error: string;
+  destinationLabel?: string;
+  diaryPreview?: boolean;
+  diaryThenPanel?: ReactNode;
   onBack: () => void;
   onExport: () => Promise<string | null>;
   onApply: () => void;
@@ -96,10 +122,38 @@ export function PreviewStep({ result, context, notice, error, onBack, onExport, 
   const [sortMode, setSortMode] = useState<PreviewSortMode>("count");
   const [exporting, setExporting] = useState(false);
   const [exportMessage, setExportMessage] = useState<{ text: string; error: boolean } | null>(null);
+  const isDiaryPreview = diaryPreview || Boolean(diaryThenPanel);
+  const diaryThenProps = isValidElement<DiaryThenPanelProps>(diaryThenPanel) ? diaryThenPanel.props : {};
+  const diarySplitMode =
+    isDiaryPreview &&
+    diaryThenProps.action === "autoColumns";
+  const diarySplitPrefix = diaryThenProps.autoColumnPrefix ?? "";
   const entries = useMemo(
     () => sortAutoCategorizePreviewEntries(result.assignments, sortMode, context),
     [context, result.assignments, sortMode]
   );
+  const matchedIds = useMemo(
+    () => Array.from(new Set(Object.values(result.assignments).flat())),
+    [result.assignments]
+  );
+  const [matchesOpen, setMatchesOpen] = useState(false);
+  const ifPlanLines = useMemo(() => {
+    if (context) {
+      return [
+        context.type === "custom"
+          ? describeRuleExpression(normalizeCustomAutoCatConfig(context.config as CustomAutoCatConfigV1), t)
+          : t("auto.diary.ifSource", { source: ruleSourceLabel(context.type, t) }),
+      ];
+    }
+    const rules = previewRules ?? [];
+    if (rules.length === 0) return [t("auto.rule.empty")];
+    return rules.map((rule) => {
+      const expression = rule.type === "custom"
+        ? describeRuleExpression(normalizeCustomAutoCatConfig(rule.config as CustomAutoCatConfigV1), t)
+        : t("auto.diary.ifSource", { source: ruleSourceLabel(rule.type, t) });
+      return rule.name?.trim() ? `${rule.name.trim()}: ${expression}` : expression;
+    });
+  }, [context, previewRules, t]);
   const [expanded, setExpanded] = useState<Set<string>>(
     () => new Set(entries.length === 1 ? [entries[0][0]] : [])
   );
@@ -147,13 +201,45 @@ export function PreviewStep({ result, context, notice, error, onBack, onExport, 
           <span>{error}</span>
         </div>
       )}
+      {diaryThenPanel && (
+        <div data-testid="autocat-if-then" className="rounded-xl border border-repressurizer-accent/30 bg-repressurizer-accent/5 p-4">
+          <div className="grid gap-3 lg:grid-cols-[72px_minmax(0,1fr)]">
+            <span className="pt-1 font-mono text-xs font-semibold tracking-[0.18em] text-repressurizer-accent">{t("auto.diary.if")}</span>
+            <div className="rounded-lg border border-repressurizer-border-subtle bg-repressurizer-bg px-3 py-2">
+              {ifPlanLines.length === 1 ? (
+                <p className="text-sm font-medium text-repressurizer-text">{ifPlanLines[0]}</p>
+              ) : (
+                <ol className="space-y-1.5">
+                  {ifPlanLines.map((line, index) => (
+                    <li key={`${index}-${line}`} className="flex items-start gap-2 text-sm text-repressurizer-text">
+                      <span className="shrink-0 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-repressurizer-accent">
+                        {t("auto.diary.if")} {index + 1}
+                      </span>
+                      <span className="min-w-0 font-medium">{line}</span>
+                    </li>
+                  ))}
+                </ol>
+              )}
+              <p className="mt-1 text-xs text-repressurizer-text-faint">{t("auto.diary.previewMatches", { count: result.games_categorized })}</p>
+            </div>
+            <span className="pt-1 font-mono text-xs font-semibold tracking-[0.18em] text-repressurizer-accent">{t("auto.diary.then")}</span>
+            <div>{diaryThenPanel}</div>
+          </div>
+        </div>
+      )}
       {/* Summary */}
-      <div className="grid grid-cols-3 gap-3">
-        {[
-          { label: t("auto.categories"), value: entries.length },
-          { label: t("auto.gamesCategorized"), value: result.games_categorized },
-          { label: t("auto.gamesProcessed"), value: result.games_processed },
-        ].map((s) => (
+      <div className={`grid gap-3 ${isDiaryPreview ? "grid-cols-2" : "grid-cols-3"}`}>
+        {(isDiaryPreview
+          ? [
+              { label: t("auto.gamesCategorized"), value: result.games_categorized },
+              { label: t("auto.gamesProcessed"), value: result.games_processed },
+            ]
+          : [
+              { label: t("auto.categories"), value: entries.length },
+              { label: t("auto.gamesCategorized"), value: result.games_categorized },
+              { label: t("auto.gamesProcessed"), value: result.games_processed },
+            ]
+        ).map((s) => (
           <div key={s.label} className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3 text-center">
             <p className="font-mono text-xl font-semibold text-repressurizer-accent tabular-nums">{s.value}</p>
             <p className="mt-0.5 text-[11px] text-repressurizer-text-faint">{s.label}</p>
@@ -161,36 +247,44 @@ export function PreviewStep({ result, context, notice, error, onBack, onExport, 
         ))}
       </div>
 
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-[11px] font-medium uppercase tracking-wider text-repressurizer-text-faint">
-          {t("auto.previewSort")}
-        </p>
-        <div className="flex rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg p-1">
-          {([
-            ["count", t("auto.sortCount")],
-            ["name", t("auto.sortName")],
-            ["natural", t("auto.sortNatural")],
-          ] as Array<[PreviewSortMode, string]>).map(([mode, label]) => (
-            <button
-              key={mode}
-              type="button"
-              onClick={() => setSortMode(mode)}
-              className={`btn-press rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
-                sortMode === mode
-                  ? "bg-repressurizer-accent/15 text-repressurizer-accent"
-                  : "text-repressurizer-text-faint hover:text-repressurizer-text"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
+      {/* Sort control — Steam collections only. */}
+      {!isDiaryPreview && (
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[11px] font-medium uppercase tracking-wider text-repressurizer-text-faint">
+              {t("auto.previewSort")}
+            </p>
+          </div>
+          <div className="flex rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg p-1">
+            {([
+              ["count", t("auto.sortCount")],
+              ["name", t("auto.sortName")],
+              ["natural", t("auto.sortNatural")],
+            ] as Array<[PreviewSortMode, string]>).map(([mode, label]) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setSortMode(mode)}
+                className={`btn-press rounded-lg px-2.5 py-1 text-xs font-medium transition-colors ${
+                  sortMode === mode
+                    ? "bg-repressurizer-accent/15 text-repressurizer-accent"
+                    : "text-repressurizer-text-faint hover:text-repressurizer-text"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* Category list — expandable */}
+      {/* Category list — expandable. Diary previews only list groups when the
+          THEN action explicitly splits matches into multiple columns. */}
+      {(!isDiaryPreview || diarySplitMode) && (
       <div className="space-y-0.5 max-h-72 overflow-auto rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg p-2">
         {entries.map(([name, ids]) => {
           const isOpen = expanded.has(name);
+          const displayName = diarySplitMode ? diaryGroupColumnLabel(name, diarySplitPrefix) : name;
           return (
             <div key={name}>
               <button
@@ -198,7 +292,7 @@ export function PreviewStep({ result, context, notice, error, onBack, onExport, 
                 className="flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left transition-colors hover:bg-repressurizer-surface-hover"
               >
                 <FolderSimplePlus size={14} weight="duotone" className="shrink-0 text-repressurizer-accent" />
-                <span className="flex-1 text-sm text-repressurizer-text truncate">{name}</span>
+                <span className="flex-1 text-sm text-repressurizer-text truncate">{displayName}</span>
                 <span className="font-mono text-xs text-repressurizer-text-faint tabular-nums">{t("auto.gamesCount", { count: ids.length })}</span>
                 <span className="text-repressurizer-text-faint text-[10px] ml-1">{isOpen ? "▲" : "▼"}</span>
               </button>
@@ -229,9 +323,37 @@ export function PreviewStep({ result, context, notice, error, onBack, onExport, 
           );
         })}
       </div>
+      )}
+
+      {isDiaryPreview && (
+        <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg">
+          <button
+            type="button"
+            onClick={() => setMatchesOpen((open) => !open)}
+            className="flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2 text-left text-xs font-medium text-repressurizer-text-muted transition-colors hover:bg-repressurizer-surface-hover hover:text-repressurizer-text"
+          >
+            <span>{matchesOpen ? t("auto.diary.hideMatches") : t("auto.diary.showMatches")}</span>
+            <span className="font-mono tabular-nums text-repressurizer-text-faint">
+              {t("auto.gamesCount", { count: matchedIds.length })}
+            </span>
+          </button>
+          {matchesOpen && (
+            <ul className="max-h-56 space-y-0.5 overflow-auto border-t border-repressurizer-border-subtle p-2">
+              {matchedIds.map((id) => {
+                const g = games[id];
+                return (
+                  <li key={id} className="truncate px-1 py-0.5 text-[11px] text-repressurizer-text-muted">
+                    {g ? String(g.name ?? "") : `#${id}`}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      )}
 
       <p className="text-xs text-repressurizer-text-faint">
-        {t("auto.previewHint")}
+        {destinationLabel ? t("auto.previewDiaryHint", { destination: destinationLabel }) : t("auto.previewHint")}
       </p>
 
       {exportMessage && (
@@ -315,7 +437,13 @@ function formatPreviewHours(hours: number): string {
 // Step: Done
 // ============================================================
 
-export function DoneStep({ result, onClose }: { result: CategorizeResult; onClose: () => void }) {
+export function DoneStep({ result, onClose, onUndo, undoNotice, summary }: {
+  result: CategorizeResult;
+  onClose: () => void;
+  onUndo?: () => void;
+  undoNotice?: string;
+  summary?: string;
+}) {
   const t = useT();
   return (
     <div className="flex flex-col items-center justify-center py-8 text-center">
@@ -324,13 +452,29 @@ export function DoneStep({ result, onClose }: { result: CategorizeResult; onClos
       </div>
       <p className="text-base font-semibold text-white mb-1">{t("auto.done")}</p>
       <p className="text-sm text-repressurizer-text-muted mb-6">
-        {t("auto.doneSummary", { categories: Object.keys(result.assignments).length, games: result.games_categorized })}
+        {summary ?? t("auto.doneSummary", { categories: Object.keys(result.assignments).length, games: result.games_categorized })}
         <br />
         {t("auto.rememberSave")}
       </p>
-      <button onClick={onClose} className="btn-press rounded-xl bg-repressurizer-accent px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-repressurizer-accent-hover">
-        {t("auto.close")}
-      </button>
+      {undoNotice && (
+        <p role="status" className="mb-4 max-w-md text-xs text-amber-300">
+          {undoNotice}
+        </p>
+      )}
+      <div className="flex flex-wrap items-center justify-center gap-2">
+        {onUndo && (
+          <button
+            type="button"
+            onClick={onUndo}
+            className="btn-press rounded-xl border border-repressurizer-border px-5 py-2.5 text-sm font-medium text-repressurizer-text-muted transition-colors hover:border-repressurizer-accent hover:text-repressurizer-accent"
+          >
+            {t("auto.diary.undo")}
+          </button>
+        )}
+        <button onClick={onClose} className="btn-press rounded-xl bg-repressurizer-accent px-6 py-2.5 text-sm font-medium text-white transition-colors hover:bg-repressurizer-accent-hover">
+          {t("auto.close")}
+        </button>
+      </div>
     </div>
   );
 }

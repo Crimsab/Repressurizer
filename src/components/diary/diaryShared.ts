@@ -6,7 +6,7 @@ import type { GameStatus } from "../../stores/statusStore";
 export type DiaryViewStatus = "backlog" | "playing" | "finished" | "abandoned" | "archived";
 export type DiaryFilter = "all" | DiaryViewStatus;
 export type DiarySort = "priority" | "recent" | "rating" | "name";
-export type DiaryLibraryView = "grid" | "list" | "kanban" | "timeline";
+export type DiaryLibraryView = "grid" | "list" | "kanban" | "timeline" | "upcoming";
 export type DiaryDateFormat = "local" | "iso";
 export type DiaryHourCycle = "auto" | "12" | "24";
 export type DiaryTimelineLayout = "rail" | "cards" | "compact";
@@ -92,7 +92,7 @@ export const DEFAULT_PREFERENCES: DiaryPreferences = {
 
 export const TIMELINE_KIND_VALUES = ["session", "note", "page", "rating", "status", "achievement"];
 export const PREFERENCES_KEY = "repressurizer-diary-preferences";
-const LIBRARY_VIEWS: DiaryLibraryView[] = ["grid", "list", "kanban", "timeline"];
+const LIBRARY_VIEWS: DiaryLibraryView[] = ["grid", "list", "kanban", "timeline", "upcoming"];
 
 export function loadPreferences(): DiaryPreferences {
   try {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactNode, type PointerEvent as ReactPointerEvent } from "react";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent, type ReactNode, type PointerEvent as ReactPointerEvent } from "react";
 import { createPortal } from "react-dom";
 import {
   Archive,
@@ -9,6 +9,9 @@ import {
   ClockCounterClockwise,
   Export,
   GameController,
+  Kanban,
+  ListBullets,
+  ListChecks,
   MagnifyingGlass,
   Notebook,
   Path,
@@ -17,6 +20,7 @@ import {
   Plus,
   SlidersHorizontal,
   Sparkle,
+  SquaresFour,
   Trash,
   X,
 } from "@phosphor-icons/react";
@@ -37,9 +41,11 @@ import {
   type DiaryAchievementEntry,
   type DiarySection,
   type DiaryStatusEvent,
+  type DiaryBulkSnapshot,
 } from "../../stores/diaryStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useHltbStore } from "../../stores/hltbStore";
+import { useToastStore } from "../../stores/toastStore";
 import { getHltbHours } from "../../lib/hltb";
 import type { PlaytimeSession } from "../../lib/playHistory";
 import { SteamImage } from "../games/SteamImage";
@@ -47,10 +53,11 @@ import { SelectMenu } from "../ui/SelectMenu";
 import { useT, type TranslationKey } from "../../lib/i18n";
 import type { GameDetails, OwnedGame, SteamCollection } from "../../lib/types";
 import type { DiaryExportData } from "../../lib/diaryExport";
-import { fetchAchievements } from "../../lib/tauri";
+import { fetchAchievements, type HltbData } from "../../lib/tauri";
 import { getDefaultDiaryTemplates, resolveDiaryTemplate, type DiaryTemplate, type DiaryTemplateContext } from "../../lib/diaryTemplates";
-import { buildBoardColumns, DiaryKanbanBoard } from "./DiaryKanban";
+import { buildBoardColumns, DiaryKanbanBoard, type BoardColumn } from "./DiaryKanban";
 import { DiaryGameTimeline, DiaryTimeline } from "./DiaryTimeline";
+import { DiaryUpcoming } from "./DiaryUpcoming";
 import { MarkdownToolbar } from "./DiaryMarkdownToolbar";
 import { SessionNotes } from "./DiarySessionNotes";
 import { DiaryExportDialog } from "./DiaryExportDialog";
@@ -80,6 +87,22 @@ import {
   type DiarySort,
   type DiaryViewStatus,
 } from "./diaryShared";
+
+const loadAutoCategorizeDialog = () => import("../categories/auto-categorize/AutoCategorizeDialog").then((module) => ({ default: module.AutoCategorizeDialog }));
+const DiaryAutoCategorizeDialog = lazy(loadAutoCategorizeDialog);
+
+const DIARY_VIEW_ICONS = {
+  grid: SquaresFour,
+  list: ListBullets,
+  kanban: Kanban,
+  timeline: ClockCounterClockwise,
+  upcoming: ListChecks,
+} as const;
+
+interface DiaryActionSnapshot {
+  diary: DiaryBulkSnapshot;
+  statuses: Record<number, GameStatus | undefined>;
+}
 
 const CATEGORY_STYLES = [
   "border-emerald-400/25 bg-emerald-400/10 text-emerald-300",
@@ -121,6 +144,9 @@ export function DiaryPage() {
   const setActiveCategory = useCategoryStore((state) => state.setActiveCategory);
   const statuses = useStatusStore((state) => state.statuses);
   const setStatus = useStatusStore((state) => state.setStatus);
+  const setBulkStatus = useStatusStore((state) => state.setBulkStatus);
+  const captureStatusSnapshot = useStatusStore((state) => state.captureSnapshot);
+  const restoreStatusSnapshot = useStatusStore((state) => state.restoreSnapshot);
   const reviews = useReviewStore((state) => state.reviews);
   const setRating = useReviewStore((state) => state.setRating);
   const clearRating = useReviewStore((state) => state.clearRating);
@@ -133,9 +159,17 @@ export function DiaryPage() {
   const templates = useDiaryStore((state) => state.templates);
   const hydrateDiary = useDiaryStore((state) => state.hydrate);
   const setDecision = useDiaryStore((state) => state.setDecision);
+  const setBulkDecision = useDiaryStore((state) => state.setBulkDecision);
+  const setBulkPriority = useDiaryStore((state) => state.setBulkPriority);
+  const setBulkMarkedBacklog = useDiaryStore((state) => state.setBulkMarkedBacklog);
+  const setBulkCustomAssignment = useDiaryStore((state) => state.setBulkCustomAssignment);
+  const captureBulkSnapshot = useDiaryStore((state) => state.captureBulkSnapshot);
+  const restoreBulkSnapshot = useDiaryStore((state) => state.restoreBulkSnapshot);
+  const clearBulkDiaryState = useDiaryStore((state) => state.clearBulkDiaryState);
   const setPriority = useDiaryStore((state) => state.setPriority);
   const setMarkedBacklog = useDiaryStore((state) => state.setMarkedBacklog);
   const logStatusEvent = useDiaryStore((state) => state.logStatusEvent);
+  const logStatusEvents = useDiaryStore((state) => state.logStatusEvents);
   const board = useDiaryStore((state) => state.board);
   const setBoardOrder = useDiaryStore((state) => state.setBoardOrder);
   const statusEvents = useDiaryStore((state) => state.statusEvents);
@@ -169,6 +203,7 @@ export function DiaryPage() {
   const [viewOptionsOpen, setViewOptionsOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [backupOpen, setBackupOpen] = useState(false);
+  const [diaryAutoCatOpen, setDiaryAutoCatOpen] = useState(false);
   const mainRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
@@ -194,6 +229,15 @@ export function DiaryPage() {
     () => Object.values(games).filter((game) => !hiddenIds.has(game.appid)),
     [games, hiddenIds]
   );
+  const diaryStatusCounts = useMemo<Record<DiaryFilter, number>>(() => {
+    const counts: Record<DiaryFilter, number> = { all: 0, backlog: 0, playing: 0, finished: 0, abandoned: 0, archived: 0 };
+    for (const game of allDiaryGames) {
+      const status = getDiaryStatus(game, statuses[game.appid] ?? "none", entries[game.appid]);
+      counts.all += 1;
+      counts[status] += 1;
+    }
+    return counts;
+  }, [allDiaryGames, entries, statuses]);
   const diaryCollections = useMemo(
     () => collections.filter((collection) => !collection.is_dynamic && !["hidden", "favorite", "favorites"].includes(collection.id.toLowerCase())),
     [collections]
@@ -289,6 +333,72 @@ export function DiaryPage() {
     if (previous !== null && previous !== nextStatus) logStatusEvent(appId, nextStatus);
   };
 
+  const captureActionSnapshot = useCallback((appIds: number[]): DiaryActionSnapshot => ({
+    diary: captureBulkSnapshot(appIds),
+    statuses: captureStatusSnapshot(appIds),
+  }), [captureBulkSnapshot, captureStatusSnapshot]);
+
+  const restoreActionSnapshot = useCallback((snapshot: DiaryActionSnapshot) => {
+    restoreStatusSnapshot(snapshot.statuses);
+    restoreBulkSnapshot(snapshot.diary);
+  }, [restoreBulkSnapshot, restoreStatusSnapshot]);
+
+  const showUndoToast = useCallback((message: string, undo: () => void) => {
+    useToastStore.getState().addAction("success", message, t("common.undo"), undo);
+  }, [t]);
+
+  const applyStatusBatch = useCallback((appIds: number[], nextStatus: DiaryViewStatus) => {
+    const ids = [...new Set(appIds.filter((appId) => Number.isFinite(appId)).map((appId) => Math.trunc(appId)))];
+    if (ids.length === 0) return;
+    // A status action takes a card out of any custom Kanban column first.
+    setBulkCustomAssignment(ids, null);
+    if (nextStatus === "archived") {
+      setBulkStatus(ids, "none");
+      setBulkDecision(ids, "archived");
+      setBulkMarkedBacklog(ids, false);
+    } else {
+      setBulkStatus(ids, statusToGameStatus(nextStatus));
+      setBulkDecision(ids, nextStatus === "playing" ? "next" : "backlog");
+      setBulkMarkedBacklog(ids, nextStatus === "backlog");
+    }
+    logStatusEvents(ids.map((appId) => ({ appId, status: nextStatus })));
+  }, [logStatusEvents, setBulkCustomAssignment, setBulkDecision, setBulkMarkedBacklog, setBulkStatus]);
+
+  const applyBulkStatus = useCallback((appIds: number[], nextStatus: DiaryViewStatus) => {
+    const snapshot = captureActionSnapshot(appIds);
+    applyStatusBatch(appIds, nextStatus);
+    showUndoToast(t("diary.kanban.statusChanged", { count: appIds.length }), () => restoreActionSnapshot(snapshot));
+  }, [applyStatusBatch, captureActionSnapshot, restoreActionSnapshot, showUndoToast, t]);
+
+  const applyBulkPriority = useCallback((appIds: number[], priority: DiaryPriority) => {
+    const snapshot = captureActionSnapshot(appIds);
+    setBulkPriority(appIds, priority);
+    showUndoToast(t("diary.kanban.priorityChanged", { count: appIds.length }), () => restoreActionSnapshot(snapshot));
+  }, [captureActionSnapshot, restoreActionSnapshot, setBulkPriority, showUndoToast, t]);
+
+  const moveDiaryGames = useCallback((appIds: number[], column: BoardColumn, orderedAppIds: number[]) => {
+    // setBoardOrder rewrites every rank in the destination column, so include
+    // that full list in the undo snapshot in addition to the moved cards.
+    const snapshot = captureActionSnapshot([...new Set([...appIds, ...orderedAppIds])]);
+    if (column.kind === "custom" && column.custom) {
+      setBulkCustomAssignment(appIds, column.custom.id);
+    } else {
+      setBulkCustomAssignment(appIds, null);
+      if (column.status) applyStatusBatch(appIds, column.status);
+    }
+    setBoardOrder(orderedAppIds);
+    showUndoToast(t("diary.kanban.moved", { count: appIds.length, column: column.label }), () => restoreActionSnapshot(snapshot));
+  }, [applyStatusBatch, captureActionSnapshot, restoreActionSnapshot, setBoardOrder, setBulkCustomAssignment, showUndoToast, t]);
+
+  const removeDiaryGames = useCallback((appIds: number[]) => {
+    const ids = [...new Set(appIds)];
+    if (ids.length === 0 || !window.confirm(t("diary.kanban.removeConfirm", { count: ids.length }))) return;
+    const snapshot = captureActionSnapshot(ids);
+    setBulkStatus(ids, "none");
+    clearBulkDiaryState(ids);
+    showUndoToast(t("diary.kanban.removed", { count: ids.length }), () => restoreActionSnapshot(snapshot));
+  }, [captureActionSnapshot, clearBulkDiaryState, restoreActionSnapshot, setBulkStatus, showUndoToast, t]);
+
   const selectedGame = selectedAppId === null ? undefined : games[selectedAppId];
   const selectedDetails = selectedGame ? details[selectedGame.appid] : undefined;
   const selectedEntry = selectedGame ? entries[selectedGame.appid] : undefined;
@@ -381,7 +491,7 @@ export function DiaryPage() {
                 <button type="button" onClick={() => setSelectedAppId(null)} className="focus-ring inline-flex min-w-0 items-center gap-2 rounded-md text-xs font-medium text-repressurizer-text-muted transition-colors hover:text-white"><ArrowLeft size={14} /><span className="truncate">{t("diary.backToLibrary")}</span></button>
                 <div className="relative"><button type="button" data-diary-view-options-button aria-label={t("diary.settings")} aria-expanded={viewOptionsOpen} onClick={() => setViewOptionsOpen((open) => !open)} className="focus-ring rounded-md p-1.5 text-repressurizer-text-faint transition-colors hover:bg-repressurizer-surface-hover hover:text-white"><SlidersHorizontal size={14} /></button>{viewOptionsOpen && <DiaryViewOptions preferences={preferences} onChange={updatePreferences} onClose={() => setViewOptionsOpen(false)} t={t} />}</div>
               </div>
-              <DiaryFilterControls query={query} statusFilter={statusFilter} sortBy={sortBy} categoryFilter={categoryFilter} collections={diaryCollections} t={t} onQueryChange={setQuery} onStatusChange={setStatusFilter} onSortChange={updateSort} onCategoryChange={setCategoryFilter} />
+              <DiaryFilterControls query={query} statusFilter={statusFilter} statusCounts={diaryStatusCounts} sortBy={sortBy} categoryFilter={categoryFilter} collections={diaryCollections} t={t} onQueryChange={setQuery} onStatusChange={setStatusFilter} onSortChange={updateSort} onCategoryChange={setCategoryFilter} />
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto p-2" data-testid="diary-game-list">
               {filteredGames.map((game, index) => <DiaryGameRow key={game.appid} game={game} detail={details[game.appid]} status={getDiaryStatus(game, statuses[game.appid] ?? "none", entries[game.appid])} rating={reviews[game.appid]?.rating ?? 0} journalCount={journal[game.appid]?.length ?? 0} sectionCount={pages.filter((page) => page.scope === "all" || page.appIds.includes(game.appid)).length} selected={selectedAppId === game.appid} compact index={index} onClick={() => selectGame(game.appid)} t={t} />)}
@@ -453,8 +563,6 @@ export function DiaryPage() {
         <DiaryLibrary
           games={filteredGames}
           gamesById={games}
-          allGamesCount={allDiaryGames.length}
-          ratedCount={Object.values(reviews).filter((review) => (review?.rating ?? 0) > 0).length}
           details={details}
           entries={entries}
           statuses={statuses}
@@ -465,6 +573,8 @@ export function DiaryPage() {
           board={board}
           boardPrefs={boardPrefs}
           sessions={playSessions}
+          hltbData={hltbData}
+          hltbTimeMode={hltbTimeMode}
           statusEvents={statusEvents}
           achievements={achievements}
           onSetColumnColor={setColumnColor}
@@ -478,6 +588,7 @@ export function DiaryPage() {
           preferences={preferences}
           query={query}
           statusFilter={statusFilter}
+          statusCounts={diaryStatusCounts}
           sortBy={sortBy}
           categoryFilter={categoryFilter}
           viewOptionsOpen={viewOptionsOpen}
@@ -490,22 +601,33 @@ export function DiaryPage() {
           onViewOptionsToggle={() => setViewOptionsOpen((open) => !open)}
           onExport={() => setExportOpen(true)}
           onBackup={() => setBackupOpen(true)}
+          onOpenAutoCategorize={() => setDiaryAutoCatOpen(true)}
           onPreferencesChange={updatePreferences}
           onSelectGame={selectGame}
           onApplyStatus={applyStatus}
           onSetBoardOrder={setBoardOrder}
+          onBulkStatusChange={applyBulkStatus}
+          onBulkPriorityChange={applyBulkPriority}
+          onRemoveGames={removeDiaryGames}
+          onMoveGames={moveDiaryGames}
           onOpenGame={openGame}
         />
       )}
       {exportOpen && <DiaryExportDialog data={diaryExportData} filteredAppIds={filteredGames.map((game) => game.appid)} onClose={() => setExportOpen(false)} t={t} />}
       {backupOpen && <DiaryBackupDialog language={language} t={t} onClose={() => setBackupOpen(false)} />}
+      {diaryAutoCatOpen && (
+        <Suspense fallback={<div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm" />}>
+          <DiaryAutoCategorizeDialog initialTarget="diary" onClose={() => setDiaryAutoCatOpen(false)} />
+        </Suspense>
+      )}
     </div>
   );
 }
 
-function DiaryFilterControls({ query, statusFilter, sortBy, categoryFilter, collections, t, onQueryChange, onStatusChange, onSortChange, onCategoryChange }: {
+function DiaryFilterControls({ query, statusFilter, statusCounts, sortBy, categoryFilter, collections, t, onQueryChange, onStatusChange, onSortChange, onCategoryChange }: {
   query: string;
   statusFilter: DiaryFilter;
+  statusCounts: Record<DiaryFilter, number>;
   sortBy: DiarySort;
   categoryFilter: string;
   collections: SteamCollection[];
@@ -528,14 +650,15 @@ function DiaryFilterControls({ query, statusFilter, sortBy, categoryFilter, coll
       <SelectMenu value={sortBy} options={sortOptions} onChange={onSortChange} ariaLabel={t("diary.sort")} size="sm" buttonClassName="border-repressurizer-border-subtle bg-repressurizer-surface/55" />
     </div>
     <div role="group" aria-label={t("diary.statusFilter")} className="flex min-w-0 gap-1 overflow-x-auto border-b border-repressurizer-border-subtle pb-1">
-      {statusOptions.map(([value, label]) => <button key={value} type="button" aria-pressed={statusFilter === value} onClick={() => onStatusChange(value)} className={`focus-ring shrink-0 border-b-2 px-2 py-1.5 text-[10px] font-medium transition-colors ${statusFilter === value ? "border-repressurizer-accent text-repressurizer-accent" : "border-transparent text-repressurizer-text-faint hover:text-repressurizer-text"}`}>{label}</button>)}
+      {statusOptions.map(([value, label]) => <button key={value} type="button" aria-pressed={statusFilter === value} onClick={() => onStatusChange(value)} className={`focus-ring inline-flex shrink-0 items-center gap-1 border-b-2 px-2 py-1.5 text-[10px] font-medium transition-colors ${statusFilter === value ? "border-repressurizer-accent text-repressurizer-accent" : "border-transparent text-repressurizer-text-faint hover:text-repressurizer-text"}`}><span>{label}</span><span aria-hidden="true" className="font-mono text-[9px] tabular-nums opacity-60">{statusCounts[value]}</span></button>)}
     </div>
   </div>;
 }
 
-function DiaryLibraryFilters({ query, statusFilter, sortBy, categoryFilter, collections, t, onQueryChange, onStatusChange, onSortChange, onCategoryChange }: {
+function DiaryLibraryFilters({ query, statusFilter, statusCounts, sortBy, categoryFilter, collections, t, onQueryChange, onStatusChange, onSortChange, onCategoryChange }: {
   query: string;
   statusFilter: DiaryFilter;
+  statusCounts: Record<DiaryFilter, number>;
   sortBy: DiarySort;
   categoryFilter: string;
   collections: SteamCollection[];
@@ -549,23 +672,21 @@ function DiaryLibraryFilters({ query, statusFilter, sortBy, categoryFilter, coll
   const categoryOptions = [{ value: "all", label: t("diary.allCategories") }, ...collections.map((collection) => ({ value: collection.key, label: collection.name }))];
   const sortOptions = (["priority", "recent", "rating", "name"] as DiarySort[]).map((value) => ({ value, label: t(`diary.sort.${value}` as TranslationKey) }));
   return <div className="flex min-w-0 flex-wrap items-center gap-2">
-    <label className="group flex h-9 min-w-[180px] flex-1 basis-[220px] items-center gap-2 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-surface/55 px-3 transition-colors focus-within:border-repressurizer-accent/60">
+    <label className="group flex h-9 min-w-[180px] flex-1 basis-[220px] items-center gap-2 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-surface/40 px-3 transition-[background-color,border-color,box-shadow] focus-within:border-repressurizer-accent/60 focus-within:shadow-[0_0_0_1px_rgba(16,185,129,0.22)] hover:border-repressurizer-border hover:bg-repressurizer-surface-hover/50">
       <MagnifyingGlass size={14} className="shrink-0 text-repressurizer-text-faint group-focus-within:text-repressurizer-accent" />
       <input type="search" value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder={t("diary.search")} aria-label={t("diary.search")} className="min-w-0 flex-1 bg-transparent text-xs text-repressurizer-text outline-none placeholder:text-repressurizer-text-faint" />
     </label>
-    <SelectMenu value={categoryFilter} options={categoryOptions} onChange={onCategoryChange} ariaLabel={t("diary.categoryFilter")} size="sm" className="w-36 shrink-0" buttonClassName="h-9 border-repressurizer-border-subtle bg-repressurizer-surface/55" />
-    <SelectMenu value={sortBy} options={sortOptions} onChange={onSortChange} ariaLabel={t("diary.sort")} size="sm" className="w-36 shrink-0" buttonClassName="h-9 border-repressurizer-border-subtle bg-repressurizer-surface/55" />
+    <SelectMenu value={categoryFilter} options={categoryOptions} onChange={onCategoryChange} ariaLabel={t("diary.categoryFilter")} size="sm" className="w-36 shrink-0" buttonClassName="h-9" />
+    <SelectMenu value={sortBy} options={sortOptions} onChange={onSortChange} ariaLabel={t("diary.sort")} size="sm" className="w-36 shrink-0" buttonClassName="h-9" />
     <div role="group" aria-label={t("diary.statusFilter")} className="flex min-w-0 flex-wrap items-center gap-1.5 lg:ml-auto">
-      {statusOptions.map(([value, label]) => <button key={value} type="button" aria-pressed={statusFilter === value} onClick={() => onStatusChange(value)} className={`focus-ring rounded-full border px-2.5 py-1.5 text-[10px] font-medium transition-colors ${statusFilter === value ? "border-repressurizer-accent/50 bg-repressurizer-accent/15 text-repressurizer-accent" : "border-repressurizer-border-subtle bg-repressurizer-surface/55 text-repressurizer-text-faint hover:border-repressurizer-border hover:text-repressurizer-text"}`}>{label}</button>)}
+      {statusOptions.map(([value, label]) => <button key={value} type="button" aria-pressed={statusFilter === value} onClick={() => onStatusChange(value)} className={`focus-ring inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-medium transition-colors ${statusFilter === value ? "border-repressurizer-accent/60 bg-repressurizer-accent/15 text-repressurizer-accent shadow-[inset_0_0_0_1px_rgba(16,185,129,0.18)]" : "border-transparent bg-repressurizer-surface/40 text-repressurizer-text-faint hover:bg-repressurizer-surface-hover hover:text-repressurizer-text"}`}><span>{label}</span><span aria-hidden="true" className="font-mono text-[9px] tabular-nums opacity-60">{statusCounts[value]}</span></button>)}
     </div>
   </div>;
 }
 
-function DiaryLibrary({ games, gamesById, allGamesCount, ratedCount, details, entries, statuses, reviews, journal, pages, collections, board, boardPrefs, sessions, statusEvents, achievements, language, preferences, query, statusFilter, sortBy, categoryFilter, viewOptionsOpen, t, onQueryChange, onStatusChange, onSortChange, onCategoryChange, onViewChange, onViewOptionsToggle, onExport, onBackup, onPreferencesChange, onSelectGame, onApplyStatus, onSetBoardOrder, onSetColumnColor, onToggleColumnHidden, onAddCustomColumn, onRenameCustomColumn, onRemoveCustomColumn, onSetCustomAssignment, onSetPriority, onOpenGame }: {
+function DiaryLibrary({ games, gamesById, details, entries, statuses, reviews, journal, pages, collections, board, boardPrefs, sessions, hltbData, hltbTimeMode, statusEvents, achievements, language, preferences, query, statusFilter, statusCounts, sortBy, categoryFilter, viewOptionsOpen, t, onQueryChange, onStatusChange, onSortChange, onCategoryChange, onViewChange, onViewOptionsToggle, onExport, onBackup, onOpenAutoCategorize, onPreferencesChange, onSelectGame, onApplyStatus, onSetBoardOrder, onBulkStatusChange, onBulkPriorityChange, onRemoveGames, onMoveGames, onSetColumnColor, onToggleColumnHidden, onAddCustomColumn, onRenameCustomColumn, onRemoveCustomColumn, onSetCustomAssignment, onSetPriority, onOpenGame }: {
   games: OwnedGame[];
   gamesById: Record<number, OwnedGame>;
-  allGamesCount: number;
-  ratedCount: number;
   details: Record<number, GameDetails>;
   entries: Record<number, DiaryEntry>;
   statuses: Record<number, GameStatus>;
@@ -576,12 +697,15 @@ function DiaryLibrary({ games, gamesById, allGamesCount, ratedCount, details, en
   board: Record<number, number>;
   boardPrefs: DiaryBoardPrefs;
   sessions: PlaytimeSession[];
+  hltbData: Record<number, HltbData>;
+  hltbTimeMode: Parameters<typeof getHltbHours>[1];
   statusEvents: DiaryStatusEvent[];
   achievements: Record<number, DiaryAchievementEntry[]>;
   language: string;
   preferences: DiaryPreferences;
   query: string;
   statusFilter: DiaryFilter;
+  statusCounts: Record<DiaryFilter, number>;
   sortBy: DiarySort;
   categoryFilter: string;
   viewOptionsOpen: boolean;
@@ -601,10 +725,15 @@ function DiaryLibrary({ games, gamesById, allGamesCount, ratedCount, details, en
   onViewOptionsToggle: () => void;
   onExport: () => void;
   onBackup: () => void;
+  onOpenAutoCategorize: () => void;
   onPreferencesChange: (patch: Partial<DiaryPreferences>) => void;
   onSelectGame: (appId: number) => void;
   onApplyStatus: (appId: number, status: DiaryViewStatus) => void;
   onSetBoardOrder: (orderedAppIds: number[]) => void;
+  onBulkStatusChange: (appIds: number[], status: DiaryViewStatus) => void;
+  onBulkPriorityChange: (appIds: number[], priority: DiaryPriority) => void;
+  onRemoveGames: (appIds: number[]) => void;
+  onMoveGames: (appIds: number[], column: BoardColumn, orderedAppIds: number[]) => void;
   onOpenGame: (appId: number, sectionId?: string) => void;
 }) {
   const visibleAppIds = useMemo(() => new Set(games.map((game) => game.appid)), [games]);
@@ -650,37 +779,41 @@ function DiaryLibrary({ games, gamesById, allGamesCount, ratedCount, details, en
   };
   return <main className="flex min-h-0 flex-1 flex-col overflow-hidden" data-testid="diary-library">
     <div className="relative z-10 shrink-0 border-b border-repressurizer-border-subtle bg-repressurizer-bg/95 backdrop-blur">
-      <div className="flex items-center justify-between gap-3 px-4 pt-3 sm:px-6">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <Notebook size={18} weight="duotone" className="shrink-0 text-repressurizer-accent" />
-          <h1 className="text-base font-semibold tracking-tight text-white">{t("diary.title")}</h1>
-          <span className="rounded-full border border-repressurizer-border-subtle bg-repressurizer-surface px-1.5 py-0.5 font-mono text-[10px] text-repressurizer-text-faint">{allGamesCount}</span>
-          <span className="hidden items-center gap-1 text-[10px] text-repressurizer-text-faint md:inline-flex"><Sparkle size={12} className="text-repressurizer-accent" />{ratedCount} {t("diary.rated")}</span>
-        </div>
-        <div className="flex shrink-0 items-center gap-1.5">
-          <div role="group" aria-label={t("diary.view")} className="flex rounded-lg border border-repressurizer-border bg-repressurizer-surface p-0.5">
-            {(["grid", "list", "kanban", "timeline"] as DiaryLibraryView[]).map((view) => <button key={view} type="button" aria-pressed={preferences.libraryView === view} data-testid={`diary-view-${view}`} onClick={() => onViewChange(view)} className={`focus-ring rounded-md px-2.5 py-1.5 text-[11px] font-medium transition-colors ${preferences.libraryView === view ? "bg-repressurizer-accent/15 text-repressurizer-accent" : "text-repressurizer-text-faint hover:text-repressurizer-text"}`}>{t(`diary.view.${view}` as TranslationKey)}</button>)}
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 pt-3 sm:px-6">
+      <h1 className="sr-only order-1 flex items-baseline gap-2 text-[15px] font-semibold tracking-tight text-white">
+        {t("diary.title")}
+      </h1>
+      <div className="order-2 flex w-full min-w-0 flex-wrap items-center gap-1.5 lg:order-2 lg:w-auto">
+          <div role="group" aria-label={t("diary.view")} className="flex h-8 items-center rounded-lg border border-repressurizer-border-subtle bg-repressurizer-bg/70 p-0.5">
+            {(["grid", "list", "kanban", "timeline", "upcoming"] as DiaryLibraryView[]).map((view) => {
+              const ViewIcon = DIARY_VIEW_ICONS[view];
+              return <button key={view} type="button" aria-label={t(`diary.view.${view}` as TranslationKey)} aria-pressed={preferences.libraryView === view} data-testid={`diary-view-${view}`} onClick={() => onViewChange(view)} className={`focus-ring inline-flex h-full items-center gap-1.5 rounded-md px-2.5 text-[11px] transition-colors ${preferences.libraryView === view ? "bg-repressurizer-surface-raised font-semibold text-white shadow-pop-sm" : "font-medium text-repressurizer-text-faint hover:text-repressurizer-text"}`}><ViewIcon size={13} aria-hidden="true" className={preferences.libraryView === view ? "text-repressurizer-accent" : ""} /><span className="hidden leading-none xl:inline">{t(`diary.view.${view}` as TranslationKey)}</span></button>;
+            })}
           </div>
           <div className="relative">
-            <button type="button" data-diary-view-options-button aria-label={t("diary.settings")} aria-expanded={viewOptionsOpen} onClick={onViewOptionsToggle} className="focus-ring rounded-lg border border-repressurizer-border bg-repressurizer-surface p-2 text-repressurizer-text-muted transition-colors hover:bg-repressurizer-surface-hover hover:text-white"><SlidersHorizontal size={15} /></button>
+            <button type="button" data-diary-view-options-button aria-label={t("diary.settings")} aria-expanded={viewOptionsOpen} onClick={onViewOptionsToggle} className="focus-ring inline-flex h-8 items-center gap-1.5 rounded-lg border border-transparent bg-repressurizer-surface/60 px-2.5 text-[11px] font-medium text-repressurizer-text-muted transition-colors hover:border-repressurizer-border hover:bg-repressurizer-surface-hover hover:text-white"><SlidersHorizontal size={14} /><span className="hidden leading-none xl:inline">{t("diary.settings")}</span></button>
             {viewOptionsOpen && <DiaryViewOptions preferences={preferences} onChange={onPreferencesChange} onClose={onViewOptionsToggle} t={t} />}
           </div>
-          <button type="button" onClick={onExport} aria-label={t("diary.export")} title={t("diary.export")} className="focus-ring rounded-lg border border-repressurizer-border bg-repressurizer-surface p-2 text-repressurizer-text-muted transition-colors hover:bg-repressurizer-surface-hover hover:text-white"><Export size={15} /></button>
-          <button type="button" onClick={onBackup} aria-label={t("diary.backup")} title={t("diary.backup")} data-testid="diary-backup-button" className="focus-ring rounded-lg border border-repressurizer-border bg-repressurizer-surface p-2 text-repressurizer-text-muted transition-colors hover:bg-repressurizer-surface-hover hover:text-white"><Database size={15} /></button>
+          <button type="button" onClick={onExport} aria-label={t("diary.export")} title={t("diary.export")} className="focus-ring inline-flex h-8 items-center gap-1.5 rounded-lg border border-transparent bg-repressurizer-surface/60 px-2.5 text-[11px] font-medium text-repressurizer-text-muted transition-colors hover:border-repressurizer-border hover:bg-repressurizer-surface-hover hover:text-white"><Export size={14} /><span className="hidden leading-none xl:inline">{t("diary.export")}</span></button>
+          <button type="button" onClick={onBackup} aria-label={t("diary.backup")} title={t("diary.backup")} data-testid="diary-backup-button" className="focus-ring inline-flex h-8 items-center gap-1.5 rounded-lg border border-transparent bg-repressurizer-surface/60 px-2.5 text-[11px] font-medium text-repressurizer-text-muted transition-colors hover:border-repressurizer-border hover:bg-repressurizer-surface-hover hover:text-white"><Database size={14} /><span className="hidden leading-none xl:inline">{t("diary.backup")}</span></button>
+          <button type="button" onClick={onOpenAutoCategorize} aria-label={`${t("auto.title")}: ${t("auto.destination.diary")}`} title={`${t("auto.title")}: ${t("auto.destination.diary")}`} data-testid="diary-autocat-button" className="focus-ring inline-flex h-8 items-center gap-1.5 rounded-lg border border-repressurizer-accent/25 bg-repressurizer-accent/[0.08] px-2.5 text-[11px] font-medium text-repressurizer-accent transition-colors hover:border-repressurizer-accent/50 hover:bg-repressurizer-accent/15"><Sparkle size={14} /><span className="hidden leading-none xl:inline">{t("auto.title")}</span></button>
         </div>
       </div>
       <div className="px-4 pb-3 pt-3 sm:px-6">
-        <DiaryLibraryFilters query={query} statusFilter={statusFilter} sortBy={sortBy} categoryFilter={categoryFilter} collections={collections} t={t} onQueryChange={onQueryChange} onStatusChange={onStatusChange} onSortChange={onSortChange} onCategoryChange={onCategoryChange} />
+        <DiaryLibraryFilters query={query} statusFilter={statusFilter} statusCounts={statusCounts} sortBy={sortBy} categoryFilter={categoryFilter} collections={collections} t={t} onQueryChange={onQueryChange} onStatusChange={onStatusChange} onSortChange={onSortChange} onCategoryChange={onCategoryChange} />
       </div>
     </div>
     <div hidden={preferences.libraryView !== "kanban"} className="flex min-h-0 flex-1 flex-col">
-      <DiaryKanbanBoard games={games} details={details} entries={entries} statuses={statuses} reviews={reviews} journal={journal} pages={pages} board={board} boardPrefs={boardPrefs} language={language} showArchived={preferences.showArchived} wipLimit={preferences.kanbanWipLimit} t={t} onApplyStatus={onApplyStatus} onSetBoardOrder={onSetBoardOrder} onSetPriority={onSetPriority} onOpenGame={(appId) => onOpenGame(appId)} onSetColumnColor={onSetColumnColor} onToggleColumnHidden={onToggleColumnHidden} onAddCustomColumn={onAddCustomColumn} onRenameCustomColumn={onRenameCustomColumn} onRemoveCustomColumn={onRemoveCustomColumn} onSetCustomAssignment={onSetCustomAssignment} />
+      <DiaryKanbanBoard games={games} details={details} entries={entries} statuses={statuses} reviews={reviews} journal={journal} pages={pages} board={board} boardPrefs={boardPrefs} language={language} showArchived={preferences.showArchived} forceStatus={statusFilter === "archived" ? "archived" : undefined} wipLimit={preferences.kanbanWipLimit} t={t} onApplyStatus={onApplyStatus} onSetBoardOrder={onSetBoardOrder} onSetPriority={onSetPriority} onBulkStatusChange={onBulkStatusChange} onBulkPriorityChange={onBulkPriorityChange} onRemoveGames={onRemoveGames} onMoveGames={onMoveGames} onOpenGame={(appId) => onOpenGame(appId)} onSetColumnColor={onSetColumnColor} onToggleColumnHidden={onToggleColumnHidden} onAddCustomColumn={onAddCustomColumn} onRenameCustomColumn={onRenameCustomColumn} onRemoveCustomColumn={onRemoveCustomColumn} onSetCustomAssignment={onSetCustomAssignment} />
     </div>
     <div hidden={preferences.libraryView !== "timeline"} className="flex min-h-0 flex-1 flex-col">
       <DiaryTimeline games={gamesById} visibleAppIds={visibleAppIds} sessions={sessions} journal={journal} pages={pages} reviews={reviews} statusEvents={statusEvents} achievements={achievements} achievementsSyncing={achievementsSyncing} language={language} preferences={preferences} t={t} onOpenGame={onOpenGame} onLayoutChange={(timelineLayout) => onPreferencesChange({ timelineLayout })} onSyncAchievements={() => void handleSyncAchievements()} onToggleKind={(kind) => { const hidden = new Set(preferences.timelineHiddenKinds); if (hidden.has(kind)) hidden.delete(kind); else hidden.add(kind); onPreferencesChange({ timelineHiddenKinds: [...hidden] }); }} onGameContextMenu={(appId, x, y) => setGameMenu({ appId, x: Math.min(x, window.innerWidth - 260), y: Math.min(y, window.innerHeight - 340) })} />
     </div>
-    <div hidden={preferences.libraryView === "kanban" || preferences.libraryView === "timeline"} className="min-h-0 flex-1 overflow-y-auto">
-      {games.length === 0 ? <div className="flex min-h-[420px] flex-col items-center justify-center px-6 text-center"><GameController size={34} weight="duotone" className="mb-3 text-repressurizer-text-faint" /><p className="text-sm font-medium text-repressurizer-text">{t("diary.empty")}</p><p className="mt-1 text-xs text-repressurizer-text-faint">{t("diary.empty.desc")}</p></div> : <div data-testid={`diary-library-${preferences.libraryView}`} className={preferences.libraryView === "grid" ? "grid grid-cols-[repeat(auto-fill,minmax(190px,1fr))] gap-x-4 gap-y-6 p-4 sm:p-6" : "divide-y divide-repressurizer-border-subtle px-4 sm:px-6"}>
+    <div hidden={preferences.libraryView !== "upcoming"} className="flex min-h-0 flex-1 flex-col">
+      <DiaryUpcoming games={games} entries={entries} statuses={statuses} sessions={sessions} hltbData={hltbData} hltbTimeMode={hltbTimeMode} language={language} t={t} onOpenGame={onOpenGame} onApplyStatus={onApplyStatus} />
+    </div>
+    <div hidden={preferences.libraryView === "kanban" || preferences.libraryView === "timeline" || preferences.libraryView === "upcoming"} className="min-h-0 flex-1 overflow-y-auto">
+      {games.length === 0 ? <div className="flex min-h-[420px] flex-col items-center justify-center px-6 text-center"><span className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl border border-dashed border-repressurizer-border bg-repressurizer-surface/40"><GameController size={26} weight="duotone" className="text-repressurizer-text-faint" /></span><p className="text-sm font-medium text-repressurizer-text">{t("diary.empty")}</p><p className="mt-1 max-w-xs text-xs leading-relaxed text-repressurizer-text-faint">{t("diary.empty.desc")}</p></div> : <div data-testid={`diary-library-${preferences.libraryView}`} className={preferences.libraryView === "grid" ? "game-grid grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-x-4 gap-y-6 p-4 sm:p-6" : "px-2 py-1 sm:px-3"}>
         {games.map((game) => <DiaryLibraryGame key={game.appid} game={game} status={getDiaryStatus(game, statuses[game.appid] ?? "none", entries[game.appid])} rating={reviews[game.appid]?.rating ?? 0} journalCount={journal[game.appid]?.length ?? 0} sectionCount={pages.filter((page) => page.scope === "all" || page.appIds.includes(game.appid)).length} language={language} view={preferences.libraryView} t={t} onClick={() => onSelectGame(game.appid)} onDoubleClick={() => onSelectGame(game.appid)} onContextMenuOpen={(x, y) => setGameMenu({ appId: game.appid, x: Math.min(x, window.innerWidth - 260), y: Math.min(y, window.innerHeight - 340) })} />)}
       </div>}
     </div>
@@ -718,12 +851,30 @@ function DiaryLibraryGame({ game, status, rating, journalCount, sectionCount, la
   onDoubleClick: () => void;
   onContextMenuOpen: (x: number, y: number) => void;
 }) {
-  const metadata = <><span>{formatHours(game.playtime_forever, language)}h</span><span>·</span><span>{sectionCount + journalCount} {t("diary.pages.count")}</span></>;
-  if (view === "list") return <button type="button" data-testid={`diary-game-${game.appid}`} onClick={onClick} onDoubleClick={onDoubleClick} onContextMenu={(event) => { event.preventDefault(); onContextMenuOpen(event.clientX, event.clientY); }} className="focus-ring group grid w-full grid-cols-[72px_minmax(0,1fr)_auto] items-center gap-3 py-3 text-left transition-colors hover:bg-repressurizer-surface/45 sm:grid-cols-[92px_minmax(0,1fr)_90px_130px_72px] sm:px-2"><span className="h-11 overflow-hidden rounded-md bg-repressurizer-surface"><SteamImage appId={game.appid} alt="" kind="header" className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.03]" /></span><span className="min-w-0"><span className="block truncate text-sm font-medium text-repressurizer-text group-hover:text-white">{String(game.name ?? "")}</span><span className="mt-1 flex items-center gap-1.5 text-[10px] text-repressurizer-text-faint sm:hidden">{metadata}</span></span><span className="hidden text-right font-mono text-[11px] text-repressurizer-text-muted sm:block">{formatHours(game.playtime_forever, language)}h</span><span className={`hidden w-fit rounded-full border px-2 py-1 text-[10px] sm:inline-flex ${STATUS_STYLES[status]}`}>{t(STATUS_LABELS[status])}</span><span className="text-right font-mono text-xs text-repressurizer-accent">{rating > 0 ? `${rating}/10` : "—"}</span></button>;
-  return <button type="button" data-testid={`diary-game-${game.appid}`} onClick={onClick} onDoubleClick={onDoubleClick} onContextMenu={(event) => { event.preventDefault(); onContextMenuOpen(event.clientX, event.clientY); }} className="focus-ring group min-w-0 text-left"><span className="relative block aspect-[460/215] overflow-hidden rounded-xl border border-repressurizer-border bg-repressurizer-surface transition-colors group-hover:border-repressurizer-accent/40"><SteamImage appId={game.appid} alt="" kind="header" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.035]" /><span className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/75 to-transparent" /><span className={`absolute bottom-2 left-2 rounded-full border px-2 py-1 text-[9px] backdrop-blur-sm ${STATUS_STYLES[status]}`}>{t(STATUS_LABELS[status])}</span>{rating > 0 && <span className="absolute bottom-2 right-2 rounded-md bg-black/70 px-2 py-1 font-mono text-[11px] font-semibold text-white">{rating}/10</span>}</span><span title={String(game.name ?? "")} className="mt-2 block truncate text-sm font-medium text-repressurizer-text group-hover:text-white">{String(game.name ?? "")}</span><span className="mt-1 flex items-center gap-1.5 text-[10px] text-repressurizer-text-faint">{metadata}</span></button>;
+  const metadata = <><span>{formatHours(game.playtime_forever, language)}h</span><span aria-hidden="true" className="text-repressurizer-text-faint/60">·</span><span>{sectionCount + journalCount} {t("diary.pages.count")}</span></>;
+  if (view === "list") return <button type="button" data-testid={`diary-game-${game.appid}`} onClick={onClick} onDoubleClick={onDoubleClick} onContextMenu={(event) => { event.preventDefault(); onContextMenuOpen(event.clientX, event.clientY); }} className="focus-ring group grid w-full grid-cols-[72px_minmax(0,1fr)_auto] items-center gap-3 rounded-lg py-2.5 text-left transition-colors hover:bg-repressurizer-surface/50 sm:grid-cols-[92px_minmax(0,1fr)_90px_130px_72px] sm:px-3"><span className="h-11 overflow-hidden rounded-md bg-repressurizer-surface shadow-[inset_0_0_0_1px_rgba(255,255,255,0.04)]"><SteamImage appId={game.appid} alt="" kind="header" className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.03]" /></span><span className="min-w-0"><span className="block truncate text-sm font-medium text-repressurizer-text group-hover:text-white">{String(game.name ?? "")}</span><span className="mt-1 flex items-center gap-1.5 text-[10px] text-repressurizer-text-faint sm:hidden">{metadata}</span></span><span className="hidden text-right font-mono text-[11px] tabular-nums text-repressurizer-text-muted sm:block">{formatHours(game.playtime_forever, language)}h</span><span className={`hidden w-fit rounded-full border px-2 py-0.5 text-[10px] sm:inline-flex ${STATUS_STYLES[status]}`}>{t(STATUS_LABELS[status])}</span><span className="text-right font-mono text-xs tabular-nums text-repressurizer-accent">{rating > 0 ? `${rating}/10` : <span className="text-repressurizer-text-faint/70">—</span>}</span></button>;
+  return <button type="button" data-testid={`diary-game-${game.appid}`} onClick={onClick} onDoubleClick={onDoubleClick} onContextMenu={(event) => { event.preventDefault(); onContextMenuOpen(event.clientX, event.clientY); }} className="card-lift focus-ring group min-w-0 rounded-xl text-left"><span className="relative block aspect-[460/215] overflow-hidden rounded-xl border border-repressurizer-border-subtle bg-repressurizer-surface shadow-pop-sm transition-[border-color,box-shadow] group-hover:border-repressurizer-accent/45 group-hover:shadow-pop"><SteamImage appId={game.appid} alt="" kind="header" className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.035]" /><span className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/80 via-black/35 to-transparent" /><span className={`absolute bottom-2 left-2 rounded-full border px-2 py-0.5 text-[9px] font-medium backdrop-blur-md ${STATUS_STYLES[status]}`}>{t(STATUS_LABELS[status])}</span>{rating > 0 && <span className="absolute bottom-2 right-2 rounded-md border border-white/10 bg-black/70 px-1.5 py-0.5 font-mono text-[11px] font-semibold tabular-nums text-white backdrop-blur-sm">{rating}/10</span>}</span><span title={String(game.name ?? "")} className="mt-2 block truncate text-sm font-medium leading-snug text-repressurizer-text group-hover:text-white">{String(game.name ?? "")}</span><span className="mt-1 flex items-center gap-1.5 text-[10px] tabular-nums text-repressurizer-text-faint">{metadata}</span></button>;
 }
 
 function DiaryViewOptions({ preferences, onChange, onClose, t }: { preferences: DiaryPreferences; onChange: (patch: Partial<DiaryPreferences>) => void; onClose: () => void; t: ReturnType<typeof useT> }) {
+  const [position, setPosition] = useState<{ top: number; left: number; width: number } | null>(null);
+  useLayoutEffect(() => {
+    const updatePosition = () => {
+      const button = document.querySelector<HTMLElement>("[data-diary-view-options-button]");
+      if (!button) return;
+      const rect = button.getBoundingClientRect();
+      const width = Math.min(320, Math.max(240, window.innerWidth - 16));
+      const left = Math.max(8, Math.min(rect.right - width, window.innerWidth - width - 8));
+      setPosition({ top: rect.bottom + 8, left, width });
+    };
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, []);
   useEffect(() => {
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target as HTMLElement;
@@ -733,7 +884,7 @@ function DiaryViewOptions({ preferences, onChange, onClose, t }: { preferences: 
     return () => document.removeEventListener("pointerdown", onPointerDown);
   }, [onClose]);
   return (
-    <div data-diary-view-options data-testid="diary-view-options" className="absolute right-0 top-[calc(100%+8px)] z-20 w-80 rounded-xl border border-repressurizer-border bg-repressurizer-surface p-3 shadow-[0_18px_44px_rgba(0,0,0,0.38)]">
+    <div data-diary-view-options data-testid="diary-view-options" style={position ? { position: "fixed", top: position.top, left: position.left, width: position.width } : { visibility: "hidden" }} className="animate-fade-in fixed z-20 max-w-[calc(100vw-1rem)] rounded-xl border border-repressurizer-border bg-repressurizer-surface-raised/95 p-3 shadow-pop backdrop-blur-md">
       <p className="mb-2 px-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-repressurizer-text-faint">{t("diary.settings")}</p>
       <label className="flex cursor-pointer items-center justify-between gap-3 rounded-lg px-2 py-2 text-xs text-repressurizer-text transition-colors hover:bg-repressurizer-surface-hover"><span>{t("diary.compact")}</span><input type="checkbox" checked={preferences.compact} onChange={(event) => onChange({ compact: event.target.checked })} className="h-4 w-4 accent-repressurizer-accent" /></label>
       <label className="flex cursor-pointer items-center justify-between gap-3 rounded-lg px-2 py-2 text-xs text-repressurizer-text transition-colors hover:bg-repressurizer-surface-hover"><span>{t("diary.showArchived")}</span><input type="checkbox" checked={preferences.showArchived} onChange={(event) => onChange({ showArchived: event.target.checked })} className="h-4 w-4 accent-repressurizer-accent" /></label>
@@ -780,7 +931,7 @@ function DiaryGameContextMenu({ appId, x, y, games, entries, boardPrefs, showArc
     onClose();
   };
   return createPortal(
-    <div data-diary-game-menu role="menu" aria-label={String(game.name ?? "")} data-testid="diary-game-context-menu" className="fixed z-50 w-60 overflow-hidden rounded-xl border border-repressurizer-border bg-repressurizer-surface py-1.5 shadow-[0_20px_60px_rgba(0,0,0,0.55)]" style={{ left: x, top: y }}>
+    <div data-diary-game-menu role="menu" aria-label={String(game.name ?? "")} data-testid="diary-game-context-menu" className="animate-fade-in fixed z-50 w-60 overflow-hidden rounded-xl border border-repressurizer-border bg-repressurizer-surface-raised/95 py-1.5 shadow-dialog backdrop-blur-md" style={{ left: x, top: y }}>
       <p className="truncate border-b border-repressurizer-border-subtle px-3 pb-1.5 pt-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-repressurizer-text-faint">{String(game.name ?? "")}</p>
       <button type="button" role="menuitem" onClick={() => { onClose(); onOpenGame(appId); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-repressurizer-text transition-colors hover:bg-repressurizer-surface-hover hover:text-white">{t("diary.openGame")}</button>
       <p className="px-3 pb-1 pt-2 text-[9px] font-semibold uppercase tracking-[0.14em] text-repressurizer-text-faint">{t("diary.kanban.moveTo")}</p>
@@ -815,7 +966,7 @@ function DiaryGameRow({ game, detail, status, rating, journalCount, sectionCount
   t: ReturnType<typeof useT>;
 }) {
   return (
-    <button type="button" data-testid={`diary-game-${game.appid}`} onClick={onClick} className={`group flex w-full items-center gap-3 rounded-xl border px-2.5 text-left transition-colors focus-ring ${compact ? "py-2" : "py-3"} ${selected ? "border-repressurizer-accent/50 bg-repressurizer-accent/10" : "border-transparent hover:border-repressurizer-border hover:bg-repressurizer-surface"}`}>
+    <button type="button" data-testid={`diary-game-${game.appid}`} onClick={onClick} className={`group card-lift focus-ring flex w-full items-center gap-3 rounded-xl border px-2.5 text-left ${compact ? "py-2" : "py-2.5"} ${selected ? "border-repressurizer-accent/55 bg-repressurizer-accent/10 shadow-pop-sm" : "border-transparent hover:border-repressurizer-border-subtle hover:bg-repressurizer-surface/70"}`}>
       <div className="relative h-11 w-[74px] shrink-0 overflow-hidden rounded-lg bg-repressurizer-surface"><SteamImage appId={game.appid} alt="" kind="capsule" className="h-full w-full object-cover" /><span className="absolute bottom-1 left-1 rounded bg-black/65 px-1 font-mono text-[9px] text-white">{String(index + 1).padStart(2, "0")}</span></div>
       <div className="min-w-0 flex-1"><div className="flex items-start gap-2"><p title={String(game.name ?? "")} className="line-clamp-2 break-words text-xs font-medium leading-snug text-repressurizer-text">{String(game.name ?? "")}</p>{rating > 0 && <span className="shrink-0 font-mono text-[10px] text-repressurizer-accent">{rating}/10</span>}</div><div className="mt-1 flex items-center gap-1.5"><span className={`rounded-full border px-1.5 py-0.5 text-[9px] font-medium ${STATUS_STYLES[status]}`}>{t(STATUS_LABELS[status])}</span>{(sectionCount > 0 || journalCount > 0) && <span className="text-[10px] text-repressurizer-text-faint">{sectionCount + journalCount} {t("diary.pages.count")}</span>}</div>{!compact && <p className="mt-1 truncate text-[10px] text-repressurizer-text-faint">{detail?.developers?.[0] || t("common.unknown")}</p>}</div>
       {selected && <span className="h-2 w-2 shrink-0 rounded-full bg-repressurizer-accent shadow-[0_0_12px_rgba(126,184,255,0.8)]" />}
@@ -932,9 +1083,9 @@ function DiaryDetail({
       <section className="min-w-0">
         <DiarySectionRail sections={sections} templates={templates} activeSectionId={activeSectionId} selectedAppId={game.appid} availableGames={availableGames} showJournal={preferences.showJournalPage} journalCount={journalEntries.length} t={t} onSelect={onActiveSectionChange} onCreate={onCreateSection} onRename={onRenameSection} onRemove={onRemoveSection} onPreviousGame={onPreviousGame} onNextGame={onNextGame} onExport={onExport} />
         <div className="min-w-0">
-          <header className="border-b border-repressurizer-border-subtle px-6 py-4">
-            <h2 className="text-3xl font-semibold tracking-tight text-white sm:text-[30px]">{String(game.name ?? "")}</h2>
-            <div className="mt-2.5 flex flex-wrap items-center gap-2 text-xs text-repressurizer-text-muted">
+          <header className="border-b border-repressurizer-border-subtle px-6 py-5">
+            <h2 className="text-[26px] font-semibold leading-tight tracking-tight text-white sm:text-3xl">{String(game.name ?? "")}</h2>
+            <div className="mt-3 flex flex-wrap items-center gap-1.5 text-xs text-repressurizer-text-muted">
               <span className={`rounded-full border px-2 py-1 text-[10px] font-medium ${STATUS_STYLES[status]}`}>{t(STATUS_LABELS[status])}</span>
               {isNext && <span className="rounded-full border border-repressurizer-accent/30 bg-repressurizer-accent/10 px-2 py-1 text-[10px] text-repressurizer-accent">{t("diary.nextUp")}</span>}
               {(() => {
@@ -989,16 +1140,16 @@ function DiaryInspector({ game, detail, status, rating, ratingEmojis, hltbHours,
   onRestore: () => void;
 }) {
   const statusOptions = (Object.keys(STATUS_LABELS) as DiaryViewStatus[]).map((value) => ({ value, label: t(STATUS_LABELS[value]) }));
-  return <aside data-testid="diary-inspector" className="min-h-full border-t border-repressurizer-border-subtle bg-repressurizer-surface/25 px-5 py-5 xl:border-t-0">
+  return <aside data-testid="diary-inspector" className="min-h-full border-t border-repressurizer-border-subtle bg-repressurizer-surface/30 px-5 py-5 xl:border-t-0">
     <div className="flex flex-col xl:sticky xl:top-0">
       <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-repressurizer-text-faint">{t("diary.metadata")}</p>
-      <div data-testid="diary-hero-image" className="aspect-[16/9] overflow-hidden rounded-lg border border-repressurizer-border bg-repressurizer-bg"><SteamImage appId={game.appid} alt={String(game.name ?? "")} kind="header" loading="eager" className="h-full w-full object-cover" /></div>
-      <div className="border-b border-repressurizer-border-subtle py-4"><div className="flex items-end justify-between gap-3"><div><p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-repressurizer-text-faint">{t("diary.rating")}</p><p className="mt-1 text-xs text-repressurizer-text-muted">{t("diary.ratingHint")}</p></div><span className="flex items-center gap-2"><span className="text-2xl" aria-hidden="true">{rating > 0 ? ratingEmojis[rating - 1] : ""}</span><span className="font-mono text-2xl font-semibold text-white">{rating > 0 ? `${rating}/10` : "—"}</span></span></div><RatingControl rating={rating} emojis={ratingEmojis} onChange={onRatingChange} t={t} compact /></div>
+      <div data-testid="diary-hero-image" className="aspect-[16/9] overflow-hidden rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg shadow-pop-sm"><SteamImage appId={game.appid} alt={String(game.name ?? "")} kind="header" loading="eager" className="h-full w-full object-cover" /></div>
+      <div className="border-b border-repressurizer-border-subtle py-4"><div className="flex items-end justify-between gap-3"><div><p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-repressurizer-text-faint">{t("diary.rating")}</p><p className="mt-1 text-xs text-repressurizer-text-muted">{t("diary.ratingHint")}</p></div><span className="flex items-center gap-2"><span className="text-2xl" aria-hidden="true">{rating > 0 ? ratingEmojis[rating - 1] : ""}</span><span className="font-mono text-2xl font-semibold tabular-nums text-white">{rating > 0 ? `${rating}/10` : "—"}</span></span></div><RatingControl rating={rating} emojis={ratingEmojis} onChange={onRatingChange} t={t} compact /></div>
       <div className="mt-5 border-b border-repressurizer-border-subtle pb-5">
-        <SelectMenu value={status} options={statusOptions} onChange={onStatusChange} label={t("diary.status")} ariaLabel={t("diary.status")} className="w-full" buttonClassName={`h-10 w-full justify-between rounded-lg px-3 text-xs ${STATUS_STYLES[status]}`} menuClassName="text-xs" />
-        <div className="my-4 grid grid-cols-[1fr_auto_1fr] items-center border-y border-repressurizer-border-subtle py-3">
+        <SelectMenu value={status} options={statusOptions} onChange={onStatusChange} label={t("diary.status")} ariaLabel={t("diary.status")} className="w-full" buttonClassName={`h-10 w-full justify-between rounded-lg border px-3 text-xs font-medium ${STATUS_STYLES[status]}`} menuClassName="text-xs" />
+        <div className="my-4 grid grid-cols-[1fr_auto_1fr] items-center rounded-lg border border-repressurizer-border-subtle bg-repressurizer-bg/50 py-3">
           <TimeMetric label={t("diary.hoursPlayed")} value={`${formatHours(game.playtime_forever, language)}h`} />
-          <span aria-hidden="true" className="mx-3 text-[9px] text-repressurizer-accent/70">◆</span>
+          <span aria-hidden="true" className="text-[9px] text-repressurizer-accent/70">◆</span>
           <TimeMetric label={t("diary.hltbHours")} value={hltbHours === null ? "—" : `${hltbHours}h`} align="right" />
         </div>
         <div className="space-y-3">
@@ -1068,11 +1219,11 @@ function DiarySectionRail({ sections, templates, activeSectionId, selectedAppId,
       <div className="sr-only"><p>{t("diary.pages")}</p><p>{t("diary.pages.hint")}</p><span>{sections.length + 1}</span></div>
       <div className="flex min-w-0 items-center gap-2">
       <div className="min-w-0 flex-1 overflow-x-auto"><nav className="flex w-max min-w-full items-center justify-center gap-1.5" aria-label={t("diary.pages")}>
-        <button type="button" data-testid="diary-section-overview" onClick={() => onSelect(OVERVIEW_SECTION_ID)} className={`focus-ring flex shrink-0 items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-xs transition-colors ${activeSectionId === OVERVIEW_SECTION_ID ? "border-repressurizer-accent/40 bg-repressurizer-accent/10 text-repressurizer-text" : "border-transparent text-repressurizer-text-muted hover:border-repressurizer-border hover:bg-repressurizer-surface-hover"}`}><Notebook size={15} weight={activeSectionId === OVERVIEW_SECTION_ID ? "fill" : "duotone"} className="text-repressurizer-accent" /><span className="truncate">{t("diary.pages.overview")}</span></button>
-        <button type="button" data-testid="diary-section-gametimeline" onClick={() => onSelect(GAME_TIMELINE_SECTION_ID)} className={`focus-ring flex shrink-0 items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-xs transition-colors ${activeSectionId === GAME_TIMELINE_SECTION_ID ? "border-repressurizer-accent/40 bg-repressurizer-accent/10 text-repressurizer-text" : "border-transparent text-repressurizer-text-muted hover:border-repressurizer-border hover:bg-repressurizer-surface-hover"}`}><Path size={15} className="text-repressurizer-accent" /><span className="truncate">{t("diary.tab.timeline")}</span></button>
-        {showJournal && <button type="button" data-testid="diary-section-journal" onClick={() => onSelect(JOURNAL_SECTION_ID)} className={`focus-ring flex shrink-0 items-center gap-2 rounded-lg border px-2.5 py-2 text-left text-xs transition-colors ${activeSectionId === JOURNAL_SECTION_ID ? "border-repressurizer-accent/40 bg-repressurizer-accent/10 text-repressurizer-text" : "border-transparent text-repressurizer-text-muted hover:border-repressurizer-border hover:bg-repressurizer-surface-hover"}`}><PencilSimple size={15} className="text-repressurizer-accent" /><span>{t("diary.journal")}</span>{journalCount > 0 && <span className="font-mono text-[9px] text-repressurizer-text-faint">{journalCount}</span>}</button>}
+        <button type="button" data-testid="diary-section-overview" onClick={() => onSelect(OVERVIEW_SECTION_ID)} className={`focus-ring flex shrink-0 items-center gap-2 rounded-lg border px-3 py-2 text-left text-xs transition-colors ${activeSectionId === OVERVIEW_SECTION_ID ? "border-repressurizer-accent/45 bg-repressurizer-accent/[0.12] font-medium text-white" : "border-transparent text-repressurizer-text-muted hover:bg-repressurizer-surface-hover hover:text-repressurizer-text"}`}><Notebook size={15} weight={activeSectionId === OVERVIEW_SECTION_ID ? "fill" : "duotone"} className={activeSectionId === OVERVIEW_SECTION_ID ? "text-repressurizer-accent" : "text-repressurizer-text-faint"} /><span className="truncate">{t("diary.pages.overview")}</span></button>
+        <button type="button" data-testid="diary-section-gametimeline" onClick={() => onSelect(GAME_TIMELINE_SECTION_ID)} className={`focus-ring flex shrink-0 items-center gap-2 rounded-lg border px-3 py-2 text-left text-xs transition-colors ${activeSectionId === GAME_TIMELINE_SECTION_ID ? "border-repressurizer-accent/45 bg-repressurizer-accent/[0.12] font-medium text-white" : "border-transparent text-repressurizer-text-muted hover:bg-repressurizer-surface-hover hover:text-repressurizer-text"}`}><Path size={15} className={activeSectionId === GAME_TIMELINE_SECTION_ID ? "text-repressurizer-accent" : "text-repressurizer-text-faint"} /><span className="truncate">{t("diary.tab.timeline")}</span></button>
+        {showJournal && <button type="button" data-testid="diary-section-journal" onClick={() => onSelect(JOURNAL_SECTION_ID)} className={`focus-ring flex shrink-0 items-center gap-2 rounded-lg border px-3 py-2 text-left text-xs transition-colors ${activeSectionId === JOURNAL_SECTION_ID ? "border-repressurizer-accent/45 bg-repressurizer-accent/[0.12] font-medium text-white" : "border-transparent text-repressurizer-text-muted hover:bg-repressurizer-surface-hover hover:text-repressurizer-text"}`}><PencilSimple size={15} className={activeSectionId === JOURNAL_SECTION_ID ? "text-repressurizer-accent" : "text-repressurizer-text-faint"} /><span>{t("diary.journal")}</span>{journalCount > 0 && <span className="rounded-full bg-repressurizer-surface-raised px-1.5 font-mono text-[9px] tabular-nums text-repressurizer-text-faint">{journalCount}</span>}</button>}
         {sections.map((section) => <SectionRailItem key={section.id} section={section} active={activeSectionId === section.id} t={t} onSelect={() => onSelect(section.id)} onRename={(next) => onRename(section.id, next)} onRemove={() => onRemove(section.id)} />)}
-        {!newOpen && <button type="button" data-testid="diary-add-section" onClick={() => setNewOpen(true)} className="focus-ring inline-flex shrink-0 items-center justify-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-medium text-repressurizer-text-faint transition-colors hover:bg-repressurizer-surface-hover hover:text-repressurizer-text"><Plus size={13} />{t("diary.pages.add")}</button>}
+        {!newOpen && <button type="button" data-testid="diary-add-section" onClick={() => setNewOpen(true)} className="focus-ring inline-flex shrink-0 items-center justify-center gap-1.5 rounded-md px-2.5 py-1.5 text-[11px] font-medium text-repressurizer-text-faint transition-colors hover:bg-repressurizer-surface-hover hover:text-repressurizer-accent"><Plus size={13} />{t("diary.pages.add")}</button>}
       </nav></div>
       <div className="flex shrink-0 items-center border-l border-repressurizer-border-subtle pl-2">
         <button type="button" disabled={!onPreviousGame} onClick={onPreviousGame} aria-label={t("diary.previousGame")} title={t("diary.previousGame")} className="focus-ring rounded-md p-1.5 text-repressurizer-text-muted transition-colors hover:bg-repressurizer-surface-hover hover:text-white disabled:opacity-25"><ArrowLeft size={15} /></button>
@@ -1081,7 +1232,8 @@ function DiarySectionRail({ sections, templates, activeSectionId, selectedAppId,
       </div>
       </div>
       {newOpen && <div className="mt-3 flex justify-center">
-        <form onSubmit={submit} className="w-full max-w-2xl space-y-2.5 rounded-lg border border-repressurizer-accent/30 bg-repressurizer-bg p-3 shadow-[0_14px_35px_rgba(0,0,0,0.28)]">
+        <form onSubmit={submit} className="animate-fade-in w-full max-w-2xl space-y-2.5 rounded-xl border border-repressurizer-accent/30 bg-repressurizer-bg p-3 shadow-pop">
+          <p className="px-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-repressurizer-text-faint">{t("diary.pages.add")}</p>
           <label className="block text-[10px] font-semibold uppercase tracking-[0.12em] text-repressurizer-text-faint"><span>{t("diary.pages.name")}</span><input autoFocus data-testid="diary-section-name" value={title} onChange={(event) => setTitle(event.target.value)} placeholder={t("diary.pages.name.placeholder")} className="mt-1.5 w-full rounded-md border border-repressurizer-border bg-repressurizer-surface px-2 py-1.5 text-xs font-normal tracking-normal text-repressurizer-text outline-none focus:border-repressurizer-accent/55" /></label>
           <label className="block text-[10px] font-semibold uppercase tracking-[0.12em] text-repressurizer-text-faint"><span>{t("diary.pages.applyTo")}</span><select data-testid="diary-page-scope" value={scope} onChange={(event) => setScope(event.target.value as "this" | "all" | "chosen")} className="mt-1.5 w-full rounded-md border border-repressurizer-border bg-repressurizer-surface px-2 py-1.5 text-xs font-normal tracking-normal text-repressurizer-text outline-none"><option value="this">{t("diary.pages.scope.this")}</option><option value="all">{t("diary.pages.scope.all")}</option><option value="chosen">{t("diary.pages.scope.chosen")}</option></select></label>
           {scope === "chosen" && <div className="max-h-32 space-y-1 overflow-y-auto rounded-md border border-repressurizer-border bg-repressurizer-surface p-1.5">{availableGames.length === 0 ? <p className="px-1 py-1 text-[10px] text-repressurizer-text-faint">{t("diary.pages.noGames")}</p> : availableGames.map((game) => <label key={game.appid} className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1 text-[11px] text-repressurizer-text hover:bg-repressurizer-surface-hover"><input data-testid={`diary-page-game-${game.appid}`} type="checkbox" checked={chosenIds.includes(game.appid)} onChange={() => toggleGame(game.appid)} className="accent-repressurizer-accent" /><span className="truncate">{String(game.name ?? "")}</span></label>)}</div>}
@@ -1098,7 +1250,7 @@ function SectionRailItem({ section, active, t, onSelect, onRename, onRemove }: {
   const [title, setTitle] = useState(section.title);
   const saveTitle = () => { if (title.trim()) onRename(title); setEditing(false); };
   return (
-    <div className={`group flex shrink-0 items-center rounded-lg border transition-colors ${active ? "border-repressurizer-accent/40 bg-repressurizer-accent/10" : "border-transparent hover:border-repressurizer-border hover:bg-repressurizer-surface-hover"}`}>
+    <div className={`group flex shrink-0 items-center rounded-lg border transition-colors ${active ? "border-repressurizer-accent/45 bg-repressurizer-accent/[0.12]" : "border-transparent hover:bg-repressurizer-surface-hover"}`}>
       {editing ? <input autoFocus value={title} onChange={(event) => setTitle(event.target.value)} onBlur={saveTitle} onKeyDown={(event) => { if (event.key === "Enter") saveTitle(); if (event.key === "Escape") setEditing(false); }} className="min-w-0 flex-1 bg-transparent px-2.5 py-2 text-xs text-repressurizer-text outline-none" aria-label={t("diary.pages.rename")} /> : <button type="button" data-testid={`diary-section-${section.id}`} onClick={onSelect} className="focus-ring flex min-w-0 flex-1 items-center gap-2 px-2.5 py-2 text-left text-xs text-repressurizer-text"><PencilSimple size={14} className={active ? "text-repressurizer-accent" : "text-repressurizer-text-faint"} /><span className="truncate">{section.title}</span></button>}
       {!editing && <div className="mr-1 hidden items-center gap-0.5 group-hover:flex"><button type="button" aria-label={`${t("diary.pages.rename")}: ${section.title}`} title={t("diary.pages.rename")} onClick={() => setEditing(true)} className="focus-ring rounded p-1 text-repressurizer-text-faint hover:text-repressurizer-text"><PencilSimple size={11} /></button><button type="button" aria-label={`${t("diary.pages.delete")}: ${section.title}`} title={t("diary.pages.delete")} onClick={() => { if (window.confirm(t("diary.pages.deleteConfirm"))) onRemove(); }} className="focus-ring rounded p-1 text-repressurizer-text-faint hover:text-repressurizer-danger"><Trash size={11} /></button></div>}
     </div>
@@ -1209,7 +1361,7 @@ function EditorUtilityBar({ saveState, revisions, language, onRestore, t }: { sa
   return <div className="relative ml-auto flex h-8 shrink-0 items-center gap-1 text-[10px] text-repressurizer-text-faint">
     <span className="inline-flex items-center gap-1.5"><span className={`h-1.5 w-1.5 rounded-full ${saveState === "saving" ? "animate-pulse bg-amber-300" : "bg-repressurizer-success"}`} />{t(saveState === "saving" ? "diary.autosave.saving" : "diary.autosave.saved")}</span>
     <button type="button" onClick={() => setOpen((value) => !value)} aria-expanded={open} aria-label={t("diary.revisions")} title={t("diary.revisions")} className="focus-ring inline-flex h-8 items-center gap-1 rounded-md px-1.5 text-repressurizer-text-muted transition-colors hover:bg-repressurizer-surface-hover hover:text-white"><ClockCounterClockwise size={14} /><span className="font-mono text-[9px]">{revisions.length}</span></button>
-    {open && <div className="absolute bottom-full right-0 z-40 mb-1 w-72 overflow-hidden rounded-xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_18px_50px_rgba(0,0,0,0.55)]"><div className="border-b border-repressurizer-border-subtle px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-repressurizer-text-faint">{t("diary.revisions")}</div><div className="max-h-64 overflow-y-auto">{revisions.length === 0 ? <p className="px-3 py-5 text-center text-xs text-repressurizer-text-faint">{t("diary.revisions.empty")}</p> : revisions.map((revision) => <button key={revision.id} type="button" onClick={() => { onRestore(revision); setOpen(false); }} className="focus-ring flex w-full items-center justify-between gap-3 border-b border-repressurizer-border-subtle px-3 py-2.5 text-left last:border-b-0 hover:bg-repressurizer-surface-hover"><span className="min-w-0"><span className="block truncate text-xs text-repressurizer-text">{revision.title || t("diary.pages.overview")}</span><span className="mt-0.5 block text-[10px] text-repressurizer-text-faint">{new Intl.DateTimeFormat(language, { dateStyle: "medium", timeStyle: "short" }).format(new Date(revision.createdAt))}</span></span><span className="shrink-0 text-[10px] text-repressurizer-accent">{t("diary.revisions.restore")}</span></button>)}</div></div>}
+    {open && <div className="animate-fade-in absolute bottom-full right-0 z-40 mb-1 w-72 overflow-hidden rounded-xl border border-repressurizer-border bg-repressurizer-surface-raised/95 shadow-dialog backdrop-blur-md"><div className="border-b border-repressurizer-border-subtle px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-repressurizer-text-faint">{t("diary.revisions")}</div><div className="max-h-64 overflow-y-auto">{revisions.length === 0 ? <p className="px-3 py-5 text-center text-xs text-repressurizer-text-faint">{t("diary.revisions.empty")}</p> : revisions.map((revision) => <button key={revision.id} type="button" onClick={() => { onRestore(revision); setOpen(false); }} className="focus-ring flex w-full items-center justify-between gap-3 border-b border-repressurizer-border-subtle px-3 py-2.5 text-left last:border-b-0 transition-colors hover:bg-repressurizer-surface-hover"><span className="min-w-0"><span className="block truncate text-xs text-repressurizer-text">{revision.title || t("diary.pages.overview")}</span><span className="mt-0.5 block text-[10px] text-repressurizer-text-faint">{new Intl.DateTimeFormat(language, { dateStyle: "medium", timeStyle: "short" }).format(new Date(revision.createdAt))}</span></span><span className="shrink-0 text-[10px] font-medium text-repressurizer-accent">{t("diary.revisions.restore")}</span></button>)}</div></div>}
   </div>;
 }
 
@@ -1250,7 +1402,7 @@ function MarkdownSectionPanel({ section, revisions, templateContext, language, t
   </section>;
 }
 
-function DiaryActionButton({ onClick, icon, label, tone }: { onClick: () => void; icon: ReactNode; label: string; tone: "accent" | "amber" | "neutral" }) { const styles = { accent: "border-repressurizer-accent/40 bg-repressurizer-accent/85 text-white hover:bg-repressurizer-accent", amber: "border-amber-400/25 bg-amber-400/10 text-amber-200 hover:bg-amber-400/20", neutral: "border-repressurizer-border bg-repressurizer-surface text-repressurizer-text hover:bg-repressurizer-surface-hover" }; return <button type="button" onClick={onClick} className={`focus-ring btn-press inline-flex w-full items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${styles[tone]}`}>{icon}{label}</button>; }
+function DiaryActionButton({ onClick, icon, label, tone }: { onClick: () => void; icon: ReactNode; label: string; tone: "accent" | "amber" | "neutral" }) { const styles = { accent: "border-transparent bg-repressurizer-accent text-white shadow-pop-sm hover:bg-repressurizer-accent-hover", amber: "border-amber-400/25 bg-amber-400/10 text-amber-200 hover:border-amber-400/45 hover:bg-amber-400/20", neutral: "border-repressurizer-border bg-repressurizer-surface/70 text-repressurizer-text hover:border-repressurizer-border hover:bg-repressurizer-surface-hover" }; return <button type="button" onClick={onClick} className={`focus-ring btn-press inline-flex w-full items-center justify-center gap-2 rounded-lg border px-3 py-2.5 text-xs font-medium transition-colors ${styles[tone]}`}>{icon}{label}</button>; }
 
 
 
@@ -1298,4 +1450,3 @@ function PanelResizeHandle({ side, value, min, max, onChange }: { side: "left" |
   const stop = () => { dragRef.current = null; document.body.style.userSelect = ""; };
   return <button type="button" aria-label={side === "left" ? "Resize game list" : "Resize metadata panel"} className="group relative z-10 hidden w-1.5 shrink-0 touch-none cursor-col-resize bg-repressurizer-border-subtle transition-colors hover:bg-repressurizer-accent/45 focus:bg-repressurizer-accent/45 xl:block" onPointerDown={(event) => { dragRef.current = { pointerId: event.pointerId, startX: event.clientX, startValue: value }; document.body.style.userSelect = "none"; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={move} onPointerUp={stop} onPointerCancel={stop} onLostPointerCapture={stop} onKeyDown={(event) => { const delta = event.key === "ArrowRight" ? 16 : event.key === "ArrowLeft" ? -16 : 0; if (!delta) return; event.preventDefault(); onChange(clamp(value + (side === "left" ? delta : -delta))); }}><span className="absolute left-1/2 top-1/2 h-10 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-repressurizer-text-faint opacity-0 transition-opacity group-hover:opacity-100" /></button>;
 }
-

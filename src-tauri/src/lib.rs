@@ -490,6 +490,14 @@ fn validate_diary_backup_name(name: &str) -> Result<(), String> {
     Ok(())
 }
 
+fn validate_diary_backup_key(key: &str) -> Result<(), String> {
+    if DIARY_BACKUP_KEYS.iter().any(|allowed| *allowed == key) {
+        Ok(())
+    } else {
+        Err("Invalid diary backup file".to_string())
+    }
+}
+
 #[tauri::command]
 fn list_diary_backups() -> Result<Vec<DiaryBackupInfo>, String> {
     let root = diary_backups_root()?;
@@ -600,6 +608,53 @@ fn restore_diary_backup(name: String) -> Result<(), String> {
         return Err("Diary backup contains no data files".to_string());
     }
     Ok(())
+}
+
+#[tauri::command]
+fn read_diary_backup_file(name: String, key: String) -> Result<Option<String>, String> {
+    validate_diary_backup_name(&name)?;
+    validate_diary_backup_key(&key)?;
+    let path = diary_backups_root()?.join(&name).join(&key);
+    if !path.is_file() {
+        return Ok(None);
+    }
+    let data = std::fs::read(path)
+        .map_err(|error| format!("Failed to read {key} from backup: {error}"))?;
+    Ok(Some(String::from_utf8_lossy(&data).into_owned()))
+}
+
+#[tauri::command]
+fn restore_diary_backup_files(name: String, keys: Vec<String>) -> Result<Vec<String>, String> {
+    validate_diary_backup_name(&name)?;
+    for key in &keys {
+        validate_diary_backup_key(key)?;
+    }
+    let root = diary_backups_root()?;
+    let folder = root.join(&name);
+    if !folder.is_dir() {
+        return Err("Diary backup not found".to_string());
+    }
+    let mut restored = Vec::new();
+    for key in keys {
+        let backup_file = folder.join(&key);
+        if !backup_file.is_file() {
+            continue;
+        }
+        let data = std::fs::read(&backup_file)
+            .map_err(|error| format!("Failed to read {key} from backup: {error}"))?;
+        let target = app_data::app_data_file_path(&key)?;
+        write_text_file_atomic(
+            &target,
+            &String::from_utf8_lossy(&data),
+            "app data file",
+            app_data::should_sync_app_data(&key),
+        )?;
+        restored.push(key);
+    }
+    if restored.is_empty() {
+        return Err("No selected diary backup files found".to_string());
+    }
+    Ok(restored)
 }
 
 #[tauri::command]
@@ -1122,6 +1177,8 @@ pub fn run() {
             list_diary_backups,
             create_diary_backup,
             restore_diary_backup,
+            read_diary_backup_file,
+            restore_diary_backup_files,
             delete_diary_backup,
             local_integration_status,
             hltb::fetch_hltb,

@@ -78,6 +78,7 @@ export function categorizerLabel(type: CategorizerType, t: ReturnType<typeof use
 
 export function ChooseStep({
   presets,
+  diaryMode = false,
   onChoose,
   onRunPresets,
   onRunPresetsCachedOnly,
@@ -87,6 +88,7 @@ export function ChooseStep({
   error,
 }: {
   presets: AutoCategorizePreset[];
+  diaryMode?: boolean;
   onChoose: (t: CategorizerType) => void;
   onRunPresets: () => void;
   onRunPresetsCachedOnly: () => void;
@@ -336,6 +338,7 @@ export function ChooseStep({
             {presets.map((preset, index) => (
               <div
                 key={preset.id}
+                data-testid={`autocat-preset-${preset.id}`}
                 className="flex items-center gap-2 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-surface px-2 py-2"
               >
                 <button
@@ -347,7 +350,8 @@ export function ChooseStep({
                     {preset.name}
                   </span>
                   <span className="mt-0.5 block truncate text-[11px] text-repressurizer-text-faint">
-                    {categorizerLabel(preset.type, t)}
+                    {categorizerLabel(preset.type, t)} · {preset.target === "diary" ? t("auto.destination.diary") : t("auto.destination.collections")}
+                    {preset.target === "diary" && preset.diaryColumn ? ` · ${preset.diaryColumn}` : ""}
                   </span>
                 </button>
                 <button
@@ -385,7 +389,7 @@ export function ChooseStep({
         </div>
       )}
 
-      <p className="mb-2 text-sm text-repressurizer-text-muted">{t("auto.choose.desc")}</p>
+      <p className="mb-2 text-sm text-repressurizer-text-muted">{diaryMode ? t("auto.diary.chooseSourceDesc") : t("auto.choose.desc")}</p>
       {CATEGORIZERS.map((c) => {
         const Icon = c.icon;
         const label = t(c.labelKey);
@@ -395,9 +399,11 @@ export function ChooseStep({
           <button
             key={c.value}
             onClick={() => onChoose(c.value)}
-            className="btn-press flex w-full items-center gap-3 rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-3.5 py-2.5 text-left transition-colors hover:border-repressurizer-accent hover:bg-repressurizer-accent/5"
+            className="btn-press group flex w-full items-center gap-3 rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-3.5 py-2.5 text-left transition-[border-color,background-color,box-shadow] hover:border-repressurizer-accent/55 hover:bg-repressurizer-accent/[0.05] hover:shadow-pop-sm"
           >
-            <Icon size={18} weight="duotone" className="shrink-0 text-repressurizer-accent" />
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-repressurizer-accent/20 bg-repressurizer-accent/10 text-repressurizer-accent transition-colors group-hover:border-repressurizer-accent/40">
+              <Icon size={17} weight="duotone" />
+            </span>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-white">{label}</p>
               <p className="mt-0.5 text-xs leading-relaxed text-repressurizer-text-faint">{description}</p>
@@ -407,7 +413,7 @@ export function ChooseStep({
                 {t(REQUIREMENT_LABELS[requirement])}
               </span>
             )}
-            <ArrowRight size={16} className="shrink-0 text-repressurizer-text-faint" />
+            <ArrowRight size={16} className="shrink-0 text-repressurizer-text-faint transition-colors group-hover:text-repressurizer-accent" />
           </button>
         );
       })}

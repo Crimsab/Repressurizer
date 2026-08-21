@@ -174,6 +174,43 @@ test("opens the gaming backlog diary workspace", async ({ page }, testInfo) => {
   await testInfo.attach("diary-workspace", { path: screenshotPath, contentType: "image/png" });
 });
 
+test("Diary status filters show counts and make archived games discoverable", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Diary" }).click();
+  const group = page.getByRole("group", { name: "Filter by status" });
+  const expected: Array<[string, number]> = [
+    ["All statuses", 11],
+    ["To play", 6],
+    ["In progress", 5],
+    ["Finished", 0],
+    ["Abandoned", 0],
+    ["Archived", 0],
+  ];
+  for (const [label, count] of expected) {
+    const filter = group.getByRole("button", { name: label, exact: true });
+    await filter.click();
+    await expect(filter).toHaveAttribute("aria-pressed", "true");
+    await expect(filter).toContainText(String(count));
+    await expect(page.locator('[data-testid^="diary-game-"]:visible')).toHaveCount(count);
+  }
+
+  const diaryStoreUrl = await page.evaluate(() =>
+    performance.getEntriesByType("resource").map((entry) => entry.name).find((name) => name.includes("/src/stores/diaryStore.ts?t="))
+      ?? "/src/stores/diaryStore.ts"
+  );
+  await page.evaluate(async (url) => {
+    const { useDiaryStore } = await import(url);
+    useDiaryStore.getState().setDecision(632470, "archived");
+  }, diaryStoreUrl);
+  await group.getByRole("button", { name: "Archived", exact: true }).click();
+  await expect(group.getByRole("button", { name: "Archived", exact: true })).toContainText("1");
+  await expect(page.getByTestId("diary-game-632470")).toBeVisible();
+
+  await page.getByTestId("diary-view-kanban").click();
+  await expect(page.getByTestId("diary-kanban-column-archived")).toContainText("Disco Elysium");
+  await expect(page.getByTestId("diary-kanban-card-632470")).toBeVisible();
+});
+
 test("finish prompts only fire for observed threshold crossings and support skip-all", async ({ page }) => {
   await page.goto("/");
   await page.evaluate(async () => {
@@ -356,11 +393,33 @@ test("Diary kanban board moves cards and the timeline lists diary events", async
   await page.goto("/");
   await page.getByRole("button", { name: "Diary" }).click();
   await expect(page.getByTestId("diary-workspace")).toBeVisible();
+  await expect(page.getByTestId("diary-view-grid")).toBeVisible();
+  await expect(page.getByTestId("diary-view-list")).toBeVisible();
+  await expect(page.getByTestId("diary-view-kanban")).toBeVisible();
+  await expect(page.getByTestId("diary-view-timeline")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Export Diary" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Diary backups" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Auto-Categorize: Diary/ })).toBeVisible();
 
   await page.getByTestId("diary-view-kanban").click();
   await expect(page.getByTestId("diary-kanban")).toBeVisible();
   await expect(page.getByTestId("diary-kanban-column-backlog")).toContainText("Outer Wilds");
   await expect(page.getByTestId("diary-kanban-column-playing")).toContainText("Disco Elysium");
+
+  // Select-all works from the column action and from the focused column/card.
+  const playingColumn = page.getByTestId("diary-kanban-column-playing");
+  const playingCount = await playingColumn.locator("[data-kanban-card]").count();
+  const playingSelectAll = page.getByTestId("diary-kanban-select-all-playing");
+  await playingSelectAll.click();
+  await expect(page.getByTestId("diary-kanban-selection")).toContainText(String(playingCount));
+  await expect(playingSelectAll).toHaveAttribute("aria-pressed", "true");
+  await playingSelectAll.click();
+  await expect(page.getByTestId("diary-kanban-selection")).toHaveCount(0);
+  await page.getByTestId("diary-kanban-card-1145360").focus();
+  await page.keyboard.press("Control+A");
+  await expect(page.getByTestId("diary-kanban-selection")).toContainText(String(playingCount));
+  await playingSelectAll.click();
+  await expect(page.getByTestId("diary-kanban-selection")).toHaveCount(0);
 
   await pointerDragToColumn(page, "diary-kanban-card-753640", "diary-kanban-column-finished");
   await expect(page.getByTestId("diary-kanban-column-finished")).toContainText("Outer Wilds");
@@ -473,19 +532,82 @@ test("Diary kanban board moves cards and the timeline lists diary events", async
   await expect(page.getByTestId("diary-hero-image").locator("img")).toHaveAttribute("src", /1145360/);
 });
 
+test("Diary bulk actions expose status, priority, removal, and undo", async ({ page }, testInfo) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Diary" }).click();
+  await page.getByTestId("diary-view-kanban").click();
+
+  const playingColumn = page.getByTestId("diary-kanban-column-playing");
+  await page.getByTestId("diary-kanban-select-all-playing").click();
+  const selection = page.getByTestId("diary-kanban-selection");
+  const playingCount = await playingColumn.locator("[data-kanban-card]").count();
+  await expect(selection).toContainText(String(playingCount));
+  const screenshotPath = testInfo.outputPath("diary-kanban-bulk-toolbar.png");
+  await page.screenshot({ path: screenshotPath, fullPage: true });
+  await testInfo.attach("diary-kanban-bulk-toolbar", { path: screenshotPath, contentType: "image/png" });
+
+  await page.getByTestId("diary-kanban-selection-status").getByRole("button").click();
+  await expect(page.getByRole("option", { name: "Finished", exact: true })).toBeVisible();
+  const statusDropdownScreenshotPath = testInfo.outputPath("diary-kanban-status-dropdown-open.png");
+  await page.screenshot({ path: statusDropdownScreenshotPath, fullPage: true });
+  await testInfo.attach("diary-kanban-status-dropdown-open", { path: statusDropdownScreenshotPath, contentType: "image/png" });
+  await page.getByRole("option", { name: "Finished", exact: true }).click();
+  await expect(page.getByText(`Changed status for ${playingCount} games.`)).toBeVisible();
+  await expect(playingColumn).not.toContainText("Hades");
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(playingColumn).toContainText("Hades");
+
+  await page.getByTestId("diary-kanban-select-all-playing").click();
+  await page.getByTestId("diary-kanban-selection-priority").getByRole("button").click();
+  await expect(page.getByRole("option", { name: "High", exact: true })).toBeVisible();
+  const priorityDropdownScreenshotPath = testInfo.outputPath("diary-kanban-priority-dropdown-open.png");
+  await page.screenshot({ path: priorityDropdownScreenshotPath, fullPage: true });
+  await testInfo.attach("diary-kanban-priority-dropdown-open", { path: priorityDropdownScreenshotPath, contentType: "image/png" });
+  await page.getByRole("option", { name: "High", exact: true }).click();
+  await expect(page.getByText(`Changed priority for ${playingCount} games.`)).toBeVisible();
+  await page.getByRole("button", { name: "Undo" }).click();
+
+  await page.getByTestId("diary-kanban-select-all-playing").click();
+  page.once("dialog", (confirmation) => confirmation.accept());
+  await page.getByTestId("diary-kanban-selection-remove").click();
+  await expect(page.getByText(`Removed ${playingCount} games from the Diary.`)).toBeVisible();
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(playingColumn).toContainText("Hades");
+});
+
+test("Diary upcoming view summarizes planning data and actions", async ({ page }, testInfo) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Diary" }).click();
+  await page.getByTestId("diary-view-upcoming").click();
+  const upcoming = page.getByTestId("diary-upcoming");
+  await expect(upcoming).toBeVisible();
+  await expect(upcoming).toContainText("Next games");
+  await expect(page.getByTestId("diary-upcoming-game-753640")).toContainText("Outer Wilds");
+  await expect(page.getByTestId("diary-upcoming-game-753640")).toContainText("sessions");
+  await page.getByTestId("diary-upcoming-game-753640").getByRole("button", { name: "Mark next" }).click();
+  await expect(page.getByTestId("diary-upcoming-game-753640")).toBeVisible();
+  const screenshotPath = testInfo.outputPath("diary-upcoming.png");
+  await page.screenshot({ path: screenshotPath, fullPage: true });
+  await testInfo.attach("diary-upcoming", { path: screenshotPath, contentType: "image/png" });
+});
+
 test("diary extras: months, game timeline, custom chip, full-text search, persisted filters", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Diary" }).click();
   const testNow = Date.parse("2026-08-20T12:00:00Z");
-  await page.evaluate(async (now) => {
-    const { useDiaryStore } = await import("/src/stores/diaryStore.ts");
+  const diaryStoreUrl = await page.evaluate(() =>
+    performance.getEntriesByType("resource").map((entry) => entry.name).find((name) => name.includes("/src/stores/diaryStore.ts?t="))
+      ?? "/src/stores/diaryStore.ts"
+  );
+  await page.evaluate(async ({ now, url }) => {
+    const { useDiaryStore } = await import(url);
     useDiaryStore.getState().addJournalEntry(632470, "Uniquetribunalword for search", now, 720);
     const columnId = useDiaryStore.getState().addCustomColumn("Wishlist", "#34d399");
     if (columnId) useDiaryStore.getState().setCustomAssignment(1145360, columnId);
     useDiaryStore.getState().setAchievements(1145360, [
       { apiName: "ACH_X", name: "First Blood", unlockedAt: Math.floor(now / 1000) - 3600, icon: null },
     ]);
-  }, testNow);
+  }, { now: testNow, url: diaryStoreUrl });
 
   // Full-text search finds a game through its diary content, not just metadata.
   await page.getByRole("searchbox", { name: "Search your backlog" }).fill("uniquetribunalword");
@@ -538,6 +660,30 @@ test("diary backups can be created, listed, and deleted", async ({ page }) => {
   page.once("dialog", (confirmation) => confirmation.accept());
   await page.getByTestId("diary-backup-list").getByRole("button", { name: /^Delete: diary-backup-/ }).click();
   await expect(dialog.getByText("No diary backups yet.")).toBeVisible();
+});
+
+test("diary backup restore previews a selective file diff", async ({ page }, testInfo) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Diary" }).click();
+  await page.getByTestId("diary-backup-button").click();
+  const dialog = page.getByRole("dialog", { name: "Diary backups" });
+  await dialog.getByLabel("Backup description (optional)").fill("Selective restore preview");
+  await page.getByTestId("diary-backup-create").click();
+  const restoreButton = page.getByTestId("diary-backup-list").getByRole("button", { name: /^Restore: diary-backup-/ });
+  await restoreButton.click();
+  const preview = page.getByTestId("diary-backup-restore-preview");
+  await expect(preview).toBeVisible();
+  await expect(preview.getByText("Missing locally").first()).toBeVisible();
+  await expect(page.getByTestId("diary-backup-restore-file-diary.json")).toBeVisible();
+  const screenshotPath = testInfo.outputPath("diary-backup-restore-preview.png");
+  await page.screenshot({ path: screenshotPath, fullPage: true });
+  await testInfo.attach("diary-backup-restore-preview", { path: screenshotPath, contentType: "image/png" });
+  const firstFile = page.getByTestId("diary-backup-restore-file-diary.json").getByRole("checkbox");
+  await expect(firstFile).toBeChecked();
+  await firstFile.uncheck();
+  await expect(page.getByTestId("diary-backup-restore-confirm")).toBeEnabled();
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(preview).toHaveCount(0);
 });
 
 test("portable builds explain manual updates without offering in-place installation", async ({ page }, testInfo) => {
@@ -868,8 +1014,8 @@ test("AutoCat custom rule creates one category from a title condition", async ({
   const dialog = page.locator(".fixed.inset-0").filter({
     has: page.getByRole("heading", { name: "Auto-Categorize" }),
   });
-  await dialog.getByRole("button", { name: /Custom rule/ }).click();
-  await dialog.getByRole("button", { name: "Add custom condition" }).click();
+  await dialog.getByRole("button", { name: /Custom rule Build one/ }).click();
+  await dialog.getByRole("button", { name: "Add condition" }).click();
   await expect(dialog.getByRole("option", { name: /Diary/ })).toBeVisible();
   await page.keyboard.press("Escape");
   await dialog.getByPlaceholder("Short RPG not in Backlog").fill("Hades Custom");
@@ -885,6 +1031,275 @@ test("AutoCat custom rule creates one category from a title condition", async ({
 
   await expect(page.getByRole("button", { name: /Hades Custom/ })).toBeVisible();
   await expectNoHorizontalOverflow(page);
+});
+
+test("AutoCat blocks an incomplete custom condition before running", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: /Auto-Categorize/ }).click();
+  const dialog = page.locator(".fixed.inset-0").filter({
+    has: page.getByRole("heading", { name: "Auto-Categorize" }),
+  });
+  await dialog.getByRole("button", { name: /Custom rule/ }).click();
+  await dialog.getByRole("button", { name: "Title starts" }).click();
+  await dialog.getByRole("button", { name: "Add condition" }).click();
+  await dialog.getByRole("option", { name: /Title/ }).click();
+  await expect(dialog.locator('[data-testid^="autocat-condition-issue-"]')).toHaveCount(1);
+  await dialog.getByRole("button", { name: "Run" }).click();
+  await expect(dialog.getByText(/Fix or disable 1 incomplete condition/)).toBeVisible();
+  await expect(dialog.getByTestId("autocat-preview-order")).toHaveCount(0);
+});
+
+test("AutoCat custom preview renders the selected AND/OR rule", async ({ page }, testInfo) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: /Auto-Categorize/ }).click();
+  const dialog = page.locator(".fixed.inset-0").filter({
+    has: page.getByRole("heading", { name: "Auto-Categorize" }),
+  });
+  await dialog.getByTestId("autocat-destination").click();
+  await page.getByRole("listbox").getByRole("option", { name: "Diary / Kanban", exact: true }).click();
+  await dialog.getByRole("button", { name: /Custom rule/ }).click();
+  await dialog.getByRole("button", { name: "Title starts" }).click();
+  await dialog.locator('input[value="A"]').fill("Hades");
+  await dialog.getByRole("button", { name: "Duplicate" }).click();
+  await dialog.locator('input[value="Hades"]').nth(1).fill("Night");
+  await dialog.getByTestId("autocat-custom-logic").click();
+  await page.getByRole("listbox").getByRole("option", { name: "Any (OR)", exact: true }).click();
+  await dialog.getByTestId("autocat-connector-0").click();
+  await expect(page.getByRole("listbox").getByRole("option", { name: "AND", exact: true })).toBeVisible();
+  const connectorScreenshotPath = testInfo.outputPath("diary-autocat-connector-dropdown.png");
+  await page.screenshot({ path: connectorScreenshotPath, fullPage: true });
+  await testInfo.attach("diary-autocat-connector-dropdown", { path: connectorScreenshotPath, contentType: "image/png" });
+  await page.keyboard.press("Escape");
+  const conditionsScreenshotPath = testInfo.outputPath("diary-autocat-multiple-conditions.png");
+  await page.screenshot({ path: conditionsScreenshotPath, fullPage: true });
+  await testInfo.attach("diary-autocat-multiple-conditions", { path: conditionsScreenshotPath, contentType: "image/png" });
+  await dialog.getByRole("button", { name: "Run" }).click();
+
+  await expect(dialog.getByText("Preview order (display only)")).toHaveCount(0);
+  await expect(dialog.getByText("Preview sort")).toHaveCount(0);
+  await expect(dialog.getByTestId("autocat-preview-order")).toHaveCount(0);
+  await expect(dialog.getByText("Kanban groups")).toHaveCount(0);
+  await expect(dialog.getByText("These are filter result groups.", { exact: false })).toHaveCount(0);
+  await expect(dialog.getByTestId("autocat-if-then")).toBeVisible();
+  await expect(dialog.getByText("Show matched games", { exact: true })).toBeVisible();
+  await expect(dialog.getByText(/OR/)).toBeVisible();
+  const screenshotPath = testInfo.outputPath("diary-autocat-if-then.png");
+  await page.screenshot({ path: screenshotPath, fullPage: true });
+  await testInfo.attach("diary-autocat-if-then", { path: screenshotPath, contentType: "image/png" });
+});
+
+test("Diary AutoCat assigns matched games to the selected Kanban column", async ({ page }, testInfo) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Diary" }).click();
+  await page.getByTestId("diary-autocat-button").click();
+
+  const dialog = page.locator(".fixed.inset-0").filter({
+    has: page.getByRole("heading", { name: "Auto-Categorize" }),
+  });
+  await expect(dialog.getByTestId("autocat-destination")).toHaveAccessibleName("Destination: Diary / Kanban");
+  for (const source of [
+    /Custom rule/,
+    /By Name/,
+    /By Genre/,
+    /By Year/,
+    /By Steam Reviews/,
+    /By Metacritic/,
+    /By Tags/,
+    /Store flags/,
+    /By HLTB Duration/,
+    /By Playtime/,
+    /Platform support/,
+    /Developer \/ Publisher/,
+    /Language support/,
+  ]) {
+    await expect(dialog.getByRole("button", { name: source })).toBeVisible();
+  }
+  await dialog.getByRole("button", { name: /Custom rule/ }).click();
+  await dialog.getByPlaceholder("e.g. Short games I already started").fill("Hades to backlog");
+  await dialog.getByRole("button", { name: "Title starts" }).click();
+  await dialog.locator('input[value="A"]').fill("Hades");
+  await dialog.getByRole("button", { name: "Run" }).click();
+
+  await expect(dialog.getByTestId("autocat-preview-order")).toHaveCount(0);
+  await expect(dialog.getByText("Preview sort")).toHaveCount(0);
+  await expect(dialog.getByText("Kanban groups")).toHaveCount(0);
+  await expect(dialog.getByText("These are filter result groups.", { exact: false })).toHaveCount(0);
+  await expect(dialog.getByTestId("autocat-if-then")).toBeVisible();
+  await expect(dialog.getByText("Show matched games", { exact: true })).toBeVisible();
+  await dialog.getByText("Show matched games", { exact: true }).click();
+  await expect(dialog.getByText("Hades", { exact: true })).toBeVisible();
+
+  // The THEN naming control is prefilled with the rule-derived default and stays editable.
+  await dialog.getByTestId("autocat-diary-action").click();
+  await page.getByRole("listbox").getByRole("option", { name: "Create a new column", exact: true }).click();
+  await expect(dialog.getByTestId("autocat-new-column-suggested")).toBeVisible();
+  const nameInput = dialog.getByTestId("autocat-new-column-name");
+  await expect(nameInput).toHaveValue("Hades to backlog");
+  await nameInput.fill("Hades renamed");
+  await expect(nameInput).toHaveValue("Hades renamed");
+  await dialog.getByTestId("autocat-diary-action").click();
+  await page.getByRole("listbox").getByRole("option", { name: "Move to existing column", exact: true }).click();
+
+  await expect(dialog.getByTestId("autocat-diary-column")).toHaveAccessibleName("Kanban column: To play");
+  const diaryAutoCatScreenshotPath = testInfo.outputPath("diary-autocat.png");
+  await page.screenshot({ path: diaryAutoCatScreenshotPath, fullPage: true });
+  await testInfo.attach("diary-autocat", { path: diaryAutoCatScreenshotPath, contentType: "image/png" });
+  await dialog.getByRole("button", { name: "Apply", exact: true }).click();
+  await expect(dialog.getByText("Done!", { exact: true })).toBeVisible();
+  await dialog.getByText("Close", { exact: true }).click();
+
+  await page.getByTestId("diary-view-kanban").click();
+  await expect(page.getByTestId("diary-kanban-column-backlog")).toContainText("Hades");
+  await expect(page.getByTestId("diary-kanban-column-playing")).not.toContainText("Hades");
+});
+
+test("Diary AutoCat can create a Kanban column for a combined rule", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Diary" }).click();
+  await page.getByTestId("diary-autocat-button").click();
+
+  const dialog = page.locator(".fixed.inset-0").filter({
+    has: page.getByRole("heading", { name: "Auto-Categorize" }),
+  });
+  await dialog.getByRole("button", { name: /Custom rule/ }).click();
+  await dialog.getByPlaceholder("e.g. Short games I already started").fill("Started short rule");
+  await dialog.getByRole("button", { name: "Title starts" }).click();
+  await dialog.locator('input[value="A"]').fill("Hades");
+  await dialog.getByRole("button", { name: "Run" }).click();
+
+  await expect(dialog.getByTestId("autocat-preview-order")).toHaveCount(0);
+  await expect(dialog.getByText("Preview sort")).toHaveCount(0);
+  await dialog.getByTestId("autocat-diary-action").click();
+  await page.getByRole("listbox").getByRole("option", { name: "Create a new column", exact: true }).click();
+  // Smart default derived from the rule label, then edited by the user.
+  await expect(dialog.getByTestId("autocat-new-column-name")).toHaveValue("Started short rule");
+  await dialog.getByTestId("autocat-new-column-name").fill("Started short");
+  await dialog.getByRole("button", { name: "Apply", exact: true }).click();
+  await expect(dialog.getByText("Done!", { exact: true })).toBeVisible();
+  await dialog.getByText("Close", { exact: true }).click();
+
+  await page.getByTestId("diary-view-kanban").click();
+  const newColumn = page.locator('[data-column-name="Started short"]');
+  await expect(newColumn).toBeVisible();
+  await expect(newColumn).toContainText("Hades");
+  await expect(page.getByTestId("diary-kanban-column-playing")).not.toContainText("Hades");
+});
+
+test("Diary AutoCat can create grouped columns and undo the whole run", async ({ page }, testInfo) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Diary" }).click();
+  await page.getByTestId("diary-autocat-button").click();
+
+  const dialog = page.locator(".fixed.inset-0").filter({
+    has: page.getByRole("heading", { name: "Auto-Categorize" }),
+  });
+  await dialog.getByRole("button", { name: /By Name/ }).click();
+  await dialog.getByRole("button", { name: "Run" }).click();
+
+  await expect(dialog.getByTestId("autocat-preview-order")).toHaveCount(0);
+  await expect(dialog.getByText("Preview sort")).toHaveCount(0);
+  await dialog.getByTestId("autocat-diary-action").click();
+  await page.getByRole("listbox").getByRole("option", { name: "Split matches into columns", exact: true }).click();
+  await dialog.getByTestId("autocat-auto-column-prefix").fill("Auto");
+  await dialog.getByTestId("autocat-auto-column-limit").fill("2");
+  const controlsScreenshotPath = testInfo.outputPath("diary-autocat-auto-columns.png");
+  await page.screenshot({ path: controlsScreenshotPath, fullPage: true });
+  await testInfo.attach("diary-autocat-auto-columns", { path: controlsScreenshotPath, contentType: "image/png" });
+  await dialog.getByRole("button", { name: "Apply", exact: true }).click();
+  await expect(dialog.getByText("Done!", { exact: true })).toBeVisible();
+  const doneScreenshotPath = testInfo.outputPath("diary-autocat-auto-columns-done.png");
+  await page.screenshot({ path: doneScreenshotPath, fullPage: true });
+  await testInfo.attach("diary-autocat-auto-columns-done", { path: doneScreenshotPath, contentType: "image/png" });
+  await expect(dialog.getByRole("button", { name: "Undo Diary AutoCat", exact: true })).toBeVisible();
+  await dialog.getByText("Close", { exact: true }).click();
+
+  await page.getByTestId("diary-view-kanban").click();
+  await expect(page.locator('[data-column-name^="Auto ·"]')).toHaveCount(2);
+  const kanbanScreenshotPath = testInfo.outputPath("diary-autocat-auto-columns-kanban.png");
+  await page.screenshot({ path: kanbanScreenshotPath, fullPage: true });
+  await testInfo.attach("diary-autocat-auto-columns-kanban", { path: kanbanScreenshotPath, contentType: "image/png" });
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  await expect(page.locator('[data-column-name^="Auto ·"]')).toHaveCount(0);
+});
+
+test("Diary AutoCat auto-column controls stay usable on a narrow screen", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  await page.evaluate(async () => {
+    const { useSettingsStore } = await import("/src/stores/settingsStore.ts");
+    const { useCategoryStore } = await import("/src/stores/categoryStore.ts");
+    useSettingsStore.getState().setSettings({ showDiary: true });
+    useCategoryStore.getState().setActiveCategory("diary");
+  });
+  await page.getByTestId("diary-autocat-button").click();
+  const dialog = page.locator(".fixed.inset-0").filter({
+    has: page.getByRole("heading", { name: "Auto-Categorize" }),
+  });
+  await dialog.getByRole("button", { name: /By Name/ }).click();
+  await dialog.getByRole("button", { name: "Run" }).click();
+  await expect(dialog.getByTestId("autocat-preview-order")).toHaveCount(0);
+  await expect(dialog.getByText("Preview sort")).toHaveCount(0);
+  await expect(dialog.getByText("Kanban groups", { exact: true })).toHaveCount(0);
+  await expect(dialog.getByTestId("autocat-if-then")).toBeVisible();
+  await expect(dialog.getByText("Show matched games", { exact: true })).toBeVisible();
+  await dialog.getByTestId("autocat-diary-action").click();
+  await page.getByRole("listbox").getByRole("option", { name: "Split matches into columns", exact: true }).click();
+  await expect(dialog.getByTestId("autocat-auto-column-prefix")).toBeVisible();
+  await expect(dialog.getByTestId("autocat-auto-column-limit")).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+  const screenshotPath = testInfo.outputPath("diary-autocat-auto-columns-mobile.png");
+  await page.screenshot({ path: screenshotPath, fullPage: true });
+  await testInfo.attach("diary-autocat-auto-columns-mobile", { path: screenshotPath, contentType: "image/png" });
+});
+
+test("Diary AutoCat saves its destination with a reusable rule", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Diary" }).click();
+  await page.getByTestId("diary-autocat-button").click();
+  const dialog = page.locator(".fixed.inset-0").filter({ has: page.getByRole("heading", { name: "Auto-Categorize" }) });
+  await dialog.getByRole("button", { name: /Custom rule/ }).click();
+  await dialog.getByPlaceholder("Preset name").fill("RPG non iniziati");
+  await dialog.getByRole("button", { name: "Save", exact: true }).click();
+  await dialog.getByRole("button", { name: "Back", exact: true }).click();
+  const saved = dialog.getByText("RPG non iniziati", { exact: true });
+  await expect(saved).toBeVisible();
+  await expect(saved.locator(".." )).toContainText("Diary / Kanban");
+  await saved.click();
+  await expect(dialog.getByTestId("autocat-destination")).toHaveAccessibleName("Destination: Diary / Kanban");
+});
+
+test("Diary AutoCat previews multiple saved IF rules before a shared action", async ({ page }, testInfo) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Diary" }).click();
+  await page.getByTestId("diary-autocat-button").click();
+  const dialog = page.locator(".fixed.inset-0").filter({ has: page.getByRole("heading", { name: "Auto-Categorize" }) });
+
+  await dialog.getByRole("button", { name: /Custom rule Build one/ }).click();
+  await dialog.getByPlaceholder("e.g. Short games I already started").fill("Hades rule");
+  await dialog.getByRole("button", { name: "Title starts" }).click();
+  await dialog.locator('input[value="A"]').fill("Hades");
+  await dialog.getByPlaceholder("Preset name").fill("Hades rule");
+  await dialog.getByRole("button", { name: "Save", exact: true }).click();
+  await dialog.getByRole("button", { name: "Back", exact: true }).click();
+
+  await dialog.getByRole("button", { name: /Custom rule Build one/ }).click();
+  await dialog.getByPlaceholder("e.g. Short games I already started").fill("Night rule");
+  await dialog.locator('input[value="Hades"]').fill("Night");
+  await dialog.getByPlaceholder("Preset name").fill("Night rule");
+  await dialog.getByRole("button", { name: "Save", exact: true }).click();
+  await dialog.getByRole("button", { name: "Back", exact: true }).click();
+
+  await expect(dialog.getByText("Hades rule", { exact: true })).toBeVisible();
+  await expect(dialog.getByText("Night rule", { exact: true })).toBeVisible();
+  await dialog.getByRole("button", { name: /Run all/ }).click();
+  await expect(dialog.getByTestId("autocat-if-then")).toBeVisible();
+  await expect(dialog.getByText(/Hades rule: Title starts with/)).toBeVisible();
+  await expect(dialog.getByText(/Night rule: Title starts with/)).toBeVisible();
+  await expect(dialog.getByText("Preview sort")).toHaveCount(0);
+
+  const screenshotPath = testInfo.outputPath("diary-autocat-multiple-if.png");
+  await page.screenshot({ path: screenshotPath, fullPage: true });
+  await testInfo.attach("diary-autocat-multiple-if", { path: screenshotPath, contentType: "image/png" });
 });
 
 test("AutoCat does not apply categories when its safety backup fails", async ({ page }) => {

@@ -216,6 +216,7 @@ export async function installTauriMock(page: Page) {
 
     window.localStorage.setItem("repressurizer-settings", JSON.stringify(settings));
     const diaryBackups: Array<{ name: string; description: string; created_at_ms: number; files: string[] }> = [];
+    const diaryBackupFiles: Record<string, Record<string, string>> = {};
     let diaryBackupCounter = 0;
     if (window.localStorage.getItem("repressurizer-last-seen-version") == null) {
       window.localStorage.setItem("repressurizer-last-seen-version", currentVersion);
@@ -520,12 +521,14 @@ export async function installTauriMock(page: Page) {
           case "create_diary_backup": {
             diaryBackupCounter += 1;
             const backupName = `diary-backup-20260819_12000${diaryBackupCounter}`;
+            const files = ["diary.json", "diary-templates.json", "diary-status-events.json", "diary-achievements.json", "reviews.json", "notes.json", "statuses.json"];
             diaryBackups.unshift({
               name: backupName,
               description: String(args?.description ?? ""),
               created_at_ms: Date.now(),
-              files: ["diary.json", "diary-templates.json", "diary-status-events.json", "diary-achievements.json", "reviews.json", "notes.json", "statuses.json"],
+              files,
             });
+            diaryBackupFiles[backupName] = Object.fromEntries(files.map((key) => [key, `backup:${key}`]));
             window.localStorage.setItem("repressurizer-last-diary-backup", backupName);
             return backupName;
           }
@@ -535,14 +538,60 @@ export async function installTauriMock(page: Page) {
             window.localStorage.setItem("repressurizer-last-diary-restore", restored.name);
             return null;
           }
+          case "read_diary_backup_file": {
+            const files = diaryBackupFiles[String(args?.name ?? "")];
+            return files?.[String(args?.key ?? "")] ?? null;
+          }
+          case "restore_diary_backup_files": {
+            const name = String(args?.name ?? "");
+            const restored = diaryBackups.find((backup) => backup.name === name);
+            if (!restored) throw new Error("Diary backup not found");
+            const keys = ((args?.keys ?? []) as unknown[]).map(String).filter((key) => restored.files.includes(key));
+            window.localStorage.setItem("repressurizer-last-diary-restore", JSON.stringify({ name, keys }));
+            return keys;
+          }
           case "delete_diary_backup": {
             const index = diaryBackups.findIndex((backup) => backup.name === String(args?.name ?? ""));
             if (index === -1) throw new Error("Diary backup not found");
             diaryBackups.splice(index, 1);
+            delete diaryBackupFiles[String(args?.name ?? "")];
             return null;
           }
           case "fetch_hltb":
             return { main_story: 12, main_extra: 18, completionist: 30 };
+          case "run_name_categorizer": {
+            const games = (args?.games ?? []) as Array<{ appid: number; name: string }>;
+            const config = (args?.config ?? {}) as {
+              prefix?: string;
+              skip_leading_the?: boolean;
+              group_numbers?: boolean;
+              group_other?: boolean;
+            };
+            const assignments: Record<string, number[]> = {};
+            let gamesCategorized = 0;
+            for (const game of games) {
+              const rawTitle = String(game.name ?? "").trim();
+              const title = config.skip_leading_the === false ? rawTitle : rawTitle.replace(/^the\s+/i, "");
+              const first = [...title].find((character) => !/\s/.test(character));
+              if (!first) continue;
+              const bucket = /[A-Za-z]/.test(first)
+                ? first.toUpperCase()
+                : /\d/.test(first) && config.group_numbers !== false
+                  ? "#"
+                  : config.group_other !== false
+                    ? "Other"
+                    : null;
+              if (!bucket) continue;
+              const name = `${config.prefix ?? ""}${bucket}`;
+              assignments[name] = [...(assignments[name] ?? []), game.appid];
+              gamesCategorized += 1;
+            }
+            return {
+              assignments,
+              games_processed: games.length,
+              games_categorized: gamesCategorized,
+            };
+          }
           case "run_flags_categorizer": {
             const gameDetails = (args?.gameDetails ?? []) as Array<{
               app_id: number;

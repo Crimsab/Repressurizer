@@ -1,5 +1,6 @@
 import { useToastStore } from "../../stores/toastStore";
 import { CheckCircle, WarningCircle, Warning, Info, X } from "@phosphor-icons/react";
+import { useT } from "../../lib/i18n";
 
 const ICON_MAP = {
   success: <CheckCircle size={16} weight="fill" className="text-repressurizer-success shrink-0" />,
@@ -9,13 +10,14 @@ const ICON_MAP = {
 };
 
 const BORDER_MAP = {
-  success: "border-repressurizer-success/20",
-  error: "border-repressurizer-danger/20",
-  warning: "border-repressurizer-warning/20",
-  info: "border-sky-400/20",
+  success: "border-repressurizer-success/25",
+  error: "border-repressurizer-danger/25",
+  warning: "border-repressurizer-warning/25",
+  info: "border-sky-400/25",
 };
 
 export function ToastContainer() {
+  const t = useT();
   const toasts = useToastStore((s) => s.toasts);
   const remove = useToastStore((s) => s.remove);
 
@@ -26,16 +28,33 @@ export function ToastContainer() {
       {toasts.map((toast) => (
         <div
           key={toast.id}
-          className={`pointer-events-auto flex items-start gap-2.5 rounded-xl border ${BORDER_MAP[toast.type]} bg-repressurizer-surface px-4 py-3 shadow-[0_8px_32px_rgba(0,0,0,0.5)] animate-toast-in min-w-[280px] max-w-[420px]`}
+          className={`animate-toast-in pointer-events-auto flex min-w-[280px] max-w-[420px] items-stretch overflow-hidden rounded-xl border ${BORDER_MAP[toast.type]} bg-repressurizer-surface-raised/95 shadow-pop backdrop-blur-sm`}
         >
-          {ICON_MAP[toast.type]}
-          <p className="flex-1 text-sm text-repressurizer-text leading-relaxed">{toast.message}</p>
-          <button
-            onClick={() => remove(toast.id)}
-            className="shrink-0 text-repressurizer-text-faint hover:text-white transition-colors mt-0.5"
-          >
-            <X size={12} weight="bold" />
-          </button>
+          <span aria-hidden="true" className={`w-1 shrink-0 ${toast.type === "success" ? "bg-repressurizer-success/70" : toast.type === "error" ? "bg-repressurizer-danger/70" : toast.type === "warning" ? "bg-repressurizer-warning/70" : "bg-sky-400/70"}`} />
+          <span className="flex flex-1 items-start gap-2.5 px-3.5 py-3">
+            {ICON_MAP[toast.type]}
+            <p className="flex-1 text-sm leading-relaxed text-repressurizer-text">{toast.message}</p>
+            {toast.actionLabel && toast.onAction && (
+              <button
+                type="button"
+                onClick={() => {
+                  toast.onAction?.();
+                  remove(toast.id);
+                }}
+                className="focus-ring shrink-0 rounded-md px-1.5 py-1 text-xs font-medium text-repressurizer-accent transition-colors hover:bg-repressurizer-accent/10"
+              >
+                {toast.actionLabel}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => remove(toast.id)}
+              aria-label={t("common.close")}
+              className="mt-0.5 shrink-0 rounded p-0.5 text-repressurizer-text-faint transition-colors hover:text-white"
+            >
+              <X size={12} weight="bold" />
+            </button>
+          </span>
         </div>
       ))}
     </div>

@@ -34,6 +34,8 @@ export type CategorizerType =
   | "name"
   | "custom";
 export type PersistStep = "choose" | "configure" | "preview" | "done";
+export type AutoCategorizePresetTarget = "collections" | "diary";
+export type AutoCategorizeDiaryAction = "existingColumn" | "newColumn" | "autoColumns";
 export const AUTO_CATEGORIZE_RESULT_SCOPE_VERSION = 3;
 
 export type AutoCategorizePresetConfig =
@@ -57,6 +59,20 @@ export interface AutoCategorizePreset {
   config: AutoCategorizePresetConfig;
   createdAt: number;
   updatedAt: number;
+  /** Destination used when this rule was saved; old presets default to collections. */
+  target?: AutoCategorizePresetTarget;
+  /** Diary status/custom-column key used by Diary AutoCat presets. */
+  diaryColumn?: string;
+  /** Diary AutoCat action; old presets default to the selected existing column. */
+  diaryAction?: AutoCategorizeDiaryAction;
+  /** Name/color used when a Diary AutoCat preset creates a new column. */
+  diaryNewColumnName?: string;
+  diaryNewColumnColor?: string;
+  /** Settings for automatic one-column-per-result-group Diary runs. */
+  diaryAutoColumnPrefix?: string;
+  diaryAutoColumnLimit?: number;
+  diaryAutoColumnReuse?: boolean;
+  diaryMoveMatches?: boolean;
 }
 
 interface AutoCategorizeState {
@@ -202,6 +218,7 @@ function normalizePreset(raw: unknown): AutoCategorizePreset | null {
   if (!raw || typeof raw !== "object") return null;
   const preset = raw as Partial<AutoCategorizePreset>;
   if (!isCategorizerType(preset.type)) return null;
+  const target = preset.target === "diary" || preset.target === "collections" ? preset.target : undefined;
   return {
     id: String(preset.id || `preset-${Date.now()}`),
     name: String(preset.name || preset.type),
@@ -209,6 +226,15 @@ function normalizePreset(raw: unknown): AutoCategorizePreset | null {
     config: preset.type === "custom" ? normalizeCustomAutoCatConfig(preset.config) : (preset.config ?? {}),
     createdAt: Number(preset.createdAt || Date.now()),
     updatedAt: Number(preset.updatedAt || Date.now()),
+    target,
+    diaryColumn: typeof preset.diaryColumn === "string" && preset.diaryColumn ? preset.diaryColumn : undefined,
+    diaryAction: preset.diaryAction === "newColumn" || preset.diaryAction === "existingColumn" || preset.diaryAction === "autoColumns" ? preset.diaryAction : undefined,
+    diaryNewColumnName: typeof preset.diaryNewColumnName === "string" && preset.diaryNewColumnName ? preset.diaryNewColumnName.slice(0, 24) : undefined,
+    diaryNewColumnColor: typeof preset.diaryNewColumnColor === "string" && /^#[0-9a-fA-F]{6}$/.test(preset.diaryNewColumnColor) ? preset.diaryNewColumnColor.toLowerCase() : undefined,
+    diaryAutoColumnPrefix: typeof preset.diaryAutoColumnPrefix === "string" ? preset.diaryAutoColumnPrefix.slice(0, 16) : undefined,
+    diaryAutoColumnLimit: Number.isFinite(Number(preset.diaryAutoColumnLimit)) ? Math.min(12, Math.max(1, Math.floor(Number(preset.diaryAutoColumnLimit)))) : undefined,
+    diaryAutoColumnReuse: typeof preset.diaryAutoColumnReuse === "boolean" ? preset.diaryAutoColumnReuse : undefined,
+    diaryMoveMatches: typeof preset.diaryMoveMatches === "boolean" ? preset.diaryMoveMatches : undefined,
   };
 }
 

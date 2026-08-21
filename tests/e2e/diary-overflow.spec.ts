@@ -29,7 +29,7 @@ test("diary views have no horizontal overflow", async ({ page }) => {
     await page.goto("/");
     await page.getByRole("button", { name: "Diary" }).click();
 
-    for (const view of ["grid", "kanban", "timeline"] as const) {
+    for (const view of ["grid", "kanban", "timeline", "upcoming"] as const) {
       await page.getByTestId(`diary-view-${view}`).click();
       if (view === "timeline") {
         for (const layout of ["rail", "cards", "compact"] as const) {

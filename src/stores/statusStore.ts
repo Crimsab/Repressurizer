@@ -44,6 +44,8 @@ interface StatusState {
   statuses: Record<number, GameStatus>;
   setStatus: (appId: number, status: GameStatus) => void;
   setBulkStatus: (appIds: number[], status: GameStatus) => void;
+  captureSnapshot: (appIds: number[]) => Record<number, GameStatus | undefined>;
+  restoreSnapshot: (snapshot: Record<number, GameStatus | undefined>) => void;
   getStatus: (appId: number) => GameStatus;
   hydrate: () => Promise<void>;
 }
@@ -67,6 +69,24 @@ export const useStatusStore = create<StatusState>((set, get) => ({
         changed = applyStatus(next, appId, status) || changed;
       }
       if (!changed) return state;
+      saveStatuses(next);
+      return { statuses: next };
+    }),
+
+  captureSnapshot: (appIds) => {
+    const current = get().statuses;
+    return Object.fromEntries([...new Set(appIds)].map((appId) => [appId, current[appId]]));
+  },
+
+  restoreSnapshot: (snapshot) =>
+    set((state) => {
+      const next = { ...state.statuses };
+      for (const [rawAppId, status] of Object.entries(snapshot)) {
+        const appId = Number(rawAppId);
+        if (!Number.isFinite(appId)) continue;
+        if (!status || status === "none") delete next[appId];
+        else next[appId] = status;
+      }
       saveStatuses(next);
       return { statuses: next };
     }),
