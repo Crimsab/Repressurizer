@@ -352,6 +352,32 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, details,
     dragRef.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, appId };
   }, []);
 
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("input, textarea, select, [contenteditable='true']")) return;
+
+      // Escape closes the transient Kanban menus first. A second Escape clears
+      // the bulk selection, matching the expected keyboard escape hierarchy.
+      if (contextMenu || columnMenu || columnsPopover || addGamePopover) {
+        setContextMenu(null);
+        setColumnMenu(null);
+        setColumnsPopover(null);
+        setAddGamePopover(null);
+        event.preventDefault();
+        return;
+      }
+      if (selection.size === 0) return;
+      setSelection(new Set());
+      setLastClicked(null);
+      event.preventDefault();
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [addGamePopover, columnMenu, columnsPopover, contextMenu, selection.size]);
+
   const openColumnMenu = (event: ReactMouseEvent, columnKey: string) => {
     if ((event.target as HTMLElement).closest("[data-kanban-card]")) return;
     event.preventDefault();
@@ -921,7 +947,13 @@ const KanbanCard = memo(function KanbanCard({ game, detail, entry, rating, journ
       title={`${String(game.name ?? "")} — ${t("diary.kanban.openHint")}`}
       style={style}
       className={`group/card card-lift focus-ring relative cursor-grab touch-none select-none rounded-lg border bg-repressurizer-surface p-2.5 text-left shadow-pop-sm active:cursor-grabbing ${dragging ? "opacity-40" : selected ? "" : "border-repressurizer-border-subtle hover:border-repressurizer-accent/45 hover:bg-repressurizer-surface-hover/70 hover:shadow-pop"}`}
+      aria-keyshortcuts="Enter"
       onPointerDown={(event) => onPointerDown(game.appid, event)}
+      onKeyDown={(event) => {
+        if (event.key !== "Enter" || event.target !== event.currentTarget) return;
+        event.preventDefault();
+        onOpen(game.appid);
+      }}
       onClick={(event) => {
         onSelect(game.appid, columnKey, columnIndex, event.shiftKey ? "range" : event.ctrlKey || event.metaKey ? "toggle" : "replace");
       }}

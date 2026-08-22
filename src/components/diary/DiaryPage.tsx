@@ -215,6 +215,22 @@ export function DiaryPage() {
   }, [hydratePlayHistory]);
 
   useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "/" || event.ctrlKey || event.metaKey || event.altKey) return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("input, textarea, select, [contenteditable='true']")) return;
+      const searchInput = [...document.querySelectorAll<HTMLInputElement>("[data-diary-search]")]
+        .find((input) => input.getClientRects().length > 0);
+      if (!searchInput) return;
+      event.preventDefault();
+      searchInput.focus();
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  useEffect(() => {
     try {
       localStorage.setItem(PREFERENCES_KEY, JSON.stringify(preferences));
     } catch {}
@@ -643,7 +659,7 @@ function DiaryFilterControls({ query, statusFilter, statusCounts, sortBy, catego
   return <div className="min-w-0 space-y-3">
     <label className="group flex w-full items-center gap-2 border-b border-repressurizer-border-subtle bg-transparent px-1 py-2.5 transition-colors focus-within:border-repressurizer-accent">
       <MagnifyingGlass size={15} className="shrink-0 text-repressurizer-text-faint group-focus-within:text-repressurizer-accent" />
-      <input type="search" value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder={t("diary.search")} aria-label={t("diary.search")} className="min-w-0 flex-1 bg-transparent text-xs text-repressurizer-text outline-none placeholder:text-repressurizer-text-faint" />
+      <input type="search" data-diary-search value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder={t("diary.search")} aria-label={t("diary.search")} className="min-w-0 flex-1 bg-transparent text-xs text-repressurizer-text outline-none placeholder:text-repressurizer-text-faint" />
     </label>
     <div className="grid w-full grid-cols-2 gap-2">
       <SelectMenu value={categoryFilter} options={categoryOptions} onChange={onCategoryChange} ariaLabel={t("diary.categoryFilter")} size="sm" buttonClassName="border-repressurizer-border-subtle bg-repressurizer-surface/55" />
@@ -674,7 +690,7 @@ function DiaryLibraryFilters({ query, statusFilter, statusCounts, sortBy, catego
   return <div className="flex min-w-0 flex-wrap items-center gap-2">
     <label className="group flex h-9 min-w-[180px] flex-1 basis-[220px] items-center gap-2 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-surface/40 px-3 transition-[background-color,border-color,box-shadow] focus-within:border-repressurizer-accent/60 focus-within:shadow-[0_0_0_1px_rgba(16,185,129,0.22)] hover:border-repressurizer-border hover:bg-repressurizer-surface-hover/50">
       <MagnifyingGlass size={14} className="shrink-0 text-repressurizer-text-faint group-focus-within:text-repressurizer-accent" />
-      <input type="search" value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder={t("diary.search")} aria-label={t("diary.search")} className="min-w-0 flex-1 bg-transparent text-xs text-repressurizer-text outline-none placeholder:text-repressurizer-text-faint" />
+      <input type="search" data-diary-search value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder={t("diary.search")} aria-label={t("diary.search")} className="min-w-0 flex-1 bg-transparent text-xs text-repressurizer-text outline-none placeholder:text-repressurizer-text-faint" />
     </label>
     <SelectMenu value={categoryFilter} options={categoryOptions} onChange={onCategoryChange} ariaLabel={t("diary.categoryFilter")} size="sm" className="w-36 shrink-0" buttonClassName="h-9" />
     <SelectMenu value={sortBy} options={sortOptions} onChange={onSortChange} ariaLabel={t("diary.sort")} size="sm" className="w-36 shrink-0" buttonClassName="h-9" />

@@ -532,6 +532,35 @@ test("Diary kanban board moves cards and the timeline lists diary events", async
   await expect(page.getByTestId("diary-hero-image").locator("img")).toHaveAttribute("src", /1145360/);
 });
 
+test("Diary Kanban Escape clears the active card selection", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Diary" }).click();
+  await page.getByTestId("diary-view-kanban").click();
+
+  const card = page.getByTestId("diary-kanban-card-1145360");
+  await card.click();
+  await expect(page.getByTestId("diary-kanban-selection")).toContainText("1");
+  await expect(card).toHaveAttribute("data-selected", "true");
+
+  await page.keyboard.press("Escape");
+  await expect(page.getByTestId("diary-kanban-selection")).toHaveCount(0);
+  await expect(card).toHaveAttribute("data-selected", "false");
+});
+
+test("Diary keyboard shortcuts focus search and open a focused Kanban card", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Diary" }).click();
+  await page.getByTestId("diary-view-kanban").click();
+
+  await page.keyboard.press("/");
+  await expect(page.getByRole("searchbox", { name: "Search your backlog" })).toBeFocused();
+
+  const card = page.getByTestId("diary-kanban-card-1145360");
+  await card.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("diary-hero-image")).toBeVisible();
+});
+
 test("Diary bulk actions expose status, priority, removal, and undo", async ({ page }, testInfo) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Diary" }).click();
