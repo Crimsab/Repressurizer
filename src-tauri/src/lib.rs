@@ -491,7 +491,7 @@ fn validate_diary_backup_name(name: &str) -> Result<(), String> {
 }
 
 fn validate_diary_backup_key(key: &str) -> Result<(), String> {
-    if DIARY_BACKUP_KEYS.iter().any(|allowed| *allowed == key) {
+    if DIARY_BACKUP_KEYS.contains(&key) {
         Ok(())
     } else {
         Err("Invalid diary backup file".to_string())
