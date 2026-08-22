@@ -532,6 +532,17 @@ jobs:
           $scanIncomplete = $false
           $maxDetections = 0
 
+          function Get-HttpStatusCode($errorRecord) {
+            if ($null -eq $errorRecord.Exception.Response) {
+              return 0
+            }
+            try {
+              return [int]$errorRecord.Exception.Response.StatusCode
+            } catch {
+              return 0
+            }
+          }
+
           foreach ($entry in $entries) {
             $parts = $entry -split "=", 2
             $name = Split-Path $parts[0] -Leaf
@@ -545,36 +556,90 @@ jobs:
 
             $analysisId = $Matches[1]
             $attributes = $null
+            $lastError = $null
 
             # PE uploads can remain queued while VirusTotal schedules engines.
-            # Allow up to ten minutes per artifact so the release gate can
-            # report the real engine verdicts instead of failing on a timeout.
+            # Allow up to ten minutes per artifact. VirusTotal can briefly return
+            # 404/429/5xx while it moves an upload into the analysis queue, so
+            # those responses are retried instead of aborting the whole release.
             for ($attempt = 1; $attempt -le 60; $attempt++) {
-              $response = Invoke-RestMethod `
-                -Headers $headers `
-                -Uri "https://www.virustotal.com/api/v3/analyses/$analysisId"
+              try {
+                $response = Invoke-RestMethod `
+                  -Headers $headers `
+                  -Uri "https://www.virustotal.com/api/v3/analyses/$analysisId"
 
-              $attributes = $response.data.attributes
-              if ($attributes.status -eq "completed") {
-                break
+                $attributes = $response.data.attributes
+                $lastError = $null
+                if ($attributes.status -eq "completed") {
+                  break
+                }
+              } catch {
+                $statusCode = Get-HttpStatusCode $_
+                if ($statusCode -notin @(404, 429, 500, 502, 503, 504)) {
+                  throw
+                }
+                $lastError = $_.Exception.Message
+                Write-Warning "VirusTotal analysis lookup for $name returned HTTP $statusCode on attempt $attempt/60; retrying."
               }
 
-              Start-Sleep -Seconds 10
+              if ($attempt -lt 60) {
+                Start-Sleep -Seconds 10
+              }
             }
 
+            $fileAttributes = $null
+            $sha256 = $null
             if ($null -eq $attributes -or $attributes.status -ne "completed") {
-              $lines += "- ${name}: analysis still pending after timeout - $url"
+              # The upload analysis resource can disappear even though the
+              # corresponding file report is available. Use the stable SHA256
+              # file endpoint as a fallback before declaring the scan unknown.
+              $sha256 = (Get-FileHash -Algorithm SHA256 -Path $parts[0]).Hash.ToLowerInvariant()
+              for ($attempt = 1; $attempt -le 6; $attempt++) {
+                try {
+                  $fileResponse = Invoke-RestMethod `
+                    -Headers $headers `
+                    -Uri "https://www.virustotal.com/api/v3/files/$sha256"
+
+                  $fileAttributes = $fileResponse.data.attributes
+                  if ($null -ne $fileAttributes.last_analysis_stats) {
+                    break
+                  }
+                } catch {
+                  $statusCode = Get-HttpStatusCode $_
+                  if ($statusCode -notin @(404, 429, 500, 502, 503, 504)) {
+                    throw
+                  }
+                  $lastError = $_.Exception.Message
+                  Write-Warning "VirusTotal file report lookup for $name returned HTTP $statusCode on fallback attempt $attempt/6; retrying."
+                }
+
+                if ($attempt -lt 6) {
+                  Start-Sleep -Seconds 10
+                }
+              }
+            }
+
+            if ($null -ne $attributes -and $attributes.status -eq "completed") {
+              $stats = $attributes.stats
+              $results = $attributes.results
+            } elseif ($null -ne $fileAttributes -and $null -ne $fileAttributes.last_analysis_stats) {
+              $stats = $fileAttributes.last_analysis_stats
+              $results = $fileAttributes.last_analysis_results
+              $url = "https://www.virustotal.com/gui/file/$sha256/detection"
+              Write-Warning "Using the VirusTotal file report fallback for $name."
+            } else {
+              $detail = if ($lastError) { " ($lastError)" } else { "" }
+              $lines += "- ${name}: analysis unavailable after retries${detail} - $url"
               $scanIncomplete = $true
               continue
             }
 
-            $stats = $attributes.stats
             $malicious = Get-Stat $stats "malicious"
             $suspicious = Get-Stat $stats "suspicious"
             $harmless = Get-Stat $stats "harmless"
             $undetected = Get-Stat $stats "undetected"
             $timeout = Get-Stat $stats "timeout"
-            $engines = Get-Detections $attributes.results
+            $engines = Get-Detections $results
             $engineText = ""
             if ($engines.Count -gt 0) {
               $engineText = " detections: " + ($engines -join "; ")
