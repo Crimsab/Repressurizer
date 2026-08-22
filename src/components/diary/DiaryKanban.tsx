@@ -116,6 +116,7 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, details,
   const [addGamePopover, setAddGamePopover] = useState<{ anchor: PopoverAnchor; column: BoardColumn } | null>(null);
   const [addGameQuery, setAddGameQuery] = useState("");
 
+  const kanbanRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ pointerId: number; startX: number; startY: number; appId: number } | null>(null);
   const suppressClickRef = useRef(false);
   const rafRef = useRef<number | null>(null);
@@ -354,9 +355,34 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, details,
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      const key = event.key.toLowerCase();
+      if (key !== "j" && key !== "k") return;
+      if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
+      const boardRoot = kanbanRef.current;
+      const target = event.target as HTMLElement | null;
+      if (!boardRoot || boardRoot.getClientRects().length === 0) return;
+      if (target?.closest("input, textarea, select, [contenteditable='true'], [role='dialog']")) return;
+      const currentCard = target?.closest<HTMLElement>("[data-kanban-card]") ?? null;
+      if (!currentCard && !target?.closest("[data-column-key]")) return;
+      const cards = Array.from(boardRoot.querySelectorAll<HTMLElement>("[data-kanban-card]"));
+      if (cards.length === 0) return;
+      const currentIndex = currentCard ? cards.indexOf(currentCard) : key === "j" ? -1 : cards.length;
+      const nextIndex = Math.max(0, Math.min(cards.length - 1, currentIndex + (key === "j" ? 1 : -1)));
+      if (nextIndex === currentIndex) return;
+      event.preventDefault();
+      cards[nextIndex].focus({ preventScroll: true });
+      cards[nextIndex].scrollIntoView({ block: "nearest", inline: "nearest" });
+    };
+
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") return;
       const target = event.target as HTMLElement | null;
-      if (target?.closest("input, textarea, select, [contenteditable='true']")) return;
+      if (target?.closest("input, textarea, select, [contenteditable='true'], [role='dialog']")) return;
 
       // Escape closes the transient Kanban menus first. A second Escape clears
       // the bulk selection, matching the expected keyboard escape hierarchy.
@@ -412,7 +438,7 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, details,
   }, [addGamePopover, addGameQuery, games, grouped, language]);
 
   return (
-    <div data-testid="diary-kanban" className="relative flex min-h-0 flex-1 flex-col">
+    <div ref={kanbanRef} data-testid="diary-kanban" className="relative flex min-h-0 flex-1 flex-col">
       {selection.size > 0 && draggingAppId === null && (
         <div data-testid="diary-kanban-selection" className="absolute inset-x-0 bottom-3 z-20 flex justify-center px-4">
           <div className="animate-fade-in inline-flex max-w-full flex-wrap items-center justify-center gap-x-1 gap-y-1.5 rounded-xl border border-repressurizer-accent/35 bg-repressurizer-surface-raised/95 py-1.5 pl-1 pr-1.5 shadow-dialog backdrop-blur-md">
@@ -947,12 +973,20 @@ const KanbanCard = memo(function KanbanCard({ game, detail, entry, rating, journ
       title={`${String(game.name ?? "")} — ${t("diary.kanban.openHint")}`}
       style={style}
       className={`group/card card-lift focus-ring relative cursor-grab touch-none select-none rounded-lg border bg-repressurizer-surface p-2.5 text-left shadow-pop-sm active:cursor-grabbing ${dragging ? "opacity-40" : selected ? "" : "border-repressurizer-border-subtle hover:border-repressurizer-accent/45 hover:bg-repressurizer-surface-hover/70 hover:shadow-pop"}`}
-      aria-keyshortcuts="Enter"
+      data-column-index={columnIndex}
+      aria-keyshortcuts="Enter Space"
       onPointerDown={(event) => onPointerDown(game.appid, event)}
       onKeyDown={(event) => {
-        if (event.key !== "Enter" || event.target !== event.currentTarget) return;
-        event.preventDefault();
-        onOpen(game.appid);
+        if (event.target !== event.currentTarget) return;
+        if (event.key === "Enter") {
+          event.preventDefault();
+          onOpen(game.appid);
+          return;
+        }
+        if (event.key === " " || event.key === "Spacebar") {
+          event.preventDefault();
+          onSelect(game.appid, columnKey, columnIndex, "toggle");
+        }
       }}
       onClick={(event) => {
         onSelect(game.appid, columnKey, columnIndex, event.shiftKey ? "range" : event.ctrlKey || event.metaKey ? "toggle" : "replace");

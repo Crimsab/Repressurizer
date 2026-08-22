@@ -561,6 +561,43 @@ test("Diary keyboard shortcuts focus search and open a focused Kanban card", asy
   await expect(page.getByTestId("diary-hero-image")).toBeVisible();
 });
 
+test("Diary shortcut panel navigates Kanban cards and toggles selection", async ({ page }, testInfo) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Diary" }).click();
+  await page.getByTestId("diary-view-kanban").click();
+
+  const shortcuts = page.getByRole("dialog", { name: "Keyboard shortcuts" });
+  await page.getByRole("button", { name: "Keyboard shortcuts" }).click();
+  await expect(shortcuts).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(shortcuts).toHaveCount(0);
+
+  await page.keyboard.press("Shift+/");
+  await expect(shortcuts).toBeVisible();
+  const desktopScreenshot = testInfo.outputPath("diary-shortcuts-desktop.png");
+  await page.screenshot({ path: desktopScreenshot, fullPage: true });
+  await testInfo.attach("diary-shortcuts-desktop", { path: desktopScreenshot, contentType: "image/png" });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(shortcuts).toBeVisible();
+  const mobileScreenshot = testInfo.outputPath("diary-shortcuts-mobile.png");
+  await page.screenshot({ path: mobileScreenshot, fullPage: true });
+  await testInfo.attach("diary-shortcuts-mobile", { path: mobileScreenshot, contentType: "image/png" });
+  await page.keyboard.press("Escape");
+  await expect(shortcuts).toHaveCount(0);
+
+  const firstCard = page.getByTestId("diary-kanban-card-39140");
+  const nextCard = page.getByTestId("diary-kanban-card-753640");
+  await firstCard.focus();
+  await page.keyboard.press("j");
+  await expect(nextCard).toBeFocused();
+  await page.keyboard.press("Space");
+  await expect(page.getByTestId("diary-kanban-selection")).toContainText("1");
+  await page.keyboard.press("Space");
+  await expect(page.getByTestId("diary-kanban-selection")).toHaveCount(0);
+  await page.keyboard.press("k");
+  await expect(firstCard).toBeFocused();
+});
+
 test("Diary bulk actions expose status, priority, removal, and undo", async ({ page }, testInfo) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Diary" }).click();

@@ -18,6 +18,7 @@ import {
   PencilSimple,
   Play,
   Plus,
+  Question,
   SlidersHorizontal,
   Sparkle,
   SquaresFour,
@@ -62,6 +63,7 @@ import { MarkdownToolbar } from "./DiaryMarkdownToolbar";
 import { SessionNotes } from "./DiarySessionNotes";
 import { DiaryExportDialog } from "./DiaryExportDialog";
 import { DiaryBackupDialog } from "./DiaryBackupDialog";
+import { DiaryKeyboardShortcutsDialog } from "./DiaryKeyboardShortcutsDialog";
 import { RatingControl } from "./DiaryRating";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -204,6 +206,7 @@ export function DiaryPage() {
   const [exportOpen, setExportOpen] = useState(false);
   const [backupOpen, setBackupOpen] = useState(false);
   const [diaryAutoCatOpen, setDiaryAutoCatOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const mainRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
@@ -216,9 +219,14 @@ export function DiaryPage() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "/" || event.ctrlKey || event.metaKey || event.altKey) return;
       const target = event.target as HTMLElement | null;
-      if (target?.closest("input, textarea, select, [contenteditable='true']")) return;
+      if (target?.closest("input, textarea, select, [contenteditable='true'], [role='dialog']")) return;
+      if ((event.key === "?" || (event.key === "/" && event.shiftKey)) && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        event.preventDefault();
+        setShortcutsOpen(true);
+        return;
+      }
+      if (event.key !== "/" || event.ctrlKey || event.metaKey || event.altKey) return;
       const searchInput = [...document.querySelectorAll<HTMLInputElement>("[data-diary-search]")]
         .find((input) => input.getClientRects().length > 0);
       if (!searchInput) return;
@@ -618,6 +626,7 @@ export function DiaryPage() {
           onExport={() => setExportOpen(true)}
           onBackup={() => setBackupOpen(true)}
           onOpenAutoCategorize={() => setDiaryAutoCatOpen(true)}
+          onOpenShortcuts={() => setShortcutsOpen(true)}
           onPreferencesChange={updatePreferences}
           onSelectGame={selectGame}
           onApplyStatus={applyStatus}
@@ -636,6 +645,7 @@ export function DiaryPage() {
           <DiaryAutoCategorizeDialog initialTarget="diary" onClose={() => setDiaryAutoCatOpen(false)} />
         </Suspense>
       )}
+      {shortcutsOpen && <DiaryKeyboardShortcutsDialog onClose={() => setShortcutsOpen(false)} t={t} />}
     </div>
   );
 }
@@ -700,7 +710,7 @@ function DiaryLibraryFilters({ query, statusFilter, statusCounts, sortBy, catego
   </div>;
 }
 
-function DiaryLibrary({ games, gamesById, details, entries, statuses, reviews, journal, pages, collections, board, boardPrefs, sessions, hltbData, hltbTimeMode, statusEvents, achievements, language, preferences, query, statusFilter, statusCounts, sortBy, categoryFilter, viewOptionsOpen, t, onQueryChange, onStatusChange, onSortChange, onCategoryChange, onViewChange, onViewOptionsToggle, onExport, onBackup, onOpenAutoCategorize, onPreferencesChange, onSelectGame, onApplyStatus, onSetBoardOrder, onBulkStatusChange, onBulkPriorityChange, onRemoveGames, onMoveGames, onSetColumnColor, onToggleColumnHidden, onAddCustomColumn, onRenameCustomColumn, onRemoveCustomColumn, onSetCustomAssignment, onSetPriority, onOpenGame }: {
+function DiaryLibrary({ games, gamesById, details, entries, statuses, reviews, journal, pages, collections, board, boardPrefs, sessions, hltbData, hltbTimeMode, statusEvents, achievements, language, preferences, query, statusFilter, statusCounts, sortBy, categoryFilter, viewOptionsOpen, t, onQueryChange, onStatusChange, onSortChange, onCategoryChange, onViewChange, onViewOptionsToggle, onExport, onBackup, onOpenAutoCategorize, onOpenShortcuts, onPreferencesChange, onSelectGame, onApplyStatus, onSetBoardOrder, onBulkStatusChange, onBulkPriorityChange, onRemoveGames, onMoveGames, onSetColumnColor, onToggleColumnHidden, onAddCustomColumn, onRenameCustomColumn, onRemoveCustomColumn, onSetCustomAssignment, onSetPriority, onOpenGame }: {
   games: OwnedGame[];
   gamesById: Record<number, OwnedGame>;
   details: Record<number, GameDetails>;
@@ -742,6 +752,7 @@ function DiaryLibrary({ games, gamesById, details, entries, statuses, reviews, j
   onExport: () => void;
   onBackup: () => void;
   onOpenAutoCategorize: () => void;
+  onOpenShortcuts: () => void;
   onPreferencesChange: (patch: Partial<DiaryPreferences>) => void;
   onSelectGame: (appId: number) => void;
   onApplyStatus: (appId: number, status: DiaryViewStatus) => void;
@@ -810,6 +821,7 @@ function DiaryLibrary({ games, gamesById, details, entries, statuses, reviews, j
             <button type="button" data-diary-view-options-button aria-label={t("diary.settings")} aria-expanded={viewOptionsOpen} onClick={onViewOptionsToggle} className="focus-ring inline-flex h-8 items-center gap-1.5 rounded-lg border border-transparent bg-repressurizer-surface/60 px-2.5 text-[11px] font-medium text-repressurizer-text-muted transition-colors hover:border-repressurizer-border hover:bg-repressurizer-surface-hover hover:text-white"><SlidersHorizontal size={14} /><span className="hidden leading-none xl:inline">{t("diary.settings")}</span></button>
             {viewOptionsOpen && <DiaryViewOptions preferences={preferences} onChange={onPreferencesChange} onClose={onViewOptionsToggle} t={t} />}
           </div>
+          <button type="button" onClick={onOpenShortcuts} aria-label={t("diary.shortcuts.title")} title={`${t("diary.shortcuts.title")} (?)`} aria-keyshortcuts="?" className="focus-ring inline-flex h-8 items-center justify-center rounded-lg border border-transparent bg-repressurizer-surface/60 px-2.5 text-[11px] font-medium text-repressurizer-text-muted transition-colors hover:border-repressurizer-border hover:bg-repressurizer-surface-hover hover:text-white"><Question size={14} weight="bold" /></button>
           <button type="button" onClick={onExport} aria-label={t("diary.export")} title={t("diary.export")} className="focus-ring inline-flex h-8 items-center gap-1.5 rounded-lg border border-transparent bg-repressurizer-surface/60 px-2.5 text-[11px] font-medium text-repressurizer-text-muted transition-colors hover:border-repressurizer-border hover:bg-repressurizer-surface-hover hover:text-white"><Export size={14} /><span className="hidden leading-none xl:inline">{t("diary.export")}</span></button>
           <button type="button" onClick={onBackup} aria-label={t("diary.backup")} title={t("diary.backup")} data-testid="diary-backup-button" className="focus-ring inline-flex h-8 items-center gap-1.5 rounded-lg border border-transparent bg-repressurizer-surface/60 px-2.5 text-[11px] font-medium text-repressurizer-text-muted transition-colors hover:border-repressurizer-border hover:bg-repressurizer-surface-hover hover:text-white"><Database size={14} /><span className="hidden leading-none xl:inline">{t("diary.backup")}</span></button>
           <button type="button" onClick={onOpenAutoCategorize} aria-label={`${t("auto.title")}: ${t("auto.destination.diary")}`} title={`${t("auto.title")}: ${t("auto.destination.diary")}`} data-testid="diary-autocat-button" className="focus-ring inline-flex h-8 items-center gap-1.5 rounded-lg border border-repressurizer-accent/25 bg-repressurizer-accent/[0.08] px-2.5 text-[11px] font-medium text-repressurizer-accent transition-colors hover:border-repressurizer-accent/50 hover:bg-repressurizer-accent/15"><Sparkle size={14} /><span className="hidden leading-none xl:inline">{t("auto.title")}</span></button>
