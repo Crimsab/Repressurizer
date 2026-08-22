@@ -171,6 +171,7 @@
   "diary.shortcuts.title": "Atajos de teclado",
   "diary.shortcuts.description": "Usa estos atajos mientras navegas por el Diario.",
   "diary.shortcuts.search": "Enfocar la búsqueda del Diario",
+  "diary.shortcuts.moveKanban": "Moverse por el Kanban",
   "diary.shortcuts.nextCard": "Enfocar la siguiente tarjeta Kanban",
   "diary.shortcuts.previousCard": "Enfocar la tarjeta Kanban anterior",
   "diary.shortcuts.toggleSelection": "Seleccionar o quitar la tarjeta enfocada",

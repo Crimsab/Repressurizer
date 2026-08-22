@@ -171,6 +171,7 @@
   "diary.shortcuts.title": "Keyboard shortcuts",
   "diary.shortcuts.description": "Use these shortcuts while browsing the Diary.",
   "diary.shortcuts.search": "Focus Diary search",
+  "diary.shortcuts.moveKanban": "Move around the Kanban",
   "diary.shortcuts.nextCard": "Focus next Kanban card",
   "diary.shortcuts.previousCard": "Focus previous Kanban card",
   "diary.shortcuts.toggleSelection": "Select or deselect focused card",

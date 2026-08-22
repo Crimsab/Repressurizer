@@ -334,6 +334,46 @@ test("Diary uses real game art, scoped Markdown pages, 1-10 scores, and timestam
   await testInfo.attach("diary-journal-tabs", { path: screenshotPath, contentType: "image/png" });
 });
 
+test("Diary inspector keeps metadata padded and avoids trailing mobile space", async ({ page }, testInfo) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Diary" }).click();
+  await page.setViewportSize({ width: 433, height: 550 });
+  await page.getByTestId("diary-game-632470").click();
+
+  const inspector = page.getByTestId("diary-inspector");
+  const metrics = page.getByTestId("diary-inspector-time-metrics");
+  const diaryMain = inspector.locator("xpath=ancestor::main[1]");
+  await expect(inspector).toBeVisible();
+  await expect(metrics).toBeVisible();
+
+  const layout = await diaryMain.evaluate((main) => {
+    const inspectorElement = main.querySelector<HTMLElement>("[data-testid='diary-inspector']");
+    const metricElement = main.querySelector<HTMLElement>("[data-testid='diary-inspector-time-metrics']");
+    if (!inspectorElement || !metricElement) throw new Error("Diary inspector layout is missing");
+    const metricRect = metricElement.getBoundingClientRect();
+    const labels = [...metricElement.querySelectorAll<HTMLElement>("p")].map((label) => label.getBoundingClientRect());
+    const computed = getComputedStyle(main);
+    return {
+      metricLeftGap: labels[0].left - metricRect.left,
+      metricRightGap: metricRect.right - labels[labels.length - 1].right,
+      bottomGap: main.scrollHeight - (inspectorElement.getBoundingClientRect().bottom + main.scrollTop),
+      paddingBottom: computed.paddingBottom,
+      horizontalOverflow: main.scrollWidth - main.clientWidth,
+    };
+  });
+
+  expect(layout.metricLeftGap).toBeGreaterThanOrEqual(12);
+  expect(layout.metricRightGap).toBeGreaterThanOrEqual(12);
+  expect(layout.bottomGap).toBeLessThanOrEqual(1);
+  expect(layout.paddingBottom).toBe("0px");
+  expect(layout.horizontalOverflow).toBeLessThanOrEqual(1);
+
+  await metrics.scrollIntoViewIfNeeded();
+  const screenshotPath = testInfo.outputPath("diary-inspector-mobile.png");
+  await page.screenshot({ path: screenshotPath, fullPage: true });
+  await testInfo.attach("diary-inspector-mobile", { path: screenshotPath, contentType: "image/png" });
+});
+
 test("Diary templates resolve game data and support persistent CRUD", async ({ page }, testInfo) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Diary" }).click();
@@ -553,12 +593,40 @@ test("Diary keyboard shortcuts focus search and open a focused Kanban card", asy
   await page.getByTestId("diary-view-kanban").click();
 
   await page.keyboard.press("/");
-  await expect(page.getByRole("searchbox", { name: "Search your backlog" })).toBeFocused();
+  const search = page.getByRole("searchbox", { name: "Search your backlog" });
+  await expect(search).toBeFocused();
+  await page.keyboard.type("wasd");
+  await expect(search).toHaveValue("wasd");
+  await search.fill("");
 
   const card = page.getByTestId("diary-kanban-card-1145360");
   await card.focus();
   await page.keyboard.press("Enter");
   await expect(page.getByTestId("diary-hero-image")).toBeVisible();
+});
+
+test("Diary Kanban WASD navigation stays in the board and crosses columns", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Diary" }).click();
+  await page.getByTestId("diary-view-kanban").click();
+
+  const firstCard = page.getByTestId("diary-kanban-card-39140");
+  const nextCard = page.getByTestId("diary-kanban-card-753640");
+  await firstCard.focus();
+
+  await page.keyboard.press("s");
+  await expect(nextCard).toBeFocused();
+  await page.keyboard.press("w");
+  await expect(firstCard).toBeFocused();
+
+  await page.keyboard.press("d");
+  await expect(page.locator(":focus")).toHaveAttribute("data-kanban-card", "true");
+  const playingFocusColumn = await page.locator(":focus").evaluate((element) => element.closest<HTMLElement>("[data-column-key]")?.dataset.columnKey);
+  expect(playingFocusColumn).toBe("playing");
+
+  await page.keyboard.press("a");
+  const backlogFocusColumn = await page.locator(":focus").evaluate((element) => element.closest<HTMLElement>("[data-column-key]")?.dataset.columnKey);
+  expect(backlogFocusColumn).toBe("backlog");
 });
 
 test("Diary shortcut panel navigates Kanban cards and toggles selection", async ({ page }, testInfo) => {

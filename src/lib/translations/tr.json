@@ -171,6 +171,7 @@
   "diary.shortcuts.title": "Klavye kısayolları",
   "diary.shortcuts.description": "Günlükte gezinirken bu kısayolları kullanın.",
   "diary.shortcuts.search": "Günlük aramasına odaklan",
+  "diary.shortcuts.moveKanban": "Kanban'da gezin",
   "diary.shortcuts.nextCard": "Sonraki Kanban kartına odaklan",
   "diary.shortcuts.previousCard": "Önceki Kanban kartına odaklan",
   "diary.shortcuts.toggleSelection": "Odaklanan kartı seç veya seçimini kaldır",

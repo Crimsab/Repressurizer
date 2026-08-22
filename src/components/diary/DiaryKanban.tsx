@@ -356,22 +356,70 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, details,
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       const key = event.key.toLowerCase();
-      if (key !== "j" && key !== "k") return;
+      const isFlatNavigation = key === "j" || key === "k";
+      const isVerticalNavigation = key === "w" || key === "s" || key === "arrowup" || key === "arrowdown";
+      const isHorizontalNavigation = key === "a" || key === "d" || key === "arrowleft" || key === "arrowright";
+      if (!isFlatNavigation && !isVerticalNavigation && !isHorizontalNavigation) return;
       if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
       const boardRoot = kanbanRef.current;
-      const target = event.target as HTMLElement | null;
+      const target = event.target instanceof Element ? event.target : null;
       if (!boardRoot || boardRoot.getClientRects().length === 0) return;
-      if (target?.closest("input, textarea, select, [contenteditable='true'], [role='dialog']")) return;
+      if (target?.closest("input, textarea, select, button, [contenteditable='true'], [role='dialog']")) return;
       const currentCard = target?.closest<HTMLElement>("[data-kanban-card]") ?? null;
-      if (!currentCard && !target?.closest("[data-column-key]")) return;
-      const cards = Array.from(boardRoot.querySelectorAll<HTMLElement>("[data-kanban-card]"));
-      if (cards.length === 0) return;
-      const currentIndex = currentCard ? cards.indexOf(currentCard) : key === "j" ? -1 : cards.length;
-      const nextIndex = Math.max(0, Math.min(cards.length - 1, currentIndex + (key === "j" ? 1 : -1)));
-      if (nextIndex === currentIndex) return;
-      event.preventDefault();
-      cards[nextIndex].focus({ preventScroll: true });
-      cards[nextIndex].scrollIntoView({ block: "nearest", inline: "nearest" });
+      const currentSection = currentCard?.closest<HTMLElement>("[data-column-key]")
+        ?? target?.closest<HTMLElement>("[data-column-key]")
+        ?? null;
+      if (!currentCard && !currentSection) return;
+
+      const focusElement = (element: HTMLElement) => {
+        element.focus({ preventScroll: true });
+        element.scrollIntoView({ block: "nearest", inline: "nearest" });
+      };
+
+      if (isFlatNavigation) {
+        const cards = Array.from(boardRoot.querySelectorAll<HTMLElement>("[data-kanban-card]"));
+        if (cards.length === 0) return;
+        const currentIndex = currentCard ? cards.indexOf(currentCard) : key === "j" ? -1 : cards.length;
+        const nextIndex = Math.max(0, Math.min(cards.length - 1, currentIndex + (key === "j" ? 1 : -1)));
+        if (nextIndex === currentIndex) return;
+        event.preventDefault();
+        focusElement(cards[nextIndex]);
+        return;
+      }
+
+      if (isVerticalNavigation && currentSection) {
+        const cards = Array.from(currentSection.querySelectorAll<HTMLElement>("[data-kanban-card]"));
+        if (cards.length === 0) return;
+        const currentIndex = currentCard ? cards.indexOf(currentCard) : -1;
+        const movingUp = key === "w" || key === "arrowup";
+        const nextIndex = currentCard ? currentIndex + (movingUp ? -1 : 1) : movingUp ? cards.length - 1 : 0;
+        if (nextIndex < 0 || nextIndex >= cards.length || nextIndex === currentIndex) return;
+        event.preventDefault();
+        focusElement(cards[nextIndex]);
+        return;
+      }
+
+      if (isHorizontalNavigation && currentSection) {
+        const sections = Array.from(boardRoot.querySelectorAll<HTMLElement>("[data-column-key]"));
+        const currentSectionIndex = sections.indexOf(currentSection);
+        if (currentSectionIndex < 0) return;
+        const movingLeft = key === "a" || key === "arrowleft";
+        const targetSection = sections[currentSectionIndex + (movingLeft ? -1 : 1)];
+        if (!targetSection) return;
+        const targetCards = Array.from(targetSection.querySelectorAll<HTMLElement>("[data-kanban-card]"));
+        const currentRect = currentCard?.getBoundingClientRect();
+        const currentCenterY = currentRect ? currentRect.top + currentRect.height / 2 : null;
+        const targetCard = targetCards.reduce<HTMLElement | null>((closest, card) => {
+          if (currentCenterY === null) return closest ?? card;
+          const cardCenter = card.getBoundingClientRect().top + card.getBoundingClientRect().height / 2;
+          const closestCenter = closest ? closest.getBoundingClientRect().top + closest.getBoundingClientRect().height / 2 : null;
+          return closestCenter === null || Math.abs(cardCenter - currentCenterY) < Math.abs(closestCenter - currentCenterY)
+            ? card
+            : closest;
+        }, null);
+        event.preventDefault();
+        focusElement(targetCard ?? targetSection);
+      }
     };
 
     document.addEventListener("keydown", onKeyDown);
@@ -528,6 +576,7 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, details,
               data-testid={isDropTarget ? "diary-kanban-drop-target" : `diary-kanban-column-${column.key}`}
               data-column-name={column.label}
               aria-label={column.label}
+              aria-keyshortcuts="W A S D ArrowUp ArrowDown ArrowLeft ArrowRight"
               onContextMenu={(event) => openColumnMenu(event, column.key)}
               onKeyDown={(event) => handleColumnKeyDown(event, column.key)}
               onPointerDown={(event) => {
@@ -974,7 +1023,7 @@ const KanbanCard = memo(function KanbanCard({ game, detail, entry, rating, journ
       style={style}
       className={`group/card card-lift focus-ring relative cursor-grab touch-none select-none rounded-lg border bg-repressurizer-surface p-2.5 text-left shadow-pop-sm active:cursor-grabbing ${dragging ? "opacity-40" : selected ? "" : "border-repressurizer-border-subtle hover:border-repressurizer-accent/45 hover:bg-repressurizer-surface-hover/70 hover:shadow-pop"}`}
       data-column-index={columnIndex}
-      aria-keyshortcuts="Enter Space"
+      aria-keyshortcuts="W A S D ArrowUp ArrowDown ArrowLeft ArrowRight Enter Space"
       onPointerDown={(event) => onPointerDown(game.appid, event)}
       onKeyDown={(event) => {
         if (event.target !== event.currentTarget) return;

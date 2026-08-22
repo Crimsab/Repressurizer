@@ -171,6 +171,7 @@
   "diary.shortcuts.title": "Tasti rapidi",
   "diary.shortcuts.description": "Usa queste scorciatoie mentre navighi nel Diario.",
   "diary.shortcuts.search": "Porta il focus alla ricerca del Diario",
+  "diary.shortcuts.moveKanban": "Muovi il focus nel Kanban",
   "diary.shortcuts.nextCard": "Focus sulla card Kanban successiva",
   "diary.shortcuts.previousCard": "Focus sulla card Kanban precedente",
   "diary.shortcuts.toggleSelection": "Seleziona o deseleziona la card attiva",

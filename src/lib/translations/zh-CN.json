@@ -171,6 +171,7 @@
   "diary.shortcuts.title": "键盘快捷键",
   "diary.shortcuts.description": "浏览日记时可以使用这些快捷键。",
   "diary.shortcuts.search": "聚焦日记搜索",
+  "diary.shortcuts.moveKanban": "在看板中移动",
   "diary.shortcuts.nextCard": "聚焦下一个看板卡片",
   "diary.shortcuts.previousCard": "聚焦上一个看板卡片",
   "diary.shortcuts.toggleSelection": "选择或取消选择当前卡片",

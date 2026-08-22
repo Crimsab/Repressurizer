@@ -522,7 +522,7 @@ export function DiaryPage() {
             </div>
           </aside>
           <PanelResizeHandle side="left" value={preferences.gameListWidth} min={220} max={420} onChange={(gameListWidth) => updatePreferences({ gameListWidth })} />
-          <main ref={mainRef} className="min-h-0 min-w-0 flex-1 overflow-y-auto pb-16 xl:pb-0">
+          <main ref={mainRef} className="min-h-0 min-w-0 flex-1 overflow-y-auto">
             <DiaryDetail
                 key={selectedGame.appid}
                 game={selectedGame}
@@ -1175,7 +1175,7 @@ function DiaryInspector({ game, detail, status, rating, ratingEmojis, hltbHours,
       <div className="border-b border-repressurizer-border-subtle py-4"><div className="flex items-end justify-between gap-3"><div><p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-repressurizer-text-faint">{t("diary.rating")}</p><p className="mt-1 text-xs text-repressurizer-text-muted">{t("diary.ratingHint")}</p></div><span className="flex items-center gap-2"><span className="text-2xl" aria-hidden="true">{rating > 0 ? ratingEmojis[rating - 1] : ""}</span><span className="font-mono text-2xl font-semibold tabular-nums text-white">{rating > 0 ? `${rating}/10` : "—"}</span></span></div><RatingControl rating={rating} emojis={ratingEmojis} onChange={onRatingChange} t={t} compact /></div>
       <div className="mt-5 border-b border-repressurizer-border-subtle pb-5">
         <SelectMenu value={status} options={statusOptions} onChange={onStatusChange} label={t("diary.status")} ariaLabel={t("diary.status")} className="w-full" buttonClassName={`h-10 w-full justify-between rounded-lg border px-3 text-xs font-medium ${STATUS_STYLES[status]}`} menuClassName="text-xs" />
-        <div className="my-4 grid grid-cols-[1fr_auto_1fr] items-center rounded-lg border border-repressurizer-border-subtle bg-repressurizer-bg/50 py-3">
+        <div data-testid="diary-inspector-time-metrics" className="my-4 grid grid-cols-[1fr_auto_1fr] items-center gap-3 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-bg/50 px-4 py-3">
           <TimeMetric label={t("diary.hoursPlayed")} value={`${formatHours(game.playtime_forever, language)}h`} />
           <span aria-hidden="true" className="text-[9px] text-repressurizer-accent/70">◆</span>
           <TimeMetric label={t("diary.hltbHours")} value={hltbHours === null ? "—" : `${hltbHours}h`} align="right" />

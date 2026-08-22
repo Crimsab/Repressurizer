@@ -9,6 +9,7 @@ interface ShortcutRow {
 
 const SHORTCUTS: ShortcutRow[] = [
   { keys: ["/"], label: "diary.shortcuts.search" },
+  { keys: ["W", "A", "S", "D"], label: "diary.shortcuts.moveKanban" },
   { keys: ["J"], label: "diary.shortcuts.nextCard" },
   { keys: ["K"], label: "diary.shortcuts.previousCard" },
   { keys: ["Space"], label: "diary.shortcuts.toggleSelection" },

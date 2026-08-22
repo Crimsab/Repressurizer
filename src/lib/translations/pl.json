@@ -171,6 +171,7 @@
   "diary.shortcuts.title": "Skróty klawiszowe",
   "diary.shortcuts.description": "Używaj tych skrótów podczas przeglądania dziennika.",
   "diary.shortcuts.search": "Przenieś fokus do wyszukiwania dziennika",
+  "diary.shortcuts.moveKanban": "Poruszaj się po Kanbanie",
   "diary.shortcuts.nextCard": "Przenieś fokus na następną kartę Kanban",
   "diary.shortcuts.previousCard": "Przenieś fokus na poprzednią kartę Kanban",
   "diary.shortcuts.toggleSelection": "Zaznacz lub odznacz aktywną kartę",
