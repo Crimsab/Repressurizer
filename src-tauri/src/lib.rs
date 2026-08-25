@@ -117,8 +117,25 @@ fn ensure_main_window(app: &tauri::AppHandle) -> tauri::Result<tauri::WebviewWin
         .or_else(|| app.config().app.windows.first())
         .expect("main window config missing");
 
-    tauri::WebviewWindowBuilder::from_config(app, window_config)?.build()
+    let window = tauri::WebviewWindowBuilder::from_config(app, window_config)?.build()?;
+    if let Some(icon) = app.default_window_icon().cloned() {
+        window.set_icon(icon)?;
+    }
+    Ok(window)
 }
+
+#[cfg(target_os = "windows")]
+fn configure_windows_app_identity() {
+    use windows_sys::Win32::UI::Shell::SetCurrentProcessExplicitAppUserModelID;
+    let app_id: Vec<u16> = "com.repressurizer.app\0".encode_utf16().collect();
+    let result = unsafe { SetCurrentProcessExplicitAppUserModelID(app_id.as_ptr()) };
+    if result < 0 {
+        log::warn!("Failed to set Windows AppUserModelID: HRESULT {result:#x}");
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn configure_windows_app_identity() {}
 
 fn set_webview_memory_target(window: &tauri::WebviewWindow, low: bool) {
     #[cfg(target_os = "windows")]
@@ -855,6 +872,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(integration_runtime::IntegrationRuntime::new())
         .setup(|app| {
+            configure_windows_app_identity();
             if !app_channel::claim_cross_channel_instance() {
                 app.handle().exit(0);
                 return Ok(());
