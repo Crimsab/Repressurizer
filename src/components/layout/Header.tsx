@@ -58,7 +58,7 @@ const loadStatsPage = () => import("../stats/StatsPage").then((m) => ({ default:
 const loadAchievementsPage = () => import("../achievements/AchievementsPage").then((m) => ({ default: m.AchievementsPage }));
 const loadWishlistPage = () => import("../wishlist/WishlistPage").then((m) => ({ default: m.WishlistPage }));
 const loadFriendCompareDialog = () => import("../friends/FriendCompareDialog").then((m) => ({ default: m.FriendCompareDialog }));
-const loadWhatToPlayNext = () => import("../recommend/WhatToPlayNext").then((m) => ({ default: m.WhatToPlayNext }));
+const loadWhatToPlayNext = () => import("../recommend/SessionPlanner").then((m) => ({ default: m.SessionPlanner }));
 const loadPlayHistoryTimeline = () => import("../timeline/PlayHistoryTimeline").then((m) => ({ default: m.PlayHistoryTimeline }));
 const loadLibraryChangesInbox = () => import("../inbox/LibraryChangesInbox").then((m) => ({ default: m.LibraryChangesInbox }));
 const SettingsPage = lazy(loadSettingsPage);

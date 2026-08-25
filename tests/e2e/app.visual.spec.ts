@@ -2922,26 +2922,18 @@ test("keeps recommendation filters inside the dialog", async ({ page }, testInfo
   await page.goto("/");
   await page.getByRole("button", { name: "What to Play Next" }).click();
 
-  const dialog = page.locator(".fixed.inset-0").filter({
-    has: page.getByRole("heading", { name: "What to Play Next" }),
-  });
-  await expect(dialog.getByRole("heading", { name: "What to Play Next" })).toBeVisible();
-  await dialog.getByRole("button", { name: "All Genres" }).click();
-  const rpgOption = dialog.getByRole("button", { name: "RPG", exact: true });
-  await expect(rpgOption).toBeVisible();
+  const dialog = page.getByRole("dialog", { name: "Session Planner" });
+  await expect(dialog.getByRole("heading", { name: "Session Planner" })).toBeVisible();
+  await dialog.getByRole("button", { name: "Requirements & preferences" }).click();
+  await expect(dialog.getByTestId("planner-requirements")).toBeVisible();
   await expectNoHorizontalOverflow(page);
-
-  const viewport = page.viewportSize();
-  const menuBox = await rpgOption.locator("..").boundingBox();
-  expect(menuBox?.x ?? 0).toBeGreaterThanOrEqual(0);
-  if (viewport && menuBox) expect(menuBox.x + menuBox.width).toBeLessThanOrEqual(viewport.width);
 
   const screenshotPath = testInfo.outputPath("recommend-filters.png");
   await page.screenshot({ path: screenshotPath, fullPage: true });
   await testInfo.attach("recommend-filters", { path: screenshotPath, contentType: "image/png" });
 });
 
-test("explains and tunes smart backlog ranking", async ({ page }, testInfo) => {
+test("explains planner results and applies device requirements", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 900, height: 600 });
   await page.goto("/");
   await page.evaluate(async () => {
@@ -2953,19 +2945,12 @@ test("explains and tunes smart backlog ranking", async ({ page }, testInfo) => {
 
   await page.getByRole("button", { name: "More tools" }).click();
   await page.getByRole("menuitem", { name: "What to Play Next" }).click();
-  const dialog = page.getByRole("dialog", { name: "What to Play Next" });
-  await expect(dialog.getByText(/Wishlist/).first()).toBeVisible();
-  await expect(dialog.getByText(/pts$/).first()).toBeVisible();
-  await expect(dialog.getByText(/\+\d+ more/).first()).toBeVisible();
-
-  await dialog.getByRole("button", { name: "Tune ranking" }).click();
-  await expect(dialog.getByText("Ranking signals", { exact: true })).toBeVisible();
-  await dialog.getByRole("button", { name: "Playtime" }).click();
-  await dialog.getByRole("button", { name: "Off", exact: true }).click();
-  await expect.poll(() => page.evaluate(() => {
-    const stored = window.localStorage.getItem("repressurizer-ranking-weights");
-    return stored ? JSON.parse(stored).playtime : null;
-  })).toBe(0);
+  const dialog = page.getByRole("dialog", { name: "Session Planner" });
+  await expect(dialog.getByTestId("planner-result-best")).toBeVisible();
+  await expect(dialog.getByText("Best fit", { exact: true })).toBeVisible();
+  await dialog.getByLabel("Device").selectOption("deck");
+  await dialog.getByRole("button", { name: "Requirements & preferences" }).click();
+  await expect(dialog.getByLabel("Require Deck-compatible platform")).toBeChecked();
   await expectNoHorizontalOverflow(page);
 
   const screenshotPath = testInfo.outputPath("recommend-ranking-tuning.png");
