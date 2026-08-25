@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { SteamCollection } from "../lib/types";
+import type { CollectionChangeOrigin } from "../lib/collectionTimeMachine";
 
 interface CategoryState {
   collections: SteamCollection[];
@@ -13,9 +14,10 @@ interface CategoryState {
   _history: SteamCollection[][];
   _future: SteamCollection[][];
   _saved: SteamCollection[]; // snapshot at last save/load
+  _lastChangeOrigin: CollectionChangeOrigin;
 
-  setCollections: (collections: SteamCollection[]) => void;
-  applyImportedCollections: (collections: SteamCollection[]) => void;
+  setCollections: (collections: SteamCollection[], origin?: CollectionChangeOrigin) => void;
+  applyImportedCollections: (collections: SteamCollection[], origin?: CollectionChangeOrigin) => void;
   setActiveCategory: (key: string | null) => void;
   toggleCategorySelection: (key: string) => void;
   clearCategorySelection: () => void;
@@ -55,6 +57,7 @@ function pushHistory(state: CategoryState): Partial<CategoryState> {
     _history: [...state._history, state.collections].slice(-50), // keep max 50
     _future: [], // clear redo on new action
     dirty: true,
+    _lastChangeOrigin: "manual",
   };
 }
 
@@ -67,8 +70,9 @@ export const useCategoryStore = create<CategoryState>((set, get) => ({
   _history: [],
   _future: [],
   _saved: [],
+  _lastChangeOrigin: "steam",
 
-  setCollections: (collections) =>
+  setCollections: (collections, origin = "steam") =>
     set({
       collections,
       dirty: false,
@@ -77,14 +81,16 @@ export const useCategoryStore = create<CategoryState>((set, get) => ({
       _future: [],
       _saved: structuredClone(collections),
       selectedCategoryKeys: [],
+      _lastChangeOrigin: origin,
     }),
 
-  applyImportedCollections: (collections) =>
+  applyImportedCollections: (collections, origin = "import") =>
     set((state) => ({
       ...pushHistory(state),
       collections,
       activeCategory: "all",
       selectedCategoryKeys: [],
+      _lastChangeOrigin: origin,
     })),
 
   setActiveCategory: (key) =>
@@ -357,6 +363,7 @@ export const useCategoryStore = create<CategoryState>((set, get) => ({
         _history: state._history.slice(0, -1),
         _future: [state.collections, ...state._future],
         dirty: JSON.stringify(prev) !== JSON.stringify(state._saved),
+        _lastChangeOrigin: "manual",
       };
     }),
 
@@ -369,6 +376,7 @@ export const useCategoryStore = create<CategoryState>((set, get) => ({
         _history: [...state._history, state.collections],
         _future: state._future.slice(1),
         dirty: JSON.stringify(next) !== JSON.stringify(state._saved),
+        _lastChangeOrigin: "manual",
       };
     }),
 
@@ -378,6 +386,7 @@ export const useCategoryStore = create<CategoryState>((set, get) => ({
       dirty: false,
       _history: [],
       _future: [],
+      _lastChangeOrigin: "manual",
     })),
 
   canUndo: () => get()._history.length > 0,

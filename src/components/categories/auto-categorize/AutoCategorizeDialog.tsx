@@ -1181,7 +1181,8 @@ export function AutoCategorizeDialog({ onClose, initialTarget = "collections" }:
       applyAutoCategorizeAssignments(collections, result.assignments, undefined, {
         processedAppIds: result.processed_app_ids,
         processedAppIdsByCategory: result.processed_app_ids_by_category,
-      })
+      }),
+      "autocat",
     );
 
     gotoStep("done");

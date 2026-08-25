@@ -30,6 +30,7 @@ import { useAppNameOverrideStore } from "./stores/appNameOverrideStore";
 import { useProviderHealthStore } from "./stores/providerHealthStore";
 import { useEntityJournalStore } from "./stores/entityJournalStore";
 import { useLibraryInboxStore } from "./stores/libraryInboxStore";
+import { useCollectionTimeMachineStore } from "./stores/collectionTimeMachineStore";
 import {
   fetchLibrary,
   loadCollections,
@@ -173,6 +174,7 @@ function AppContent() {
   const settings = useSettingsStore(useShallow((state) => ({
     setupComplete: state.setupComplete,
     apiKey: state.apiKey,
+    steamId3: state.steamId3,
     steamId64: state.steamId64,
     steamPersonaName: state.steamPersonaName,
     autoRefreshLibraryEnabled: state.autoRefreshLibraryEnabled,
@@ -214,6 +216,7 @@ function AppContent() {
   const hydrateProviderHealth = useProviderHealthStore((s) => s.hydrate);
   const hydrateEntityJournal = useEntityJournalStore((s) => s.hydrate);
   const hydrateLibraryInbox = useLibraryInboxStore((s) => s.hydrate);
+  const hydrateCollectionTimeMachine = useCollectionTimeMachineStore((s) => s.hydrate);
   const hydrateSettingsFromDisk = useSettingsStore((s) => s.hydrateFromDisk);
   const setCollections = useCategoryStore((s) => s.setCollections);
   const [reloading, setReloading] = useState(false);
@@ -801,8 +804,27 @@ function AppContent() {
     hydrateProviderHealth();
     hydrateEntityJournal();
     hydrateLibraryInbox();
+    hydrateCollectionTimeMachine();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [interactiveStartupReady]);
+
+  useEffect(() => {
+    if (!interactiveStartupReady) return;
+    let previousReference = useCategoryStore.getState().collections;
+    let previous = structuredClone(previousReference);
+    return useCategoryStore.subscribe((state) => {
+      if (state.collections === previousReference) return;
+      const before = previous;
+      previousReference = state.collections;
+      previous = structuredClone(state.collections);
+      useCollectionTimeMachineStore.getState().recordTransition({
+        before,
+        after: state.collections,
+        origin: state._lastChangeOrigin,
+        steamAccountId: settings.steamId64 || settings.steamId3 || "unknown",
+      });
+    });
+  }, [interactiveStartupReady, settings.steamId3, settings.steamId64]);
 
   // Disable transitions during window resize to prevent layout thrashing
   useEffect(() => {
