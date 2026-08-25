@@ -40,6 +40,8 @@ export interface SearchFilter {
   duplicate?: boolean;
   missingDetails?: boolean;
   delisted?: boolean;
+  /** Diary/Kanban placement, independent from the Steam play status. */
+  diaryStatus?: "backlog" | "playing" | "finished" | "abandoned" | "archived";
 }
 
 export interface MatchContext {
@@ -49,6 +51,8 @@ export interface MatchContext {
   familyApps?: Record<number, FamilyLibraryApp>;
   duplicateAppIds?: Set<number>;
   delistedAppIds?: Set<number>;
+  /** appId -> derived Diary placement (Kanban status). */
+  diaryStatuses?: Record<number, SearchFilter["diaryStatus"]>;
 }
 
 function stripQuotes(value: string): string {
@@ -237,6 +241,15 @@ export function parseSearchQuery(query: string): SearchFilter {
           filter.status = value.toLowerCase() as GameStatus;
         }
         break;
+      case "diary":
+      case "diarystatus":
+      case "diary-status": {
+        const diaryStatus = value.toLowerCase();
+        if (["backlog", "playing", "finished", "abandoned", "archived"].includes(diaryStatus)) {
+          filter.diaryStatus = diaryStatus as NonNullable<SearchFilter["diaryStatus"]>;
+        }
+        break;
+      }
       case "hours":
       case "playtime":
         applyNumericFilter(filter, value, "minHours", "maxHours");
@@ -361,6 +374,8 @@ export function matchesFilter(
     if (gameStatus !== filter.status) return false;
   }
 
+  if (filter.diaryStatus && context.diaryStatuses?.[game.appid] !== filter.diaryStatus) return false;
+
   const hours = game.playtime_forever / 60;
   if (filter.minHours != null && hours < filter.minHours) return false;
   if (filter.maxHours != null && hours > filter.maxHours) return false;
@@ -436,5 +451,5 @@ export function matchesFilter(
 
 /** Check if a query string contains any advanced filters */
 export function hasAdvancedFilters(query: string): boolean {
-  return /(^|\s)\/.+\/[dgimsuvy]*($|\s)|\b(appid|app|id|genre|cat|category|status|hours|playtime|hltb|hltbmain|tag|dev|developer|pub|publisher|year|released|release|date|rating|myrating|meta|metacritic|ach|achievement|achievements|platform|family|duplicate|duplicates|dupe|missing|metadata|delisted):/i.test(query);
+  return /(^|\s)\/.+\/[dgimsuvy]*($|\s)|\b(appid|app|id|genre|cat|category|status|diary|diarystatus|diary-status|hours|playtime|hltb|hltbmain|tag|dev|developer|pub|publisher|year|released|release|date|rating|myrating|meta|metacritic|ach|achievement|achievements|platform|family|duplicate|duplicates|dupe|missing|metadata|delisted):/i.test(query);
 }

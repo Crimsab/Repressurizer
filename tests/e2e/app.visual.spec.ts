@@ -202,6 +202,10 @@ test("Diary status filters show counts and make archived games discoverable", as
     const { useDiaryStore } = await import(url);
     useDiaryStore.getState().setDecision(632470, "archived");
   }, diaryStoreUrl);
+  await group.getByRole("button", { name: "All statuses", exact: true }).click();
+  await page.getByRole("searchbox", { name: "Search your backlog" }).fill("diary:archived");
+  await expect(page.getByTestId("diary-game-632470")).toBeVisible();
+  await page.getByRole("searchbox", { name: "Search your backlog" }).fill("");
   await group.getByRole("button", { name: "Archived", exact: true }).click();
   await expect(group.getByRole("button", { name: "Archived", exact: true })).toContainText("1");
   await expect(page.getByTestId("diary-game-632470")).toBeVisible();
@@ -411,6 +415,7 @@ test("Diary templates resolve game data and support persistent CRUD", async ({ p
 
   await page.reload();
   await page.getByRole("button", { name: "Diary" }).click();
+  await page.waitForTimeout(750);
   await page.getByTestId("diary-game-632470").click();
   await page.getByTestId("diary-overview-edit").click();
   await page.getByRole("button", { name: "Templates", exact: true }).click();
@@ -707,6 +712,70 @@ test("Diary bulk actions expose status, priority, removal, and undo", async ({ p
   await expect(page.getByText(`Removed ${playingCount} games from the Diary.`)).toBeVisible();
   await page.getByRole("button", { name: "Undo" }).click();
   await expect(playingColumn).toContainText("Hades");
+});
+
+test("Diary Kanban applies structured filters and exposes persistent action history", async ({ page }, testInfo) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Diary" }).click();
+  const search = page.getByRole("searchbox", { name: "Search your backlog" });
+  await search.fill("diary:backlog");
+  await expect(page.getByTestId("diary-advanced-filter-active")).toBeVisible();
+  await expect(page.getByTestId("diary-game-39140")).toBeVisible();
+  await expect(page.getByTestId("diary-game-1145360")).toHaveCount(0);
+
+  await search.fill("");
+  await page.getByTestId("diary-view-kanban").click();
+  await page.getByTestId("diary-kanban-select-all-playing").click();
+  const playingCount = await page.getByTestId("diary-kanban-column-playing").locator("[data-kanban-card]").count();
+  await page.getByTestId("diary-kanban-selection-status").getByRole("button").click();
+  await page.getByRole("option", { name: "Finished", exact: true }).click();
+  await expect(page.getByTestId("diary-history-button")).toHaveAttribute("aria-label", /\(1\)$/);
+
+  await page.reload();
+  await page.getByRole("button", { name: "Diary" }).click();
+  await page.getByTestId("diary-history-button").click();
+  const history = page.getByTestId("diary-action-history-dialog");
+  await expect(history).toBeVisible();
+  await expect(history).toContainText(`Changed status for ${playingCount} games.`);
+  const screenshotPath = testInfo.outputPath("diary-action-history.png");
+  await page.screenshot({ path: screenshotPath, fullPage: true });
+  await testInfo.attach("diary-action-history", { path: screenshotPath, contentType: "image/png" });
+  await history.getByRole("button", { name: "Undo", exact: true }).first().click();
+  await page.waitForTimeout(250);
+  await page.getByTestId("diary-view-kanban").click();
+  await expect(page.getByTestId("diary-kanban-column-playing")).toContainText("Hades");
+});
+
+test("Diary Kanban cleans empty columns and can merge custom columns", async ({ page }, testInfo) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Diary" }).click();
+  await page.getByTestId("diary-view-kanban").click();
+  await page.getByTestId("diary-kanban-columns-button").click();
+  await page.getByTestId("diary-kanban-new-column-name").fill("Empty column");
+  await page.getByTestId("diary-kanban-new-column-add").click();
+  await expect(page.locator('[data-column-name="Empty column"]')).toBeVisible();
+  await expect(page.getByTestId("diary-kanban-clean-empty")).toContainText("1");
+  await page.getByTestId("diary-kanban-clean-empty").click();
+  await expect(page.locator('[data-column-name="Empty column"]')).toHaveCount(0);
+
+  const diaryStoreUrl = await page.evaluate(() =>
+    performance.getEntriesByType("resource").map((entry) => entry.name).find((name) => name.includes("/src/stores/diaryStore.ts?t="))
+      ?? "/src/stores/diaryStore.ts"
+  );
+  await page.evaluate(async (url) => {
+    const { useDiaryStore } = await import(url);
+    const first = useDiaryStore.getState().addCustomColumn("Queue A", "#34d399");
+    const second = useDiaryStore.getState().addCustomColumn("Queue B", "#38bdf8");
+    if (first && second) useDiaryStore.getState().setCustomAssignment(753640, first);
+  }, diaryStoreUrl);
+  if (await page.getByTestId("diary-kanban-columns-popover").count() === 0) await page.getByTestId("diary-kanban-columns-button").click();
+  await page.getByRole("button", { name: /Merge column: Queue A/ }).click();
+  await page.getByTestId("diary-kanban-merge-target").selectOption({ label: "Queue B" });
+  await expect(page.locator('[data-column-name="Queue A"]')).toHaveCount(0);
+  await expect(page.locator('[data-column-name="Queue B"]')).toContainText("Outer Wilds");
+  const screenshotPath = testInfo.outputPath("diary-kanban-column-housekeeping.png");
+  await page.screenshot({ path: screenshotPath, fullPage: true });
+  await testInfo.attach("diary-kanban-column-housekeeping", { path: screenshotPath, contentType: "image/png" });
 });
 
 test("Diary upcoming view summarizes planning data and actions", async ({ page }, testInfo) => {
@@ -1285,6 +1354,16 @@ test("Diary AutoCat assigns matched games to the selected Kanban column", async 
   await page.getByTestId("diary-view-kanban").click();
   await expect(page.getByTestId("diary-kanban-column-backlog")).toContainText("Hades");
   await expect(page.getByTestId("diary-kanban-column-playing")).not.toContainText("Hades");
+
+  await page.getByTestId("diary-history-button").click();
+  const history = page.getByTestId("diary-action-history-dialog");
+  await expect(history).toContainText("Diary AutoCat applied to 1 games.");
+  await page.reload();
+  await page.getByRole("button", { name: "Diary" }).click();
+  await page.getByTestId("diary-history-button").click();
+  await page.getByTestId("diary-action-history-dialog").getByRole("button", { name: "Undo", exact: true }).first().click();
+  await page.getByTestId("diary-view-kanban").click();
+  await expect(page.getByTestId("diary-kanban-column-playing")).toContainText("Hades");
 });
 
 test("Diary AutoCat can create a Kanban column for a combined rule", async ({ page }) => {

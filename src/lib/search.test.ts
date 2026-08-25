@@ -141,4 +141,11 @@ describe("search", () => {
     expect(matchesFilter(game, undefined, {}, {}, {}, filter)).toBe(true);
     expect(matchesFilter(game, details, {}, {}, {}, filter)).toBe(false);
   });
+
+  it("matches Diary/Kanban placement independently from Steam status", () => {
+    expect(hasAdvancedFilters("genre:rpg diary:playing")).toBe(true);
+    expect(match("genre:rpg diary:playing", { diaryStatuses: { 39140: "playing" } })).toBe(true);
+    expect(match("status:playing diary:archived", { diaryStatuses: { 39140: "archived" } })).toBe(true);
+    expect(match("diary:archived", { diaryStatuses: { 39140: "playing" } })).toBe(false);
+  });
 });

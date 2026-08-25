@@ -122,12 +122,16 @@ interface DiaryState {
   setAchievements: (appId: number, entries: DiaryAchievementEntry[]) => void;
   /** Overrides the Kanban column color for a status; null restores the default. */
   setColumnColor: (status: string, color: string | null) => void;
+  restoreBoardPrefs: (prefs: DiaryBoardPrefs) => void;
   /** Shows or hides a Kanban column. */
   toggleColumnHidden: (status: string) => void;
   /** Creates a custom Kanban column and returns its id. */
   addCustomColumn: (name: string, color: string) => string | null;
   renameCustomColumn: (columnId: string, name: string) => void;
   removeCustomColumn: (columnId: string) => void;
+  mergeCustomColumn: (sourceId: string, targetId: string) => void;
+  removeEmptyCustomColumns: () => string[];
+  moveCustomColumn: (columnId: string, direction: -1 | 1) => void;
   /** Moves a game onto a custom column, or back to status-driven columns when null. */
   setCustomAssignment: (appId: number, columnId: string | null) => void;
   /** Applies one decision to a batch of games and updates the play queue once. */
@@ -572,8 +576,12 @@ export const useDiaryStore = create<DiaryState>((set, get) => ({
     for (const appId of ids) entries[appId] = { ...entryWithDefaults(entries[appId]), decision, updatedAt: now };
     let queue = state.queue.filter((id) => !idSet.has(id));
     if (decision === "next") queue = [...ids, ...queue];
+    const customAssignments = { ...state.boardPrefs.customAssignments };
+    if (decision === "archived") for (const appId of ids) delete customAssignments[appId];
+    const boardPrefs = decision === "archived" ? { ...state.boardPrefs, customAssignments } : state.boardPrefs;
     persistDiary(entries, queue, state.finishPrompts, state.journal, state.pages, state.revisions, state.board);
-    return { entries, queue };
+    if (decision === "archived") persistBoardPrefs(boardPrefs);
+    return { entries, queue, ...(decision === "archived" ? { boardPrefs } : {}) };
   }),
   setBulkPriority: (appIds, priority) => set((state) => {
     const ids = [...new Set(appIds.filter((appId) => Number.isFinite(appId)).map((appId) => Math.trunc(appId)))];
@@ -641,7 +649,21 @@ export const useDiaryStore = create<DiaryState>((set, get) => ({
     persistBoardPrefs(boardPrefs);
     return { entries, queue, board, boardPrefs };
   }),
-  setDecision: (appId, decision) => set((state) => { const entries = { ...state.entries, [appId]: { ...entryWithDefaults(state.entries[appId]), decision, updatedAt: Date.now() } }; let queue = state.queue.filter((id) => id !== appId); if (decision === "next") queue = [appId, ...queue]; persistDiary(entries, queue, state.finishPrompts, state.journal, state.pages, state.revisions, state.board); return { entries, queue }; }),
+  setDecision: (appId, decision) => set((state) => {
+    const entries = { ...state.entries, [appId]: { ...entryWithDefaults(state.entries[appId]), decision, updatedAt: Date.now() } };
+    let queue = state.queue.filter((id) => id !== appId);
+    if (decision === "next") queue = [appId, ...queue];
+    if (decision !== "archived") {
+      persistDiary(entries, queue, state.finishPrompts, state.journal, state.pages, state.revisions, state.board);
+      return { entries, queue };
+    }
+    const customAssignments = { ...state.boardPrefs.customAssignments };
+    delete customAssignments[appId];
+    const boardPrefs = { ...state.boardPrefs, customAssignments };
+    persistDiary(entries, queue, state.finishPrompts, state.journal, state.pages, state.revisions, state.board);
+    persistBoardPrefs(boardPrefs);
+    return { entries, queue, boardPrefs };
+  }),
   setPriority: (appId, priority) => set((state) => { const entries = { ...state.entries, [appId]: { ...entryWithDefaults(state.entries[appId]), priority, updatedAt: Date.now() } }; persistDiary(entries, state.queue, state.finishPrompts, state.journal, state.pages, state.revisions, state.board); return { entries }; }),
   setBulkMarkedBacklog: (appIds, marked) => set((state) => {
     const ids = [...new Set(appIds.filter((appId) => Number.isFinite(appId)).map((appId) => Math.trunc(appId)))];
@@ -711,6 +733,11 @@ export const useDiaryStore = create<DiaryState>((set, get) => ({
     persistBoardPrefs(boardPrefs);
     return { boardPrefs };
   }),
+  restoreBoardPrefs: (prefs) => set(() => {
+    const boardPrefs = normalizeBoardPrefs(prefs);
+    persistBoardPrefs(boardPrefs);
+    return { boardPrefs };
+  }),
   toggleColumnHidden: (status) => set((state) => {
     const hiddenColumns = state.boardPrefs.hiddenColumns.includes(status)
       ? state.boardPrefs.hiddenColumns.filter((candidate) => candidate !== status)
@@ -748,6 +775,51 @@ export const useDiaryStore = create<DiaryState>((set, get) => ({
     }
     const hiddenColumns = state.boardPrefs.hiddenColumns.filter((candidate) => candidate !== columnId);
     const boardPrefs = { ...state.boardPrefs, customColumns, customAssignments, hiddenColumns };
+    persistBoardPrefs(boardPrefs);
+    return { boardPrefs };
+  }),
+  mergeCustomColumn: (sourceId, targetId) => set((state) => {
+    if (sourceId === targetId) return state;
+    const sourceExists = state.boardPrefs.customColumns.some((column) => column.id === sourceId);
+    const targetExists = state.boardPrefs.customColumns.some((column) => column.id === targetId);
+    if (!sourceExists || !targetExists) return state;
+    const customColumns = state.boardPrefs.customColumns.filter((column) => column.id !== sourceId);
+    const customAssignments = { ...state.boardPrefs.customAssignments };
+    for (const [appId, assigned] of Object.entries(customAssignments)) {
+      if (assigned === sourceId) customAssignments[appId] = targetId;
+    }
+    const hiddenColumns = state.boardPrefs.hiddenColumns.filter((columnId) => columnId !== sourceId);
+    const columnColors = { ...state.boardPrefs.columnColors };
+    delete columnColors[sourceId];
+    const boardPrefs = { ...state.boardPrefs, customColumns, customAssignments, hiddenColumns, columnColors };
+    persistBoardPrefs(boardPrefs);
+    return { boardPrefs };
+  }),
+  removeEmptyCustomColumns: () => {
+    const state = get();
+    const assignedIds = new Set(Object.values(state.boardPrefs.customAssignments));
+    const emptyIds = state.boardPrefs.customColumns.filter((column) => !assignedIds.has(column.id)).map((column) => column.id);
+    if (emptyIds.length === 0) return [];
+    set((current) => {
+      const empty = new Set(emptyIds);
+      const customColumns = current.boardPrefs.customColumns.filter((column) => !empty.has(column.id));
+      const hiddenColumns = current.boardPrefs.hiddenColumns.filter((columnId) => !empty.has(columnId));
+      const columnColors = { ...current.boardPrefs.columnColors };
+      for (const columnId of empty) delete columnColors[columnId];
+      const customAssignments = Object.fromEntries(Object.entries(current.boardPrefs.customAssignments).filter(([, columnId]) => !empty.has(columnId)));
+      const boardPrefs = { ...current.boardPrefs, customColumns, hiddenColumns, columnColors, customAssignments };
+      persistBoardPrefs(boardPrefs);
+      return { boardPrefs };
+    });
+    return emptyIds;
+  },
+  moveCustomColumn: (columnId, direction) => set((state) => {
+    const index = state.boardPrefs.customColumns.findIndex((column) => column.id === columnId);
+    const nextIndex = index + direction;
+    if (index < 0 || nextIndex < 0 || nextIndex >= state.boardPrefs.customColumns.length) return state;
+    const customColumns = [...state.boardPrefs.customColumns];
+    [customColumns[index], customColumns[nextIndex]] = [customColumns[nextIndex], customColumns[index]];
+    const boardPrefs = { ...state.boardPrefs, customColumns };
     persistBoardPrefs(boardPrefs);
     return { boardPrefs };
   }),

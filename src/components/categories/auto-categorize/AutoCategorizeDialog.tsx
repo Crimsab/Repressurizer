@@ -21,6 +21,7 @@ import { useToastStore } from "../../../stores/toastStore";
 import { useReviewStore } from "../../../stores/reviewStore";
 import { useHltbIgnoredStore } from "../../../stores/hltbIgnoredStore";
 import { useFailedGamesStore } from "../../../stores/failedGamesStore";
+import { makeDiaryActionSnapshot, useDiaryActionHistoryStore } from "../../../stores/diaryActionHistoryStore";
 import { DEFAULT_COLUMN_COLORS, STATUS_LABELS, type DiaryViewStatus } from "../../diary/diaryShared";
 import {
   yearCategorizationReleaseDate,
@@ -170,8 +171,8 @@ export function AutoCategorizeDialog({ onClose, initialTarget = "collections" }:
   const diaryJournal = useDiaryStore((s) => s.journal);
   const diaryPages = useDiaryStore((s) => s.pages);
   const diaryBoardPrefs = useDiaryStore((s) => s.boardPrefs);
+  const restoreBoardPrefs = useDiaryStore((s) => s.restoreBoardPrefs);
   const addCustomColumn = useDiaryStore((s) => s.addCustomColumn);
-  const removeCustomColumn = useDiaryStore((s) => s.removeCustomColumn);
   const captureBulkSnapshot = useDiaryStore((s) => s.captureBulkSnapshot);
   const restoreBulkSnapshot = useDiaryStore((s) => s.restoreBulkSnapshot);
   const setBulkDecision = useDiaryStore((s) => s.setBulkDecision);
@@ -184,6 +185,8 @@ export function AutoCategorizeDialog({ onClose, initialTarget = "collections" }:
   const restoreStatusSnapshot = useStatusStore((s) => s.restoreSnapshot);
   const userReviews = useReviewStore((s) => s.reviews);
   const detailsCacheMaxAgeDays = useSettingsStore((s) => s.detailsCacheMaxAgeDays);
+  const pushActionHistory = useDiaryActionHistoryStore((s) => s.push);
+  const removeActionHistory = useDiaryActionHistoryStore((s) => s.remove);
 
   const persist = useAutoCategorizeStore();
 
@@ -1036,6 +1039,7 @@ export function AutoCategorizeDialog({ onClose, initialTarget = "collections" }:
     else if (status === "finished") applyStatus("completed", "backlog", false);
     else if (status === "abandoned") applyStatus("abandoned", "backlog", false);
     else {
+      setBulkStatus(ids, "none");
       setBulkDecision(ids, "archived");
       setBulkMarkedBacklog(ids, false);
       for (const appId of ids) statusEvents.push({ appId, status });
@@ -1064,14 +1068,17 @@ export function AutoCategorizeDialog({ onClose, initialTarget = "collections" }:
       // assignments, instead of guessing from the current column.
       const diarySnapshot = captureBulkSnapshot(appIds);
       const statusSnapshot = captureStatusSnapshot(appIds);
+      const actionSnapshot = makeDiaryActionSnapshot(appIds, diarySnapshot, statusSnapshot, diaryBoardPrefs);
       const createdColumnIds: string[] = [];
       let undone = false;
+      let historyId: string | null = null;
       const undoDiaryRun = () => {
         if (undone) return;
         undone = true;
         restoreStatusSnapshot(statusSnapshot);
         restoreBulkSnapshot(diarySnapshot);
-        for (const columnId of createdColumnIds) removeCustomColumn(columnId);
+        restoreBoardPrefs(actionSnapshot.boardPrefs);
+        if (historyId) removeActionHistory(historyId);
         setDiaryUndo(null);
         setDiaryUndoNotice(t("auto.diary.undoDone"));
       };
@@ -1132,6 +1139,11 @@ export function AutoCategorizeDialog({ onClose, initialTarget = "collections" }:
           ? t("auto.diary.applied", { count: appIds.length })
           : t("auto.diary.createdOnly", { count: createdColumnIds.length }),
       );
+      historyId = pushActionHistory({
+        label: t("auto.diary.applied", { count: appIds.length }),
+        count: appIds.length,
+        snapshot: actionSnapshot,
+      });
       setDiaryUndo(() => undoDiaryRun);
       useToastStore.getState().addAction(
         "success",

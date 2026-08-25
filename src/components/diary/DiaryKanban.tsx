@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { createPortal } from "react-dom";
-import { Archive, ArrowUpRight, CheckSquareOffset, GameController, MagnifyingGlass, Plus, Trash, Warning, X } from "@phosphor-icons/react";
+import { Archive, ArrowDown, ArrowRight, ArrowUp, ArrowUpRight, CheckSquareOffset, GameController, MagnifyingGlass, Plus, Trash, Warning, X } from "@phosphor-icons/react";
 import { SteamImage } from "../games/SteamImage";
 import { SelectMenu } from "../ui/SelectMenu";
 import { useT } from "../../lib/i18n";
@@ -75,7 +75,7 @@ function colorWithAlpha(hex: string, alpha: number): string {
 
 const PRIORITY_EDGE: Record<DiaryPriority, string | null> = { high: "#fb7185", normal: null, low: "#64748b" };
 
-export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, details, entries, statuses, reviews, journal, pages, board, boardPrefs, language, showArchived, forceStatus, wipLimit, t, onBulkStatusChange, onBulkPriorityChange, onRemoveGames, onMoveGames, onOpenGame, onSetColumnColor, onToggleColumnHidden, onAddCustomColumn, onRenameCustomColumn, onRemoveCustomColumn }: {
+export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, details, entries, statuses, reviews, journal, pages, board, boardPrefs, language, showArchived, forceStatus, wipLimit, t, onBulkStatusChange, onBulkPriorityChange, onRemoveGames, onMoveGames, onOpenGame, onSetColumnColor, onToggleColumnHidden, onAddCustomColumn, onRenameCustomColumn, onRemoveCustomColumn, onMergeCustomColumn, onRemoveEmptyCustomColumns, onMoveCustomColumn }: {
   games: OwnedGame[];
   details: Record<number, GameDetails>;
   entries: Record<number, DiaryEntry>;
@@ -103,6 +103,9 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, details,
   onAddCustomColumn: (name: string, color: string) => string | null;
   onRenameCustomColumn: (columnId: string, name: string) => void;
   onRemoveCustomColumn: (columnId: string) => void;
+  onMergeCustomColumn: (sourceId: string, targetId: string) => void;
+  onRemoveEmptyCustomColumns: () => void;
+  onMoveCustomColumn: (columnId: string, direction: -1 | 1) => void;
   onSetCustomAssignment: (appId: number, columnId: string | null) => void;
 }) {
   const [draggingAppId, setDraggingAppId] = useState<number | null>(null);
@@ -113,6 +116,7 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, details,
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [columnMenu, setColumnMenu] = useState<ColumnMenuState | null>(null);
   const [columnsPopover, setColumnsPopover] = useState<PopoverAnchor | null>(null);
+  const [mergeSourceId, setMergeSourceId] = useState<string | null>(null);
   const [addGamePopover, setAddGamePopover] = useState<{ anchor: PopoverAnchor; column: BoardColumn } | null>(null);
   const [addGameQuery, setAddGameQuery] = useState("");
 
@@ -155,6 +159,11 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, details,
     }
     return byColumn;
   }, [board, columnOfGame, columns, games]);
+
+  const emptyCustomColumnCount = useMemo(() => {
+    const assignedColumnIds = new Set(Object.values(boardPrefs.customAssignments));
+    return boardPrefs.customColumns.filter((column) => !assignedColumnIds.has(column.id)).length;
+  }, [boardPrefs.customAssignments, boardPrefs.customColumns]);
 
   const sectionCountByAppId = useMemo(() => {
     const counts = new Map<number, number>();
@@ -798,11 +807,15 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, details,
               ))}
             </div>
             <p className="mb-1.5 mt-3 px-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-repressurizer-text-faint">{t("diary.kanban.customColumns")}</p>
+            <div className="mb-2 flex items-center justify-between gap-2 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-bg/45 px-2 py-1.5">
+              <span className="text-[10px] text-repressurizer-text-faint">{t("diary.kanban.cleanupEmpty")}</span>
+              <button type="button" data-testid="diary-kanban-clean-empty" disabled={emptyCustomColumnCount === 0} onClick={() => { onRemoveEmptyCustomColumns(); setMergeSourceId(null); }} className="focus-ring rounded-md border border-repressurizer-border-subtle px-2 py-1 text-[10px] font-medium text-repressurizer-text-muted transition-colors hover:border-repressurizer-accent/40 hover:text-repressurizer-accent disabled:cursor-not-allowed disabled:opacity-40">{t("diary.kanban.cleanupEmpty.action")} <span className="font-mono tabular-nums">{emptyCustomColumnCount}</span></button>
+            </div>
             <div className="space-y-0.5">
               {boardPrefs.customColumns.length === 0 && (
                 <p className="px-2 py-1.5 text-[10px] leading-relaxed text-repressurizer-text-faint">{t("diary.kanban.customColumns.empty")}</p>
               )}
-              {boardPrefs.customColumns.map((custom) => (
+              {boardPrefs.customColumns.map((custom, customIndex) => (
                 <div key={custom.id} className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-xs text-repressurizer-text transition-colors hover:bg-repressurizer-surface-hover">
                   <ColumnColorButton
                     testId={`diary-column-color-${custom.id}`}
@@ -819,6 +832,10 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, details,
                     onChange={(event) => onRenameCustomColumn(custom.id, event.target.value)}
                     className="min-w-0 flex-1 rounded-md border border-transparent bg-transparent px-1.5 py-1 text-xs text-repressurizer-text outline-none transition-colors hover:border-repressurizer-border-subtle focus:border-repressurizer-accent/50"
                   />
+                  <span className="shrink-0 rounded-full border border-repressurizer-border-subtle bg-repressurizer-bg px-1.5 py-0.5 font-mono text-[9px] tabular-nums text-repressurizer-text-faint">{grouped.get(custom.id)?.length ?? 0}</span>
+                  <button type="button" aria-label={`${t("diary.kanban.moveColumnUp")}: ${custom.name}`} title={t("diary.kanban.moveColumnUp")} disabled={customIndex === 0} onClick={() => onMoveCustomColumn(custom.id, -1)} className="focus-ring rounded-md p-1 text-repressurizer-text-faint transition-colors hover:text-repressurizer-text disabled:opacity-25"><ArrowUp size={11} /></button>
+                  <button type="button" aria-label={`${t("diary.kanban.moveColumnDown")}: ${custom.name}`} title={t("diary.kanban.moveColumnDown")} disabled={customIndex === boardPrefs.customColumns.length - 1} onClick={() => onMoveCustomColumn(custom.id, 1)} className="focus-ring rounded-md p-1 text-repressurizer-text-faint transition-colors hover:text-repressurizer-text disabled:opacity-25"><ArrowDown size={11} /></button>
+                  <button type="button" aria-label={`${t("diary.kanban.mergeColumn")}: ${custom.name}`} title={t("diary.kanban.mergeColumn")} onClick={() => setMergeSourceId((current) => current === custom.id ? null : custom.id)} className={`focus-ring rounded-md p-1 transition-colors ${mergeSourceId === custom.id ? "bg-repressurizer-accent/15 text-repressurizer-accent" : "text-repressurizer-text-faint hover:text-repressurizer-text"}`}><ArrowRight size={11} /></button>
                   <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-[10px] text-repressurizer-text-faint">
                     <span className="sr-only">{`${t("diary.kanban.showColumn")}: ${custom.name}`}</span>
                     <input type="checkbox" checked={!boardPrefs.hiddenColumns.includes(custom.id)} onChange={() => onToggleColumnHidden(custom.id)} className="h-3.5 w-3.5 accent-repressurizer-accent" />
@@ -827,6 +844,19 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, details,
                 </div>
               ))}
             </div>
+            {mergeSourceId && boardPrefs.customColumns.length > 1 && (
+              <div className="mt-2 flex items-center gap-2 rounded-lg border border-repressurizer-accent/25 bg-repressurizer-accent/[0.06] p-2">
+                <select data-testid="diary-kanban-merge-target" aria-label={t("diary.kanban.mergeTarget")} defaultValue="" onChange={(event) => {
+                  const targetId = event.target.value;
+                  if (!targetId) return;
+                  onMergeCustomColumn(mergeSourceId, targetId);
+                  setMergeSourceId(null);
+                }} className="min-w-0 flex-1 rounded-md border border-repressurizer-border-subtle bg-repressurizer-bg px-2 py-1.5 text-[10px] text-repressurizer-text outline-none focus:border-repressurizer-accent/50">
+                  <option value="">{t("diary.kanban.mergeTarget")}</option>
+                  {boardPrefs.customColumns.filter((column) => column.id !== mergeSourceId).map((column) => <option key={column.id} value={column.id}>{column.name}</option>)}
+                </select>
+              </div>
+            )}
             <NewColumnRow t={t} onCreate={(name, color) => onAddCustomColumn(name, color)} />
             <p className="mt-2 border-t border-repressurizer-border-subtle px-1 pt-2 text-[10px] leading-relaxed text-repressurizer-text-faint">{t("diary.kanban.columns.hint")}</p>
           </div>

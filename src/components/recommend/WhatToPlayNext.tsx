@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useGameStore } from "../../stores/gameStore";
 import { useHltbStore } from "../../stores/hltbStore";
 import { useStatusStore } from "../../stores/statusStore";
+import { useDiaryStore } from "../../stores/diaryStore";
 import { useCategoryStore } from "../../stores/categoryStore";
 import { useWishlistStore } from "../../stores/wishlistStore";
 import { useAchievementsStore } from "../../stores/achievementsStore";
@@ -45,6 +46,7 @@ export function WhatToPlayNext({ onClose }: WhatToPlayNextProps) {
   const details = useGameStore((s) => s.details);
   const hltbData = useHltbStore((s) => s.data);
   const statuses = useStatusStore((s) => s.statuses);
+  const diaryEntries = useDiaryStore((s) => s.entries);
   const collections = useCategoryStore((s) => s.collections);
   const wishlistItems = useWishlistStore((s) => s.items);
   const achievements = useAchievementsStore((s) => s.summaries);
@@ -113,6 +115,7 @@ export function WhatToPlayNext({ onClose }: WhatToPlayNextProps) {
 
     // Select backlog candidates before applying the pure, deterministic ranking.
     const candidates = list.filter((g) => {
+      if (diaryEntries[g.appid]?.decision === "archived") return false;
       if (playFilter === "unplayed" && g.playtime_forever > 0) return false;
       if (playFilter === "started" && (g.playtime_forever === 0 || g.playtime_forever > 240)) return false;
       if (playFilter === "any" && g.playtime_forever > 60) return false; // less than 1h played
@@ -162,7 +165,7 @@ export function WhatToPlayNext({ onClose }: WhatToPlayNextProps) {
       ? weightedPick(filtered.slice(0, 45), seed, 20)
       : filtered.slice(0, 20);
     return { recommendations, genreOptions };
-  }, [games, details, hltbData, achievements, wishlistItems, statuses, seed, lengthFilter, genreFilter, playFilter, avoidRecent, recentIds, collections, mode, rankingWeights]);
+  }, [games, details, hltbData, achievements, wishlistItems, statuses, diaryEntries, seed, lengthFilter, genreFilter, playFilter, avoidRecent, recentIds, collections, mode, rankingWeights]);
 
   const handleShuffle = () => {
     rememberRecommendations(recommendations.slice(0, 8).map((r) => r.game.appid));

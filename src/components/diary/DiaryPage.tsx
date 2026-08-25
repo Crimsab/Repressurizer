@@ -8,6 +8,7 @@ import {
   CalendarBlank,
   ClockCounterClockwise,
   Export,
+  Funnel,
   GameController,
   Kanban,
   ListBullets,
@@ -29,6 +30,10 @@ import { useGameStore } from "../../stores/gameStore";
 import { useCategoryStore } from "../../stores/categoryStore";
 import { useStatusStore, type GameStatus } from "../../stores/statusStore";
 import { useReviewStore } from "../../stores/reviewStore";
+import { useTagsStore } from "../../stores/tagsStore";
+import { useAchievementsStore } from "../../stores/achievementsStore";
+import { useFamilyStore } from "../../stores/familyStore";
+import { MAX_FAIL_RUNS, useFailedGamesStore } from "../../stores/failedGamesStore";
 import { useNotesStore } from "../../stores/notesStore";
 import { usePlayHistoryStore } from "../../stores/playHistoryStore";
 import {
@@ -42,12 +47,14 @@ import {
   type DiaryAchievementEntry,
   type DiarySection,
   type DiaryStatusEvent,
-  type DiaryBulkSnapshot,
 } from "../../stores/diaryStore";
+import { makeDiaryActionSnapshot, useDiaryActionHistoryStore, type DiaryActionSnapshot } from "../../stores/diaryActionHistoryStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useHltbStore } from "../../stores/hltbStore";
 import { useToastStore } from "../../stores/toastStore";
 import { getHltbHours } from "../../lib/hltb";
+import { hasAdvancedFilters, matchesFilter, normalizeSearchText, parseSearchQuery } from "../../lib/search";
+import { possibleDuplicateAppIds } from "../../lib/gameIdentity";
 import type { PlaytimeSession } from "../../lib/playHistory";
 import { SteamImage } from "../games/SteamImage";
 import { SelectMenu } from "../ui/SelectMenu";
@@ -64,6 +71,7 @@ import { SessionNotes } from "./DiarySessionNotes";
 import { DiaryExportDialog } from "./DiaryExportDialog";
 import { DiaryBackupDialog } from "./DiaryBackupDialog";
 import { DiaryKeyboardShortcutsDialog } from "./DiaryKeyboardShortcutsDialog";
+import { DiaryActionHistoryDialog } from "./DiaryActionHistoryDialog";
 import { RatingControl } from "./DiaryRating";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -100,11 +108,6 @@ const DIARY_VIEW_ICONS = {
   timeline: ClockCounterClockwise,
   upcoming: ListChecks,
 } as const;
-
-interface DiaryActionSnapshot {
-  diary: DiaryBulkSnapshot;
-  statuses: Record<number, GameStatus | undefined>;
-}
 
 const CATEGORY_STYLES = [
   "border-emerald-400/25 bg-emerald-400/10 text-emerald-300",
@@ -150,6 +153,10 @@ export function DiaryPage() {
   const captureStatusSnapshot = useStatusStore((state) => state.captureSnapshot);
   const restoreStatusSnapshot = useStatusStore((state) => state.restoreSnapshot);
   const reviews = useReviewStore((state) => state.reviews);
+  const allGameTags = useTagsStore((state) => state.tags);
+  const achievementSummaries = useAchievementsStore((state) => state.summaries);
+  const familyApps = useFamilyStore((state) => state.apps);
+  const failedGames = useFailedGamesStore((state) => state.fails);
   const setRating = useReviewStore((state) => state.setRating);
   const clearRating = useReviewStore((state) => state.clearRating);
   const notes = useNotesStore((state) => state.notes);
@@ -177,11 +184,15 @@ export function DiaryPage() {
   const statusEvents = useDiaryStore((state) => state.statusEvents);
   const achievements = useDiaryStore((state) => state.achievements);
   const boardPrefs = useDiaryStore((state) => state.boardPrefs);
+  const restoreBoardPrefs = useDiaryStore((state) => state.restoreBoardPrefs);
   const setColumnColor = useDiaryStore((state) => state.setColumnColor);
   const toggleColumnHidden = useDiaryStore((state) => state.toggleColumnHidden);
   const addCustomColumn = useDiaryStore((state) => state.addCustomColumn);
   const renameCustomColumn = useDiaryStore((state) => state.renameCustomColumn);
   const removeCustomColumn = useDiaryStore((state) => state.removeCustomColumn);
+  const mergeCustomColumn = useDiaryStore((state) => state.mergeCustomColumn);
+  const removeEmptyCustomColumns = useDiaryStore((state) => state.removeEmptyCustomColumns);
+  const moveCustomColumn = useDiaryStore((state) => state.moveCustomColumn);
   const setCustomAssignment = useDiaryStore((state) => state.setCustomAssignment);
   const addPage = useDiaryStore((state) => state.addPage);
   const updatePage = useDiaryStore((state) => state.updatePage);
@@ -190,6 +201,11 @@ export function DiaryPage() {
   const addJournalEntry = useDiaryStore((state) => state.addJournalEntry);
   const updateJournalEntry = useDiaryStore((state) => state.updateJournalEntry);
   const removeJournalEntry = useDiaryStore((state) => state.removeJournalEntry);
+  const actionHistory = useDiaryActionHistoryStore((state) => state.entries);
+  const hydrateActionHistory = useDiaryActionHistoryStore((state) => state.hydrate);
+  const pushActionHistory = useDiaryActionHistoryStore((state) => state.push);
+  const removeActionHistory = useDiaryActionHistoryStore((state) => state.remove);
+  const clearActionHistory = useDiaryActionHistoryStore((state) => state.clear);
   const hltbData = useHltbStore((state) => state.data);
   const playSessions = usePlayHistoryStore((state) => state.data.sessions);
   const hydratePlayHistory = usePlayHistoryStore((state) => state.hydrate);
@@ -207,11 +223,16 @@ export function DiaryPage() {
   const [backupOpen, setBackupOpen] = useState(false);
   const [diaryAutoCatOpen, setDiaryAutoCatOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [actionHistoryOpen, setActionHistoryOpen] = useState(false);
   const mainRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     void hydrateDiary();
   }, [hydrateDiary]);
+
+  useEffect(() => {
+    void hydrateActionHistory();
+  }, [hydrateActionHistory]);
 
   useEffect(() => {
     void hydratePlayHistory();
@@ -291,16 +312,55 @@ export function DiaryPage() {
     return index;
   }, [allDiaryGames, journal, language, notes, pages]);
 
+  const diaryAdvancedFilter = useMemo(() => parseSearchQuery(query), [query]);
+  const diaryHasAdvancedFilter = hasAdvancedFilters(query);
+  const duplicateAppIds = useMemo(() => possibleDuplicateAppIds(Object.values(games)), [games]);
+  const delistedAppIds = useMemo(
+    () => new Set(Object.entries(failedGames).filter(([, count]) => count >= MAX_FAIL_RUNS).map(([appId]) => Number(appId))),
+    [failedGames],
+  );
+  const diaryStatuses = useMemo(() => {
+    const result: Record<number, NonNullable<ReturnType<typeof parseSearchQuery>["diaryStatus"]>> = {};
+    for (const game of allDiaryGames) {
+      result[game.appid] = getDiaryStatus(game, statuses[game.appid] ?? "none", entries[game.appid]);
+    }
+    return result;
+  }, [allDiaryGames, entries, statuses]);
+
   const filteredGames = useMemo(() => {
     const normalizedQuery = query.trim().toLocaleLowerCase(language);
     const result = allDiaryGames.filter((game) => {
       const entry = entries[game.appid];
       const status = getDiaryStatus(game, statuses[game.appid] ?? "none", entry);
       if (categoryFilter !== "all" && !collections.find((collection) => collection.key === categoryFilter)?.added.includes(game.appid)) return false;
-      if (!preferences.showArchived && status === "archived" && statusFilter !== "archived") return false;
+      const queryRequestsArchived = diaryAdvancedFilter.diaryStatus === "archived";
+      if (!preferences.showArchived && status === "archived" && statusFilter !== "archived" && !queryRequestsArchived) return false;
       if (statusFilter !== "all" && status !== statusFilter) return false;
       if (!normalizedQuery) return true;
       const detail = details[game.appid];
+      if (diaryHasAdvancedFilter) {
+        const structuredFilter = { ...diaryAdvancedFilter, text: "" };
+        const metadataMatches = matchesFilter(game, detail, statuses, allGameTags, reviews, structuredFilter, {
+          hltbData,
+          hltbTimeMode,
+          achievements: achievementSummaries,
+          familyApps,
+          duplicateAppIds,
+          delistedAppIds,
+          diaryStatuses,
+        });
+        if (!metadataMatches) return false;
+        if (!diaryAdvancedFilter.text) return true;
+        const searchable = normalizeSearchText([
+          game.name,
+          detail?.name,
+          ...(detail?.genres ?? []),
+          ...(detail?.developers ?? []),
+          ...(detail?.publishers ?? []),
+          ...(diarySearchIndex[game.appid] ?? ""),
+        ].filter(Boolean).join(" "));
+        return normalizeSearchText(diaryAdvancedFilter.text).split(" ").every((token) => searchable.includes(token));
+      }
       const searchable = [game.name, detail?.name, ...(detail?.genres ?? []), ...(detail?.developers ?? [])]
         .filter(Boolean)
         .join(" ")
@@ -328,7 +388,7 @@ export function DiaryPage() {
       );
     });
     return result;
-  }, [allDiaryGames, categoryFilter, collections, details, diarySearchIndex, entries, language, preferences.showArchived, query, reviews, sortBy, statusFilter, statuses]);
+  }, [achievementSummaries, allDiaryGames, allGameTags, categoryFilter, collections, details, diaryAdvancedFilter, diaryHasAdvancedFilter, diarySearchIndex, diaryStatuses, delistedAppIds, duplicateAppIds, entries, familyApps, failedGames, hltbData, hltbTimeMode, language, preferences.showArchived, query, reviews, sortBy, statusFilter, statuses]);
 
   useEffect(() => {
     const validIds = new Set(allDiaryGames.map((game) => game.appid));
@@ -344,32 +404,45 @@ export function DiaryPage() {
     if (sectionId) setActiveSectionByGame((state) => (state[appId] === sectionId ? state : { ...state, [appId]: sectionId }));
   };
 
-  const applyStatus = (appId: number, nextStatus: DiaryViewStatus) => {
+  const applyStatusRaw = useCallback((appId: number, nextStatus: DiaryViewStatus) => {
     const game = games[appId];
     const previous = game ? getDiaryStatus(game, statuses[appId] ?? "none", entries[appId]) : null;
     if (nextStatus === "archived") {
+      setStatus(appId, "none");
       setDecision(appId, "archived");
+      setMarkedBacklog(appId, false);
+      setCustomAssignment(appId, null);
     } else {
       setStatus(appId, statusToGameStatus(nextStatus));
       setDecision(appId, nextStatus === "playing" ? "next" : "backlog");
       setMarkedBacklog(appId, nextStatus === "backlog");
     }
     if (previous !== null && previous !== nextStatus) logStatusEvent(appId, nextStatus);
-  };
+  }, [entries, games, logStatusEvent, setCustomAssignment, setDecision, setMarkedBacklog, setStatus, statuses]);
 
-  const captureActionSnapshot = useCallback((appIds: number[]): DiaryActionSnapshot => ({
-    diary: captureBulkSnapshot(appIds),
-    statuses: captureStatusSnapshot(appIds),
-  }), [captureBulkSnapshot, captureStatusSnapshot]);
+  const captureActionSnapshot = useCallback((appIds: number[]): DiaryActionSnapshot => {
+    return makeDiaryActionSnapshot(appIds, captureBulkSnapshot(appIds), captureStatusSnapshot(appIds), boardPrefs);
+  }, [boardPrefs, captureBulkSnapshot, captureStatusSnapshot]);
 
   const restoreActionSnapshot = useCallback((snapshot: DiaryActionSnapshot) => {
     restoreStatusSnapshot(snapshot.statuses);
     restoreBulkSnapshot(snapshot.diary);
-  }, [restoreBulkSnapshot, restoreStatusSnapshot]);
+    restoreBoardPrefs(snapshot.boardPrefs);
+  }, [restoreBoardPrefs, restoreBulkSnapshot, restoreStatusSnapshot]);
 
-  const showUndoToast = useCallback((message: string, undo: () => void) => {
-    useToastStore.getState().addAction("success", message, t("common.undo"), undo);
-  }, [t]);
+  const showUndoToast = useCallback((message: string, snapshot: DiaryActionSnapshot, count: number) => {
+    const historyId = pushActionHistory({ label: message, count, snapshot });
+    useToastStore.getState().addAction("success", message, t("common.undo"), () => {
+      restoreActionSnapshot(snapshot);
+      removeActionHistory(historyId);
+    });
+  }, [pushActionHistory, removeActionHistory, restoreActionSnapshot, t]);
+
+  const applyStatus = useCallback((appId: number, nextStatus: DiaryViewStatus) => {
+    const snapshot = captureActionSnapshot([appId]);
+    applyStatusRaw(appId, nextStatus);
+    showUndoToast(t("diary.kanban.statusChanged", { count: 1 }), snapshot, 1);
+  }, [applyStatusRaw, captureActionSnapshot, showUndoToast, t]);
 
   const applyStatusBatch = useCallback((appIds: number[], nextStatus: DiaryViewStatus) => {
     const ids = [...new Set(appIds.filter((appId) => Number.isFinite(appId)).map((appId) => Math.trunc(appId)))];
@@ -391,14 +464,14 @@ export function DiaryPage() {
   const applyBulkStatus = useCallback((appIds: number[], nextStatus: DiaryViewStatus) => {
     const snapshot = captureActionSnapshot(appIds);
     applyStatusBatch(appIds, nextStatus);
-    showUndoToast(t("diary.kanban.statusChanged", { count: appIds.length }), () => restoreActionSnapshot(snapshot));
-  }, [applyStatusBatch, captureActionSnapshot, restoreActionSnapshot, showUndoToast, t]);
+    showUndoToast(t("diary.kanban.statusChanged", { count: appIds.length }), snapshot, appIds.length);
+  }, [applyStatusBatch, captureActionSnapshot, showUndoToast, t]);
 
   const applyBulkPriority = useCallback((appIds: number[], priority: DiaryPriority) => {
     const snapshot = captureActionSnapshot(appIds);
     setBulkPriority(appIds, priority);
-    showUndoToast(t("diary.kanban.priorityChanged", { count: appIds.length }), () => restoreActionSnapshot(snapshot));
-  }, [captureActionSnapshot, restoreActionSnapshot, setBulkPriority, showUndoToast, t]);
+    showUndoToast(t("diary.kanban.priorityChanged", { count: appIds.length }), snapshot, appIds.length);
+  }, [captureActionSnapshot, setBulkPriority, showUndoToast, t]);
 
   const moveDiaryGames = useCallback((appIds: number[], column: BoardColumn, orderedAppIds: number[]) => {
     // setBoardOrder rewrites every rank in the destination column, so include
@@ -411,8 +484,8 @@ export function DiaryPage() {
       if (column.status) applyStatusBatch(appIds, column.status);
     }
     setBoardOrder(orderedAppIds);
-    showUndoToast(t("diary.kanban.moved", { count: appIds.length, column: column.label }), () => restoreActionSnapshot(snapshot));
-  }, [applyStatusBatch, captureActionSnapshot, restoreActionSnapshot, setBoardOrder, setBulkCustomAssignment, showUndoToast, t]);
+    showUndoToast(t("diary.kanban.moved", { count: appIds.length, column: column.label }), snapshot, appIds.length);
+  }, [applyStatusBatch, captureActionSnapshot, setBoardOrder, setBulkCustomAssignment, showUndoToast, t]);
 
   const removeDiaryGames = useCallback((appIds: number[]) => {
     const ids = [...new Set(appIds)];
@@ -420,8 +493,32 @@ export function DiaryPage() {
     const snapshot = captureActionSnapshot(ids);
     setBulkStatus(ids, "none");
     clearBulkDiaryState(ids);
-    showUndoToast(t("diary.kanban.removed", { count: ids.length }), () => restoreActionSnapshot(snapshot));
-  }, [captureActionSnapshot, clearBulkDiaryState, restoreActionSnapshot, setBulkStatus, showUndoToast, t]);
+    showUndoToast(t("diary.kanban.removed", { count: ids.length }), snapshot, ids.length);
+  }, [captureActionSnapshot, clearBulkDiaryState, setBulkStatus, showUndoToast, t]);
+
+  const removeCustomColumnWithHistory = useCallback((columnId: string) => {
+    const snapshot = captureActionSnapshot([]);
+    removeCustomColumn(columnId);
+    showUndoToast(`${t("diary.kanban.columns")} · ${t("common.delete")}`, snapshot, 0);
+  }, [captureActionSnapshot, removeCustomColumn, showUndoToast, t]);
+
+  const mergeCustomColumnWithHistory = useCallback((sourceId: string, targetId: string) => {
+    const snapshot = captureActionSnapshot([]);
+    mergeCustomColumn(sourceId, targetId);
+    showUndoToast(`${t("diary.kanban.columns")} · ${t("diary.kanban.mergeColumn")}`, snapshot, 0);
+  }, [captureActionSnapshot, mergeCustomColumn, showUndoToast, t]);
+
+  const removeEmptyColumnsWithHistory = useCallback(() => {
+    const snapshot = captureActionSnapshot([]);
+    const removed = removeEmptyCustomColumns();
+    if (removed.length > 0) showUndoToast(`${t("diary.kanban.columns")} · ${t("diary.kanban.cleanupEmpty.action")}`, snapshot, removed.length);
+  }, [captureActionSnapshot, removeEmptyCustomColumns, showUndoToast, t]);
+
+  const moveCustomColumnWithHistory = useCallback((columnId: string, direction: -1 | 1) => {
+    const snapshot = captureActionSnapshot([]);
+    moveCustomColumn(columnId, direction);
+    showUndoToast(`${t("diary.kanban.columns")} · ${t(direction < 0 ? "diary.kanban.moveColumnUp" : "diary.kanban.moveColumnDown")}`, snapshot, 0);
+  }, [captureActionSnapshot, moveCustomColumn, showUndoToast, t]);
 
   const selectedGame = selectedAppId === null ? undefined : games[selectedAppId];
   const selectedDetails = selectedGame ? details[selectedGame.appid] : undefined;
@@ -570,13 +667,10 @@ export function DiaryPage() {
                 onNextGame={nextGame ? () => selectGame(nextGame.appid) : undefined}
                 onInspectorResize={(inspectorWidth) => updatePreferences({ inspectorWidth })}
                 onExport={() => setExportOpen(true)}
-                onPlayNow={() => {
-                  setStatus(selectedGame.appid, "playing");
-                  setDecision(selectedGame.appid, "next");
-                }}
+                onPlayNow={() => applyStatus(selectedGame.appid, "playing")}
                 onDefer={() => setDecision(selectedGame.appid, "deferred")}
-                onArchive={() => setDecision(selectedGame.appid, "archived")}
-                onRestore={() => setDecision(selectedGame.appid, "backlog")}
+                onArchive={() => applyStatus(selectedGame.appid, "archived")}
+                onRestore={() => applyStatus(selectedGame.appid, "backlog")}
                 onAddJournal={(body, createdAt) => addJournalEntry(selectedGame.appid, body, createdAt, selectedGame.playtime_forever)}
                 onUpdateJournal={(entryId, patch) => updateJournalEntry(selectedGame.appid, entryId, patch)}
                 onRemoveJournal={(entryId) => removeJournalEntry(selectedGame.appid, entryId)}
@@ -605,7 +699,10 @@ export function DiaryPage() {
           onToggleColumnHidden={toggleColumnHidden}
           onAddCustomColumn={addCustomColumn}
           onRenameCustomColumn={renameCustomColumn}
-          onRemoveCustomColumn={removeCustomColumn}
+          onRemoveCustomColumn={removeCustomColumnWithHistory}
+          onMergeCustomColumn={mergeCustomColumnWithHistory}
+          onRemoveEmptyCustomColumns={removeEmptyColumnsWithHistory}
+          onMoveCustomColumn={moveCustomColumnWithHistory}
           onSetCustomAssignment={setCustomAssignment}
           onSetPriority={setPriority}
           language={language}
@@ -627,6 +724,8 @@ export function DiaryPage() {
           onBackup={() => setBackupOpen(true)}
           onOpenAutoCategorize={() => setDiaryAutoCatOpen(true)}
           onOpenShortcuts={() => setShortcutsOpen(true)}
+          actionHistoryCount={actionHistory.length}
+          onOpenActionHistory={() => setActionHistoryOpen(true)}
           onPreferencesChange={updatePreferences}
           onSelectGame={selectGame}
           onApplyStatus={applyStatus}
@@ -646,6 +745,7 @@ export function DiaryPage() {
         </Suspense>
       )}
       {shortcutsOpen && <DiaryKeyboardShortcutsDialog onClose={() => setShortcutsOpen(false)} t={t} />}
+      {actionHistoryOpen && <DiaryActionHistoryDialog entries={actionHistory} t={t} onClose={() => setActionHistoryOpen(false)} onUndo={(entry) => { restoreActionSnapshot(entry.snapshot); removeActionHistory(entry.id); setActionHistoryOpen(false); }} onRemove={removeActionHistory} onClear={clearActionHistory} />}
     </div>
   );
 }
@@ -671,6 +771,7 @@ function DiaryFilterControls({ query, statusFilter, statusCounts, sortBy, catego
       <MagnifyingGlass size={15} className="shrink-0 text-repressurizer-text-faint group-focus-within:text-repressurizer-accent" />
       <input type="search" data-diary-search value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder={t("diary.search")} aria-label={t("diary.search")} className="min-w-0 flex-1 bg-transparent text-xs text-repressurizer-text outline-none placeholder:text-repressurizer-text-faint" />
     </label>
+    <DiaryAdvancedFilterBadge query={query} t={t} />
     <div className="grid w-full grid-cols-2 gap-2">
       <SelectMenu value={categoryFilter} options={categoryOptions} onChange={onCategoryChange} ariaLabel={t("diary.categoryFilter")} size="sm" buttonClassName="border-repressurizer-border-subtle bg-repressurizer-surface/55" />
       <SelectMenu value={sortBy} options={sortOptions} onChange={onSortChange} ariaLabel={t("diary.sort")} size="sm" buttonClassName="border-repressurizer-border-subtle bg-repressurizer-surface/55" />
@@ -702,6 +803,7 @@ function DiaryLibraryFilters({ query, statusFilter, statusCounts, sortBy, catego
       <MagnifyingGlass size={14} className="shrink-0 text-repressurizer-text-faint group-focus-within:text-repressurizer-accent" />
       <input type="search" data-diary-search value={query} onChange={(event) => onQueryChange(event.target.value)} placeholder={t("diary.search")} aria-label={t("diary.search")} className="min-w-0 flex-1 bg-transparent text-xs text-repressurizer-text outline-none placeholder:text-repressurizer-text-faint" />
     </label>
+    <DiaryAdvancedFilterBadge query={query} t={t} />
     <SelectMenu value={categoryFilter} options={categoryOptions} onChange={onCategoryChange} ariaLabel={t("diary.categoryFilter")} size="sm" className="w-36 shrink-0" buttonClassName="h-9" />
     <SelectMenu value={sortBy} options={sortOptions} onChange={onSortChange} ariaLabel={t("diary.sort")} size="sm" className="w-36 shrink-0" buttonClassName="h-9" />
     <div role="group" aria-label={t("diary.statusFilter")} className="flex min-w-0 flex-wrap items-center gap-1.5 lg:ml-auto">
@@ -710,7 +812,18 @@ function DiaryLibraryFilters({ query, statusFilter, statusCounts, sortBy, catego
   </div>;
 }
 
-function DiaryLibrary({ games, gamesById, details, entries, statuses, reviews, journal, pages, collections, board, boardPrefs, sessions, hltbData, hltbTimeMode, statusEvents, achievements, language, preferences, query, statusFilter, statusCounts, sortBy, categoryFilter, viewOptionsOpen, t, onQueryChange, onStatusChange, onSortChange, onCategoryChange, onViewChange, onViewOptionsToggle, onExport, onBackup, onOpenAutoCategorize, onOpenShortcuts, onPreferencesChange, onSelectGame, onApplyStatus, onSetBoardOrder, onBulkStatusChange, onBulkPriorityChange, onRemoveGames, onMoveGames, onSetColumnColor, onToggleColumnHidden, onAddCustomColumn, onRenameCustomColumn, onRemoveCustomColumn, onSetCustomAssignment, onSetPriority, onOpenGame }: {
+function DiaryAdvancedFilterBadge({ query, t }: { query: string; t: ReturnType<typeof useT> }) {
+  if (!hasAdvancedFilters(query)) return null;
+  return (
+    <div data-testid="diary-advanced-filter-active" title={t("search.advanced.hint")} className="flex basis-full items-center gap-1.5 rounded-md border border-repressurizer-accent/25 bg-repressurizer-accent/[0.08] px-2.5 py-1.5 text-[10px] text-repressurizer-accent">
+      <Funnel size={12} weight="duotone" />
+      <span className="font-medium">{t("filter.advanced")}</span>
+      <span className="truncate text-repressurizer-text-faint">{t("search.advanced.hint")}</span>
+    </div>
+  );
+}
+
+function DiaryLibrary({ games, gamesById, details, entries, statuses, reviews, journal, pages, collections, board, boardPrefs, sessions, hltbData, hltbTimeMode, statusEvents, achievements, language, preferences, query, statusFilter, statusCounts, sortBy, categoryFilter, viewOptionsOpen, actionHistoryCount, t, onQueryChange, onStatusChange, onSortChange, onCategoryChange, onViewChange, onViewOptionsToggle, onExport, onBackup, onOpenAutoCategorize, onOpenShortcuts, onOpenActionHistory, onPreferencesChange, onSelectGame, onApplyStatus, onSetBoardOrder, onBulkStatusChange, onBulkPriorityChange, onRemoveGames, onMoveGames, onSetColumnColor, onToggleColumnHidden, onAddCustomColumn, onRenameCustomColumn, onRemoveCustomColumn, onMergeCustomColumn, onRemoveEmptyCustomColumns, onMoveCustomColumn, onSetCustomAssignment, onSetPriority, onOpenGame }: {
   games: OwnedGame[];
   gamesById: Record<number, OwnedGame>;
   details: Record<number, GameDetails>;
@@ -735,11 +848,15 @@ function DiaryLibrary({ games, gamesById, details, entries, statuses, reviews, j
   sortBy: DiarySort;
   categoryFilter: string;
   viewOptionsOpen: boolean;
+  actionHistoryCount: number;
   onSetColumnColor: (columnKey: string, color: string | null) => void;
   onToggleColumnHidden: (columnKey: string) => void;
   onAddCustomColumn: (name: string, color: string) => string | null;
   onRenameCustomColumn: (columnId: string, name: string) => void;
   onRemoveCustomColumn: (columnId: string) => void;
+  onMergeCustomColumn: (sourceId: string, targetId: string) => void;
+  onRemoveEmptyCustomColumns: () => void;
+  onMoveCustomColumn: (columnId: string, direction: -1 | 1) => void;
   onSetCustomAssignment: (appId: number, columnId: string | null) => void;
   onSetPriority: (appId: number, priority: DiaryPriority) => void;
   t: ReturnType<typeof useT>;
@@ -753,6 +870,7 @@ function DiaryLibrary({ games, gamesById, details, entries, statuses, reviews, j
   onBackup: () => void;
   onOpenAutoCategorize: () => void;
   onOpenShortcuts: () => void;
+  onOpenActionHistory: () => void;
   onPreferencesChange: (patch: Partial<DiaryPreferences>) => void;
   onSelectGame: (appId: number) => void;
   onApplyStatus: (appId: number, status: DiaryViewStatus) => void;
@@ -822,6 +940,7 @@ function DiaryLibrary({ games, gamesById, details, entries, statuses, reviews, j
             {viewOptionsOpen && <DiaryViewOptions preferences={preferences} onChange={onPreferencesChange} onClose={onViewOptionsToggle} t={t} />}
           </div>
           <button type="button" onClick={onOpenShortcuts} aria-label={t("diary.shortcuts.title")} title={`${t("diary.shortcuts.title")} (?)`} aria-keyshortcuts="?" className="focus-ring inline-flex h-8 items-center justify-center rounded-lg border border-transparent bg-repressurizer-surface/60 px-2.5 text-[11px] font-medium text-repressurizer-text-muted transition-colors hover:border-repressurizer-border hover:bg-repressurizer-surface-hover hover:text-white"><Question size={14} weight="bold" /></button>
+          <button type="button" onClick={onOpenActionHistory} aria-label={`${t("diary.revisions")} (${actionHistoryCount})`} title={t("diary.revisions")} data-testid="diary-history-button" className="focus-ring inline-flex h-8 items-center gap-1.5 rounded-lg border border-transparent bg-repressurizer-surface/60 px-2.5 text-[11px] font-medium text-repressurizer-text-muted transition-colors hover:border-repressurizer-border hover:bg-repressurizer-surface-hover hover:text-white"><ClockCounterClockwise size={14} /><span className="hidden leading-none xl:inline">{actionHistoryCount}</span></button>
           <button type="button" onClick={onExport} aria-label={t("diary.export")} title={t("diary.export")} className="focus-ring inline-flex h-8 items-center gap-1.5 rounded-lg border border-transparent bg-repressurizer-surface/60 px-2.5 text-[11px] font-medium text-repressurizer-text-muted transition-colors hover:border-repressurizer-border hover:bg-repressurizer-surface-hover hover:text-white"><Export size={14} /><span className="hidden leading-none xl:inline">{t("diary.export")}</span></button>
           <button type="button" onClick={onBackup} aria-label={t("diary.backup")} title={t("diary.backup")} data-testid="diary-backup-button" className="focus-ring inline-flex h-8 items-center gap-1.5 rounded-lg border border-transparent bg-repressurizer-surface/60 px-2.5 text-[11px] font-medium text-repressurizer-text-muted transition-colors hover:border-repressurizer-border hover:bg-repressurizer-surface-hover hover:text-white"><Database size={14} /><span className="hidden leading-none xl:inline">{t("diary.backup")}</span></button>
           <button type="button" onClick={onOpenAutoCategorize} aria-label={`${t("auto.title")}: ${t("auto.destination.diary")}`} title={`${t("auto.title")}: ${t("auto.destination.diary")}`} data-testid="diary-autocat-button" className="focus-ring inline-flex h-8 items-center gap-1.5 rounded-lg border border-repressurizer-accent/25 bg-repressurizer-accent/[0.08] px-2.5 text-[11px] font-medium text-repressurizer-accent transition-colors hover:border-repressurizer-accent/50 hover:bg-repressurizer-accent/15"><Sparkle size={14} /><span className="hidden leading-none xl:inline">{t("auto.title")}</span></button>
@@ -832,7 +951,7 @@ function DiaryLibrary({ games, gamesById, details, entries, statuses, reviews, j
       </div>
     </div>
     <div hidden={preferences.libraryView !== "kanban"} className="flex min-h-0 flex-1 flex-col">
-      <DiaryKanbanBoard games={games} details={details} entries={entries} statuses={statuses} reviews={reviews} journal={journal} pages={pages} board={board} boardPrefs={boardPrefs} language={language} showArchived={preferences.showArchived} forceStatus={statusFilter === "archived" ? "archived" : undefined} wipLimit={preferences.kanbanWipLimit} t={t} onApplyStatus={onApplyStatus} onSetBoardOrder={onSetBoardOrder} onSetPriority={onSetPriority} onBulkStatusChange={onBulkStatusChange} onBulkPriorityChange={onBulkPriorityChange} onRemoveGames={onRemoveGames} onMoveGames={onMoveGames} onOpenGame={(appId) => onOpenGame(appId)} onSetColumnColor={onSetColumnColor} onToggleColumnHidden={onToggleColumnHidden} onAddCustomColumn={onAddCustomColumn} onRenameCustomColumn={onRenameCustomColumn} onRemoveCustomColumn={onRemoveCustomColumn} onSetCustomAssignment={onSetCustomAssignment} />
+      <DiaryKanbanBoard games={games} details={details} entries={entries} statuses={statuses} reviews={reviews} journal={journal} pages={pages} board={board} boardPrefs={boardPrefs} language={language} showArchived={preferences.showArchived} forceStatus={statusFilter === "archived" ? "archived" : undefined} wipLimit={preferences.kanbanWipLimit} t={t} onApplyStatus={onApplyStatus} onSetBoardOrder={onSetBoardOrder} onSetPriority={onSetPriority} onBulkStatusChange={onBulkStatusChange} onBulkPriorityChange={onBulkPriorityChange} onRemoveGames={onRemoveGames} onMoveGames={onMoveGames} onOpenGame={(appId) => onOpenGame(appId)} onSetColumnColor={onSetColumnColor} onToggleColumnHidden={onToggleColumnHidden} onAddCustomColumn={onAddCustomColumn} onRenameCustomColumn={onRenameCustomColumn} onRemoveCustomColumn={onRemoveCustomColumn} onMergeCustomColumn={onMergeCustomColumn} onRemoveEmptyCustomColumns={onRemoveEmptyCustomColumns} onMoveCustomColumn={onMoveCustomColumn} onSetCustomAssignment={onSetCustomAssignment} />
     </div>
     <div hidden={preferences.libraryView !== "timeline"} className="flex min-h-0 flex-1 flex-col">
       <DiaryTimeline games={gamesById} visibleAppIds={visibleAppIds} sessions={sessions} journal={journal} pages={pages} reviews={reviews} statusEvents={statusEvents} achievements={achievements} achievementsSyncing={achievementsSyncing} language={language} preferences={preferences} t={t} onOpenGame={onOpenGame} onLayoutChange={(timelineLayout) => onPreferencesChange({ timelineLayout })} onSyncAchievements={() => void handleSyncAchievements()} onToggleKind={(kind) => { const hidden = new Set(preferences.timelineHiddenKinds); if (hidden.has(kind)) hidden.delete(kind); else hidden.add(kind); onPreferencesChange({ timelineHiddenKinds: [...hidden] }); }} onGameContextMenu={(appId, x, y) => setGameMenu({ appId, x: Math.min(x, window.innerWidth - 260), y: Math.min(y, window.innerHeight - 340) })} />
