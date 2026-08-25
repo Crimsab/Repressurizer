@@ -1398,7 +1398,7 @@ function StepBar({ step }: { step: Step }) {
     : (step === "fetch" ? 1 : shown.length - 1);
 
   return (
-    <div className="flex items-center gap-0 border-b border-repressurizer-border px-6 py-3">
+    <div className="flex items-center gap-0 border-b border-repressurizer-border px-3 py-3 sm:px-6">
       {shown.map((s, i) => (
         <div key={s.key} className="flex items-center">
           <div className={`flex items-center gap-1.5 text-xs font-medium ${
@@ -1412,7 +1412,7 @@ function StepBar({ step }: { step: Step }) {
             {t(s.labelKey)}
           </div>
           {i < shown.length - 1 && (
-            <div className={`mx-3 h-px w-8 ${i < idx ? "bg-repressurizer-accent/40" : "bg-repressurizer-border-subtle"}`} />
+            <div className={`mx-1 h-px w-3 sm:mx-3 sm:w-8 ${i < idx ? "bg-repressurizer-accent/40" : "bg-repressurizer-border-subtle"}`} />
           )}
         </div>
       ))}

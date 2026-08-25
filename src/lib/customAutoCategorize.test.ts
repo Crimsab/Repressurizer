@@ -3,6 +3,8 @@ import {
   conditionIssue,
   evaluateCustomAutoCat,
   findIncompleteConditionIds,
+  inspectCustomAutoCatGame,
+  inspectCustomAutoCatRule,
   type CustomAutoCatConfigV1,
   type CustomRuleConditionV1,
 } from "./customAutoCategorize";
@@ -369,5 +371,76 @@ describe("conditionIssue", () => {
       conditionIssue({ id: "p", kind: "platform", mode: "any", values: [] })
     ).toBe("valuesEmpty");
     expect(conditionIssue({ id: "ok", kind: "playtime", minHours: 1, maxHoursExclusive: 5 })).toBeNull();
+  });
+});
+
+describe("custom rule inspection", () => {
+  const inspectionInput = {
+    config: config("Short A games", [
+      { id: "title", kind: "title" as const, op: "startsWith" as const, value: "A" },
+      { id: "hltb", kind: "hltb" as const, mode: "main_story" as const, maxHoursExclusive: 5 },
+    ]),
+    games,
+    details: {},
+    collections: [],
+    hltbData: {
+      1: { main_story: 3, main_extra: null, completionist: null },
+      2: { main_story: 30, main_extra: null, completionist: null },
+      3: { main_story: 2, main_extra: null, completionist: null },
+    },
+    ratings: {},
+    hltbTimeMode: "main_story" as const,
+  };
+
+  it("summarizes included, excluded, and preserved games with production semantics", () => {
+    const summary = inspectCustomAutoCatRule(inspectionInput);
+
+    expect(summary.includedAppIds).toEqual([1, 3]);
+    expect(summary.excludedAppIds).toEqual([2]);
+    expect(summary.missingAppIds).toEqual([4]);
+    expect(summary).toMatchObject({ matched: 2, evaluated: 3, missing: 1 });
+  });
+
+  it("explains each condition using the observed value", () => {
+    const inspection = inspectCustomAutoCatGame(inspectionInput, 1);
+
+    expect(inspection).toMatchObject({
+      appId: 1,
+      finalState: "included",
+      conditions: [
+        { state: "pass", actualValue: "A Short RPG", decisive: true },
+        { state: "pass", actualValue: "3 h", decisive: true },
+      ],
+    });
+  });
+
+  it("does not call a redundant OR branch decisive", () => {
+    const inspection = inspectCustomAutoCatGame({
+      ...inspectionInput,
+      config: config("Either", [
+        { id: "title-one", kind: "title", op: "startsWith", value: "A" },
+        { id: "title-two", kind: "title", op: "contains", value: "Short" },
+      ], "any"),
+    }, 1);
+
+    expect(inspection?.conditions.map((condition) => condition.decisive)).toEqual([false, false]);
+  });
+
+  it("warns about empty, overly broad, and duplicate rules", () => {
+    const empty = inspectCustomAutoCatRule({
+      ...inspectionInput,
+      config: config("Empty", [{ id: "title", kind: "title", op: "startsWith", value: "Z" }]),
+    });
+    expect(empty.warnings).toContain("This rule matches no games.");
+
+    const duplicate = inspectCustomAutoCatRule({
+      ...inspectionInput,
+      config: config("Broad", [
+        { id: "one", kind: "playtime", minHours: 0 },
+        { id: "two", kind: "playtime", minHours: 0 },
+      ]),
+    });
+    expect(duplicate.warnings).toContain("This rule matches at least 80% of the library.");
+    expect(duplicate.warnings).toContain("This rule contains duplicate conditions.");
   });
 });

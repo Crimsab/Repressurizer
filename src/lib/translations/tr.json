@@ -1854,5 +1854,22 @@
   "auto.custom.ratingMin": "En az (1–10)",
   "auto.custom.ratingMax": "En çok (1–10)",
   "auto.custom.diaryField.status": "Oyun durumu",
-  "auto.custom.diaryField.rating": "Senin puanın"
+  "auto.custom.diaryField.rating": "Senin puanın",
+  "auto.inspector.title": "Rule Inspector",
+  "auto.inspector.description": "Preview the real rule result against your current library.",
+  "auto.inspector.export": "Export report",
+  "auto.inspector.included": "Included",
+  "auto.inspector.excluded": "Excluded",
+  "auto.inspector.missing": "Missing data",
+  "auto.inspector.search": "Find a game",
+  "auto.inspector.noGames": "No games found.",
+  "auto.inspector.noConditions": "Add an enabled condition to inspect the rule.",
+  "auto.inspector.observed": "Observed",
+  "auto.inspector.decisive": "Decisive for this result",
+  "auto.inspector.state.pass": "Pass",
+  "auto.inspector.state.fail": "Fail",
+  "auto.inspector.state.missing": "Missing",
+  "auto.inspector.state.not-applicable": "N/A",
+  "auto.inspector.exported": "Inspection report saved.",
+  "auto.inspector.exportError": "Could not save the inspection report."
 }

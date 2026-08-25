@@ -21,6 +21,7 @@ import type {
 import type { SteamCollection } from "../../../lib/types";
 import { useT } from "../../../lib/i18n";
 import { CustomRuleBuilder } from "./CustomRuleBuilder";
+import { RuleInspectorPanel } from "./RuleInspectorPanel";
 import type {
   AutoCatMetadata,
   CategorizerType,
@@ -119,7 +120,12 @@ export function ConfigureStep({
       {type === "platform" && <PlatformConfigForm config={platformConfig} onChange={setPlatformConfig} />}
       {type === "name" && <NameConfigForm config={nameConfig} onChange={setNameConfig} />}
       {type === "rating" && <SteamRatingConfigForm config={ratingConfig} onChange={setRatingConfig} />}
-      {type === "custom" && <CustomRuleBuilder config={customConfig} onChange={setCustomConfig} collections={collections} diaryMode={diaryMode} />}
+      {type === "custom" && (
+        <div className="space-y-4">
+          <CustomRuleBuilder config={customConfig} onChange={setCustomConfig} collections={collections} diaryMode={diaryMode} />
+          <RuleInspectorPanel config={customConfig} collections={collections} />
+        </div>
+      )}
       {type === "score" && (
         <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg p-4 text-sm text-repressurizer-text-muted">
           <p className="font-medium text-repressurizer-text mb-2">{t("auto.metacriticBuckets")}</p>

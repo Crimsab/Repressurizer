@@ -1854,5 +1854,22 @@
   "auto.custom.ratingMin": "Min (1–10)",
   "auto.custom.ratingMax": "Max (1–10)",
   "auto.custom.diaryField.status": "Stato del gioco",
-  "auto.custom.diaryField.rating": "La tua valutazione"
+  "auto.custom.diaryField.rating": "La tua valutazione",
+  "auto.inspector.title": "Analisi regola",
+  "auto.inspector.description": "Anteprima del risultato reale sulla libreria attuale.",
+  "auto.inspector.export": "Esporta report",
+  "auto.inspector.included": "Inclusi",
+  "auto.inspector.excluded": "Esclusi",
+  "auto.inspector.missing": "Dati mancanti",
+  "auto.inspector.search": "Trova un gioco",
+  "auto.inspector.noGames": "Nessun gioco trovato.",
+  "auto.inspector.noConditions": "Aggiungi una condizione attiva per analizzare la regola.",
+  "auto.inspector.observed": "Valore rilevato",
+  "auto.inspector.decisive": "Determinante per questo risultato",
+  "auto.inspector.state.pass": "Superata",
+  "auto.inspector.state.fail": "Fallita",
+  "auto.inspector.state.missing": "Mancante",
+  "auto.inspector.state.not-applicable": "N/D",
+  "auto.inspector.exported": "Report di analisi salvato.",
+  "auto.inspector.exportError": "Impossibile salvare il report di analisi."
 }

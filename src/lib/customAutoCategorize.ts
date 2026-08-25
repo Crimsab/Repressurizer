@@ -134,7 +134,7 @@ export interface CustomRuleDiagnostics {
   invalidMessages: string[];
 }
 
-interface EvaluateCustomAutoCatInput {
+export interface EvaluateCustomAutoCatInput {
   config: CustomAutoCatConfigV1;
   games: Record<number, OwnedGame>;
   details: Record<number, GameDetails>;
@@ -394,6 +394,218 @@ export function evaluateCustomAutoCat(input: EvaluateCustomAutoCatInput): Catego
     games_categorized: assignments[categoryName].length,
     processed_app_ids: processedAppIds,
   }, diagnostics);
+}
+
+export type CustomRuleInspectorState = "pass" | "fail" | "missing" | "not-applicable";
+
+export interface CustomRuleConditionInspection {
+  condition: CustomRuleConditionV1;
+  state: CustomRuleInspectorState;
+  actualValue: string;
+  decisive: boolean;
+  missingReason: MissingReason | null;
+}
+
+export interface CustomRuleGameInspection {
+  appId: number;
+  gameName: string;
+  finalState: "included" | "excluded" | "missing";
+  conditions: CustomRuleConditionInspection[];
+}
+
+export interface CustomRuleInspectionSummary {
+  matched: number;
+  evaluated: number;
+  missing: number;
+  includedAppIds: number[];
+  excludedAppIds: number[];
+  missingAppIds: number[];
+  warnings: string[];
+  diagnostics: CustomRuleDiagnostics;
+}
+
+export function inspectCustomAutoCatGame(
+  input: EvaluateCustomAutoCatInput,
+  appId: number,
+): CustomRuleGameInspection | null {
+  const game = input.games[appId];
+  if (!game) return null;
+  const config = normalizeCustomAutoCatConfig(input.config);
+  const conditions = enabledConditions(config);
+  const index = buildCategoryIndex(
+    input.collections,
+    config.output.categoryName.trim(),
+    Object.keys(input.games).map(Number),
+  );
+  const outcomes = conditions.map((condition) =>
+    evaluateCondition(condition, game, input, config, index),
+  );
+  const connectors = customRuleConnectors(config, true);
+  const baseOutcome = evaluateInspectorOutcomes(outcomes, connectors);
+  const singleResult = evaluateCustomAutoCat({ ...input, games: { [appId]: game } });
+  const included = Object.values(singleResult.assignments).some((ids) => ids.includes(appId));
+  const evaluated = singleResult.processed_app_ids?.includes(appId) ?? false;
+  const finalState = !evaluated ? "missing" : included ? "included" : "excluded";
+
+  return {
+    appId,
+    gameName: game.name,
+    finalState,
+    conditions: conditions.map((condition, conditionIndex) => {
+      const outcome = outcomes[conditionIndex];
+      const state: CustomRuleInspectorState =
+        outcome === "match" ? "pass" : outcome === "noMatch" ? "fail" : "missing";
+      return {
+        condition,
+        state,
+        actualValue: customConditionActualValue(condition, game, input, index),
+        decisive: inspectionOutcomeIsDecisive(outcomes, connectors, conditionIndex, baseOutcome),
+        missingReason: typeof outcome === "object" ? outcome.missing : null,
+      };
+    }),
+  };
+}
+
+function evaluateInspectorOutcomes(
+  outcomes: ConditionOutcome[],
+  connectors: CustomRuleConnector[],
+): TriState {
+  return evaluateMixedOutcomes(outcomes, connectors, {
+    evaluated: 0,
+    matched: 0,
+    skippedMissingHltb: 0,
+    skippedMissingDetails: 0,
+    skippedMissingRatings: 0,
+    skippedInvalid: 0,
+    staleCategoryRefs: [],
+    invalidMessages: [],
+  });
+}
+
+function inspectionOutcomeIsDecisive(
+  outcomes: ConditionOutcome[],
+  connectors: CustomRuleConnector[],
+  index: number,
+  baseOutcome: TriState,
+): boolean {
+  const current = outcomes[index];
+  const alternatives: ConditionOutcome[] = typeof current === "object"
+    ? ["match", "noMatch"]
+    : [current === "match" ? "noMatch" : "match"];
+  return alternatives.some((alternative) => {
+    const changed = [...outcomes];
+    changed[index] = alternative;
+    return evaluateInspectorOutcomes(changed, connectors) !== baseOutcome;
+  });
+}
+
+export function inspectCustomAutoCatRule(
+  input: EvaluateCustomAutoCatInput,
+): CustomRuleInspectionSummary {
+  const config = normalizeCustomAutoCatConfig(input.config);
+  const result = evaluateCustomAutoCat({ ...input, config });
+  const includedAppIds = [...new Set(Object.values(result.assignments).flat())];
+  const included = new Set(includedAppIds);
+  const processed = new Set(result.processed_app_ids ?? []);
+  const allIds = Object.keys(input.games).map(Number);
+  const excludedAppIds = allIds.filter((appId) => processed.has(appId) && !included.has(appId));
+  const missingAppIds = allIds.filter((appId) => !processed.has(appId));
+  const diagnostics = result.custom_diagnostics ?? {
+    evaluated: result.games_processed,
+    matched: result.games_categorized,
+    skippedMissingHltb: 0,
+    skippedMissingDetails: 0,
+    skippedMissingRatings: 0,
+    skippedInvalid: 0,
+    staleCategoryRefs: [],
+    invalidMessages: [],
+  };
+  const warnings = [...diagnostics.invalidMessages];
+  if (includedAppIds.length === 0 && allIds.length > 0) warnings.push("This rule matches no games.");
+  if (allIds.length > 0 && includedAppIds.length / allIds.length >= 0.8) {
+    warnings.push("This rule matches at least 80% of the library.");
+  }
+  const fingerprints = new Set<string>();
+  for (const condition of enabledConditions(config)) {
+    const { id: _id, ...identity } = condition;
+    const fingerprint = JSON.stringify(identity);
+    if (fingerprints.has(fingerprint)) warnings.push("This rule contains duplicate conditions.");
+    fingerprints.add(fingerprint);
+  }
+  return {
+    matched: includedAppIds.length,
+    evaluated: processed.size,
+    missing: missingAppIds.length,
+    includedAppIds,
+    excludedAppIds,
+    missingAppIds,
+    warnings: [...new Set(warnings)],
+    diagnostics,
+  };
+}
+
+function customConditionActualValue(
+  condition: CustomRuleConditionV1,
+  game: OwnedGame,
+  input: EvaluateCustomAutoCatInput,
+  index: CategoryIndex,
+): string {
+  const detail = input.details[game.appid];
+  if (condition.kind === "title") return game.name;
+  if (condition.kind === "playtime") return `${(game.playtime_forever / 60).toFixed(1)} h`;
+  if (condition.kind === "hltb") {
+    const hours = getHltbHours(input.hltbData[game.appid], condition.mode || input.hltbTimeMode);
+    return hours == null ? "Missing HLTB data" : `${hours} h`;
+  }
+  if (condition.kind === "category") {
+    const memberships = index.categoryKeysByAppId.get(game.appid) ?? new Set<string>();
+    return [...memberships].join(", ") || "No collections";
+  }
+  if (condition.kind === "special") {
+    const set = condition.field === "hidden"
+      ? index.hiddenAppIds
+      : condition.field === "favorite"
+        ? index.favoriteAppIds
+        : index.uncategorizedAppIds;
+    return set.has(game.appid) ? "Yes" : "No";
+  }
+  if (condition.kind === "platform") {
+    if (!detail) return "Missing details";
+    return (["windows", "mac", "linux"] as const)
+      .filter((platform) => detail.platforms?.[platform])
+      .join(", ") || "None";
+  }
+  if (condition.kind === "metadataText") {
+    if (!detail) return "Missing details";
+    const values = condition.field === "genre" ? detail.genres
+      : condition.field === "tag" ? detail.tags
+        : condition.field === "flag" ? detail.categories
+          : condition.field === "language" ? detail.supported_languages
+            : condition.field === "developer" ? detail.developers
+              : detail.publishers;
+    return values?.join(", ") || "None";
+  }
+  if (condition.kind === "metadataNumber") {
+    if (condition.field === "steamReviewScore" || condition.field === "steamReviewCount") {
+      const rating = input.ratings[game.appid];
+      if (!rating) return "Missing Steam reviews";
+      return condition.field === "steamReviewCount"
+        ? String(rating.total_reviews)
+        : String(scoreForRating(rating, condition.steamReviewScoreMode === "wilson"));
+    }
+    if (!detail) return "Missing details";
+    return condition.field === "releaseYear"
+      ? String(extractReleaseYear(bestAvailableReleaseDate(detail)) ?? "Unknown")
+      : String(detail.metacritic_score ?? "Missing");
+  }
+  if (condition.kind === "diary") {
+    const diary = input.diary;
+    if (condition.field === "rating") return String(diary?.ratings[game.appid]?.rating ?? "Unrated");
+    if (condition.field === "hasJournal") return (diary?.journal[game.appid]?.length ?? 0) > 0 ? "Yes" : "No";
+    if (condition.field === "hasPages") return diary?.pageAppIds.has(game.appid) ? "Yes" : "No";
+    return diary?.entries[game.appid]?.decision ?? diary?.statuses[game.appid] ?? "backlog";
+  }
+  return "Not applicable";
 }
 
 type TriState = "match" | "noMatch" | "unknown";
