@@ -491,11 +491,17 @@ pub(crate) fn save_collections_unlocked(
     let output =
         serde_json::to_string(&catalog).map_err(|e| format!("Failed to serialize: {}", e))?;
 
-    let tmp_path = path.with_extension("tmp");
-
-    fs::write(&tmp_path, &output).map_err(|e| format!("Failed to write temp file: {}", e))?;
-
-    fs::rename(&tmp_path, &path).map_err(|e| format!("Failed to rename temp file: {}", e))?;
+    crate::app_data::write_text_file_atomic_validated(
+        &path,
+        &output,
+        "Steam collection catalog",
+        true,
+        |candidate| {
+            serde_json::from_str::<Vec<serde_json::Value>>(candidate)
+                .map(|_| ())
+                .map_err(|error| error.to_string())
+        },
+    )?;
 
     if let Some(leveldb) = &leveldb {
         write_leveldb_catalog(leveldb, &output)?;

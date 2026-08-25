@@ -2,6 +2,7 @@ use super::{
     preserve_newer_automation_status, read_optional_text_file, should_sync_app_data,
     validate_app_data_key,
 };
+use crate::app_data::write_text_file_atomic_validated;
 
 fn temp_test_path(prefix: &str) -> std::path::PathBuf {
     let unique = std::time::SystemTime::now()
@@ -103,6 +104,39 @@ fn optional_text_read_returns_existing_file_contents() {
     let _ = std::fs::remove_file(&path);
 
     assert_eq!(result.as_deref(), Some("{\"ok\":true}"));
+}
+
+#[test]
+fn validated_atomic_write_rejects_invalid_data_without_replacing_target() {
+    let path = temp_test_path("atomic-validation");
+    std::fs::write(&path, "{\"safe\":true}").unwrap();
+
+    let result =
+        write_text_file_atomic_validated(&path, "{not-json", "test JSON", true, |candidate| {
+            serde_json::from_str::<serde_json::Value>(candidate)
+                .map(|_| ())
+                .map_err(|error| error.to_string())
+        });
+
+    assert!(result.is_err());
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), "{\"safe\":true}");
+    let _ = std::fs::remove_file(path);
+}
+
+#[test]
+fn validated_atomic_write_replaces_target_after_verifying_temp_file() {
+    let path = temp_test_path("atomic-success");
+    std::fs::write(&path, "{\"version\":1}").unwrap();
+
+    write_text_file_atomic_validated(&path, "{\"version\":2}", "test JSON", true, |candidate| {
+        serde_json::from_str::<serde_json::Value>(candidate)
+            .map(|_| ())
+            .map_err(|error| error.to_string())
+    })
+    .unwrap();
+
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), "{\"version\":2}");
+    let _ = std::fs::remove_file(path);
 }
 
 #[test]

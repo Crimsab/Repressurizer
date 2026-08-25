@@ -210,6 +210,21 @@ pub(crate) fn write_text_file_atomic(
     description: &str,
     sync_to_disk: bool,
 ) -> Result<(), String> {
+    write_text_file_atomic_validated(path, data, description, sync_to_disk, |_| Ok(()))
+}
+
+pub(crate) fn write_text_file_atomic_validated<F>(
+    path: &Path,
+    data: &str,
+    description: &str,
+    sync_to_disk: bool,
+    validate: F,
+) -> Result<(), String>
+where
+    F: Fn(&str) -> Result<(), String>,
+{
+    validate(data).map_err(|error| format!("Invalid {description}: {error}"))?;
+
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|error| {
             format!(
@@ -251,6 +266,17 @@ pub(crate) fn write_text_file_atomic(
         }
         drop(file);
 
+        let written = std::fs::read_to_string(&temporary_path).map_err(|error| {
+            format!(
+                "Failed to verify temporary {} {}: {}",
+                description,
+                temporary_path.display(),
+                error
+            )
+        })?;
+        validate(&written)
+            .map_err(|error| format!("Temporary {description} failed validation: {error}"))?;
+
         replace_file(&temporary_path, path).map_err(|error| {
             format!(
                 "Failed to replace {} {}: {}",
@@ -258,7 +284,25 @@ pub(crate) fn write_text_file_atomic(
                 path.display(),
                 error
             )
-        })
+        })?;
+
+        #[cfg(not(windows))]
+        if sync_to_disk {
+            if let Some(parent) = path.parent() {
+                std::fs::File::open(parent)
+                    .and_then(|directory| directory.sync_all())
+                    .map_err(|error| {
+                        format!(
+                            "Failed to flush {} directory {}: {}",
+                            description,
+                            parent.display(),
+                            error
+                        )
+                    })?;
+            }
+        }
+
+        Ok(())
     })();
 
     if result.is_err() {
