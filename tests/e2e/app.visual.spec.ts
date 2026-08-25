@@ -738,8 +738,43 @@ test("Diary bulk actions expose status, priority, removal, and undo", async ({ p
   page.once("dialog", (confirmation) => confirmation.accept());
   await page.getByTestId("diary-kanban-selection-remove").click();
   await expect(page.getByText(`Removed ${playingCount} games from the Diary.`)).toBeVisible();
+  await expect(playingColumn).not.toContainText("Hades");
   await page.getByRole("button", { name: "Undo" }).click();
   await expect(playingColumn).toContainText("Hades");
+
+  await page.getByTestId("diary-kanban-select-all-playing").click();
+  page.once("dialog", (confirmation) => confirmation.accept());
+  await page.getByTestId("diary-kanban-selection-remove").click();
+  await expect(playingColumn).not.toContainText("Hades");
+  await page.reload();
+  await page.getByRole("button", { name: "Diary" }).click();
+  await page.getByTestId("diary-view-kanban").click();
+  await expect(page.getByTestId("diary-kanban-column-playing")).not.toContainText("Hades");
+  await page.getByTestId("diary-kanban-columns-button").click();
+  const removedScreenshotPath = testInfo.outputPath("diary-kanban-removed-games.png");
+  await page.screenshot({ path: removedScreenshotPath, fullPage: true });
+  await testInfo.attach("diary-kanban-removed-games", {
+    path: removedScreenshotPath,
+    contentType: "image/png",
+  });
+  await page.keyboard.press("Escape");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByTestId("diary-kanban-columns-button").click();
+  const removedPopover = page.getByTestId("diary-kanban-columns-popover");
+  const removedPopoverBox = await removedPopover.boundingBox();
+  expect(removedPopoverBox).not.toBeNull();
+  expect(removedPopoverBox!.x).toBeGreaterThanOrEqual(0);
+  expect(removedPopoverBox!.x + removedPopoverBox!.width).toBeLessThanOrEqual(390);
+  const removedMobileScreenshotPath = testInfo.outputPath(
+    "diary-kanban-removed-games-mobile.png",
+  );
+  await page.screenshot({ path: removedMobileScreenshotPath, fullPage: true });
+  await testInfo.attach("diary-kanban-removed-games-mobile", {
+    path: removedMobileScreenshotPath,
+    contentType: "image/png",
+  });
+  await page.getByTestId("diary-kanban-restore-removed").click();
+  await expect(page.getByTestId("diary-kanban-column-playing")).toContainText("Hades");
 });
 
 test("Diary Kanban applies structured filters and exposes persistent action history", async ({ page }, testInfo) => {

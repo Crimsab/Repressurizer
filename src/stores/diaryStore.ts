@@ -20,6 +20,8 @@ export interface DiaryBoardPrefs {
   customColumns: DiaryCustomColumn[];
   /** appId -> custom column id (wins over the diary status on the board). */
   customAssignments: Record<string, string>;
+  /** Games explicitly removed from Diary; independent from Steam playtime/status. */
+  removedAppIds: number[];
 }
 
 export interface DiaryEntry {
@@ -153,8 +155,10 @@ interface DiaryState {
   setBulkPriority: (appIds: number[], priority: DiaryPriority) => void;
   captureBulkSnapshot: (appIds: number[]) => DiaryBulkSnapshot;
   restoreBulkSnapshot: (snapshot: DiaryBulkSnapshot) => void;
-  /** Clears Diary placement metadata while preserving notes, pages and history. */
+  /** Removes games from Diary while preserving notes, pages and history. */
   clearBulkDiaryState: (appIds: number[]) => void;
+  /** Restores selected removed games, or every removed game when omitted. */
+  restoreRemovedGames: (appIds?: number[]) => void;
   setDecision: (appId: number, decision: DiaryDecision) => void;
   setPriority: (appId: number, priority: DiaryPriority) => void;
   /** Marks or clears the explicit backlog override for a batch of games. */
@@ -197,7 +201,7 @@ const BOARD_PREFS_APP_DATA_KEY = "diary-board.json";
 const ACHIEVEMENTS_STORAGE_KEY = "repressurizer-diary-achievements";
 const ACHIEVEMENTS_APP_DATA_KEY = "diary-achievements.json";
 
-const DEFAULT_BOARD_PREFS: DiaryBoardPrefs = { columnColors: {}, hiddenColumns: [], customColumns: [], customAssignments: {} };
+const DEFAULT_BOARD_PREFS: DiaryBoardPrefs = { columnColors: {}, hiddenColumns: [], customColumns: [], customAssignments: {}, removedAppIds: [] };
 
 function normalizeHexColor(value: unknown): string | null {
   if (typeof value !== "string") return null;
@@ -205,7 +209,7 @@ function normalizeHexColor(value: unknown): string | null {
 }
 
 function normalizeBoardPrefs(value: unknown): DiaryBoardPrefs {
-  if (!value || typeof value !== "object") return { columnColors: {}, hiddenColumns: [], customColumns: [], customAssignments: {} };
+  if (!value || typeof value !== "object") return { ...DEFAULT_BOARD_PREFS };
   const raw = value as Partial<DiaryBoardPrefs>;
   const columnColors: Record<string, string> = {};
   for (const [status, color] of Object.entries(raw.columnColors ?? {})) {
@@ -228,7 +232,13 @@ function normalizeBoardPrefs(value: unknown): DiaryBoardPrefs {
     const appId = Number(rawAppId);
     if (Number.isFinite(appId) && typeof columnId === "string" && validIds.has(columnId)) customAssignments[appId] = columnId;
   }
-  return { columnColors, hiddenColumns, customColumns, customAssignments };
+  const removedAppIds = [...new Set(
+    (Array.isArray(raw.removedAppIds) ? raw.removedAppIds : [])
+      .map(Number)
+      .filter((appId) => Number.isFinite(appId) && appId > 0)
+      .map(Math.trunc),
+  )].slice(0, 10_000);
+  return { columnColors, hiddenColumns, customColumns, customAssignments, removedAppIds };
 }
 
 function readLocalBoardPrefs(): DiaryBoardPrefs {
@@ -676,10 +686,23 @@ export const useDiaryStore = create<DiaryState>((set, get) => ({
       delete customAssignments[appId];
     }
     const queue = state.queue.filter((appId) => !idSet.has(appId));
-    const boardPrefs = { ...state.boardPrefs, customAssignments };
+    const removedAppIds = [...new Set([...state.boardPrefs.removedAppIds, ...ids])];
+    const boardPrefs = { ...state.boardPrefs, customAssignments, removedAppIds };
     persistDiary(entries, queue, state.finishPrompts, state.journal, state.pages, state.revisions, board);
     persistBoardPrefs(boardPrefs);
     return { entries, queue, board, boardPrefs };
+  }),
+  restoreRemovedGames: (appIds) => set((state) => {
+    const restoreSet = appIds
+      ? new Set(appIds.filter((appId) => Number.isFinite(appId)).map(Math.trunc))
+      : null;
+    const removedAppIds = restoreSet
+      ? state.boardPrefs.removedAppIds.filter((appId) => !restoreSet.has(appId))
+      : [];
+    if (removedAppIds.length === state.boardPrefs.removedAppIds.length) return state;
+    const boardPrefs = { ...state.boardPrefs, removedAppIds };
+    persistBoardPrefs(boardPrefs);
+    return { boardPrefs };
   }),
   setDecision: (appId, decision) => set((state) => {
     const entries = { ...state.entries, [appId]: { ...entryWithDefaults(state.entries[appId]), decision, updatedAt: Date.now() } };

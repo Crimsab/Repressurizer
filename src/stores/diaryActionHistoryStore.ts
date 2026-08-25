@@ -42,6 +42,7 @@ export function makeDiaryActionSnapshot(
       hiddenColumns: [...boardPrefs.hiddenColumns],
       customColumns: boardPrefs.customColumns.map((column) => ({ ...column })),
       customAssignments: { ...boardPrefs.customAssignments },
+      removedAppIds: [...boardPrefs.removedAppIds],
     },
   };
 }
@@ -100,6 +101,7 @@ function isEntry(value: unknown): value is DiaryActionHistoryEntry {
   const boardPrefs = snapshot.boardPrefs as Partial<DiaryBoardPrefs>;
   return Array.isArray(boardPrefs.hiddenColumns)
     && Array.isArray(boardPrefs.customColumns)
+    && (boardPrefs.removedAppIds === undefined || Array.isArray(boardPrefs.removedAppIds))
     && !!boardPrefs.columnColors
     && typeof boardPrefs.columnColors === "object"
     && !!boardPrefs.customAssignments

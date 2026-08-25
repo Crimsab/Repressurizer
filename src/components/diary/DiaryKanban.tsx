@@ -75,7 +75,7 @@ function colorWithAlpha(hex: string, alpha: number): string {
 
 const PRIORITY_EDGE: Record<DiaryPriority, string | null> = { high: "#fb7185", normal: null, low: "#64748b" };
 
-export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, details, entries, statuses, reviews, journal, pages, board, boardPrefs, language, showArchived, forceStatus, wipLimit, t, onBulkStatusChange, onBulkPriorityChange, onRemoveGames, onMoveGames, onOpenGame, onSetColumnColor, onToggleColumnHidden, onAddCustomColumn, onRenameCustomColumn, onRemoveCustomColumn, onMergeCustomColumn, onRemoveEmptyCustomColumns, onMoveCustomColumn }: {
+export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, details, entries, statuses, reviews, journal, pages, board, boardPrefs, language, showArchived, forceStatus, wipLimit, t, onBulkStatusChange, onBulkPriorityChange, onRemoveGames, onRestoreRemovedGames, onMoveGames, onOpenGame, onSetColumnColor, onToggleColumnHidden, onAddCustomColumn, onRenameCustomColumn, onRemoveCustomColumn, onMergeCustomColumn, onRemoveEmptyCustomColumns, onMoveCustomColumn }: {
   games: OwnedGame[];
   details: Record<number, GameDetails>;
   entries: Record<number, DiaryEntry>;
@@ -96,6 +96,7 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, details,
   onBulkStatusChange: (appIds: number[], status: DiaryViewStatus) => void;
   onBulkPriorityChange: (appIds: number[], priority: DiaryPriority) => void;
   onRemoveGames: (appIds: number[]) => void;
+  onRestoreRemovedGames: () => void;
   onMoveGames: (appIds: number[], column: BoardColumn, orderedAppIds: number[]) => void;
   onOpenGame: (appId: number) => void;
   onSetColumnColor: (columnKey: string, color: string | null) => void;
@@ -805,6 +806,22 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, details,
                   onToggleHidden={() => onToggleColumnHidden(status)}
                 />
               ))}
+            </div>
+            <div className="mt-3 flex items-center justify-between gap-2 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-bg/45 px-2 py-1.5">
+              <span className="text-[10px] text-repressurizer-text-faint">
+                {t("diary.kanban.removedGames")}
+              </span>
+              <button
+                type="button"
+                data-testid="diary-kanban-restore-removed"
+                disabled={boardPrefs.removedAppIds.length === 0}
+                onClick={onRestoreRemovedGames}
+                className="focus-ring rounded-md border border-repressurizer-border-subtle px-2 py-1 text-[10px] font-medium text-repressurizer-text-muted transition-colors hover:border-repressurizer-accent/40 hover:text-repressurizer-accent disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {t("diary.kanban.restoreRemoved", {
+                  count: boardPrefs.removedAppIds.length,
+                })}
+              </button>
             </div>
             <p className="mb-1.5 mt-3 px-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-repressurizer-text-faint">{t("diary.kanban.customColumns")}</p>
             <div className="mb-2 flex items-center justify-between gap-2 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-bg/45 px-2 py-1.5">
