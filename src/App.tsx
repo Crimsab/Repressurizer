@@ -36,6 +36,7 @@ import { useProfileStore } from "./stores/profileStore";
 import { useProfileSyncStore } from "./stores/profileSyncStore";
 import { useStoragePlannerStore } from "./stores/storagePlannerStore";
 import { useDeckPackStore } from "./stores/deckPackStore";
+import { useCommunityRulePackStore } from "./stores/communityRulePackStore";
 import {
   fetchLibrary,
   loadCollections,
@@ -227,6 +228,7 @@ function AppContent() {
   const hydrateProfileSync = useProfileSyncStore((s) => s.hydrate);
   const hydrateStoragePlanner = useStoragePlannerStore((s) => s.hydrate);
   const hydrateDeckPacks = useDeckPackStore((s) => s.hydrate);
+  const hydrateCommunityPacks = useCommunityRulePackStore((s) => s.hydrate);
   const profileSync = useProfileSyncStore(useShallow((state) => ({ hydrated: state.hydrated, folder: state.folder, automatic: state.automatic, paused: state.paused, intervalMinutes: state.intervalMinutes, lastSyncAt: state.lastSyncAt })));
   const hydrateSettingsFromDisk = useSettingsStore((s) => s.hydrateFromDisk);
   const setCollections = useCategoryStore((s) => s.setCollections);
@@ -821,6 +823,7 @@ function AppContent() {
     hydrateProfileSync();
     hydrateStoragePlanner();
     hydrateDeckPacks();
+    hydrateCommunityPacks();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [interactiveStartupReady]);
 

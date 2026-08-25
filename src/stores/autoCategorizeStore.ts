@@ -73,6 +73,7 @@ export interface AutoCategorizePreset {
   diaryAutoColumnLimit?: number;
   diaryAutoColumnReuse?: boolean;
   diaryMoveMatches?: boolean;
+  communityPack?: { packId: string; version: string; author: string; ruleId: string; sourceChecksum: string; linked: boolean };
 }
 
 interface AutoCategorizeState {
@@ -235,6 +236,7 @@ function normalizePreset(raw: unknown): AutoCategorizePreset | null {
     diaryAutoColumnLimit: Number.isFinite(Number(preset.diaryAutoColumnLimit)) ? Math.min(12, Math.max(1, Math.floor(Number(preset.diaryAutoColumnLimit)))) : undefined,
     diaryAutoColumnReuse: typeof preset.diaryAutoColumnReuse === "boolean" ? preset.diaryAutoColumnReuse : undefined,
     diaryMoveMatches: typeof preset.diaryMoveMatches === "boolean" ? preset.diaryMoveMatches : undefined,
+    communityPack: preset.communityPack && typeof preset.communityPack.packId === "string" ? structuredClone(preset.communityPack) : undefined,
   };
 }
 

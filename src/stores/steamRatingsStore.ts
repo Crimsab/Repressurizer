@@ -6,6 +6,7 @@ const STORAGE_KEY = "steam_ratings_cache.json";
 
 interface SteamRatingsState {
   ratings: Record<number, SteamReviewSummary>;
+  readonly summaries: Record<number, SteamReviewSummary>;
   hydrated: boolean;
   hydrating: boolean;
   setRating: (appId: number, rating: SteamReviewSummary) => void;
@@ -44,6 +45,7 @@ function cleanRatings(raw: Record<string, SteamReviewSummary>): Record<number, S
 
 export const useSteamRatingsStore = create<SteamRatingsState>((set, get) => ({
   ratings: {},
+  summaries: {},
   hydrated: false,
   hydrating: false,
 
@@ -51,7 +53,7 @@ export const useSteamRatingsStore = create<SteamRatingsState>((set, get) => ({
     set((state) => {
       const next = { ...state.ratings, [appId]: rating };
       saveAsync(next);
-      return { ratings: next };
+      return { ratings: next, summaries: next };
     }),
 
   setBulkRatings: (ratings) =>
@@ -59,7 +61,7 @@ export const useSteamRatingsStore = create<SteamRatingsState>((set, get) => ({
       const next = { ...state.ratings };
       for (const rating of ratings) next[rating.app_id] = rating;
       saveAsync(next);
-      return { ratings: next };
+      return { ratings: next, summaries: next };
     }),
 
   getRating: (appId) => get().ratings[appId] ?? null,
@@ -71,14 +73,16 @@ export const useSteamRatingsStore = create<SteamRatingsState>((set, get) => ({
     hydratePromise = (async () => {
       try {
         const raw = await loadAppData(STORAGE_KEY);
+        const restored = raw ? cleanRatings(JSON.parse(raw)) : {};
         set({
-          ratings: raw ? cleanRatings(JSON.parse(raw)) : {},
+          ratings: restored,
+          summaries: restored,
           hydrated: true,
           hydrating: false,
         });
       } catch {
         // Cache miss or parse error: start fresh.
-        set({ ratings: {}, hydrated: true, hydrating: false });
+        set({ ratings: {}, summaries: {}, hydrated: true, hydrating: false });
       } finally {
         hydratePromise = null;
       }
