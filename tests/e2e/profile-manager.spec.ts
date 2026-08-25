@@ -35,4 +35,16 @@ test("profiles export without secrets and selectively import after backup", asyn
 test("profile manager remains usable on mobile", async ({ page }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 }); await page.goto("/"); const dialog = await openProfiles(page); await expect(dialog.getByText("Create or export profile")).toBeVisible();
   const overflow = await dialog.evaluate((element) => ({ clientWidth: element.clientWidth, scrollWidth: element.scrollWidth })); expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth + 1); await capture(page, testInfo, "profile-manager-mobile");
+  await dialog.getByText("Folder sync", { exact: true }).scrollIntoViewIfNeeded(); await capture(page, testInfo, "profile-sync-mobile");
+});
+
+test("folder sync writes a verified versioned file without Steam paths or secrets", async ({ page }) => {
+  await page.goto("/"); const dialog = await openProfiles(page);
+  await page.evaluate(() => window.localStorage.setItem("repressurizer-mock-open-path", "C:\\Users\\Demo\\Syncthing\\Repressurizer"));
+  await dialog.getByRole("button", { name: "Choose a sync folder" }).click();
+  await dialog.getByRole("button", { name: "Sync now" }).click();
+  await expect(page.getByText("Profile data synchronized.")).toBeVisible();
+  const files = await page.evaluate(() => JSON.parse(window.localStorage.getItem("repressurizer-mock-files") ?? "{}") as Record<string, string>);
+  const entries = Object.entries(files).filter(([path]) => path.endsWith(".json"));
+  expect(entries).toHaveLength(1); expect(entries[0][0]).toContain(".repressurizer-sync-"); expect(entries[0][1]).toContain('"checksum"'); expect(entries[0][1]).not.toContain("mock-key"); expect(entries[0][1]).not.toContain("Program Files");
 });

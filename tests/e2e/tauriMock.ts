@@ -217,6 +217,8 @@ export async function installTauriMock(page: Page) {
         ],
       }),
     };
+    const mockFiles: Record<string, string> = {};
+    const rememberMockFiles = () => window.localStorage.setItem("repressurizer-mock-files", JSON.stringify(mockFiles));
 
     window.localStorage.setItem("repressurizer-settings", JSON.stringify(settings));
     const diaryBackups: Array<{ name: string; description: string; created_at_ms: number; files: string[] }> = [];
@@ -304,7 +306,7 @@ export async function installTauriMock(page: Page) {
     });
 
     const tauriInternals = {
-      invoke: async (cmd: string, args?: Record<string, unknown>) => {
+      invoke: async (cmd: string, args?: Record<string, unknown>, invokeOptions?: { headers?: Record<string, string> }) => {
         switch (cmd) {
           case "plugin:log|log":
             return null;
@@ -356,17 +358,31 @@ export async function installTauriMock(page: Page) {
           }
           case "plugin:fs|write_text_file": {
             const payload = args as unknown;
-            const writtenText = payload instanceof Uint8Array
-              ? new TextDecoder().decode(payload)
-              : String(args?.contents ?? args?.data ?? "");
+            const writtenText = Array.isArray(payload) || payload instanceof Uint8Array
+              ? new TextDecoder().decode(new Uint8Array(payload as number[]))
+              : String(payload);
+            const path = decodeURIComponent(invokeOptions?.headers?.path ?? "");
+            if (path) { mockFiles[path] = writtenText; rememberMockFiles(); }
             window.localStorage.setItem(
               "repressurizer-last-written-text",
               writtenText,
             );
             return null;
           }
-          case "plugin:fs|read_text_file":
-            return Array.from(new TextEncoder().encode(window.localStorage.getItem("repressurizer-mock-read-text") ?? ""));
+          case "plugin:fs|read_text_file": {
+            const body = mockFiles[String(args?.path ?? "")] ?? window.localStorage.getItem("repressurizer-mock-read-text") ?? "";
+            return Array.from(new TextEncoder().encode(body));
+          }
+          case "plugin:fs|read_dir": {
+            const folder = String(args?.path ?? "").replace(/[\\/]+$/, "");
+            return Object.keys(mockFiles).filter((path) => path.startsWith(`${folder}/`) && !path.slice(folder.length + 1).includes("/")).map((path) => ({ name: path.slice(folder.length + 1), isDirectory: false, isFile: true, isSymlink: false }));
+          }
+          case "plugin:fs|rename": {
+            const oldPath = String(args?.oldPath ?? args?.old_path ?? ""); const newPath = String(args?.newPath ?? args?.new_path ?? "");
+            mockFiles[newPath] = mockFiles[oldPath]; delete mockFiles[oldPath]; rememberMockFiles(); return null;
+          }
+          case "plugin:fs|remove":
+            delete mockFiles[String(args?.path ?? "")]; rememberMockFiles(); return null;
           case "plugin:autostart|is_enabled":
             return autostartEnabled;
           case "plugin:autostart|enable":

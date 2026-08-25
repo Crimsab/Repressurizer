@@ -33,6 +33,7 @@ import { useLibraryInboxStore } from "./stores/libraryInboxStore";
 import { useCollectionTimeMachineStore } from "./stores/collectionTimeMachineStore";
 import { useConflictResolverStore } from "./stores/conflictResolverStore";
 import { useProfileStore } from "./stores/profileStore";
+import { useProfileSyncStore } from "./stores/profileSyncStore";
 import {
   fetchLibrary,
   loadCollections,
@@ -221,6 +222,8 @@ function AppContent() {
   const hydrateCollectionTimeMachine = useCollectionTimeMachineStore((s) => s.hydrate);
   const hydrateConflictResolver = useConflictResolverStore((s) => s.hydrate);
   const hydrateProfiles = useProfileStore((s) => s.hydrate);
+  const hydrateProfileSync = useProfileSyncStore((s) => s.hydrate);
+  const profileSync = useProfileSyncStore(useShallow((state) => ({ hydrated: state.hydrated, folder: state.folder, automatic: state.automatic, paused: state.paused, intervalMinutes: state.intervalMinutes, lastSyncAt: state.lastSyncAt })));
   const hydrateSettingsFromDisk = useSettingsStore((s) => s.hydrateFromDisk);
   const setCollections = useCategoryStore((s) => s.setCollections);
   const [reloading, setReloading] = useState(false);
@@ -811,8 +814,19 @@ function AppContent() {
     hydrateCollectionTimeMachine();
     hydrateConflictResolver();
     hydrateProfiles();
+    hydrateProfileSync();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [interactiveStartupReady]);
+
+  useEffect(() => {
+    if (!interactiveStartupReady || !profileSync.hydrated || !profileSync.automatic || profileSync.paused || !profileSync.folder) return;
+    const run = () => { void useProfileSyncStore.getState().syncNow().catch(() => {}); };
+    const elapsed = Date.now() - (profileSync.lastSyncAt ?? 0);
+    const intervalMs = Math.max(5, profileSync.intervalMinutes) * 60_000;
+    const timeout = window.setTimeout(run, Math.max(0, intervalMs - elapsed));
+    const interval = window.setInterval(run, intervalMs);
+    return () => { window.clearTimeout(timeout); window.clearInterval(interval); };
+  }, [interactiveStartupReady, profileSync.automatic, profileSync.folder, profileSync.hydrated, profileSync.intervalMinutes, profileSync.lastSyncAt, profileSync.paused]);
 
   useEffect(() => {
     if (!interactiveStartupReady) return;
