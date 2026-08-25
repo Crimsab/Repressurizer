@@ -8,6 +8,7 @@ import { useSettingsStore } from "../../stores/settingsStore";
 import { useFailedGamesStore } from "../../stores/failedGamesStore";
 import { useToastStore } from "../../stores/toastStore";
 import { useExportUiStore } from "../../stores/exportUiStore";
+import { useLibraryInboxStore } from "../../stores/libraryInboxStore";
 import { isSteamRunning, saveCollections, saveShortcuts } from "../../lib/tauri";
 import { buildSavePreview, type SavePreview } from "../../lib/savePreview";
 import { hasAdvancedFilters } from "../../lib/search";
@@ -47,6 +48,7 @@ import {
   CurrencyDollar,
   Spinner,
   DotsThree,
+  BellSimple,
 } from "@phosphor-icons/react";
 
 const loadSettingsPage = () => import("../settings/SettingsPage").then((m) => ({ default: m.SettingsPage }));
@@ -58,6 +60,7 @@ const loadWishlistPage = () => import("../wishlist/WishlistPage").then((m) => ({
 const loadFriendCompareDialog = () => import("../friends/FriendCompareDialog").then((m) => ({ default: m.FriendCompareDialog }));
 const loadWhatToPlayNext = () => import("../recommend/WhatToPlayNext").then((m) => ({ default: m.WhatToPlayNext }));
 const loadPlayHistoryTimeline = () => import("../timeline/PlayHistoryTimeline").then((m) => ({ default: m.PlayHistoryTimeline }));
+const loadLibraryChangesInbox = () => import("../inbox/LibraryChangesInbox").then((m) => ({ default: m.LibraryChangesInbox }));
 const SettingsPage = lazy(loadSettingsPage);
 const ExportDialog = lazy(loadExportDialog);
 const AutoCategorizeDialog = lazy(loadAutoCategorizeDialog);
@@ -67,6 +70,7 @@ const WishlistPage = lazy(loadWishlistPage);
 const FriendCompareDialog = lazy(loadFriendCompareDialog);
 const WhatToPlayNext = lazy(loadWhatToPlayNext);
 const PlayHistoryTimeline = lazy(loadPlayHistoryTimeline);
+const LibraryChangesInbox = lazy(loadLibraryChangesInbox);
 const preload = (loader: () => Promise<unknown>) => { void loader(); };
 
 function LazyOverlay({ children }: { children: ReactNode }) {
@@ -171,6 +175,7 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
   const [showFriendCompare, setShowFriendCompare] = useState(false);
   const [showRecommend, setShowRecommend] = useState(false);
   const [showTimeline, setShowTimeline] = useState(false);
+  const [showInbox, setShowInbox] = useState(false);
   const [showMoreTools, setShowMoreTools] = useState(false);
   const [showSavePreview, setShowSavePreview] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -179,15 +184,18 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
 
   const t = useT();
   const toast = useToastStore;
+  const inboxEvents = useLibraryInboxStore((state) => state.events);
+  const inboxUnread = inboxEvents.filter((event) => event.status === "unread" || (event.status === "snoozed" && (event.snoozedUntil ?? 0) <= Date.now())).length;
 
   const secondaryTools = [
-    { key: "achievements", label: t("toolbar.achievements"), Icon: Trophy, open: () => setShowAchievements(true), loader: loadAchievementsPage },
-    { key: "wishlist", label: t("toolbar.wishlist"), Icon: BookmarkSimple, open: () => setShowWishlist(true), loader: loadWishlistPage },
-    { key: "friends", label: t("toolbar.friendCompare"), Icon: UsersThree, open: () => setShowFriendCompare(true), loader: loadFriendCompareDialog },
-    { key: "recommend", label: t("toolbar.recommend"), Icon: GameController, open: () => setShowRecommend(true), loader: loadWhatToPlayNext },
-    { key: "timeline", label: t("toolbar.timeline"), Icon: CalendarBlank, open: () => setShowTimeline(true), loader: loadPlayHistoryTimeline },
-    { key: "stats", label: t("toolbar.stats"), Icon: ChartBar, open: () => setShowStats(true), loader: loadStatsPage },
-    { key: "export", label: t("toolbar.export"), Icon: Export, open: () => openExportDialog(), loader: loadExportDialog },
+    { key: "inbox", label: t("toolbar.inbox"), Icon: BellSimple, open: () => setShowInbox(true), loader: loadLibraryChangesInbox, badge: inboxUnread },
+    { key: "achievements", label: t("toolbar.achievements"), Icon: Trophy, open: () => setShowAchievements(true), loader: loadAchievementsPage, badge: 0 },
+    { key: "wishlist", label: t("toolbar.wishlist"), Icon: BookmarkSimple, open: () => setShowWishlist(true), loader: loadWishlistPage, badge: 0 },
+    { key: "friends", label: t("toolbar.friendCompare"), Icon: UsersThree, open: () => setShowFriendCompare(true), loader: loadFriendCompareDialog, badge: 0 },
+    { key: "recommend", label: t("toolbar.recommend"), Icon: GameController, open: () => setShowRecommend(true), loader: loadWhatToPlayNext, badge: 0 },
+    { key: "timeline", label: t("toolbar.timeline"), Icon: CalendarBlank, open: () => setShowTimeline(true), loader: loadPlayHistoryTimeline, badge: 0 },
+    { key: "stats", label: t("toolbar.stats"), Icon: ChartBar, open: () => setShowStats(true), loader: loadStatsPage, badge: 0 },
+    { key: "export", label: t("toolbar.export"), Icon: Export, open: () => openExportDialog(), loader: loadExportDialog, badge: 0 },
   ];
 
   useEffect(() => {
@@ -257,6 +265,7 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
         toast.getState().warning(`Collections saved, but shortcuts.vdf update failed: ${String(shortcutError)}`);
       }
       markClean();
+      useLibraryInboxStore.getState().recordCollectionsBaseline(collections);
       setShowSavePreview(false);
       toast.getState().success(t("toast.saveSuccess"));
     } catch (e) {
@@ -470,7 +479,7 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
             )}
           </ToolbarIconButton>
 
-          {secondaryTools.map(({ key, label, Icon, open, loader }) => (
+          {secondaryTools.map(({ key, label, Icon, open, loader, badge }) => (
             <ToolbarIconButton
               key={key}
               label={label}
@@ -478,9 +487,10 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
               onClick={open}
               onPointerEnter={() => preload(loader)}
               onFocus={() => preload(loader)}
-              className="btn-press flex h-8 w-8 items-center justify-center rounded-lg text-repressurizer-text-muted transition-colors hover:bg-repressurizer-surface-hover hover:text-white"
+              className="btn-press relative flex h-8 w-8 items-center justify-center rounded-lg text-repressurizer-text-muted transition-colors hover:bg-repressurizer-surface-hover hover:text-white"
             >
               <Icon size={16} />
+              {badge > 0 && <span className="absolute -right-1 -top-1 flex min-w-4 items-center justify-center rounded-full bg-repressurizer-danger px-1 text-[8px] font-bold leading-4 text-white">{badge > 99 ? "99+" : badge}</span>}
             </ToolbarIconButton>
           ))}
 
@@ -501,7 +511,7 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
                 aria-label={t("toolbar.more")}
                 className="absolute right-0 top-full z-50 mt-1.5 w-56 rounded-xl border border-repressurizer-border bg-repressurizer-surface p-1.5 shadow-pop"
               >
-                {secondaryTools.map(({ key, label, Icon, open, loader }) => (
+                {secondaryTools.map(({ key, label, Icon, open, loader, badge }) => (
                   <button
                     key={key}
                     type="button"
@@ -515,7 +525,8 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
                     className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs text-repressurizer-text transition-colors hover:bg-repressurizer-surface-hover focus:bg-repressurizer-surface-hover focus:outline-none"
                   >
                     <Icon size={15} className="text-repressurizer-text-muted" />
-                    {label}
+                    <span className="min-w-0 flex-1">{label}</span>
+                    {badge > 0 && <span className="rounded-full bg-repressurizer-danger/15 px-1.5 font-mono text-[9px] text-repressurizer-danger">{badge}</span>}
                   </button>
                 ))}
                 <div className="my-1 border-t border-repressurizer-border-subtle min-[960px]:hidden" />
@@ -611,6 +622,15 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
       {showTimeline && (
         <LazyOverlay>
           <PlayHistoryTimeline onClose={() => setShowTimeline(false)} />
+        </LazyOverlay>
+      )}
+      {showInbox && (
+        <LazyOverlay>
+          <LibraryChangesInbox
+            onClose={() => setShowInbox(false)}
+            onOpenAutoCat={() => setShowAutoCat(true)}
+            onRefresh={onRefreshLibrary}
+          />
         </LazyOverlay>
       )}
       {showSavePreview && (

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo, useState, useCallback, useRef } from "react";
+import { lazy, Suspense, useMemo, useState, useCallback, useEffect, useRef } from "react";
 import { useGameStore } from "../../stores/gameStore";
 import { useCategoryStore } from "../../stores/categoryStore";
 import { useStatusStore, STATUS_META } from "../../stores/statusStore";
@@ -111,6 +111,18 @@ export function GameGrid() {
     preloadGameDetailPage();
     setDetailGame(game);
   }, []);
+
+  useEffect(() => {
+    const openGame = (event: Event) => {
+      const appId = Number((event as CustomEvent<{ appId?: number }>).detail?.appId);
+      const game = games[appId];
+      if (!game) return;
+      preloadGameDetailPage();
+      setDetailGame(game);
+    };
+    window.addEventListener("repressurizer-open-game", openGame);
+    return () => window.removeEventListener("repressurizer-open-game", openGame);
+  }, [games]);
 
   const handleBackgroundClick = (e: React.MouseEvent) => {
     if (e.target === e.currentTarget) {

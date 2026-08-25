@@ -29,6 +29,7 @@ import { useSteamRatingsStore } from "./stores/steamRatingsStore";
 import { useAppNameOverrideStore } from "./stores/appNameOverrideStore";
 import { useProviderHealthStore } from "./stores/providerHealthStore";
 import { useEntityJournalStore } from "./stores/entityJournalStore";
+import { useLibraryInboxStore } from "./stores/libraryInboxStore";
 import {
   fetchLibrary,
   loadCollections,
@@ -212,6 +213,7 @@ function AppContent() {
   const hydrateAppNames = useAppNameOverrideStore((s) => s.hydrate);
   const hydrateProviderHealth = useProviderHealthStore((s) => s.hydrate);
   const hydrateEntityJournal = useEntityJournalStore((s) => s.hydrate);
+  const hydrateLibraryInbox = useLibraryInboxStore((s) => s.hydrate);
   const hydrateSettingsFromDisk = useSettingsStore((s) => s.hydrateFromDisk);
   const setCollections = useCategoryStore((s) => s.setCollections);
   const [reloading, setReloading] = useState(false);
@@ -519,6 +521,9 @@ function AppContent() {
     setReloading(true);
     setReloadError("");
     try {
+      if (!useLibraryInboxStore.getState().hydrated) {
+        await useLibraryInboxStore.getState().hydrate();
+      }
       const previousGameIds = new Set(Object.keys(useGameStore.getState().games).map(Number));
       const [games, collections, installedAppIds] = await Promise.all([
         fetchLibrary(currentSettings.apiKey, currentSettings.steamId64),
@@ -528,7 +533,6 @@ function AppContent() {
         useAppNameOverrideStore.getState().hydrate(),
       ]);
       useProviderHealthStore.getState().record("steam-library", "success");
-      useProviderHealthStore.getState().record("steam-family", "success");
       const familyGames = useFamilyStore.getState().sharedGamesAsOwned();
       const cachedDetails = useGameStore.getState().details;
       const appIndex = useSteamAppIndexStore.getState().data;
@@ -553,6 +557,22 @@ function AppContent() {
       setInstalledAppIds(installedAppIds);
       usePlayHistoryStore.getState().observeLibrary(mergedGames);
       setCollections(collections);
+      const familyState = useFamilyStore.getState();
+      useLibraryInboxStore.getState().observe({
+        games: Object.fromEntries(mergedGames.map((game) => [game.appid, game])),
+        steamLibraryAppIds: games.map((game) => game.appid),
+        installedAppIds,
+        familyAppIds: familyGames.map((game) => game.appid),
+        familyObservedAt: familyState.lastFetched,
+        collections,
+        details: useGameStore.getState().details,
+        detailsMaxAgeDays: currentSettings.detailsCacheMaxAgeDays,
+        hltbData: useHltbStore.getState().data,
+        hltbTimeMode: currentSettings.hltbTimeMode,
+        statuses: useStatusStore.getState().statuses,
+        diaryEntries: useDiaryStore.getState().entries,
+      });
+      useLibraryInboxStore.getState().observeProviderHealth(useProviderHealthStore.getState().providers);
       useSteamAppIndexStore.getState().ensureFresh(currentSettings.apiKey).then(() => {
         const current = Object.values(useGameStore.getState().games);
         if (current.length > 0) useGameStore.getState().setGames(current);
@@ -582,6 +602,7 @@ function AppContent() {
       }
     } catch (e) {
       useProviderHealthStore.getState().recordError("steam-library", e);
+      useLibraryInboxStore.getState().observeProviderHealth(useProviderHealthStore.getState().providers);
       await appLog.error("Steam library refresh failed", { error: String(e) });
       setReloadError(String(e));
       toast.getState().error(`Failed to load library: ${e}`);
@@ -779,6 +800,7 @@ function AppContent() {
     hydrateAppNames();
     hydrateProviderHealth();
     hydrateEntityJournal();
+    hydrateLibraryInbox();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [interactiveStartupReady]);
 

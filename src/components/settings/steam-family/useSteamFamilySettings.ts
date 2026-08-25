@@ -15,6 +15,8 @@ import { fetchFamilyLibrary, type FamilyLibraryResult } from "../../../lib/tauri
 import { useFamilyStore } from "../../../stores/familyStore";
 import { useGameStore } from "../../../stores/gameStore";
 import { useSettingsStore } from "../../../stores/settingsStore";
+import { useProviderHealthStore } from "../../../stores/providerHealthStore";
+import { useLibraryInboxStore } from "../../../stores/libraryInboxStore";
 
 type SetTransientMessage = (message: string, ttlMs?: number) => void;
 
@@ -174,6 +176,11 @@ export function useSteamFamilySettings(
       });
       setResult(familyResult);
       useFamilyStore.getState().setResult(familyResult);
+      useProviderHealthStore.getState().record("steam-family", "success");
+      useLibraryInboxStore.getState().observeFamily(
+        familyAppsToOwnedGames(familyResult.apps).map((game) => game.appid),
+      );
+      useLibraryInboxStore.getState().observeProviderHealth(useProviderHealthStore.getState().providers);
       mergeGames(familyAppsToOwnedGames(familyResult.apps));
       if (familyResult.auth_used === "access_token" && normalizedAccessToken) {
         const cache = await saveSteamFamilyToken(normalizedAccessToken, true);
@@ -181,6 +188,8 @@ export function useSteamFamilySettings(
       }
       setMessage(t("settings.family.loaded", { auth: familyResult.auth_used }));
     } catch (error) {
+      useProviderHealthStore.getState().recordError("steam-family", error);
+      useLibraryInboxStore.getState().observeProviderHealth(useProviderHealthStore.getState().providers);
       console.error("Steam Family probe failed", {
         error: String(error),
         durationMs: Math.round(performance.now() - startedAt),

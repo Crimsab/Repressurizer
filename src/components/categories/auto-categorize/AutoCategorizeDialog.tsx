@@ -21,6 +21,7 @@ import { useToastStore } from "../../../stores/toastStore";
 import { useReviewStore } from "../../../stores/reviewStore";
 import { useHltbIgnoredStore } from "../../../stores/hltbIgnoredStore";
 import { useFailedGamesStore } from "../../../stores/failedGamesStore";
+import { useLibraryInboxStore } from "../../../stores/libraryInboxStore";
 import { makeDiaryActionSnapshot, useDiaryActionHistoryStore } from "../../../stores/diaryActionHistoryStore";
 import { DEFAULT_COLUMN_COLORS, STATUS_LABELS, type DiaryViewStatus } from "../../diary/diaryShared";
 import {
@@ -933,6 +934,12 @@ export function AutoCategorizeDialog({ onClose, initialTarget = "collections" }:
       const res = withConservativeMetadataScopes(categorizedResult, type);
 
       setResult(res);
+      useLibraryInboxStore.getState().addAutoCatProposal(
+        type === "custom"
+          ? normalizeCustomAutoCatConfig(config).output.categoryName || categorizerLabel(type, t)
+          : categorizerLabel(type, t),
+        res.games_categorized,
+      );
       setPreviewContext({ type, config });
       setPreviewRules([{ type, config }]);
       const customNotice = rawResult.custom_diagnostics
@@ -989,6 +996,10 @@ export function AutoCategorizeDialog({ onClose, initialTarget = "collections" }:
       const res = combineAutoCategorizePresetResults(presetResults, Object.keys(games).length);
 
       setResult(res);
+      useLibraryInboxStore.getState().addAutoCatProposal(
+        presets.map((preset) => preset.name).join(", "),
+        res.games_categorized,
+      );
       setPreviewContext(null);
       setPreviewRules(presets.map((preset) => ({
         type: preset.type,
