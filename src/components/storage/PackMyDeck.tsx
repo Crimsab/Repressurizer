@@ -158,9 +158,6 @@ export function PackMyDeck({ onClose }: { onClose: () => void }) {
                   <h2 className="text-base font-semibold text-white">
                     {t("deck.title")}
                   </h2>
-                  <p className="text-xs text-repressurizer-text-faint">
-                    {t("deck.description")}
-                  </p>
                 </div>
               </div>
               <div className="flex gap-1">

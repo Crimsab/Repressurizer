@@ -57,6 +57,11 @@ test("Pack My Deck builds an explainable plan and stages a reversible collection
   await page.goto("/");
   await seedDeckMetadata(page);
   const dialog = await openPack(page);
+  await expect(
+    dialog.getByText(
+      "Build a varied, explainable Steam Deck set within a guarded storage budget.",
+    ),
+  ).toHaveCount(0);
   const sidebar = dialog.locator("aside");
   const originalSidebarWidth = (await sidebar.boundingBox())?.width ?? 0;
   await dialog

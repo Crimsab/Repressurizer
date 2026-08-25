@@ -34,7 +34,25 @@ async function openToolbarTool(page: Page, name: string) {
     return;
   }
   await page.getByRole("button", { name: "More tools" }).click();
-  await page.getByRole("menuitem", { name, exact: true }).click();
+  const item = page.getByRole("menuitem", { name, exact: true });
+  if (!(await item.isVisible())) {
+    const id = {
+      Statistics: "stats",
+      "Play History Timeline": "timeline",
+    }[name];
+    if (id) {
+      await page.evaluate(async (toolId) => {
+        const { useSettingsStore } = await import("/src/stores/settingsStore.ts");
+        const state = useSettingsStore.getState();
+        state.setSettings({
+          toolbarHiddenToolIds: state.toolbarHiddenToolIds.filter(
+            (candidate) => candidate !== toolId,
+          ),
+        });
+      }, id);
+    }
+  }
+  await item.click();
 }
 
 
@@ -931,7 +949,8 @@ test("keeps every header action reachable at the minimum window size", async ({ 
 
   await page.getByRole("button", { name: "More tools" }).click();
   await expect(page.getByRole("tooltip", { name: "More tools" })).toHaveCount(0);
-  await expect(page.getByRole("menuitem", { name: "Statistics" })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "Statistics" })).toBeHidden();
+  await expect(page.getByRole("menuitem", { name: "Profiles & Sync" })).toBeVisible();
   await expect(page.getByRole("menuitem", { name: "Export" })).toBeVisible();
   await expect(page.getByRole("menuitem", { name: /Auto-Categorize/ })).toBeVisible();
   await expect(page.getByRole("menuitem", { name: "Settings" })).toBeVisible();

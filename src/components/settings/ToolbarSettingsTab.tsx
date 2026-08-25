@@ -7,7 +7,12 @@ import {
   EyeSlash,
   PushPin,
 } from "@phosphor-icons/react";
-import { TOOLBAR_TOOLS, type ToolbarToolId } from "../../lib/toolbarTools";
+import {
+  DEFAULT_HIDDEN_TOOLS,
+  DEFAULT_PINNED_TOOLS,
+  TOOLBAR_TOOLS,
+  type ToolbarToolId,
+} from "../../lib/toolbarTools";
 import { useT } from "../../lib/i18n";
 import { useSettingsStore } from "../../stores/settingsStore";
 
@@ -173,14 +178,9 @@ export function ToolbarSettingsTab() {
         onClick={() =>
           settings.setSettings({
             toolbarToolOrder: TOOLBAR_TOOLS.map((tool) => tool.id),
-            toolbarPinnedToolIds: [
-              "inbox",
-              "recommend",
-              "storage",
-              "time-machine",
-            ],
-            toolbarHiddenToolIds: [],
-            toolbarVisibleCount: 4,
+            toolbarPinnedToolIds: DEFAULT_PINNED_TOOLS,
+            toolbarHiddenToolIds: DEFAULT_HIDDEN_TOOLS,
+            toolbarVisibleCount: 3,
           })
         }
         className="rounded-lg border border-repressurizer-border px-3 py-2 text-xs text-repressurizer-text-muted hover:text-white"

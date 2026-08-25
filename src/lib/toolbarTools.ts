@@ -19,7 +19,13 @@ export const TOOLBAR_TOOLS = [
 
 export type ToolbarToolId = typeof TOOLBAR_TOOLS[number]["id"];
 export const DEFAULT_TOOLBAR_ORDER = TOOLBAR_TOOLS.map((tool) => tool.id);
-export const DEFAULT_PINNED_TOOLS: ToolbarToolId[] = ["inbox", "recommend", "storage", "time-machine"];
+export const DEFAULT_PINNED_TOOLS: ToolbarToolId[] = ["inbox", "recommend", "storage"];
+export const DEFAULT_HIDDEN_TOOLS: ToolbarToolId[] = [
+  "friends",
+  "timeline",
+  "stats",
+  "community-packs",
+];
 
 export function normalizeToolbarIds(value: unknown, includeMissing: boolean): ToolbarToolId[] {
   const valid = new Set<ToolbarToolId>(DEFAULT_TOOLBAR_ORDER);

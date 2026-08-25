@@ -21,6 +21,20 @@ test("toolbar tools can be configured from right click and Settings", async ({
   await page.setViewportSize({ width: 1366, height: 900 });
   await page.goto("/");
 
+  await page.getByRole("button", { name: "More tools" }).click();
+  await expect(page.getByRole("menuitem", { name: "Profiles & Sync" })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "Statistics" })).toBeHidden();
+  await expect(
+    page.getByRole("menuitem", { name: "Community Rule Packs" }),
+  ).toBeHidden();
+  const defaultsPath = testInfo.outputPath("toolbar-recommended-defaults.png");
+  await page.screenshot({ path: defaultsPath, fullPage: true });
+  await testInfo.attach("toolbar-recommended-defaults", {
+    path: defaultsPath,
+    contentType: "image/png",
+  });
+  await page.keyboard.press("Escape");
+
   const storage = page.getByRole("button", { name: "Storage Planner" });
   await expect(storage).toBeVisible();
   await storage.click({ button: "right" });

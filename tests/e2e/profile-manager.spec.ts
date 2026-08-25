@@ -26,6 +26,11 @@ test("profiles export without secrets and selectively import after backup", asyn
   await expect(
     dialog.getByRole("button", { name: "Associated Steam account" }),
   ).toContainText("DemoUser (76561198000000000)");
+  const profileNameBox = await dialog.getByLabel("Profile name").boundingBox();
+  const accountBox = await dialog
+    .getByRole("button", { name: "Associated Steam account" })
+    .boundingBox();
+  expect(Math.abs((profileNameBox?.x ?? 0) - (accountBox?.x ?? 0))).toBeLessThan(2);
   await dialog.getByLabel("Profile name").fill("Portable Demo");
   await dialog.getByRole("button", { name: "Save profile file" }).click();
   const exported = await page.evaluate(
@@ -99,7 +104,8 @@ test("profile manager remains usable on mobile", async ({ page }, testInfo) => {
 
 test("folder sync writes a verified versioned file without Steam paths or secrets", async ({
   page,
-}) => {
+}, testInfo) => {
+  await page.setViewportSize({ width: 1366, height: 900 });
   await page.goto("/");
   const dialog = await openProfiles(page);
   await page.evaluate(() =>
@@ -109,8 +115,13 @@ test("folder sync writes a verified versioned file without Steam paths or secret
     ),
   );
   await dialog.getByRole("button", { name: "Choose a sync folder" }).click();
+  await dialog.getByRole("checkbox", { name: "Automatic sync" }).check();
   await dialog.getByRole("button", { name: "Sync now" }).click();
   await expect(page.getByText("Profile data synchronized.")).toBeVisible();
+  await dialog
+    .getByText(/Active Steam files are never synchronized/)
+    .scrollIntoViewIfNeeded();
+  await capture(page, testInfo, "profile-sync-automation-desktop");
   const files = await page.evaluate(
     () =>
       JSON.parse(

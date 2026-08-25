@@ -259,20 +259,22 @@ export function ProfileManager({ onClose }: { onClose: () => void }) {
                 <h3 className="text-sm font-semibold text-white">
                   {t("profiles.export")}
                 </h3>
-                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                <div className="mt-3 grid gap-2">
                   <Field
                     label={t("profiles.name")}
                     value={name}
                     onChange={setName}
                   />
-                  <SelectMenu
-                    label={t("profiles.account")}
-                    ariaLabel={t("profiles.account")}
-                    value={account}
-                    onChange={setAccount}
-                    options={accountOptions}
-                    size="sm"
-                  />
+                  <div className="min-w-0">
+                    <SelectMenu
+                      label={t("profiles.account")}
+                      ariaLabel={t("profiles.account")}
+                      value={account}
+                      onChange={setAccount}
+                      options={accountOptions}
+                      size="sm"
+                    />
+                  </div>
                 </div>
                 <SectionChecks
                   selected={selected}

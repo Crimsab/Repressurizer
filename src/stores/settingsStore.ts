@@ -14,7 +14,12 @@ import { isHltbTimeMode } from "../lib/hltb";
 import { normalizeCategoryColors } from "../lib/categoryColors";
 import { DEFAULT_CATEGORY_CHIP_STYLE, normalizeCategoryChipStyle } from "../lib/categoryChipStyles";
 import { DEFAULT_DETAILS_CACHE_MAX_AGE_DAYS } from "../lib/detailsCache";
-import { DEFAULT_PINNED_TOOLS, DEFAULT_TOOLBAR_ORDER, normalizeToolbarIds } from "../lib/toolbarTools";
+import {
+  DEFAULT_HIDDEN_TOOLS,
+  DEFAULT_PINNED_TOOLS,
+  DEFAULT_TOOLBAR_ORDER,
+  normalizeToolbarIds,
+} from "../lib/toolbarTools";
 
 interface SettingsState extends AppSettings {
   hydrateFromDisk: () => Promise<void>;
@@ -57,8 +62,8 @@ const defaults: AppSettings = {
   showDetailPrice: true,
   toolbarToolOrder: DEFAULT_TOOLBAR_ORDER,
   toolbarPinnedToolIds: DEFAULT_PINNED_TOOLS,
-  toolbarHiddenToolIds: [],
-  toolbarVisibleCount: 4,
+  toolbarHiddenToolIds: DEFAULT_HIDDEN_TOOLS,
+  toolbarVisibleCount: 3,
   hltbConcurrency: 5,
   achievementsConcurrency: 5,
   steamDetailsDelayMs: 1200,
@@ -211,6 +216,12 @@ function normalizeSettings(raw: Partial<AppSettings>): AppSettings {
   const proxyMode = PROXY_MODES.includes(proxySettings.mode as ProxyRotationMode)
     ? proxySettings.mode as ProxyRotationMode
     : defaults.proxySettings.mode;
+  const usesLegacyToolbarDefaults =
+    raw.toolbarVisibleCount === 4 &&
+    JSON.stringify(raw.toolbarPinnedToolIds) ===
+      JSON.stringify(["inbox", "recommend", "storage", "time-machine"]) &&
+    Array.isArray(raw.toolbarHiddenToolIds) &&
+    raw.toolbarHiddenToolIds.length === 0;
 
   return {
     ...defaults,
@@ -232,9 +243,26 @@ function normalizeSettings(raw: Partial<AppSettings>): AppSettings {
     categoryColors: normalizeCategoryColors(raw.categoryColors),
     categoryChipStyle: normalizeCategoryChipStyle(raw.categoryChipStyle),
     toolbarToolOrder: normalizeToolbarIds(raw.toolbarToolOrder, true),
-    toolbarPinnedToolIds: normalizeToolbarIds(raw.toolbarPinnedToolIds ?? DEFAULT_PINNED_TOOLS, false),
-    toolbarHiddenToolIds: normalizeToolbarIds(raw.toolbarHiddenToolIds, false),
-    toolbarVisibleCount: clampInteger(raw.toolbarVisibleCount, defaults.toolbarVisibleCount, 0, 8),
+    toolbarPinnedToolIds: normalizeToolbarIds(
+      usesLegacyToolbarDefaults
+        ? DEFAULT_PINNED_TOOLS
+        : (raw.toolbarPinnedToolIds ?? DEFAULT_PINNED_TOOLS),
+      false,
+    ),
+    toolbarHiddenToolIds: normalizeToolbarIds(
+      usesLegacyToolbarDefaults
+        ? DEFAULT_HIDDEN_TOOLS
+        : (raw.toolbarHiddenToolIds ?? DEFAULT_HIDDEN_TOOLS),
+      false,
+    ),
+    toolbarVisibleCount: usesLegacyToolbarDefaults
+      ? defaults.toolbarVisibleCount
+      : clampInteger(
+          raw.toolbarVisibleCount,
+          defaults.toolbarVisibleCount,
+          0,
+          8,
+        ),
     updateChannel: raw.updateChannel === "beta" ? "beta" : "stable",
     automationPublishPayload: normalizeAutomationPublishPayload(raw.automationPublishPayload),
     mcpPermissionMode: raw.mcpPermissionMode === "manageLibrary" || raw.mcpPermissionMode === "full"

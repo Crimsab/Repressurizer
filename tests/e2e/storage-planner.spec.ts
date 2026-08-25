@@ -48,8 +48,20 @@ test("storage planner offers treemap, bars, and distribution views", async ({
   });
   await dialog.getByRole("button", { name: "Bar chart" }).click();
   await expect(dialog.getByTestId("storage-bars")).toBeVisible();
+  const bars = testInfo.outputPath("storage-bars-desktop.png");
+  await page.screenshot({ path: bars, fullPage: true });
+  await testInfo.attach("storage-bars-desktop", {
+    path: bars,
+    contentType: "image/png",
+  });
   await dialog.getByRole("button", { name: "Storage distribution" }).click();
   await expect(dialog.getByTestId("storage-pie")).toBeVisible();
+  const pie = testInfo.outputPath("storage-pie-desktop.png");
+  await page.screenshot({ path: pie, fullPage: true });
+  await testInfo.attach("storage-pie-desktop", {
+    path: pie,
+    contentType: "image/png",
+  });
 });
 test("storage planner is horizontally contained on mobile", async ({
   page,
