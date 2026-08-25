@@ -1,8 +1,9 @@
 # Repressurizer 0.8.0 delivery plan
 
-**Implementation status:** all eight delivery slices are integrated on the
-local `agent/repressurizer-0.8.0` branch. The desktop version remains unchanged
-until the release gate below is fully green.
+**Implementation status:** all eight delivery slices are integrated and the
+release gate is green on the local `agent/repressurizer-0.8.0` branch. Desktop
+metadata now identifies the build as 0.8.0; no push, tag, publication, or release
+artifact has been created.
 
 This document is the implementation contract for the 0.8.0 release. It turns
 the feature backlog into ordered, testable slices and records the shared safety
