@@ -4,6 +4,34 @@ All notable user-facing changes are generated from release tags and Conventional
 
 Run `bun run changelog:write` after changing release tags or commit history.
 
+## 0.8.0 - Unreleased
+
+> **Major planning and safety update:** Session Planner, Tonight Queue, Library
+> Changes Inbox, Rule Inspector, Collection Time Machine, conflict resolution,
+> portable profiles and folder sync, storage planning, Deck packs, Community
+> Rule Packs, and metadata health now share explainable previews and reversible
+> workflows.
+
+### Added
+
+- Explainable session recommendations, saved presets, recommendation history,
+  and a resumable temporary queue.
+- Deduplicated library-change review and live AutoCat rule inspection.
+- Collection snapshots, selective restore, and deterministic three-way merge.
+- Checked portable profiles and journal-based folder synchronization.
+- Actual local storage inventory, reclaim simulations, and guarded Deck packs.
+- Safe declarative rule packs and provider/per-game metadata health.
+
+### Fixed
+
+- Recover legacy Steam achievement artwork URLs, including achievements such as
+  Palworld's **To the World Tree**.
+- Validate atomic data writes before replacement and update the vulnerable `h2`
+  dependency.
+
+This entry remains unreleased until the validated commit is tagged. No release
+artifact is produced by the local 0.8.0 preparation branch.
+
 ## 0.7.0 - 2026-08-20
 
 > **Big update:** This release adds a complete Diary workspace, richer AutoCat rules, local API and MCP integrations, local installation detection, and more convenient settings and export tools.

@@ -7,11 +7,15 @@ export interface CommunityRulePack { schemaVersion: typeof COMMUNITY_PACK_SCHEMA
 
 const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 const FORBIDDEN_KEYS = /^(script|code|eval|function|executable|command|url)$/i;
+const PACK_KEYS = new Set(["schemaVersion", "id", "name", "description", "author", "version", "compatibleApp", "dataSources", "collections", "rules", "changelog", "checksum"]);
+const RULE_KEYS = new Set(["id", "name", "config"]);
 function hasForbidden(value: unknown): boolean { if (Array.isArray(value)) return value.some(hasForbidden); if (!value || typeof value !== "object") return false; return Object.entries(value as Record<string, unknown>).some(([key, child]) => FORBIDDEN_KEYS.test(key) || hasForbidden(child)); }
+function hasOnlyKeys(value: object, allowed: ReadonlySet<string>): boolean { return Object.keys(value).every((key) => allowed.has(key)); }
+function boundedStrings(value: unknown, maxItems: number, maxLength: number): value is string[] { return Array.isArray(value) && value.length <= maxItems && value.every((item) => typeof item === "string" && item.length > 0 && item.length <= maxLength); }
 export function safeCommunityRegex(value: string): boolean { return value.length <= 120 && !/\\[1-9]|\(\?<?[=!]|\([^)]*[+*][^)]*\)[+*{]/.test(value); }
 function validateRule(rule: unknown): CommunityPackRule | null {
   if (!rule || typeof rule !== "object" || hasForbidden(rule)) return null; const raw = rule as Partial<CommunityPackRule>;
-  if (!raw.id || !raw.name || !raw.config || raw.config.schema !== "repressurizer.customAutoCat" || raw.config.version !== 1) return null;
+  if (!hasOnlyKeys(raw, RULE_KEYS) || typeof raw.id !== "string" || !raw.id || raw.id.length > 80 || typeof raw.name !== "string" || !raw.name || raw.name.length > 120 || !raw.config || raw.config.schema !== "repressurizer.customAutoCat" || raw.config.version !== 1) return null;
   const config = normalizeCustomAutoCatConfig(raw.config); if (!config.output.categoryName.trim() || !config.logic.conditions.length) return null;
   if (config.logic.conditions.some((condition) => condition.kind === "title" && condition.op === "regex" && !safeCommunityRegex(condition.value))) return null;
   return { id: String(raw.id).slice(0, 80), name: String(raw.name).slice(0, 120), config };
@@ -20,7 +24,7 @@ function checksumPayload(pack: Omit<CommunityRulePack, "checksum">) { return ent
 export function createCommunityRulePack(input: Omit<CommunityRulePack, "schemaVersion" | "checksum">): CommunityRulePack { const { schemaVersion: _schema, checksum: _checksum, ...clean } = input as CommunityRulePack; const payload = { schemaVersion: COMMUNITY_PACK_SCHEMA, ...structuredClone(clean) }; return { ...payload, checksum: checksumPayload(payload) }; }
 export function parseCommunityRulePack(value: unknown): { pack: CommunityRulePack | null; error: string | null } {
   if (!value || typeof value !== "object" || hasForbidden(value)) return { pack: null, error: "Executable or unsupported content" }; const raw = value as CommunityRulePack;
-  if (raw.schemaVersion !== COMMUNITY_PACK_SCHEMA || !raw.id || !raw.name || !raw.author || !SEMVER.test(raw.version) || !Array.isArray(raw.rules) || raw.rules.length > 100 || !Array.isArray(raw.dataSources) || !Array.isArray(raw.collections) || !Array.isArray(raw.changelog)) return { pack: null, error: "Invalid pack schema" };
+  if (!hasOnlyKeys(raw, PACK_KEYS) || raw.schemaVersion !== COMMUNITY_PACK_SCHEMA || typeof raw.id !== "string" || !/^[A-Za-z0-9._-]{1,80}$/.test(raw.id) || typeof raw.name !== "string" || !raw.name || raw.name.length > 120 || typeof raw.description !== "string" || raw.description.length > 1000 || typeof raw.author !== "string" || !raw.author || raw.author.length > 120 || typeof raw.version !== "string" || !SEMVER.test(raw.version) || typeof raw.compatibleApp !== "string" || !raw.compatibleApp || raw.compatibleApp.length > 80 || !Array.isArray(raw.rules) || raw.rules.length < 1 || raw.rules.length > 100 || !boundedStrings(raw.dataSources, 32, 80) || !boundedStrings(raw.collections, 100, 120) || !Array.isArray(raw.changelog) || raw.changelog.length > 100 || raw.changelog.some((item) => typeof item !== "string" || item.length > 500)) return { pack: null, error: "Invalid pack schema" };
   const rules = raw.rules.map(validateRule); if (rules.some((rule) => !rule)) return { pack: null, error: "Invalid or unsafe rule" };
   const { checksum, ...payload } = raw; if (checksum !== checksumPayload(payload)) return { pack: null, error: "Checksum mismatch" };
   return { pack: createCommunityRulePack({ id: raw.id, name: raw.name, description: raw.description, author: raw.author, version: raw.version, compatibleApp: raw.compatibleApp, dataSources: raw.dataSources, collections: raw.collections, rules: rules as CommunityPackRule[], changelog: raw.changelog }), error: null };

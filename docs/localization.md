@@ -53,18 +53,18 @@ the affected keys per locale.
 Run `bun run i18n:status` to print the current table, or `bun run i18n:status:write` to refresh this generated block.
 
 <!-- localization-status:start -->
-Canonical locale: `en`. Total canonical keys: 854.
+Canonical locale: `en`. Total canonical keys: 2349.
 
 | Locale | Key coverage | Translated coverage | English fallback | Missing | Extra | Placeholder issues |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | `en` | 100.0% | 100.0% | 0 | 0 | 0 | 0 |
-| `de` | 100.0% | 77.2% | 195 | 0 | 0 | 0 |
-| `es` | 100.0% | 78.7% | 182 | 0 | 0 | 0 |
-| `fr` | 100.0% | 77.9% | 189 | 0 | 0 | 0 |
-| `it` | 100.0% | 97.4% | 22 | 0 | 0 | 0 |
-| `pl` | 100.0% | 78.5% | 184 | 0 | 0 | 0 |
-| `tr` | 100.0% | 79.0% | 179 | 0 | 0 | 0 |
-| `zh-CN` | 100.0% | 79.6% | 174 | 0 | 0 | 0 |
+| `de` | 100.0% | 61.6% | 903 | 0 | 0 | 0 |
+| `es` | 100.0% | 62.8% | 875 | 0 | 0 | 0 |
+| `fr` | 100.0% | 61.1% | 913 | 0 | 0 | 0 |
+| `it` | 100.0% | 79.5% | 482 | 0 | 0 | 0 |
+| `pl` | 100.0% | 62.4% | 883 | 0 | 0 | 0 |
+| `tr` | 100.0% | 62.9% | 872 | 0 | 0 | 0 |
+| `zh-CN` | 100.0% | 63.5% | 858 | 0 | 0 | 0 |
 <!-- localization-status:end -->
 
 ## Current Locales

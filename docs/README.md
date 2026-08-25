@@ -12,6 +12,7 @@ README.
 | [steam-family.md](steam-family.md) | Steam Family detection and optional Store token fallback. |
 | [privacy.md](privacy.md) | Local data, network behavior, redaction, and sensitive settings. |
 | [localization.md](localization.md) | Translation coverage and localization status. |
+| [user-guide/planning-and-maintenance.md](user-guide/planning-and-maintenance.md) | Session planning, Inbox, Time Machine, profiles, sync, storage, Deck packs, rule packs, and metadata health. |
 
 ## Automation And Integrations
 
@@ -20,6 +21,7 @@ README.
 | [automation-export.md](automation-export.md) | Configuring automation snapshots and HTTP publishing. |
 | [cli.md](cli.md) | `repressurizer-cli` diagnostics, snapshot, cache, backup, and Steam tooling commands. |
 | [integrations/repressurizer-snapshot-v1.md](integrations/repressurizer-snapshot-v1.md) | Stable snapshot schema for receivers. |
+| [integrations/portable-formats-v1.md](integrations/portable-formats-v1.md) | Profile, folder-sync, and Community Rule Pack v1 contracts. |
 | [integrations/mcp.md](integrations/mcp.md) | Optional local MCP access with user-selected permissions. |
 | [integrations/local-api.md](integrations/local-api.md) | Authenticated loopback HTTP API for local agents and scripts. |
 | [integrations/openapi.yaml](integrations/openapi.yaml) | Versioned v1 API contract. |

@@ -1,5 +1,9 @@
 # Repressurizer 0.8.0 delivery plan
 
+**Implementation status:** all eight delivery slices are integrated on the
+local `agent/repressurizer-0.8.0` branch. The desktop version remains unchanged
+until the release gate below is fully green.
+
 This document is the implementation contract for the 0.8.0 release. It turns
 the feature backlog into ordered, testable slices and records the shared safety
 rules that every slice must satisfy.
@@ -175,3 +179,24 @@ Every feature that proposes or performs a change must:
 Each delivery slice is committed only after its focused checks pass. Follow-up
 fixes get their own commit. The branch remains local until the entire 0.8.0
 acceptance matrix is green.
+
+## Acceptance matrix
+
+| Slice | Implementation evidence | Focused verification |
+| --- | --- | --- |
+| Achievement artwork | Legacy Steam CDN URLs are normalized and failed images retry against supported hosts. | URL normalization, fallback, and Palworld-style legacy URL tests. |
+| Safety and health foundation | Verified atomic replacement, retained backups, entity journals, checksums, provider observations, and dependency security workflows. | Rust atomic-write tests, journal/provider unit tests, `bun audit`, and `cargo audit`. |
+| Rule Inspector | Production AutoCat evaluator drives tri-state condition trees, diagnostics, live previews, and redacted report export. | Evaluator/diagnostic unit tests and desktop/mobile E2E. |
+| Library Changes Inbox | Stable deduplicated events, source-success gates, filters, preferences, action history, bulk preview, and reversible Diary fixes. | Inbox unit tests and desktop/mobile E2E. |
+| Planner and queue | Hard requirements, scored preferences, explainable stable top-three results, controlled reroll, suppression/tuning, presets/history, and resumable queues. | Planner/queue unit tests and desktop/mobile E2E. |
+| Time Machine and conflicts | Before/after snapshots, retention/pinning/export, selective restore, stable-ID three-way merge, manual and bulk choices, preview, backup, and undo. | Snapshot/merge unit and integration tests plus desktop/mobile E2E. |
+| Profiles and sync | Checked selective profiles, named local copies, pre-import backups, per-device envelopes, entity merge, pause/automatic sync, and atomic shared-folder writes. | Corruption/secret/selective import and concurrent/offline sync tests plus desktop/mobile E2E. |
+| Storage and Deck packs | Multi-library measured inventory, reclaim goals/protection/simulation/export, Steam uninstall handoff, guarded diverse packs, saved results, and staged collection conversion. | Rust filesystem fixture, planner/pack unit tests, and inspected desktop/mobile E2E. |
+| Rule packs and metadata health | Closed declarative v1 pack schema, cost bounds, provenance/update/rollback/detach, provider/game states, scoped refresh, cache, and backoff. | Schema/runtime, pack lifecycle, health/backoff unit tests, and inspected desktop/mobile E2E. |
+| Documentation and localization | README, user workflow guide, portable-format contract, JSON Schema, release notes, and eight structurally complete locale catalogs. | Strict MkDocs build, docs audit, i18n key/placeholder audit, and generated localization status. |
+
+Steam Deck compatibility is intentionally not inferred from native Linux
+support. Valve's Store API response used by Repressurizer does not document the
+Deck review category, so strict Verified/Playable filters accept only explicit
+metadata and otherwise report the value as unknown. Installed sizes are measured
+locally; non-installed estimates are used only when an explicit estimate exists.

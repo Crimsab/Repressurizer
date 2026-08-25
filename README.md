@@ -41,6 +41,17 @@ with a Rust backend and a React interface.
 | Create, rename, merge, color, and bulk-edit collections. | Cache Steam details, reviews, prices, achievements, HLTB times, and Steam Family entries. | Preview collection changes and create automatic backups before local writes. |
 | Search with text, regex, and structured filters. | Build AutoCat rules from genres, tags, year, playtime, platforms, publishers, and more. | Restore backups and export redacted diagnostics when something goes wrong. |
 
+## Plan, review, and recover
+
+Repressurizer 0.8 adds an explainable Session Planner and temporary Tonight
+Queue; a deduplicated Library Changes Inbox; AutoCat Rule Inspector; Collection
+Time Machine with three-way conflict resolution; portable profiles and safe
+folder sync; Storage Planner and Pack My Deck; declarative Community Rule Packs;
+and provider/per-game metadata health. Every mutating flow keeps a preview,
+backup, history, or undo path close to the action.
+
+[Read the planning and maintenance guide](https://crimsab.github.io/Repressurizer/user-guide/planning-and-maintenance/).
+
 Repressurizer does not edit your Steam account remotely. Collection saves are
 local file writes. Metadata fetches and automation exports are separate network
 operations.

@@ -123,6 +123,7 @@ nav:
       - Collections: user-guide/collections.md
       - Search and filters: user-guide/search-and-filters.md
       - What to play next: user-guide/what-to-play-next.md
+      - Planning and maintenance: user-guide/planning-and-maintenance.md
       - Diary: user-guide/diary.md
       - Metadata cache and network: cache-and-network.md
       - AutoCat: user-guide/autocat.md
@@ -150,11 +151,13 @@ nav:
       - MCP: integrations/mcp.md
       - GG.deals pricing: integrations/gg-deals.md
       - Snapshot schema: integrations/repressurizer-snapshot-v1.md
+      - Portable formats: integrations/portable-formats-v1.md
       - Receiver example: integrations/receiver-example.md
       - TypeScript package: integrations/integration-package-release.md
       - Rust crate: integrations/rust-integration-crate.md
   - Contributing:
       - development/index.md
+      - 0.8.0 delivery contract: roadmap-0.8.0.md
       - Development setup: development/setup.md
       - Architecture: development/architecture.md
       - macOS packaging: development/macos.md
