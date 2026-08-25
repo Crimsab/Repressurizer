@@ -157,7 +157,6 @@ nav:
       - Rust crate: integrations/rust-integration-crate.md
   - Contributing:
       - development/index.md
-      - 0.8.0 delivery contract: roadmap-0.8.0.md
       - Development setup: development/setup.md
       - Architecture: development/architecture.md
       - macOS packaging: development/macos.md
