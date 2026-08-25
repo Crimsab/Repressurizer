@@ -66,6 +66,18 @@ pub struct GameDetails {
     pub price_country_code: Option<String>,
     #[serde(default)]
     pub is_free: bool,
+    #[serde(default)]
+    pub full_controller_support: Option<bool>,
+    #[serde(default)]
+    pub deck_status: Option<String>,
+    #[serde(default)]
+    pub external_launcher: Option<bool>,
+    #[serde(default)]
+    pub offline_support: Option<bool>,
+    #[serde(default)]
+    pub first_launch_online: Option<bool>,
+    #[serde(default)]
+    pub estimated_install_bytes: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

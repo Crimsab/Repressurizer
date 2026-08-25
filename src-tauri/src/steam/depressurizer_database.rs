@@ -378,6 +378,12 @@ fn entry_to_details(entry: &DepressurizerDatabaseEntry) -> Option<GameDetails> {
         price_currency: None,
         price_country_code: None,
         is_free: false,
+        full_controller_support: None,
+        deck_status: None,
+        external_launcher: None,
+        offline_support: None,
+        first_launch_online: None,
+        estimated_install_bytes: None,
     };
 
     if has_importable_details(&details) {

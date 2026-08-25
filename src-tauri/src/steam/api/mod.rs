@@ -445,7 +445,7 @@ mod tests {
             "data": {
               "name": "Plants vs. Zombies GOTY Edition",
               "genres": [{"description": "Strategy"}],
-              "categories": [{"description": "Single-player"}],
+              "categories": [{"description": "Single-player"}, {"description": "Full controller support"}],
               "release_date": {"date": "May 5, 2009"},
               "metacritic": {"score": 87},
               "developers": ["PopCap Games"],
@@ -469,6 +469,8 @@ mod tests {
             vec!["English", "French", "Italian"]
         );
         assert!(details.platforms.windows);
+        assert_eq!(details.full_controller_support, Some(true));
+        assert_eq!(details.deck_status, None);
         assert_eq!(details.price_country_code.as_deref(), Some("IT"));
         assert!(details.header_image.unwrap().contains("/3590/header.jpg"));
         assert!(details

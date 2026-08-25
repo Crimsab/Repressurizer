@@ -556,6 +556,15 @@ pub(super) fn parse_game_details_response(
 
     let data = app_data.data.as_ref().ok_or("No data in response")?;
 
+    let categories: Vec<String> = data
+        .categories
+        .as_ref()
+        .map(|items| items.iter().map(|item| item.description.clone()).collect())
+        .unwrap_or_default();
+    let full_controller_support = categories
+        .iter()
+        .any(|category| category.eq_ignore_ascii_case("Full controller support"));
+
     Ok(GameDetails {
         app_id,
         name: data.name.clone().unwrap_or_default(),
@@ -565,11 +574,7 @@ pub(super) fn parse_game_details_response(
             .map(|g| g.iter().map(|x| x.description.clone()).collect())
             .unwrap_or_default(),
         tags: Vec::new(),
-        categories: data
-            .categories
-            .as_ref()
-            .map(|c| c.iter().map(|x| x.description.clone()).collect())
-            .unwrap_or_default(),
+        categories,
         release_date: data.release_date.as_ref().and_then(|r| r.date.clone()),
         store_release_date: None,
         store_release_date_fetched_at: None,
@@ -606,6 +611,14 @@ pub(super) fn parse_game_details_response(
             .and_then(|p| p.currency.clone()),
         price_country_code: country_code.map(|cc| cc.to_ascii_uppercase()),
         is_free: data.is_free.unwrap_or(false),
+        full_controller_support: Some(full_controller_support),
+        // Valve publishes Deck ratings in Steam clients and the storefront, but does not
+        // document them in this Store API response. Keep unsupported metadata unknown.
+        deck_status: None,
+        external_launcher: None,
+        offline_support: None,
+        first_launch_online: None,
+        estimated_install_bytes: None,
     })
 }
 
