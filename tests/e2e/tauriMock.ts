@@ -344,7 +344,7 @@ export async function installTauriMock(page: Page) {
               "repressurizer-last-dialog-default-path",
               String(options?.defaultPath ?? "")
             );
-            return backupPath;
+            return window.localStorage.getItem("repressurizer-mock-open-path") ?? backupPath;
           }
           case "plugin:dialog|save": {
             const options = args?.options as { defaultPath?: string } | undefined;
@@ -365,6 +365,8 @@ export async function installTauriMock(page: Page) {
             );
             return null;
           }
+          case "plugin:fs|read_text_file":
+            return Array.from(new TextEncoder().encode(window.localStorage.getItem("repressurizer-mock-read-text") ?? ""));
           case "plugin:autostart|is_enabled":
             return autostartEnabled;
           case "plugin:autostart|enable":

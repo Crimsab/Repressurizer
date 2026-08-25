@@ -74,6 +74,7 @@ interface SessionPlannerState extends PersistedSessionPlanner {
   saveCurrentQueue: (name: string) => string | null;
   resumeQueue: (id: string) => void;
   clearQueue: () => void;
+  restoreProfile: (data: Partial<PersistedSessionPlanner>) => void;
 }
 
 function id(prefix: string): string {
@@ -161,4 +162,20 @@ export const useSessionPlannerStore = create<SessionPlannerState>((set, get) => 
     persist({ ...stateData(state), queue });
     set({ queue });
   },
+  restoreProfile: (data) => set((state) => {
+    const next = {
+      ...stateData(state),
+      ...(data.config ? { config: { ...DEFAULT_SESSION_PLANNER_CONFIG, ...data.config } } : {}),
+      ...(Array.isArray(data.presets) ? { presets: data.presets.slice(0, 50) } : {}),
+      ...(data.hiddenUntil ? { hiddenUntil: data.hiddenUntil } : {}),
+      ...(Array.isArray(data.permanentlySuppressed) ? { permanentlySuppressed: data.permanentlySuppressed } : {}),
+      ...(data.frequency ? { frequency: data.frequency } : {}),
+      ...(data.pinnedAppId !== undefined ? { pinnedAppId: data.pinnedAppId } : {}),
+      ...(Array.isArray(data.history) ? { history: data.history.slice(0, 500) } : {}),
+      ...(Array.isArray(data.queue) ? { queue: data.queue.slice(0, 30) } : {}),
+      ...(Array.isArray(data.recentQueues) ? { recentQueues: data.recentQueues.slice(0, 20) } : {}),
+    };
+    persist(next);
+    return next;
+  }),
 }));

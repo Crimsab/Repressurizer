@@ -25,6 +25,7 @@ interface TagsState {
   removeTag: (appId: number, tag: string) => void;
   setTags: (appId: number, tags: string[]) => void;
   getAllTags: () => string[];
+  restoreAll: (tags: Record<number, string[]>) => void;
   hydrate: () => Promise<void>;
 }
 
@@ -70,6 +71,7 @@ export const useTagsStore = create<TagsState>((set, get) => ({
     const all = Object.values(get().tags).flat();
     return [...new Set(all)].sort();
   },
+  restoreAll: (tags) => { const next = structuredClone(tags); saveTags(next); set({ tags: next }); },
 
   hydrate: async () => {
     try {

@@ -51,6 +51,7 @@ import {
   DotsThree,
   BellSimple,
   ClockCounterClockwise,
+  UserCircle,
 } from "@phosphor-icons/react";
 
 const loadSettingsPage = () => import("../settings/SettingsPage").then((m) => ({ default: m.SettingsPage }));
@@ -65,6 +66,7 @@ const loadPlayHistoryTimeline = () => import("../timeline/PlayHistoryTimeline").
 const loadLibraryChangesInbox = () => import("../inbox/LibraryChangesInbox").then((m) => ({ default: m.LibraryChangesInbox }));
 const loadCollectionTimeMachine = () => import("../collections/CollectionTimeMachine").then((m) => ({ default: m.CollectionTimeMachine }));
 const loadCollectionConflictResolver = () => import("../collections/CollectionConflictResolver").then((m) => ({ default: m.CollectionConflictResolver }));
+const loadProfileManager = () => import("../profiles/ProfileManager").then((m) => ({ default: m.ProfileManager }));
 const SettingsPage = lazy(loadSettingsPage);
 const ExportDialog = lazy(loadExportDialog);
 const AutoCategorizeDialog = lazy(loadAutoCategorizeDialog);
@@ -77,6 +79,7 @@ const PlayHistoryTimeline = lazy(loadPlayHistoryTimeline);
 const LibraryChangesInbox = lazy(loadLibraryChangesInbox);
 const CollectionTimeMachine = lazy(loadCollectionTimeMachine);
 const CollectionConflictResolver = lazy(loadCollectionConflictResolver);
+const ProfileManager = lazy(loadProfileManager);
 const preload = (loader: () => Promise<unknown>) => { void loader(); };
 
 function LazyOverlay({ children }: { children: ReactNode }) {
@@ -184,6 +187,7 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
   const [showInbox, setShowInbox] = useState(false);
   const [showTimeMachine, setShowTimeMachine] = useState(false);
   const [pendingConflict, setPendingConflict] = useState<ThreeWayMergeAnalysis | null>(null);
+  const [showProfiles, setShowProfiles] = useState(false);
   const [showMoreTools, setShowMoreTools] = useState(false);
   const [showSavePreview, setShowSavePreview] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -198,6 +202,7 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
   const secondaryTools = [
     { key: "inbox", label: t("toolbar.inbox"), Icon: BellSimple, open: () => setShowInbox(true), loader: loadLibraryChangesInbox, badge: inboxUnread },
     { key: "time-machine", label: t("toolbar.timeMachine"), Icon: ClockCounterClockwise, open: () => setShowTimeMachine(true), loader: loadCollectionTimeMachine, badge: 0 },
+    { key: "profiles", label: t("toolbar.profiles"), Icon: UserCircle, open: () => setShowProfiles(true), loader: loadProfileManager, badge: 0 },
     { key: "achievements", label: t("toolbar.achievements"), Icon: Trophy, open: () => setShowAchievements(true), loader: loadAchievementsPage, badge: 0 },
     { key: "wishlist", label: t("toolbar.wishlist"), Icon: BookmarkSimple, open: () => setShowWishlist(true), loader: loadWishlistPage, badge: 0 },
     { key: "friends", label: t("toolbar.friendCompare"), Icon: UsersThree, open: () => setShowFriendCompare(true), loader: loadFriendCompareDialog, badge: 0 },
@@ -657,6 +662,11 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
       {showTimeMachine && (
         <LazyOverlay>
           <CollectionTimeMachine onClose={() => setShowTimeMachine(false)} />
+        </LazyOverlay>
+      )}
+      {showProfiles && (
+        <LazyOverlay>
+          <ProfileManager onClose={() => setShowProfiles(false)} />
         </LazyOverlay>
       )}
       {pendingConflict && (

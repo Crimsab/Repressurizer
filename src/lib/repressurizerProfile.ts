@@ -40,6 +40,16 @@ function itemCount(value: unknown): number {
   return value == null ? 0 : 1;
 }
 
+function validSections(sections: RepressurizerProfileDocument["sections"]): boolean {
+  for (const [key, value] of Object.entries(sections)) {
+    if (!SECTION_KEYS.includes(key as ProfileSectionKey)) return false;
+    if (key === "collections") {
+      if (!Array.isArray(value) || value.some((collection) => !collection || typeof collection !== "object" || typeof (collection as { key?: unknown }).key !== "string" || typeof (collection as { name?: unknown }).name !== "string" || !Array.isArray((collection as { added?: unknown }).added))) return false;
+    } else if (!value || typeof value !== "object") return false;
+  }
+  return true;
+}
+
 export function createRepressurizerProfile(input: {
   profileId: string;
   name: string;
@@ -74,6 +84,7 @@ export function parseRepressurizerProfile(value: unknown): { document: Repressur
   if (schema !== REPRESSURIZER_PROFILE_SCHEMA || !raw.sections || typeof raw.sections !== "object" || !raw.manifest) return { document: null, error: "invalid" };
   const includedSections = Array.isArray(raw.manifest.includedSections) ? raw.manifest.includedSections.filter((key): key is ProfileSectionKey => SECTION_KEYS.includes(key as ProfileSectionKey)) : [];
   const document = { manifest: { ...raw.manifest, schemaVersion: REPRESSURIZER_PROFILE_SCHEMA, includedSections } as RepressurizerProfileManifest, sections: raw.sections as RepressurizerProfileDocument["sections"] };
+  if (!validSections(document.sections)) return { document: null, error: "invalid" };
   if (!verifyRepressurizerProfile(document)) return { document: null, error: "checksum" };
   return { document, error: null };
 }

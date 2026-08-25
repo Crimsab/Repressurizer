@@ -13,6 +13,10 @@ describe("Repressurizer profile", () => {
     const profile = createRepressurizerProfile({ profileId: "p", name: "P", deviceId: "d", steamAccountId: null, sections: { diary: {}, settings: {}, history: {} } });
     expect(selectProfileSections(profile, new Set(["diary"]), 20).manifest.includedSections).toEqual(["diary"]);
   });
+  it("rejects malformed section payloads even when their checksum is valid", () => {
+    const malformed = createRepressurizerProfile({ profileId: "p", name: "P", deviceId: "d", steamAccountId: null, sections: { collections: [{ name: "missing identity" }] } });
+    expect(parseRepressurizerProfile(malformed).error).toBe("invalid");
+  });
   it("never exports secrets, endpoints, or absolute Steam paths as settings", () => {
     expect(sanitizeProfileSettings({ theme: "dark", apiKey: "secret", steamPath: "C:\\Steam", automationPublishUrl: "https://private", proxySettings: { password: "x" } })).toEqual({ theme: "dark" });
   });

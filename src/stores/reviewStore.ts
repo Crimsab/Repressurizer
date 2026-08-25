@@ -30,6 +30,7 @@ interface ReviewState {
   setRating: (appId: number, rating: number) => void;
   clearRating: (appId: number) => void;
   getRating: (appId: number) => number;
+  restoreAll: (reviews: Record<number, GameReview>) => void;
   hydrate: () => Promise<void>;
 }
 
@@ -55,6 +56,7 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
     }),
 
   getRating: (appId) => get().reviews[appId]?.rating ?? 0,
+  restoreAll: (reviews) => { const next = structuredClone(reviews); saveReviews(next); set({ reviews: next }); },
 
   hydrate: async () => {
     try {

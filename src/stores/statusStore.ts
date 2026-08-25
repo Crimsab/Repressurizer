@@ -46,6 +46,7 @@ interface StatusState {
   setBulkStatus: (appIds: number[], status: GameStatus) => void;
   captureSnapshot: (appIds: number[]) => Record<number, GameStatus | undefined>;
   restoreSnapshot: (snapshot: Record<number, GameStatus | undefined>) => void;
+  restoreAll: (statuses: Record<number, GameStatus>) => void;
   getStatus: (appId: number) => GameStatus;
   hydrate: () => Promise<void>;
 }
@@ -90,6 +91,7 @@ export const useStatusStore = create<StatusState>((set, get) => ({
       saveStatuses(next);
       return { statuses: next };
     }),
+  restoreAll: (statuses) => { const next = structuredClone(statuses); saveStatuses(next); set({ statuses: next }); },
 
   getStatus: (appId) => get().statuses[appId] ?? "none",
 

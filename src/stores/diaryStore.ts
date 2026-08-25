@@ -103,6 +103,19 @@ interface PersistedDiary {
   sections?: Record<string, DiarySection[]>;
 }
 
+export interface DiaryProfileData {
+  entries: Record<number, DiaryEntry>;
+  queue: number[];
+  finishPrompts: Record<number, DiaryFinishPromptState>;
+  journal: Record<number, DiaryJournalEntry[]>;
+  pages: DiarySection[];
+  revisions: DiaryRevision[];
+  board: Record<number, number>;
+  boardPrefs: DiaryBoardPrefs;
+  templates: DiaryTemplate[];
+  statusEvents: DiaryStatusEvent[];
+}
+
 interface DiaryState {
   entries: Record<number, DiaryEntry>;
   queue: number[];
@@ -118,6 +131,7 @@ interface DiaryState {
   templates: DiaryTemplate[];
   hydrated: boolean;
   hydrate: () => Promise<void>;
+  restoreProfile: (data: Partial<DiaryProfileData>) => void;
   /** Replaces the cached unlock list for one game (also stamps the sync time). */
   setAchievements: (appId: number, entries: DiaryAchievementEntry[]) => void;
   /** Overrides the Kanban column color for a status; null restores the default. */
@@ -566,6 +580,24 @@ export const useDiaryStore = create<DiaryState>((set, get) => ({
       persistTemplates(templates);
     } catch { set({ hydrated: true }); }
   },
+
+  restoreProfile: (data) => set((state) => {
+    const entries = data.entries ? structuredClone(data.entries) : state.entries;
+    const queue = data.queue ? [...data.queue] : state.queue;
+    const finishPrompts = data.finishPrompts ? structuredClone(data.finishPrompts) : state.finishPrompts;
+    const journal = data.journal ? structuredClone(data.journal) : state.journal;
+    const pages = data.pages ? structuredClone(data.pages) : state.pages;
+    const revisions = data.revisions ? structuredClone(data.revisions).slice(0, 500) : state.revisions;
+    const board = data.board ? structuredClone(data.board) : state.board;
+    const boardPrefs = data.boardPrefs ? normalizeBoardPrefs(data.boardPrefs) : state.boardPrefs;
+    const templates = data.templates ? data.templates.map(normalizeTemplate).filter((template): template is DiaryTemplate => template !== null).slice(0, 200) : state.templates;
+    const statusEvents = data.statusEvents ? data.statusEvents.map(normalizeStatusEvent).filter((event): event is DiaryStatusEvent => event !== null).slice(0, 1000) : state.statusEvents;
+    persistDiary(entries, queue, finishPrompts, journal, pages, revisions, board);
+    persistBoardPrefs(boardPrefs);
+    persistTemplates(templates);
+    persistStatusEvents(statusEvents);
+    return { entries, queue, finishPrompts, journal, pages, revisions, board, boardPrefs, templates, statusEvents };
+  }),
 
   setBulkDecision: (appIds, decision) => set((state) => {
     const ids = [...new Set(appIds.filter((appId) => Number.isFinite(appId)).map((appId) => Math.trunc(appId)))];

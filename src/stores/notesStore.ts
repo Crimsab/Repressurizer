@@ -23,6 +23,7 @@ interface NotesState {
   notes: Record<number, string>;
   setNote: (appId: number, text: string) => void;
   getNote: (appId: number) => string;
+  restoreAll: (notes: Record<number, string>) => void;
   hydrate: () => Promise<void>;
 }
 
@@ -42,6 +43,7 @@ export const useNotesStore = create<NotesState>((set, get) => ({
     }),
 
   getNote: (appId) => get().notes[appId] ?? "",
+  restoreAll: (notes) => { const next = structuredClone(notes); saveNotes(next); set({ notes: next }); },
 
   hydrate: async () => {
     try {

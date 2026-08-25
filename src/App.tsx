@@ -32,6 +32,7 @@ import { useEntityJournalStore } from "./stores/entityJournalStore";
 import { useLibraryInboxStore } from "./stores/libraryInboxStore";
 import { useCollectionTimeMachineStore } from "./stores/collectionTimeMachineStore";
 import { useConflictResolverStore } from "./stores/conflictResolverStore";
+import { useProfileStore } from "./stores/profileStore";
 import {
   fetchLibrary,
   loadCollections,
@@ -219,6 +220,7 @@ function AppContent() {
   const hydrateLibraryInbox = useLibraryInboxStore((s) => s.hydrate);
   const hydrateCollectionTimeMachine = useCollectionTimeMachineStore((s) => s.hydrate);
   const hydrateConflictResolver = useConflictResolverStore((s) => s.hydrate);
+  const hydrateProfiles = useProfileStore((s) => s.hydrate);
   const hydrateSettingsFromDisk = useSettingsStore((s) => s.hydrateFromDisk);
   const setCollections = useCategoryStore((s) => s.setCollections);
   const [reloading, setReloading] = useState(false);
@@ -808,6 +810,7 @@ function AppContent() {
     hydrateLibraryInbox();
     hydrateCollectionTimeMachine();
     hydrateConflictResolver();
+    hydrateProfiles();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [interactiveStartupReady]);
 
