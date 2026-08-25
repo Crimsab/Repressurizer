@@ -411,6 +411,15 @@ export async function installTauriMock(page: Page) {
             return games;
           case "load_installed_library":
             return [632470, 1145360, 39140];
+          case "load_storage_inventory":
+            return {
+              libraries: [{ path: "C:\\Program Files (x86)\\Steam", drive: "C:", totalBytes: 512 * 1024 ** 3, freeBytes: 76 * 1024 ** 3 }],
+              installs: [
+                { appid: 632470, libraryPath: "C:\\Program Files (x86)\\Steam", installPath: "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Disco Elysium", gameBytes: 18 * 1024 ** 3, workshopBytes: 1 * 1024 ** 3, shaderCacheBytes: 200 * 1024 ** 2, compatdataBytes: 800 * 1024 ** 2, totalBytes: 20 * 1024 ** 3, scannedAt: 1_787_000_000 },
+                { appid: 1145360, libraryPath: "C:\\Program Files (x86)\\Steam", installPath: "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Hades", gameBytes: 14 * 1024 ** 3, workshopBytes: 0, shaderCacheBytes: 100 * 1024 ** 2, compatdataBytes: 400 * 1024 ** 2, totalBytes: 14.5 * 1024 ** 3, scannedAt: 1_787_000_000 },
+                { appid: 39140, libraryPath: "C:\\Program Files (x86)\\Steam", installPath: "C:\\Program Files (x86)\\Steam\\steamapps\\common\\FINAL FANTASY VII", gameBytes: 3 * 1024 ** 3, workshopBytes: 0, shaderCacheBytes: 0, compatdataBytes: 0, totalBytes: 3 * 1024 ** 3, scannedAt: 1_787_000_000 },
+              ],
+            };
           case "fetch_steam_app_list":
             if (!args?.apiKey) throw new Error("Steam Web API key is required");
             return [

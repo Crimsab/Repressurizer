@@ -112,6 +112,10 @@ export interface OwnedGame {
   is_collection_only?: boolean;
 }
 
+export interface StorageLibrary { path: string; drive: string; totalBytes: number; freeBytes: number; }
+export interface StorageInstall { appid: number; libraryPath: string; installPath: string; gameBytes: number; workshopBytes: number; shaderCacheBytes: number; compatdataBytes: number; totalBytes: number; scannedAt: number; }
+export interface StorageInventory { libraries: StorageLibrary[]; installs: StorageInstall[]; }
+
 export interface GameDetails {
   app_id: number;
   name: string;

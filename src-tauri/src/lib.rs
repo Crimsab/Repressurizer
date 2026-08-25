@@ -1137,6 +1137,7 @@ pub fn run() {
             steam::legacy_sharedconfig::load_legacy_sharedconfig,
             steam::local_library::load_local_license_library,
             steam::local_library::load_installed_library,
+            steam::local_library::load_storage_inventory,
             steam_api::fetch_wishlist,
             steam_api::fetch_family_library,
             steam_api::resolve_vanity_url,

@@ -13,6 +13,36 @@ pub struct LocalLicenseApp {
     pub package_id: u32,
 }
 
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct StorageLibrary {
+    pub path: String,
+    pub drive: String,
+    pub total_bytes: u64,
+    pub free_bytes: u64,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct StorageInstall {
+    pub appid: u64,
+    pub library_path: String,
+    pub install_path: String,
+    pub game_bytes: u64,
+    pub workshop_bytes: u64,
+    pub shader_cache_bytes: u64,
+    pub compatdata_bytes: u64,
+    pub total_bytes: u64,
+    pub scanned_at: u64,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct StorageInventory {
+    pub libraries: Vec<StorageLibrary>,
+    pub installs: Vec<StorageInstall>,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 enum BinaryKvValue {
     Object(BTreeMap<String, BinaryKvValue>),
@@ -137,6 +167,124 @@ pub fn load_installed_library(steam_path: String) -> Result<Vec<u64>, String> {
     }
 
     Ok(installed.into_iter().collect())
+}
+
+#[tauri::command]
+pub fn load_storage_inventory(steam_path: String) -> Result<StorageInventory, String> {
+    let steam_root = PathBuf::from(steam_path.trim());
+    if !steam_root.join("steamapps").is_dir() {
+        return Err(format!(
+            "Steam apps directory does not exist: {}",
+            steam_root.join("steamapps").display()
+        ));
+    }
+    let scanned_at = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let mut libraries = Vec::new();
+    let mut installs = Vec::new();
+    for library_root in steam_library_roots(&steam_root) {
+        let steamapps = library_root.join("steamapps");
+        if !steamapps.is_dir() {
+            continue;
+        }
+        libraries.push(StorageLibrary {
+            path: library_root.to_string_lossy().into_owned(),
+            drive: drive_label(&library_root),
+            total_bytes: fs2::total_space(&library_root).unwrap_or(0),
+            free_bytes: fs2::available_space(&library_root).unwrap_or(0),
+        });
+        let Ok(entries) = fs::read_dir(&steamapps) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let manifest_path = entry.path();
+            let Some(appid) = appid_from_manifest_name(&manifest_path) else {
+                continue;
+            };
+            let Ok(manifest) = fs::read_to_string(&manifest_path) else {
+                continue;
+            };
+            let install_dir =
+                vdf_string_value(&manifest, "installdir").unwrap_or_else(|| appid.to_string());
+            let install_path = steamapps.join("common").join(install_dir);
+            let game_bytes = directory_size(&install_path);
+            let workshop_bytes = directory_size(
+                &steamapps
+                    .join("workshop")
+                    .join("content")
+                    .join(appid.to_string()),
+            );
+            let shader_cache_bytes =
+                directory_size(&steamapps.join("shadercache").join(appid.to_string()));
+            let compatdata_bytes =
+                directory_size(&steamapps.join("compatdata").join(appid.to_string()));
+            installs.push(StorageInstall {
+                appid,
+                library_path: library_root.to_string_lossy().into_owned(),
+                install_path: install_path.to_string_lossy().into_owned(),
+                game_bytes,
+                workshop_bytes,
+                shader_cache_bytes,
+                compatdata_bytes,
+                total_bytes: game_bytes
+                    .saturating_add(workshop_bytes)
+                    .saturating_add(shader_cache_bytes)
+                    .saturating_add(compatdata_bytes),
+                scanned_at,
+            });
+        }
+    }
+    installs.sort_by_key(|item| item.appid);
+    libraries.sort_by(|left, right| left.path.cmp(&right.path));
+    Ok(StorageInventory {
+        libraries,
+        installs,
+    })
+}
+
+fn vdf_string_value(content: &str, wanted_key: &str) -> Option<String> {
+    content.lines().find_map(|line| {
+        let values = parse_vdf_quoted_strings(line);
+        (values.len() >= 2 && values[0].eq_ignore_ascii_case(wanted_key)).then(|| values[1].clone())
+    })
+}
+
+fn directory_size(root: &Path) -> u64 {
+    let Ok(metadata) = fs::symlink_metadata(root) else {
+        return 0;
+    };
+    if metadata.file_type().is_symlink() {
+        return 0;
+    }
+    if metadata.is_file() {
+        return metadata.len();
+    }
+    let Ok(entries) = fs::read_dir(root) else {
+        return 0;
+    };
+    entries.flatten().fold(0_u64, |total, entry| {
+        total.saturating_add(directory_size(&entry.path()))
+    })
+}
+
+fn drive_label(path: &Path) -> String {
+    #[cfg(windows)]
+    {
+        path.components()
+            .next()
+            .map(|part| part.as_os_str().to_string_lossy().into_owned())
+            .unwrap_or_else(|| path.to_string_lossy().into_owned())
+    }
+    #[cfg(not(windows))]
+    {
+        path.ancestors()
+            .last()
+            .unwrap_or(path)
+            .to_string_lossy()
+            .into_owned()
+    }
 }
 
 fn steam_library_roots(steam_root: &Path) -> Vec<PathBuf> {
@@ -613,6 +761,41 @@ mod tests {
             ]
         );
 
+        fs::remove_dir_all(steam_path).unwrap();
+    }
+
+    #[test]
+    fn scans_actual_storage_components_without_following_missing_paths() {
+        let steam_path = temp_steam_dir("storage-inventory");
+        let steamapps = steam_path.join("steamapps");
+        fs::create_dir_all(steamapps.join("common").join("Demo Game")).unwrap();
+        fs::create_dir_all(steamapps.join("workshop").join("content").join("42")).unwrap();
+        fs::write(
+            steamapps.join("appmanifest_42.acf"),
+            "\"AppState\"\n{\n\"appid\" \"42\"\n\"installdir\" \"Demo Game\"\n}",
+        )
+        .unwrap();
+        fs::write(
+            steamapps.join("common").join("Demo Game").join("game.bin"),
+            vec![0_u8; 11],
+        )
+        .unwrap();
+        fs::write(
+            steamapps
+                .join("workshop")
+                .join("content")
+                .join("42")
+                .join("mod.bin"),
+            vec![0_u8; 7],
+        )
+        .unwrap();
+
+        let inventory = load_storage_inventory(steam_path.to_string_lossy().into_owned()).unwrap();
+        assert_eq!(inventory.installs.len(), 1);
+        assert_eq!(inventory.installs[0].appid, 42);
+        assert_eq!(inventory.installs[0].game_bytes, 11);
+        assert_eq!(inventory.installs[0].workshop_bytes, 7);
+        assert_eq!(inventory.installs[0].total_bytes, 18);
         fs::remove_dir_all(steam_path).unwrap();
     }
 

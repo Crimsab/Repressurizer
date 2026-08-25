@@ -19,6 +19,7 @@ import type {
   StoreReleaseDateResult,
   HltbTimeMode,
   GgDealsPrice,
+  StorageInventory,
 } from "./types";
 import type { UpdaterKind } from "./updater";
 
@@ -172,6 +173,10 @@ export async function loadLocalLicenseLibrary(
 
 export async function loadInstalledLibrary(steamPath: string): Promise<number[]> {
   return invoke<number[]>("load_installed_library", { steamPath });
+}
+
+export async function loadStorageInventory(steamPath: string): Promise<StorageInventory> {
+  return invoke<StorageInventory>("load_storage_inventory", { steamPath });
 }
 
 export async function importDepressurizerProfile(
