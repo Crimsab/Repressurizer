@@ -15,6 +15,12 @@ describe("collection three-way merge", () => {
     expect(result.autoMerged.find((item) => item.key === "b")?.name).toBe("Renamed");
   });
 
+  it("does not treat timestamps alone as concurrent edits", () => {
+    const base = [collection("a", "A", [1])];
+    const steam = [{ ...collection("a", "A", [1]), timestamp: 999 }];
+    expect(analyzeThreeWayCollectionMerge({ base, steam, proposed: base }).steamChanged).toBe(false);
+  });
+
   it("detects rename and delete-versus-modify conflicts by stable identity", () => {
     const base = [collection("a", "Original", [1]), collection("b", "B", [2])];
     const steam = [collection("a", "Steam name", [1])];

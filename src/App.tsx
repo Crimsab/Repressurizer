@@ -31,6 +31,7 @@ import { useProviderHealthStore } from "./stores/providerHealthStore";
 import { useEntityJournalStore } from "./stores/entityJournalStore";
 import { useLibraryInboxStore } from "./stores/libraryInboxStore";
 import { useCollectionTimeMachineStore } from "./stores/collectionTimeMachineStore";
+import { useConflictResolverStore } from "./stores/conflictResolverStore";
 import {
   fetchLibrary,
   loadCollections,
@@ -217,6 +218,7 @@ function AppContent() {
   const hydrateEntityJournal = useEntityJournalStore((s) => s.hydrate);
   const hydrateLibraryInbox = useLibraryInboxStore((s) => s.hydrate);
   const hydrateCollectionTimeMachine = useCollectionTimeMachineStore((s) => s.hydrate);
+  const hydrateConflictResolver = useConflictResolverStore((s) => s.hydrate);
   const hydrateSettingsFromDisk = useSettingsStore((s) => s.hydrateFromDisk);
   const setCollections = useCategoryStore((s) => s.setCollections);
   const [reloading, setReloading] = useState(false);
@@ -805,6 +807,7 @@ function AppContent() {
     hydrateEntityJournal();
     hydrateLibraryInbox();
     hydrateCollectionTimeMachine();
+    hydrateConflictResolver();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [interactiveStartupReady]);
 
@@ -822,6 +825,7 @@ function AppContent() {
         after: state.collections,
         origin: state._lastChangeOrigin,
         steamAccountId: settings.steamId64 || settings.steamId3 || "unknown",
+        steamLibraryPath: useSettingsStore.getState().steamPath,
       });
     });
   }, [interactiveStartupReady, settings.steamId3, settings.steamId64]);

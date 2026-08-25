@@ -465,7 +465,10 @@ export async function installTauriMock(page: Page) {
             };
           }
           case "load_collections":
-            return collections;
+            return JSON.parse(window.localStorage.getItem("repressurizer-mock-steam-collections") ?? JSON.stringify(collections));
+          case "save_collections":
+            window.localStorage.setItem("repressurizer-mock-saved-collections", JSON.stringify(args?.collections ?? []));
+            return null;
           case "fetch_family_library":
             return {
               auth_used: "access_token",

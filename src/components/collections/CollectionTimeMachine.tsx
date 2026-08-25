@@ -111,7 +111,7 @@ export function CollectionTimeMachine({ onClose }: { onClose: () => void }) {
           {events.length ? <div className="space-y-2">{events.map((event) => <button data-testid={`time-machine-event-${event.id}`} key={event.id} onClick={() => setSelectedEventId(event.id)} className={`w-full rounded-xl border p-3 text-left ${selectedEvent?.id === event.id ? "border-repressurizer-accent bg-repressurizer-accent/5" : "border-repressurizer-border-subtle bg-repressurizer-bg/45"}`}>
             <div className="flex items-center justify-between gap-2"><span className="text-xs font-medium text-white">{t(`timeMachine.origin.${event.origin}` as TranslationKey)}</span><time className="text-[9px] text-repressurizer-text-faint">{new Intl.DateTimeFormat(undefined, { dateStyle: "short", timeStyle: "short" }).format(event.occurredAt)}</time></div>
             <p className="mt-1 text-[10px] text-repressurizer-text-muted">{t("timeMachine.event.summary", { collections: event.diff.created + event.diff.deleted + event.diff.renamed + event.diff.colors + event.diff.reordered, added: event.diff.gamesAdded, removed: event.diff.gamesRemoved })}</p>
-            <p className="mt-1 truncate text-[9px] text-repressurizer-text-faint">{event.steamAccountId} · {event.deviceId}</p>
+            <p className="mt-1 truncate text-[9px] text-repressurizer-text-faint" title={event.steamLibraryPath}>{event.steamAccountId} · {event.deviceId} · {event.steamLibraryPath}</p>
           </button>)}</div> : <p className="py-16 text-center text-xs text-repressurizer-text-faint">{t("timeMachine.empty")}</p>}
         </aside>
         <main className="min-h-0 overflow-y-auto p-4">

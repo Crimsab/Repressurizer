@@ -12,6 +12,7 @@ export interface CollectionSnapshot {
   id: string;
   createdAt: number;
   steamAccountId: string;
+  steamLibraryPath: string;
   deviceId: string;
   collections: SteamCollection[];
 }
@@ -42,6 +43,7 @@ export interface CollectionTimelineEvent {
   id: string;
   occurredAt: number;
   steamAccountId: string;
+  steamLibraryPath: string;
   deviceId: string;
   origin: CollectionChangeOrigin;
   beforeSnapshotId: string;
@@ -77,22 +79,28 @@ function sortedUnique(values: number[]): number[] {
 }
 
 export function collectionStateChecksum(collections: SteamCollection[]): string {
-  return entityChecksum(collections);
+  return entityChecksum(collections.map((collection) => {
+    const { timestamp: _timestamp, ...semantic } = collection;
+    return semantic;
+  }));
 }
 
 export function createCollectionSnapshot(input: {
   collections: SteamCollection[];
   steamAccountId: string;
+  steamLibraryPath?: string;
   deviceId: string;
   createdAt?: number;
 }): CollectionSnapshot {
   const collections = structuredClone(input.collections);
-  const checksum = collectionStateChecksum(collections);
+  const steamLibraryPath = input.steamLibraryPath ?? "unknown";
+  const checksum = entityChecksum([input.steamAccountId, steamLibraryPath, collectionStateChecksum(collections)]);
   return {
     version: COLLECTION_SNAPSHOT_VERSION,
     id: `collection-snapshot:${checksum}`,
     createdAt: input.createdAt ?? Date.now(),
     steamAccountId: input.steamAccountId,
+    steamLibraryPath,
     deviceId: input.deviceId,
     collections,
   };
@@ -158,6 +166,7 @@ export function createTimelineEvent(input: {
     id: `collection-event:${entityChecksum([input.before.id, input.after.id, input.origin, occurredAt])}`,
     occurredAt,
     steamAccountId: input.after.steamAccountId,
+    steamLibraryPath: input.after.steamLibraryPath,
     deviceId: input.after.deviceId,
     origin: input.origin,
     beforeSnapshotId: input.before.id,
@@ -211,6 +220,7 @@ export function parseCollectionSnapshot(value: unknown): CollectionSnapshot | nu
   return createCollectionSnapshot({
     collections: snapshot.collections,
     steamAccountId: snapshot.steamAccountId,
+    steamLibraryPath: typeof snapshot.steamLibraryPath === "string" ? snapshot.steamLibraryPath : "unknown",
     deviceId: snapshot.deviceId,
     createdAt: Number.isFinite(snapshot.createdAt) ? snapshot.createdAt : Date.now(),
   });

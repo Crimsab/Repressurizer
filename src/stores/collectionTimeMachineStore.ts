@@ -32,6 +32,7 @@ interface CollectionTimeMachineState extends PersistedTimeMachine {
     after: SteamCollection[];
     origin: CollectionChangeOrigin;
     steamAccountId: string;
+    steamLibraryPath?: string;
     deviceId?: string;
     occurredAt?: number;
   }) => CollectionTimelineEvent | null;
@@ -71,7 +72,9 @@ function parsed(raw: string | null): PersistedTimeMachine | null {
     if (value.version !== SCHEMA_VERSION || !Array.isArray(value.snapshots) || !Array.isArray(value.events)) return null;
     const snapshots = value.snapshots.map(parseCollectionSnapshot).filter((snapshot): snapshot is CollectionSnapshot => Boolean(snapshot));
     const snapshotIds = new Set(snapshots.map((snapshot) => snapshot.id));
-    const events = value.events.filter((event) => event && snapshotIds.has(event.beforeSnapshotId) && snapshotIds.has(event.afterSnapshotId));
+    const events = value.events
+      .filter((event) => event && snapshotIds.has(event.beforeSnapshotId) && snapshotIds.has(event.afterSnapshotId))
+      .map((event) => ({ ...event, steamLibraryPath: typeof event.steamLibraryPath === "string" ? event.steamLibraryPath : "unknown" }));
     const retention: SnapshotRetention = ["all", "30-days", "100-snapshots"].includes(value.retention ?? "") ? value.retention! : "100-snapshots";
     return prune({ version: SCHEMA_VERSION, retention, snapshots, events, pinnedSnapshotIds: (value.pinnedSnapshotIds ?? []).filter((id) => snapshotIds.has(id)) });
   } catch {
@@ -92,10 +95,10 @@ export const useCollectionTimeMachineStore = create<CollectionTimeMachineState>(
     set(loaded ? { ...loaded, hydrated: true } : { hydrated: true });
   },
 
-  recordTransition: ({ before, after, origin, steamAccountId, deviceId, occurredAt }) => {
+  recordTransition: ({ before, after, origin, steamAccountId, steamLibraryPath, deviceId, occurredAt }) => {
     const resolvedDeviceId = deviceId ?? useEntityJournalStore.getState().deviceId;
-    const beforeSnapshot = createCollectionSnapshot({ collections: before, steamAccountId, deviceId: resolvedDeviceId, createdAt: occurredAt });
-    const afterSnapshot = createCollectionSnapshot({ collections: after, steamAccountId, deviceId: resolvedDeviceId, createdAt: occurredAt });
+    const beforeSnapshot = createCollectionSnapshot({ collections: before, steamAccountId, steamLibraryPath, deviceId: resolvedDeviceId, createdAt: occurredAt });
+    const afterSnapshot = createCollectionSnapshot({ collections: after, steamAccountId, steamLibraryPath, deviceId: resolvedDeviceId, createdAt: occurredAt });
     const event = createTimelineEvent({ before: beforeSnapshot, after: afterSnapshot, origin, occurredAt });
     if (!event) return null;
     const state = get();

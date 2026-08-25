@@ -23,6 +23,12 @@ describe("collection time machine", () => {
     expect(createTimelineEvent({ before, after: duplicate, origin: "manual" })).toBeNull();
   });
 
+  it("ignores timestamp-only observations", () => {
+    const before = createCollectionSnapshot({ collections: [collection("a", "A", [1])], steamAccountId: "account", deviceId: "device" });
+    const after = createCollectionSnapshot({ collections: [{ ...collection("a", "A", [1]), timestamp: 999 }], steamAccountId: "account", deviceId: "device" });
+    expect(createTimelineEvent({ before, after, origin: "steam" })).toBeNull();
+  });
+
   it("previews full and selective restores without mutating the source", () => {
     const current = [collection("a", "Current", [1, 3]), collection("b", "B", [9])];
     const target = [collection("a", "Target", [1, 2])];

@@ -48,6 +48,13 @@ function changed(base: unknown, value: unknown): boolean {
   return !equal(base, value);
 }
 
+function semanticCollections(collections: SteamCollection[]): unknown[] {
+  return collections.map((collection) => {
+    const { timestamp: _timestamp, ...semantic } = collection;
+    return semantic;
+  });
+}
+
 function conflict(input: Omit<CollectionConflict, "id">): CollectionConflict {
   return { ...input, id: `collection-conflict:${entityChecksum(input)}` };
 }
@@ -156,7 +163,7 @@ export function analyzeThreeWayCollectionMerge(input: { base: SteamCollection[];
   }
 
   const autoMerged = [...merged.entries()].sort(([left], [right]) => orderByIdentity[left] - orderByIdentity[right] || left.localeCompare(right)).map(([, collection]) => collection);
-  return { ...input, autoMerged, conflicts, orderByIdentity, steamChanged: !equal(input.base, input.steam) };
+  return { ...input, autoMerged, conflicts, orderByIdentity, steamChanged: !equal(semanticCollections(input.base), semanticCollections(input.steam)) };
 }
 
 function mergedChoice(conflictItem: CollectionConflict): unknown {

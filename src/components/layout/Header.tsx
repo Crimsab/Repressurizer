@@ -9,7 +9,8 @@ import { useFailedGamesStore } from "../../stores/failedGamesStore";
 import { useToastStore } from "../../stores/toastStore";
 import { useExportUiStore } from "../../stores/exportUiStore";
 import { useLibraryInboxStore } from "../../stores/libraryInboxStore";
-import { isSteamRunning, saveCollections, saveShortcuts } from "../../lib/tauri";
+import { isSteamRunning, loadCollections, saveCollections, saveShortcuts } from "../../lib/tauri";
+import { analyzeThreeWayCollectionMerge, type ThreeWayMergeAnalysis } from "../../lib/collectionConflictResolver";
 import { buildSavePreview, type SavePreview } from "../../lib/savePreview";
 import { hasAdvancedFilters } from "../../lib/search";
 import { useT, type TranslationKey } from "../../lib/i18n";
@@ -63,6 +64,7 @@ const loadWhatToPlayNext = () => import("../recommend/SessionPlanner").then((m) 
 const loadPlayHistoryTimeline = () => import("../timeline/PlayHistoryTimeline").then((m) => ({ default: m.PlayHistoryTimeline }));
 const loadLibraryChangesInbox = () => import("../inbox/LibraryChangesInbox").then((m) => ({ default: m.LibraryChangesInbox }));
 const loadCollectionTimeMachine = () => import("../collections/CollectionTimeMachine").then((m) => ({ default: m.CollectionTimeMachine }));
+const loadCollectionConflictResolver = () => import("../collections/CollectionConflictResolver").then((m) => ({ default: m.CollectionConflictResolver }));
 const SettingsPage = lazy(loadSettingsPage);
 const ExportDialog = lazy(loadExportDialog);
 const AutoCategorizeDialog = lazy(loadAutoCategorizeDialog);
@@ -74,6 +76,7 @@ const WhatToPlayNext = lazy(loadWhatToPlayNext);
 const PlayHistoryTimeline = lazy(loadPlayHistoryTimeline);
 const LibraryChangesInbox = lazy(loadLibraryChangesInbox);
 const CollectionTimeMachine = lazy(loadCollectionTimeMachine);
+const CollectionConflictResolver = lazy(loadCollectionConflictResolver);
 const preload = (loader: () => Promise<unknown>) => { void loader(); };
 
 function LazyOverlay({ children }: { children: ReactNode }) {
@@ -159,7 +162,7 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
   const collections = useCategoryStore((s) => s.collections);
   const savedCollections = useCategoryStore((s) => s._saved);
   const dirty = useCategoryStore((s) => s.dirty);
-  const markClean = useCategoryStore((s) => s.markClean);
+  const setCollections = useCategoryStore((s) => s.setCollections);
   const undo = useCategoryStore((s) => s.undo);
   const redo = useCategoryStore((s) => s.redo);
   const discardChanges = useCategoryStore((s) => s.discardChanges);
@@ -180,6 +183,7 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
   const [showTimeline, setShowTimeline] = useState(false);
   const [showInbox, setShowInbox] = useState(false);
   const [showTimeMachine, setShowTimeMachine] = useState(false);
+  const [pendingConflict, setPendingConflict] = useState<ThreeWayMergeAnalysis | null>(null);
   const [showMoreTools, setShowMoreTools] = useState(false);
   const [showSavePreview, setShowSavePreview] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -257,22 +261,34 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
 
   const savePreview = buildSavePreview(savedCollections, collections, games, details);
 
+  const writeResolvedCollections = async (resolvedCollections: typeof collections) => {
+    if (await isSteamRunning()) throw new Error(t("savePreview.steamRunning.desc"));
+    await saveCollections(steamPath, steamId3, resolvedCollections);
+    try {
+      const shortcutUpdates = await saveShortcuts(steamPath, steamId3, resolvedCollections);
+      if (shortcutUpdates > 0) toast.getState().info(`Updated ${shortcutUpdates} non-Steam shortcuts.`);
+    } catch (shortcutError) {
+      toast.getState().warning(`Collections saved, but shortcuts.vdf update failed: ${String(shortcutError)}`);
+    }
+    setCollections(resolvedCollections, pendingConflict ? "sync" : "manual");
+    useLibraryInboxStore.getState().recordCollectionsBaseline(resolvedCollections);
+    setShowSavePreview(false);
+    setPendingConflict(null);
+    toast.getState().success(t("toast.saveSuccess"));
+  };
+
   const handleSave = async () => {
     setSaving(true);
     try {
-      await saveCollections(steamPath, steamId3, collections);
-      try {
-        const shortcutUpdates = await saveShortcuts(steamPath, steamId3, collections);
-        if (shortcutUpdates > 0) {
-          toast.getState().info(`Updated ${shortcutUpdates} non-Steam shortcuts.`);
-        }
-      } catch (shortcutError) {
-        toast.getState().warning(`Collections saved, but shortcuts.vdf update failed: ${String(shortcutError)}`);
+      if (await isSteamRunning()) throw new Error(t("savePreview.steamRunning.desc"));
+      const currentSteamCollections = await loadCollections(steamPath, steamId3);
+      const analysis = analyzeThreeWayCollectionMerge({ base: savedCollections, steam: currentSteamCollections, proposed: collections });
+      if (analysis.steamChanged) {
+        setPendingConflict(analysis);
+        setShowSavePreview(false);
+        return;
       }
-      markClean();
-      useLibraryInboxStore.getState().recordCollectionsBaseline(collections);
-      setShowSavePreview(false);
-      toast.getState().success(t("toast.saveSuccess"));
+      await writeResolvedCollections(analysis.autoMerged);
     } catch (e) {
       toast.getState().error(t("toast.saveFailed", { error: String(e) }));
     } finally {
@@ -641,6 +657,20 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
       {showTimeMachine && (
         <LazyOverlay>
           <CollectionTimeMachine onClose={() => setShowTimeMachine(false)} />
+        </LazyOverlay>
+      )}
+      {pendingConflict && (
+        <LazyOverlay>
+          <CollectionConflictResolver
+            analysis={pendingConflict}
+            onCancel={() => setPendingConflict(null)}
+            onConfirm={async (resolvedCollections) => {
+              setSaving(true);
+              try { await writeResolvedCollections(resolvedCollections); }
+              catch (error) { toast.getState().error(t("toast.saveFailed", { error: String(error) })); throw error; }
+              finally { setSaving(false); }
+            }}
+          />
         </LazyOverlay>
       )}
       {showSavePreview && (
