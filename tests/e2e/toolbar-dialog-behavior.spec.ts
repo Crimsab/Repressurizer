@@ -21,6 +21,10 @@ test("toolbar tools can be configured from right click and Settings", async ({
   await page.setViewportSize({ width: 1366, height: 900 });
   await page.goto("/");
 
+  await expect(page.getByRole("button", { name: "Achievements" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Wishlist" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Export" })).toBeVisible();
+
   await page.getByRole("button", { name: "More tools" }).click();
   await expect(page.getByRole("menuitem", { name: "Profiles & Sync" })).toBeVisible();
   await expect(page.getByRole("menuitem", { name: "Statistics" })).toBeHidden();

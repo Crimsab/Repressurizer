@@ -48,6 +48,12 @@ test("storage planner offers treemap, bars, and distribution views", async ({
   });
   await dialog.getByRole("button", { name: "Bar chart" }).click();
   await expect(dialog.getByTestId("storage-bars")).toBeVisible();
+  await expect(dialog.getByText("C:", { exact: true })).toBeVisible();
+  await expect(dialog.getByText("D:", { exact: true })).toBeVisible();
+  await expect(dialog.getByTestId("storage-disk-share-632470")).toHaveAttribute(
+    "data-share",
+    "3.9063",
+  );
   const bars = testInfo.outputPath("storage-bars-desktop.png");
   await page.screenshot({ path: bars, fullPage: true });
   await testInfo.attach("storage-bars-desktop", {
@@ -78,6 +84,38 @@ test("storage planner is horizontally contained on mobile", async ({
   await page.screenshot({ path, fullPage: true });
   await testInfo.attach("storage-planner-mobile", {
     path,
+    contentType: "image/png",
+  });
+
+  await dialog.getByRole("button", { name: "Treemap view" }).click();
+  await expect(dialog.getByTestId("storage-treemap")).toBeVisible();
+  const treemapOverflow = await dialog.evaluate((element) => ({
+    clientWidth: element.clientWidth,
+    scrollWidth: element.scrollWidth,
+  }));
+  expect(treemapOverflow.scrollWidth).toBeLessThanOrEqual(
+    treemapOverflow.clientWidth + 1,
+  );
+  const treemapPath = testInfo.outputPath("storage-treemap-mobile.png");
+  await page.screenshot({ path: treemapPath, fullPage: true });
+  await testInfo.attach("storage-treemap-mobile", {
+    path: treemapPath,
+    contentType: "image/png",
+  });
+
+  await dialog.getByRole("button", { name: "Bar chart" }).click();
+  await expect(dialog.getByTestId("storage-bars")).toBeVisible();
+  const barsOverflow = await dialog.evaluate((element) => ({
+    clientWidth: element.clientWidth,
+    scrollWidth: element.scrollWidth,
+  }));
+  expect(barsOverflow.scrollWidth).toBeLessThanOrEqual(
+    barsOverflow.clientWidth + 1,
+  );
+  const barsPath = testInfo.outputPath("storage-bars-mobile.png");
+  await page.screenshot({ path: barsPath, fullPage: true });
+  await testInfo.attach("storage-bars-mobile", {
+    path: barsPath,
     contentType: "image/png",
   });
 });

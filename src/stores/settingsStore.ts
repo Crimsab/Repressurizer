@@ -63,7 +63,7 @@ const defaults: AppSettings = {
   toolbarToolOrder: DEFAULT_TOOLBAR_ORDER,
   toolbarPinnedToolIds: DEFAULT_PINNED_TOOLS,
   toolbarHiddenToolIds: DEFAULT_HIDDEN_TOOLS,
-  toolbarVisibleCount: 3,
+  toolbarVisibleCount: 6,
   hltbConcurrency: 5,
   achievementsConcurrency: 5,
   steamDetailsDelayMs: 1200,
@@ -217,11 +217,16 @@ function normalizeSettings(raw: Partial<AppSettings>): AppSettings {
     ? proxySettings.mode as ProxyRotationMode
     : defaults.proxySettings.mode;
   const usesLegacyToolbarDefaults =
-    raw.toolbarVisibleCount === 4 &&
-    JSON.stringify(raw.toolbarPinnedToolIds) ===
-      JSON.stringify(["inbox", "recommend", "storage", "time-machine"]) &&
-    Array.isArray(raw.toolbarHiddenToolIds) &&
-    raw.toolbarHiddenToolIds.length === 0;
+    (raw.toolbarVisibleCount === 4 &&
+      JSON.stringify(raw.toolbarPinnedToolIds) ===
+        JSON.stringify(["inbox", "recommend", "storage", "time-machine"]) &&
+      Array.isArray(raw.toolbarHiddenToolIds) &&
+      raw.toolbarHiddenToolIds.length === 0) ||
+    (raw.toolbarVisibleCount === 3 &&
+      JSON.stringify(raw.toolbarPinnedToolIds) ===
+        JSON.stringify(["inbox", "recommend", "storage"]) &&
+      JSON.stringify(raw.toolbarHiddenToolIds) ===
+        JSON.stringify(DEFAULT_HIDDEN_TOOLS));
 
   return {
     ...defaults,

@@ -180,7 +180,7 @@ export function ToolbarSettingsTab() {
             toolbarToolOrder: TOOLBAR_TOOLS.map((tool) => tool.id),
             toolbarPinnedToolIds: DEFAULT_PINNED_TOOLS,
             toolbarHiddenToolIds: DEFAULT_HIDDEN_TOOLS,
-            toolbarVisibleCount: 3,
+            toolbarVisibleCount: 6,
           })
         }
         className="rounded-lg border border-repressurizer-border px-3 py-2 text-xs text-repressurizer-text-muted hover:text-white"

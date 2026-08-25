@@ -34,7 +34,7 @@ import { DialogOverlay } from "../ui/DialogOverlay";
 import { ResizableDialogPanel } from "../ui/ResizableDialogPanel";
 import { SelectMenu } from "../ui/SelectMenu";
 import { Tooltip } from "../ui/Tooltip";
-import { SteamImage } from "../games/SteamImage";
+import type { StorageLibrary } from "../../lib/types";
 
 const GB = 1_073_741_824;
 const bytes = (value: number) =>
@@ -321,6 +321,7 @@ export function StoragePlanner({ onClose }: { onClose: () => void }) {
                 <StorageVisualization
                   view={view}
                   suggestions={suggestions}
+                  libraries={selectedLibrary ? [selectedLibrary] : libraries}
                   selected={selected}
                   onToggle={(appId) => storage.toggleUninstall(appId)}
                 />
@@ -524,17 +525,17 @@ function StorageRow({
 function StorageVisualization({
   view,
   suggestions,
+  libraries,
   selected,
   onToggle,
 }: {
   view: Exclude<StorageView, "list">;
   suggestions: ReturnType<typeof rankStorageCandidates>;
+  libraries: StorageLibrary[];
   selected: Set<number>;
   onToggle: (appId: number) => void;
 }) {
-  const t = useT();
-  const items = suggestions.slice(0, 16);
-  const max = Math.max(...items.map((item) => item.install.totalBytes), 1);
+  const items = suggestions;
   const total = Math.max(
     items.reduce((sum, item) => sum + item.install.totalBytes, 0),
     1,
@@ -543,64 +544,28 @@ function StorageVisualization({
     return (
       <div
         data-testid="storage-treemap"
-        className="flex min-h-80 flex-wrap content-start gap-2 overflow-hidden rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg/35 p-2"
+        className="flex min-h-[360px] flex-col gap-1 overflow-hidden rounded-lg border border-repressurizer-border bg-[#090b0d] p-1 md:flex-row"
       >
-        {items.map((game) => (
-          <button
-            key={game.appid}
-            onClick={() => onToggle(game.appid)}
-            aria-pressed={selected.has(game.appid)}
-            aria-label={`${t("storage.addList")} ${game.name}`}
-            style={{
-              flexGrow: Math.max(1, (game.install.totalBytes / total) * 100),
-              flexBasis: `${Math.max(16, (game.install.totalBytes / max) * 38)}%`,
-            }}
-            className={`group relative min-h-24 overflow-hidden rounded-lg border text-left ${selected.has(game.appid) ? "border-repressurizer-accent" : "border-repressurizer-border-subtle"}`}
-          >
-            <SteamImage
-              appId={game.appid}
-              alt=""
-              kind="header"
-              className="absolute inset-0 h-full w-full object-cover opacity-55 transition-transform group-hover:scale-105"
-            />
-            <span className="absolute inset-0 bg-gradient-to-t from-black via-black/35 to-transparent" />
-            <span className="absolute inset-x-3 bottom-2">
-              <strong className="block truncate text-xs text-white">
-                {game.name}
-              </strong>
-              <span className="text-[10px] text-repressurizer-accent">
-                {bytes(game.install.totalBytes)}
-              </span>
-            </span>
-          </button>
+        {visualLibraries(libraries, items).filter((library) => library.games.length > 0).map((library) => (
+          <DiskTreemap
+            key={library.path}
+            library={library}
+            selected={selected}
+            onToggle={onToggle}
+          />
         ))}
       </div>
     );
   if (view === "bars")
     return (
-      <div data-testid="storage-bars" className="space-y-2">
-        {items.map((game) => (
-          <button
-            key={game.appid}
-            onClick={() => onToggle(game.appid)}
-            aria-pressed={selected.has(game.appid)}
-            className="grid w-full grid-cols-[minmax(120px,220px)_1fr_auto] items-center gap-3 text-left"
-          >
-            <span className="truncate text-xs text-repressurizer-text">
-              {game.name}
-            </span>
-            <span className="h-6 overflow-hidden rounded-md bg-repressurizer-bg">
-              <span
-                style={{
-                  width: `${Math.max(2, (game.install.totalBytes / max) * 100)}%`,
-                }}
-                className={`block h-full rounded-md ${selected.has(game.appid) ? "bg-repressurizer-accent" : "bg-sky-500/55"}`}
-              />
-            </span>
-            <span className="w-16 text-right font-mono text-[10px] text-repressurizer-text-muted">
-              {bytes(game.install.totalBytes)}
-            </span>
-          </button>
+      <div data-testid="storage-bars" className="space-y-5">
+        {visualLibraries(libraries, items).map((library) => (
+          <DiskBars
+            key={library.path}
+            library={library}
+            selected={selected}
+            onToggle={onToggle}
+          />
         ))}
       </div>
     );
@@ -651,5 +616,304 @@ function StorageVisualization({
         ))}
       </div>
     </div>
+  );
+}
+
+type VisualGame = ReturnType<typeof rankStorageCandidates>[number];
+type VisualLibrary = StorageLibrary & { games: VisualGame[] };
+
+function visualLibraries(
+  libraries: StorageLibrary[],
+  games: VisualGame[],
+): VisualLibrary[] {
+  if (!libraries.length) {
+    const installed = games.reduce(
+      (sum, game) => sum + game.install.totalBytes,
+      0,
+    );
+    return [{
+      path: "unknown",
+      drive: "Steam",
+      totalBytes: installed,
+      freeBytes: 0,
+      games,
+    }];
+  }
+  return libraries.map((library) => ({
+    ...library,
+    games: games
+      .filter((game) => game.install.libraryPath === library.path)
+      .sort((left, right) => right.install.totalBytes - left.install.totalBytes),
+  }));
+}
+
+type TreemapNode = {
+  id: string;
+  label: string;
+  value: number;
+  color: string;
+  game?: VisualGame;
+};
+type TreemapRect = TreemapNode & {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+function binaryTreemap(
+  nodes: TreemapNode[],
+  x = 0,
+  y = 0,
+  width = 100,
+  height = 100,
+): TreemapRect[] {
+  if (!nodes.length) return [];
+  if (nodes.length === 1) return [{ ...nodes[0], x, y, width, height }];
+  const total = nodes.reduce((sum, node) => sum + node.value, 0);
+  let leftTotal = 0;
+  let split = 1;
+  for (let index = 0; index < nodes.length - 1; index += 1) {
+    const next = leftTotal + nodes[index].value;
+    if (Math.abs(total / 2 - next) <= Math.abs(total / 2 - leftTotal)) {
+      leftTotal = next;
+      split = index + 1;
+    } else break;
+  }
+  const ratio = Math.min(0.96, Math.max(0.04, leftTotal / total));
+  if (width >= height) {
+    return [
+      ...binaryTreemap(nodes.slice(0, split), x, y, width * ratio, height),
+      ...binaryTreemap(
+        nodes.slice(split),
+        x + width * ratio,
+        y,
+        width * (1 - ratio),
+        height,
+      ),
+    ];
+  }
+  return [
+    ...binaryTreemap(nodes.slice(0, split), x, y, width, height * ratio),
+    ...binaryTreemap(
+      nodes.slice(split),
+      x,
+      y + height * ratio,
+      width,
+      height * (1 - ratio),
+    ),
+  ];
+}
+
+const treemapColors = [
+  "#047857",
+  "#0369a1",
+  "#7e22ce",
+  "#b45309",
+  "#be123c",
+  "#0e7490",
+  "#4d7c0f",
+  "#c2410c",
+];
+
+function libraryNodes(library: VisualLibrary): TreemapNode[] {
+  return library.games.map((game, index) => ({
+      id: String(game.appid),
+      label: game.name,
+      value: game.install.totalBytes,
+      color: treemapColors[index % treemapColors.length],
+      game,
+    })).filter((node) => node.value > 0)
+    .sort((left, right) => right.value - left.value);
+}
+
+function DiskTreemap({
+  library,
+  selected,
+  onToggle,
+}: {
+  library: VisualLibrary;
+  selected: Set<number>;
+  onToggle: (appId: number) => void;
+}) {
+  const t = useT();
+  const installed = library.games.reduce(
+    (sum, game) => sum + game.install.totalBytes,
+    0,
+  );
+  const rects = binaryTreemap(libraryNodes(library));
+  return (
+    <section
+      className="flex min-h-52 min-w-0 flex-col overflow-hidden border border-white/10 bg-black md:min-h-0"
+      style={{ flexGrow: Math.max(1, installed), flexBasis: 0 }}
+    >
+      <header className="flex items-center justify-between gap-2 border-b border-white/10 bg-white/[0.04] px-2 py-1 text-[10px]">
+        <strong className="truncate text-zinc-200">{library.drive}</strong>
+        <span className="shrink-0 font-mono text-zinc-500">
+          {bytes(installed)} {t("storage.steamGames")} · {bytes(library.freeBytes)} {t("storage.free")}
+        </span>
+      </header>
+      <div className="relative min-h-0 flex-1">
+        {rects.map((rect) => {
+          const game = rect.game!;
+          const active = selected.has(game.appid);
+          const labelFits = rect.width > 11 && rect.height > 9;
+          const style = {
+            left: `${rect.x}%`,
+            top: `${rect.y}%`,
+            width: `${rect.width}%`,
+            height: `${rect.height}%`,
+            backgroundColor: rect.color,
+          };
+          return (
+            <button
+              key={rect.id}
+              type="button"
+              title={`${game.name} · ${bytes(rect.value)}`}
+              aria-label={`${t("storage.addList")} ${game.name}`}
+              aria-pressed={active}
+              onClick={() => onToggle(game.appid)}
+              style={style}
+              className={`group absolute overflow-hidden border border-black/70 text-left outline-none transition-[filter,box-shadow] hover:z-10 hover:brightness-125 focus-visible:z-10 focus-visible:ring-2 focus-visible:ring-repressurizer-accent ${active ? "z-10 ring-2 ring-inset ring-repressurizer-accent" : ""}`}
+            >
+              <GameContentTreemap game={game} color={rect.color} />
+              {labelFits && (
+                <span className="pointer-events-none absolute inset-x-1 top-1 z-10 overflow-hidden text-[9px] leading-tight text-white drop-shadow-[0_1px_2px_#000]">
+                  <strong className="block truncate font-semibold">{game.name}</strong>
+                  <span className="text-white/75">{bytes(rect.value)}</span>
+                </span>
+              )}
+              <span className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-black/25" />
+            </button>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function GameContentTreemap({
+  game,
+  color,
+}: {
+  game: VisualGame;
+  color: string;
+}) {
+  const t = useT();
+  const parts = [
+    { id: "game", label: t("storage.content.game"), value: game.install.gameBytes, opacity: 1 },
+    { id: "workshop", label: t("storage.content.workshop"), value: game.install.workshopBytes, opacity: 0.8 },
+    { id: "shader", label: t("storage.content.shader"), value: game.install.shaderCacheBytes, opacity: 0.62 },
+    { id: "compat", label: t("storage.content.compat"), value: game.install.compatdataBytes, opacity: 0.45 },
+  ].filter((part) => part.value > 0);
+  const rects = binaryTreemap(parts.map((part) => ({
+    ...part,
+    color,
+  })));
+  return (
+    <span className="absolute inset-0">
+      {rects.map((rect) => (
+        <span
+          key={rect.id}
+          title={`${rect.label} · ${bytes(rect.value)}`}
+          style={{
+            left: `${rect.x}%`,
+            top: `${rect.y}%`,
+            width: `${rect.width}%`,
+            height: `${rect.height}%`,
+            backgroundColor: color,
+            opacity: parts.find((part) => part.id === rect.id)?.opacity ?? 1,
+          }}
+          className="absolute border border-black/25 shadow-[inset_0_0_12px_rgba(255,255,255,0.08)]"
+        >
+          {rect.width > 24 && rect.height > 24 && (
+            <span className="absolute bottom-1 left-1 truncate text-[8px] text-white/65">
+              {rect.label}
+            </span>
+          )}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+function DiskBars({
+  library,
+  selected,
+  onToggle,
+}: {
+  library: VisualLibrary;
+  selected: Set<number>;
+  onToggle: (appId: number) => void;
+}) {
+  const t = useT();
+  const capacity = Math.max(1, library.totalBytes);
+  const installed = library.games.reduce(
+    (sum, game) => sum + game.install.totalBytes,
+    0,
+  );
+  const otherUsed = Math.max(0, capacity - library.freeBytes - installed);
+  const percent = (value: number) => (value / capacity) * 100;
+  return (
+    <section className="border-t border-repressurizer-border-subtle pt-3 first:border-t-0 first:pt-0">
+      <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+        <strong className="text-xs text-white">{library.drive}</strong>
+        <span className="font-mono text-[10px] text-repressurizer-text-faint">
+          {bytes(capacity)} {t("storage.capacity")} · {bytes(library.freeBytes)} {t("storage.free")}
+        </span>
+      </div>
+      <div className="mb-3 flex h-8 overflow-hidden rounded-md border border-repressurizer-border bg-repressurizer-bg" title={`${bytes(capacity)} ${t("storage.capacity")}`}>
+        <span
+          style={{ width: `${percent(installed)}%` }}
+          className="flex items-center justify-center overflow-hidden bg-repressurizer-accent/70 text-[9px] text-white"
+          title={`${t("storage.steamGames")} · ${bytes(installed)}`}
+        >
+          {percent(installed) >= 12 ? `${t("storage.steamGames")} · ${bytes(installed)}` : ""}
+        </span>
+        <span
+          style={{ width: `${percent(otherUsed)}%` }}
+          className="flex items-center justify-center overflow-hidden bg-zinc-600/70 text-[9px] text-zinc-200"
+          title={`${t("storage.otherData")} · ${bytes(otherUsed)}`}
+        >
+          {percent(otherUsed) >= 12 ? `${t("storage.otherData")} · ${bytes(otherUsed)}` : ""}
+        </span>
+        <span
+          style={{ width: `${percent(library.freeBytes)}%` }}
+          className="flex items-center justify-center overflow-hidden bg-sky-950/65 text-[9px] text-sky-200"
+          title={`${t("storage.freeSpace")} · ${bytes(library.freeBytes)}`}
+        >
+          {percent(library.freeBytes) >= 12 ? `${t("storage.freeSpace")} · ${bytes(library.freeBytes)}` : ""}
+        </span>
+      </div>
+      <div className="space-y-1.5">
+        {library.games.map((game) => {
+          const share = percent(game.install.totalBytes);
+          return (
+            <button
+              key={game.appid}
+              type="button"
+              onClick={() => onToggle(game.appid)}
+              aria-pressed={selected.has(game.appid)}
+              className={`grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 rounded px-1 py-1 text-left hover:bg-white/[0.03] sm:grid-cols-[minmax(100px,220px)_minmax(120px,1fr)_7rem] ${selected.has(game.appid) ? "bg-repressurizer-accent/[0.07]" : ""}`}
+            >
+              <span className="truncate text-xs text-repressurizer-text">
+                {game.name}
+              </span>
+              <span className="relative col-span-2 row-start-2 h-4 overflow-hidden rounded-sm bg-repressurizer-bg ring-1 ring-inset ring-white/5 sm:col-span-1 sm:row-start-auto">
+                <span
+                  data-testid={`storage-disk-share-${game.appid}`}
+                  data-share={share.toFixed(4)}
+                  style={{ width: `${share}%`, minWidth: share > 0 ? 2 : 0 }}
+                  className={`block h-full ${selected.has(game.appid) ? "bg-repressurizer-accent" : "bg-sky-500/65"}`}
+                />
+              </span>
+              <span className="col-start-2 row-start-1 text-right font-mono text-[10px] text-repressurizer-text-muted sm:col-start-auto sm:row-start-auto">
+                {bytes(game.install.totalBytes)} · {share.toFixed(1)}%
+              </span>
+            </button>
+          );
+        })}
+      </div>
+    </section>
   );
 }
