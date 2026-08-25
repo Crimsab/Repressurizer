@@ -65,6 +65,15 @@ updater key held in GitHub Actions secrets; this is the key that produces the
 `.AppImage.sig` updater artifact and is unrelated to Apple Developer signing,
 Steam credentials, or Repressurizer API tokens.
 
+For a local Windows x64 portable test build, use
+`bun run build:windows:portable`. On Linux this uses `cargo-xwin`, embeds the
+Windows SAM bridge, enables Tauri's production `custom-protocol`, and verifies
+that the generated executable contains the Vite entry assets before copying it
+to `artifacts/windows-portable`. Set `REPRESSURIZER_ARTIFACT_DIR` to choose a
+different output directory. Do not package the result of a direct
+`cargo xwin build`: without the production protocol feature it opens the Vite
+development URL (`localhost:5173`) instead of the bundled interface.
+
 ## Rollback and channel recovery
 
 - Do not move or delete a published version tag.
