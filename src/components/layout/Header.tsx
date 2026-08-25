@@ -49,6 +49,7 @@ import {
   Spinner,
   DotsThree,
   BellSimple,
+  ClockCounterClockwise,
 } from "@phosphor-icons/react";
 
 const loadSettingsPage = () => import("../settings/SettingsPage").then((m) => ({ default: m.SettingsPage }));
@@ -61,6 +62,7 @@ const loadFriendCompareDialog = () => import("../friends/FriendCompareDialog").t
 const loadWhatToPlayNext = () => import("../recommend/SessionPlanner").then((m) => ({ default: m.SessionPlanner }));
 const loadPlayHistoryTimeline = () => import("../timeline/PlayHistoryTimeline").then((m) => ({ default: m.PlayHistoryTimeline }));
 const loadLibraryChangesInbox = () => import("../inbox/LibraryChangesInbox").then((m) => ({ default: m.LibraryChangesInbox }));
+const loadCollectionTimeMachine = () => import("../collections/CollectionTimeMachine").then((m) => ({ default: m.CollectionTimeMachine }));
 const SettingsPage = lazy(loadSettingsPage);
 const ExportDialog = lazy(loadExportDialog);
 const AutoCategorizeDialog = lazy(loadAutoCategorizeDialog);
@@ -71,6 +73,7 @@ const FriendCompareDialog = lazy(loadFriendCompareDialog);
 const WhatToPlayNext = lazy(loadWhatToPlayNext);
 const PlayHistoryTimeline = lazy(loadPlayHistoryTimeline);
 const LibraryChangesInbox = lazy(loadLibraryChangesInbox);
+const CollectionTimeMachine = lazy(loadCollectionTimeMachine);
 const preload = (loader: () => Promise<unknown>) => { void loader(); };
 
 function LazyOverlay({ children }: { children: ReactNode }) {
@@ -176,6 +179,7 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
   const [showRecommend, setShowRecommend] = useState(false);
   const [showTimeline, setShowTimeline] = useState(false);
   const [showInbox, setShowInbox] = useState(false);
+  const [showTimeMachine, setShowTimeMachine] = useState(false);
   const [showMoreTools, setShowMoreTools] = useState(false);
   const [showSavePreview, setShowSavePreview] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -189,6 +193,7 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
 
   const secondaryTools = [
     { key: "inbox", label: t("toolbar.inbox"), Icon: BellSimple, open: () => setShowInbox(true), loader: loadLibraryChangesInbox, badge: inboxUnread },
+    { key: "time-machine", label: t("toolbar.timeMachine"), Icon: ClockCounterClockwise, open: () => setShowTimeMachine(true), loader: loadCollectionTimeMachine, badge: 0 },
     { key: "achievements", label: t("toolbar.achievements"), Icon: Trophy, open: () => setShowAchievements(true), loader: loadAchievementsPage, badge: 0 },
     { key: "wishlist", label: t("toolbar.wishlist"), Icon: BookmarkSimple, open: () => setShowWishlist(true), loader: loadWishlistPage, badge: 0 },
     { key: "friends", label: t("toolbar.friendCompare"), Icon: UsersThree, open: () => setShowFriendCompare(true), loader: loadFriendCompareDialog, badge: 0 },
@@ -631,6 +636,11 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
             onOpenAutoCat={() => setShowAutoCat(true)}
             onRefresh={onRefreshLibrary}
           />
+        </LazyOverlay>
+      )}
+      {showTimeMachine && (
+        <LazyOverlay>
+          <CollectionTimeMachine onClose={() => setShowTimeMachine(false)} />
         </LazyOverlay>
       )}
       {showSavePreview && (
