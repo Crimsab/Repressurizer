@@ -7,6 +7,7 @@ README.
 
 | Document | Covers |
 | --- | --- |
+| [roadmap-0.8.0.md](roadmap-0.8.0.md) | Ordered implementation and acceptance contract for the 0.8.0 feature release. |
 | [cache-and-network.md](cache-and-network.md) | Cache preparation, Steam request behavior, regional prices, rate limits, and proxy routing. |
 | [steam-family.md](steam-family.md) | Steam Family detection and optional Store token fallback. |
 | [privacy.md](privacy.md) | Local data, network behavior, redaction, and sensitive settings. |
