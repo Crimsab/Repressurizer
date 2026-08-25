@@ -10,10 +10,10 @@ const ICON_MAP = {
 };
 
 const BORDER_MAP = {
-  success: "border-repressurizer-success/25",
-  error: "border-repressurizer-danger/25",
-  warning: "border-repressurizer-warning/25",
-  info: "border-sky-400/25",
+  success: "border-repressurizer-success/35 bg-repressurizer-success/[0.08]",
+  error: "border-repressurizer-danger/35 bg-repressurizer-danger/[0.08]",
+  warning: "border-repressurizer-warning/35 bg-repressurizer-warning/[0.08]",
+  info: "border-sky-400/35 bg-sky-400/[0.08]",
 };
 
 export function ToastContainer() {
@@ -28,12 +28,12 @@ export function ToastContainer() {
       {toasts.map((toast) => (
         <div
           key={toast.id}
-          className={`animate-toast-in pointer-events-auto flex min-w-[280px] max-w-[420px] items-stretch overflow-hidden rounded-xl border ${BORDER_MAP[toast.type]} bg-repressurizer-surface-raised/95 shadow-pop backdrop-blur-sm`}
+          className={`animate-toast-in pointer-events-auto flex min-w-[280px] max-w-[420px] items-stretch overflow-hidden rounded-xl border ${BORDER_MAP[toast.type]} shadow-pop backdrop-blur-xl`}
         >
           <span aria-hidden="true" className={`w-1 shrink-0 ${toast.type === "success" ? "bg-repressurizer-success/70" : toast.type === "error" ? "bg-repressurizer-danger/70" : toast.type === "warning" ? "bg-repressurizer-warning/70" : "bg-sky-400/70"}`} />
           <span className="flex flex-1 items-start gap-2.5 px-3.5 py-3">
             {ICON_MAP[toast.type]}
-            <p className="flex-1 text-sm leading-relaxed text-repressurizer-text">{toast.message}</p>
+            <p className="flex-1 text-sm leading-relaxed text-repressurizer-text">{toast.message}{toast.count > 1 && <span className="ml-2 inline-flex rounded-full bg-white/10 px-1.5 py-0.5 font-mono text-[10px] text-white">×{toast.count}</span>}</p>
             {toast.actionLabel && toast.onAction && (
               <button
                 type="button"

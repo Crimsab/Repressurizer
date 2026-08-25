@@ -9,6 +9,7 @@ export interface Toast {
   duration?: number; // ms, default 4000
   actionLabel?: string;
   onAction?: () => void;
+  count: number;
 }
 
 interface ToastState {
@@ -16,6 +17,7 @@ interface ToastState {
   add: (type: ToastType, message: string, duration?: number) => void;
   addAction: (type: ToastType, message: string, actionLabel: string, onAction: () => void, duration?: number) => void;
   remove: (id: string) => void;
+  dismissAll: () => void;
   success: (message: string) => void;
   error: (message: string) => void;
   warning: (message: string) => void;
@@ -23,53 +25,41 @@ interface ToastState {
 }
 
 let counter = 0;
+const MAX_VISIBLE_TOASTS = 4;
+const timers = new Map<string, ReturnType<typeof setTimeout>>();
 
-export const useToastStore = create<ToastState>((set) => ({
-  toasts: [],
+export const useToastStore = create<ToastState>((set) => {
+  const remove = (id: string) => {
+    const timer = timers.get(id);
+    if (timer) clearTimeout(timer);
+    timers.delete(id);
+    set((state) => ({ toasts: state.toasts.filter((toast) => toast.id !== id) }));
+  };
+  const enqueue = (type: ToastType, message: string, duration: number, actionLabel?: string, onAction?: () => void) => {
+    let id = "";
+    set((state) => {
+      const duplicate = state.toasts.find((toast) => toast.type === type && toast.message === message && toast.actionLabel === actionLabel);
+      if (duplicate) {
+        id = duplicate.id;
+        return { toasts: [...state.toasts.filter((toast) => toast.id !== duplicate.id), { ...duplicate, count: duplicate.count + 1, duration, onAction: onAction ?? duplicate.onAction }] };
+      }
+      id = `toast-${++counter}`;
+      return { toasts: [...state.toasts, { id, type, message, duration, actionLabel, onAction, count: 1 }].slice(-MAX_VISIBLE_TOASTS) };
+    });
+    const previousTimer = timers.get(id);
+    if (previousTimer) clearTimeout(previousTimer);
+    if (duration > 0) timers.set(id, setTimeout(() => remove(id), duration));
+  };
 
-  add: (type, message, duration = 4000) => {
-    const id = `toast-${++counter}`;
-    set((s) => ({ toasts: [...s.toasts, { id, type, message, duration }] }));
-    if (duration > 0) {
-      setTimeout(() => {
-        set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }));
-      }, duration);
-    }
-  },
-
-  addAction: (type, message, actionLabel, onAction, duration = 8000) => {
-    const id = `toast-${++counter}`;
-    set((s) => ({ toasts: [...s.toasts, { id, type, message, duration, actionLabel, onAction }] }));
-    if (duration > 0) {
-      setTimeout(() => {
-        set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }));
-      }, duration);
-    }
-  },
-
-  remove: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
-
-  success: (message) => {
-    const id = `toast-${++counter}`;
-    set((s) => ({ toasts: [...s.toasts, { id, type: "success", message, duration: 4000 }] }));
-    setTimeout(() => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })), 4000);
-  },
-
-  error: (message) => {
-    const id = `toast-${++counter}`;
-    set((s) => ({ toasts: [...s.toasts, { id, type: "error", message, duration: 6000 }] }));
-    setTimeout(() => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })), 6000);
-  },
-
-  warning: (message) => {
-    const id = `toast-${++counter}`;
-    set((s) => ({ toasts: [...s.toasts, { id, type: "warning", message, duration: 5000 }] }));
-    setTimeout(() => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })), 5000);
-  },
-
-  info: (message) => {
-    const id = `toast-${++counter}`;
-    set((s) => ({ toasts: [...s.toasts, { id, type: "info", message, duration: 4000 }] }));
-    setTimeout(() => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })), 4000);
-  },
-}));
+  return {
+    toasts: [],
+    add: (type, message, duration = 4000) => enqueue(type, message, duration),
+    addAction: (type, message, actionLabel, onAction, duration = 8000) => enqueue(type, message, duration, actionLabel, onAction),
+    remove,
+    dismissAll: () => { for (const timer of timers.values()) clearTimeout(timer); timers.clear(); set({ toasts: [] }); },
+    success: (message) => enqueue("success", message, 4000),
+    error: (message) => enqueue("error", message, 6000),
+    warning: (message) => enqueue("warning", message, 5000),
+    info: (message) => enqueue("info", message, 4000),
+  };
+});

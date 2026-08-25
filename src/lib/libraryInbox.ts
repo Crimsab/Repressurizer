@@ -202,21 +202,27 @@ export function detectLibraryInboxEvents(
   });
   if (staleDetails.length) events.push(makeEvent("metadata-stale", "metadata", observedAt, { appIds: staleDetails, importance: "info", source: "Steam Store metadata", confidence: "high", recommendedAction: "refresh-provider" }));
 
+  const finishedPlaying: number[] = [];
+  const startedNotStarted: number[] = [];
+  const hltbOverrun: number[] = [];
   for (const appId of libraryIds) {
     const game = input.games[appId];
     const status = input.statuses[appId] ?? "none";
     const diaryDecision = input.diaryEntries[appId]?.decision;
     if ((status === "completed" || status === "beaten") && diaryDecision === "next") {
-      events.push(makeEvent("diary-finished-playing", "diary", observedAt, { appIds: [appId], importance: "important", source: "Diary + game status", confidence: "high", recommendedAction: "fix-diary", context: String(appId) }));
+      finishedPlaying.push(appId);
     }
     if (game.playtime_forever > 0 && status === "none" && (diaryDecision === "backlog" || input.diaryEntries[appId]?.markedBacklog)) {
-      events.push(makeEvent("diary-started-not-started", "diary", observedAt, { appIds: [appId], importance: "important", source: "Steam playtime + Diary", confidence: "high", recommendedAction: "fix-diary", context: String(appId) }));
+      startedNotStarted.push(appId);
     }
     const hltb = getHltbHours(input.hltbData[appId], input.hltbTimeMode);
     if (hltb != null && hltb > 0 && game.playtime_forever / 60 > hltb) {
-      events.push(makeEvent("hltb-overrun", "hltb", observedAt, { appIds: [appId], importance: "info", source: "Steam playtime + HLTB", confidence: "medium", recommendedAction: "open-game", context: String(appId) }));
+      hltbOverrun.push(appId);
     }
   }
+  if (finishedPlaying.length) events.push(makeEvent("diary-finished-playing", "diary", observedAt, { appIds: finishedPlaying, importance: "important", source: "Diary + game status", confidence: "high", recommendedAction: "fix-diary" }));
+  if (startedNotStarted.length) events.push(makeEvent("diary-started-not-started", "diary", observedAt, { appIds: startedNotStarted, importance: "important", source: "Steam playtime + Diary", confidence: "high", recommendedAction: "fix-diary" }));
+  if (hltbOverrun.length) events.push(makeEvent("hltb-overrun", "hltb", observedAt, { appIds: hltbOverrun, importance: "info", source: "Steam playtime + HLTB", confidence: "medium", recommendedAction: "open-game" }));
 
   return { snapshot, events };
 }
@@ -256,4 +262,43 @@ export function autoCatProposalInboxEvent(name: string, matchCount: number, obse
     recommendedAction: "run-autocat",
     context: name.trim().slice(0, 120),
   });
+}
+
+const AGGREGATED_KINDS = new Set<InboxEventKind>([
+  "diary-finished-playing",
+  "diary-started-not-started",
+  "hltb-overrun",
+]);
+
+/** Collapse legacy per-game rows into one actionable row per condition. */
+export function compactLibraryInboxEvents(events: readonly LibraryInboxEvent[]): LibraryInboxEvent[] {
+  const passthrough: LibraryInboxEvent[] = [];
+  const grouped = new Map<InboxEventKind, LibraryInboxEvent[]>();
+  for (const event of events) {
+    if (!AGGREGATED_KINDS.has(event.kind)) {
+      passthrough.push(event);
+      continue;
+    }
+    grouped.set(event.kind, [...(grouped.get(event.kind) ?? []), event]);
+  }
+  for (const [kind, rows] of grouped) {
+    const latest = [...rows].sort((left, right) => right.lastObservedAt - left.lastObservedAt)[0];
+    const appIds = sortedUnique(rows.flatMap((row) => row.appIds));
+    const status: InboxEventStatus = rows.some((row) => row.status === "unread") ? "unread"
+      : rows.some((row) => row.status === "snoozed") ? "snoozed"
+        : rows.some((row) => row.status === "reviewed") ? "reviewed"
+          : rows.some((row) => row.status === "accepted") ? "accepted" : "ignored";
+    passthrough.push({
+      ...latest,
+      id: stableEventId(["library-inbox", kind, latest.provider ?? "", ""]),
+      appIds,
+      count: appIds.length,
+      context: undefined,
+      occurredAt: Math.min(...rows.map((row) => row.occurredAt)),
+      lastObservedAt: Math.max(...rows.map((row) => row.lastObservedAt)),
+      status,
+      snoozedUntil: status === "snoozed" ? Math.max(...rows.map((row) => row.snoozedUntil ?? 0)) : null,
+    });
+  }
+  return passthrough.sort((left, right) => right.lastObservedAt - left.lastObservedAt);
 }

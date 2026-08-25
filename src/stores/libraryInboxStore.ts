@@ -6,6 +6,7 @@ import {
   detectFamilyInboxEvents,
   providerHealthInboxEvents,
   libraryCollectionsChecksum,
+  compactLibraryInboxEvents,
   type InboxCategory,
   type InboxEventStatus,
   type LibraryInboxEvent,
@@ -74,7 +75,7 @@ function parsePersisted(raw: string | null): PersistedLibraryInbox | null {
     if (value.version !== SCHEMA_VERSION || !Array.isArray(value.events)) return null;
     return {
       version: SCHEMA_VERSION,
-      events: value.events.map(normalizeEvent).filter((event): event is LibraryInboxEvent => !!event),
+      events: compactLibraryInboxEvents(value.events.map(normalizeEvent).filter((event): event is LibraryInboxEvent => !!event)).slice(0, MAX_EVENTS),
       snapshot: value.snapshot?.version === 1 ? value.snapshot : null,
       disabledCategories: Array.isArray(value.disabledCategories) ? value.disabledCategories : [],
       history: Array.isArray(value.history) ? value.history.slice(-100) : [],
