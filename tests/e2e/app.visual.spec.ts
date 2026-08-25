@@ -27,6 +27,16 @@ async function expectNoHorizontalOverflow(page: Page) {
   );
 }
 
+async function openToolbarTool(page: Page, name: string) {
+  const direct = page.getByRole("button", { name, exact: true });
+  if (await direct.isVisible()) {
+    await direct.click();
+    return;
+  }
+  await page.getByRole("button", { name: "More tools" }).click();
+  await page.getByRole("menuitem", { name, exact: true }).click();
+}
+
 
 async function pointerDragToColumn(page: import("@playwright/test").Page, cardTestId: string, columnIdentifier: string) {
   const card = page.getByTestId(cardTestId);
@@ -955,11 +965,11 @@ test("workspace reports use the persistent resizable dialog surface", async ({ p
   await page.goto("/");
   await expect(page.getByRole("heading", { name: "Repressurizer" })).toBeVisible();
 
-  await page.getByRole("button", { name: "Statistics" }).click();
+  await openToolbarTool(page, "Statistics");
   await expect(page.locator('[data-resizable-dialog="statistics"]')).toBeVisible();
   await page.getByRole("dialog", { name: "Statistics" }).getByRole("button", { name: "Close" }).click();
 
-  await page.getByRole("button", { name: "Export" }).click();
+  await openToolbarTool(page, "Export");
   await expect(page.locator('[data-resizable-dialog="export"]')).toBeVisible();
 });
 
@@ -1025,7 +1035,7 @@ test("filters the library and export preview by installation state", async ({ pa
   await expect(page.locator(".game-card").filter({ hasText: "Disco Elysium" })).toHaveCount(0);
   await expect(page.locator(".game-card").filter({ hasText: "Outer Wilds" })).toHaveCount(1);
 
-  await page.getByRole("button", { name: "Export", exact: true }).click();
+  await openToolbarTool(page, "Export");
   const dialog = page.getByRole("dialog", { name: "Export" });
   const exportInstallation = dialog.getByRole("button", { name: "Installation: All", exact: true });
   await expect(exportInstallation).toBeEnabled();
@@ -2005,7 +2015,7 @@ test("GG.deals pricing is opt-in, lazy, cached, and readable", async ({ page }, 
 test("play history shows tracked deltas instead of lifetime playtime", async ({ page }) => {
   await page.goto("/");
 
-  await page.getByRole("button", { name: "Play History Timeline" }).click();
+  await openToolbarTool(page, "Play History Timeline");
 
   const timeline = page.locator(".fixed.inset-0").filter({
     has: page.getByRole("heading", { name: "Play History" }),
@@ -2948,7 +2958,8 @@ test("explains planner results and applies device requirements", async ({ page }
   const dialog = page.getByRole("dialog", { name: "Session Planner" });
   await expect(dialog.getByTestId("planner-result-best")).toBeVisible();
   await expect(dialog.getByText("Best fit", { exact: true })).toBeVisible();
-  await dialog.getByLabel("Device").selectOption("deck");
+  await dialog.getByRole("button", { name: "Device profile" }).click();
+  await dialog.getByRole("option", { name: /Steam Deck/ }).click();
   await dialog.getByRole("button", { name: "Requirements & preferences" }).click();
   await expect(dialog.getByLabel("Require Deck-compatible platform")).toBeChecked();
   await expectNoHorizontalOverflow(page);

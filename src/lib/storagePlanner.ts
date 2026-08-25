@@ -26,7 +26,7 @@ export function rankStorageCandidates(games: readonly StoragePlannerGame[], now 
     if (sizeGb >= 20 && game.playtimeMinutes < 120) { score += Math.min(35, sizeGb / 2); reasons.push("Large and lightly used"); }
     if (game.deckCompatible === false) { score += 10; reasons.push("Not compatible with selected device"); }
     if (!reasons.length) reasons.push("Large installed footprint");
-    if (game.hasUnsyncedSaves === null) limitations.push("Cloud/local save status unknown");
+    if (game.hasUnsyncedSaves === null) limitations.push("Steam Cloud sync cannot be verified from local files");
     if (game.install.workshopBytes > 0) limitations.push("Includes Workshop content");
     if (game.install.shaderCacheBytes > 0 || game.install.compatdataBytes > 0) limitations.push("Includes Steam Deck cache or Proton data");
     return [{ ...game, score: score + Math.min(40, sizeGb), reasons, limitations }];

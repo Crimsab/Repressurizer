@@ -4,47 +4,125 @@ import { installTauriMock } from "./tauriMock";
 async function openProfiles(page: Page) {
   const direct = page.getByRole("button", { name: "Profiles & Sync" });
   if (await direct.isVisible()) await direct.click();
-  else { await page.getByRole("button", { name: "More tools" }).click(); await page.getByRole("menuitem", { name: "Profiles & Sync" }).click(); }
+  else {
+    await page.getByRole("button", { name: "More tools" }).click();
+    await page.getByRole("menuitem", { name: "Profiles & Sync" }).click();
+  }
   return page.getByRole("dialog", { name: "Repressurizer Profiles" });
 }
-async function capture(page: Page, testInfo: TestInfo, name: string) { const path = testInfo.outputPath(`${name}.png`); await page.screenshot({ path, fullPage: true }); await testInfo.attach(name, { path, contentType: "image/png" }); }
+async function capture(page: Page, testInfo: TestInfo, name: string) {
+  const path = testInfo.outputPath(`${name}.png`);
+  await page.screenshot({ path, fullPage: true });
+  await testInfo.attach(name, { path, contentType: "image/png" });
+}
 test.beforeEach(async ({ page }) => installTauriMock(page));
 
-test("profiles export without secrets and selectively import after backup", async ({ page }, testInfo) => {
-  await page.setViewportSize({ width: 1366, height: 900 }); await page.goto("/"); const dialog = await openProfiles(page);
+test("profiles export without secrets and selectively import after backup", async ({
+  page,
+}, testInfo) => {
+  await page.setViewportSize({ width: 1366, height: 900 });
+  await page.goto("/");
+  const dialog = await openProfiles(page);
+  await expect(
+    dialog.getByRole("button", { name: "Associated Steam account" }),
+  ).toContainText("DemoUser (76561198000000000)");
   await dialog.getByLabel("Profile name").fill("Portable Demo");
   await dialog.getByRole("button", { name: "Save profile file" }).click();
-  const exported = await page.evaluate(() => window.localStorage.getItem("repressurizer-last-written-text") ?? "");
-  expect(exported).toContain('"checksum"'); expect(exported).not.toContain("mock-key"); expect(exported).not.toContain("Program Files"); expect(exported).not.toContain("automationPublishBearerToken");
+  const exported = await page.evaluate(
+    () => window.localStorage.getItem("repressurizer-last-written-text") ?? "",
+  );
+  expect(exported).toContain('"checksum"');
+  expect(exported).not.toContain("mock-key");
+  expect(exported).not.toContain("Program Files");
+  expect(exported).not.toContain("automationPublishBearerToken");
   await page.evaluate(async () => {
-    const { createRepressurizerProfile } = await import("/src/lib/repressurizerProfile.ts");
+    const { createRepressurizerProfile } =
+      await import("/src/lib/repressurizerProfile.ts");
     const { useCategoryStore } = await import("/src/stores/categoryStore.ts");
-    const profile = createRepressurizerProfile({ profileId: "incoming", name: "Incoming Deck", deviceId: "deck-device", steamAccountId: "76561198000000000", sections: { settings: { showEmptyLists: true }, collections: useCategoryStore.getState().collections } });
-    window.localStorage.setItem("repressurizer-mock-open-path", "C:\\Users\\Demo\\incoming.repressurizer-profile.json");
-    window.localStorage.setItem("repressurizer-mock-read-text", JSON.stringify(profile));
+    const profile = createRepressurizerProfile({
+      profileId: "incoming",
+      name: "Incoming Deck",
+      deviceId: "deck-device",
+      steamAccountId: "76561198000000000",
+      sections: {
+        settings: { showEmptyLists: true },
+        collections: useCategoryStore.getState().collections,
+      },
+    });
+    window.localStorage.setItem(
+      "repressurizer-mock-open-path",
+      "C:\\Users\\Demo\\incoming.repressurizer-profile.json",
+    );
+    window.localStorage.setItem(
+      "repressurizer-mock-read-text",
+      JSON.stringify(profile),
+    );
   });
   await dialog.getByRole("button", { name: "Choose profile" }).click();
-  await expect(dialog.getByText("Incoming Deck", { exact: true })).toBeVisible();
-  await dialog.getByRole("checkbox", { name: "Manual collections Unchanged" }).uncheck();
-  await dialog.getByRole("button", { name: "Create backups and import selected" }).click();
-  const state = await page.evaluate(async () => { const { useSettingsStore } = await import("/src/stores/settingsStore.ts"); const { useProfileStore } = await import("/src/stores/profileStore.ts"); return { showEmptyLists: useSettingsStore.getState().showEmptyLists, backups: useProfileStore.getState().backups.length }; });
+  await expect(
+    dialog.getByText("Incoming Deck", { exact: true }),
+  ).toBeVisible();
+  await dialog
+    .getByRole("checkbox", { name: "Manual collections Unchanged" })
+    .uncheck();
+  await dialog
+    .getByRole("button", { name: "Create backups and import selected" })
+    .click();
+  const state = await page.evaluate(async () => {
+    const { useSettingsStore } = await import("/src/stores/settingsStore.ts");
+    const { useProfileStore } = await import("/src/stores/profileStore.ts");
+    return {
+      showEmptyLists: useSettingsStore.getState().showEmptyLists,
+      backups: useProfileStore.getState().backups.length,
+    };
+  });
   expect(state).toEqual({ showEmptyLists: true, backups: 1 });
   await capture(page, testInfo, "profile-manager-desktop");
 });
 
 test("profile manager remains usable on mobile", async ({ page }, testInfo) => {
-  await page.setViewportSize({ width: 390, height: 844 }); await page.goto("/"); const dialog = await openProfiles(page); await expect(dialog.getByText("Create or export profile")).toBeVisible();
-  const overflow = await dialog.evaluate((element) => ({ clientWidth: element.clientWidth, scrollWidth: element.scrollWidth })); expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth + 1); await capture(page, testInfo, "profile-manager-mobile");
-  await dialog.getByText("Folder sync", { exact: true }).scrollIntoViewIfNeeded(); await capture(page, testInfo, "profile-sync-mobile");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+  const dialog = await openProfiles(page);
+  await expect(dialog.getByText("Create or export profile")).toBeVisible();
+  const overflow = await dialog.evaluate((element) => ({
+    clientWidth: element.clientWidth,
+    scrollWidth: element.scrollWidth,
+  }));
+  expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth + 1);
+  await capture(page, testInfo, "profile-manager-mobile");
+  await dialog
+    .getByText("Folder sync", { exact: true })
+    .scrollIntoViewIfNeeded();
+  await capture(page, testInfo, "profile-sync-mobile");
 });
 
-test("folder sync writes a verified versioned file without Steam paths or secrets", async ({ page }) => {
-  await page.goto("/"); const dialog = await openProfiles(page);
-  await page.evaluate(() => window.localStorage.setItem("repressurizer-mock-open-path", "C:\\Users\\Demo\\Syncthing\\Repressurizer"));
+test("folder sync writes a verified versioned file without Steam paths or secrets", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const dialog = await openProfiles(page);
+  await page.evaluate(() =>
+    window.localStorage.setItem(
+      "repressurizer-mock-open-path",
+      "C:\\Users\\Demo\\Syncthing\\Repressurizer",
+    ),
+  );
   await dialog.getByRole("button", { name: "Choose a sync folder" }).click();
   await dialog.getByRole("button", { name: "Sync now" }).click();
   await expect(page.getByText("Profile data synchronized.")).toBeVisible();
-  const files = await page.evaluate(() => JSON.parse(window.localStorage.getItem("repressurizer-mock-files") ?? "{}") as Record<string, string>);
-  const entries = Object.entries(files).filter(([path]) => path.endsWith(".json"));
-  expect(entries).toHaveLength(1); expect(entries[0][0]).toContain(".repressurizer-sync-"); expect(entries[0][1]).toContain('"checksum"'); expect(entries[0][1]).not.toContain("mock-key"); expect(entries[0][1]).not.toContain("Program Files");
+  const files = await page.evaluate(
+    () =>
+      JSON.parse(
+        window.localStorage.getItem("repressurizer-mock-files") ?? "{}",
+      ) as Record<string, string>,
+  );
+  const entries = Object.entries(files).filter(([path]) =>
+    path.endsWith(".json"),
+  );
+  expect(entries).toHaveLength(1);
+  expect(entries[0][0]).toContain(".repressurizer-sync-");
+  expect(entries[0][1]).toContain('"checksum"');
+  expect(entries[0][1]).not.toContain("mock-key");
+  expect(entries[0][1]).not.toContain("Program Files");
 });

@@ -246,6 +246,12 @@ body {
   border-top: 2px solid var(--color-repressurizer-accent);
 }
 
+@media (min-width: 1024px) {
+  .deck-pack-layout {
+    grid-template-columns: var(--deck-sidebar-width, 400px) minmax(0, 1fr);
+  }
+}
+
 /* Diary rating slider: visible grabbable thumb */
 .diary-rating-slider {
   -webkit-appearance: none;

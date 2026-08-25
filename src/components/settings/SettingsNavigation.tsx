@@ -37,7 +37,10 @@ export function SettingsNavigation({
 
   if (variant === "mobile") {
     return (
-      <nav className="border-b border-repressurizer-border px-3 md:hidden" aria-label={t("settings.sections")}>
+      <nav
+        className="border-b border-repressurizer-border px-3 md:hidden"
+        aria-label={t("settings.sections")}
+      >
         <div className="flex gap-1 overflow-x-auto py-2">
           {tabs.map((item) => (
             <SettingsNavButton
@@ -55,7 +58,10 @@ export function SettingsNavigation({
   }
 
   return (
-    <nav className="hidden w-48 shrink-0 border-r border-repressurizer-border bg-repressurizer-bg/35 p-3 md:block" aria-label={t("settings.sections")}>
+    <nav
+      className="hidden w-48 shrink-0 border-r border-repressurizer-border bg-repressurizer-bg/35 p-3 md:block"
+      aria-label={t("settings.sections")}
+    >
       <div className="space-y-1">
         {tabs.map((item) => (
           <SettingsNavButton
@@ -94,10 +100,18 @@ function SettingsNavButton({
   const state = active
     ? "border-repressurizer-accent bg-repressurizer-accent/10 text-repressurizer-accent"
     : "border-transparent text-repressurizer-text-muted hover:border-repressurizer-border hover:bg-repressurizer-surface/50 hover:text-repressurizer-text";
-  const iconState = active ? "text-repressurizer-accent" : "text-repressurizer-text-faint";
+  const iconState = active
+    ? "text-repressurizer-accent"
+    : "text-repressurizer-text-faint";
 
   return (
-    <button type="button" onClick={onClick} className={`${base} ${state}`}>
+    <button
+      type="button"
+      onClick={onClick}
+      aria-current={active ? "page" : undefined}
+      data-active={active ? "true" : "false"}
+      className={`${base} ${state}`}
+    >
       <span className={`shrink-0 ${iconState}`}>{item.icon}</span>
       <span className="truncate">{item.label}</span>
       {showMatch && (

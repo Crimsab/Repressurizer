@@ -17,7 +17,10 @@ const FOCUSABLE_SELECTOR = [
   "[tabindex]:not([tabindex='-1'])",
 ].join(",");
 
-interface DialogOverlayProps extends Omit<HTMLAttributes<HTMLDivElement>, "children"> {
+interface DialogOverlayProps extends Omit<
+  HTMLAttributes<HTMLDivElement>,
+  "children"
+> {
   children: ReactNode;
   label: string;
   onClose: () => void;
@@ -38,18 +41,22 @@ export function DialogOverlay({
   const dialogRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const previousFocus = document.activeElement instanceof HTMLElement
-      ? document.activeElement
-      : null;
+    const previousFocus =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : null;
     const frame = requestAnimationFrame(() => {
       const dialog = dialogRef.current;
       const focusable = Array.from(
-        dialog?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR) ?? []
+        dialog?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR) ?? [],
       );
       const firstFocusable =
-        focusable.find((element) => !element.hasAttribute("data-dialog-size-control")) ??
-        focusable[0];
-      (initialFocusRef?.current ?? firstFocusable ?? dialog)?.focus({ preventScroll: true });
+        focusable.find(
+          (element) => !element.hasAttribute("data-dialog-size-control"),
+        ) ?? focusable[0];
+      (initialFocusRef?.current ?? firstFocusable ?? dialog)?.focus({
+        preventScroll: true,
+      });
     });
 
     return () => {
@@ -63,7 +70,9 @@ export function DialogOverlay({
     if (event.defaultPrevented) return;
 
     if (event.key === "Escape") {
-      if (dialogRef.current?.querySelector('[role="listbox"]')) return;
+      // SelectMenu is portalled to document.body so it can escape dialog overflow.
+      // Let the open menu consume the first Escape before closing the dialog.
+      if (document.querySelector('[role="listbox"]')) return;
       event.preventDefault();
       onClose();
       return;
@@ -71,7 +80,8 @@ export function DialogOverlay({
 
     if (event.key !== "Tab") return;
     const focusable = Array.from(
-      dialogRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR) ?? []
+      dialogRef.current?.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR) ??
+        [],
     ).filter((element) => element.offsetParent !== null);
     if (focusable.length === 0) {
       event.preventDefault();
@@ -92,7 +102,11 @@ export function DialogOverlay({
 
   const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
     onPointerDown?.(event);
-    if (!event.defaultPrevented && closeOnBackdrop && event.target === event.currentTarget) {
+    if (
+      !event.defaultPrevented &&
+      closeOnBackdrop &&
+      event.target === event.currentTarget
+    ) {
       onClose();
     }
   };

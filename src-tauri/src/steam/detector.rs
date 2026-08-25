@@ -28,10 +28,21 @@ fn find_steam_path() -> Option<PathBuf> {
 fn steam_path_candidates() -> Vec<PathBuf> {
     #[cfg(target_os = "windows")]
     {
-        return vec![
+        let mut candidates = windows_registry_steam_paths();
+        candidates.extend([
             PathBuf::from(r"C:\Program Files (x86)\Steam"),
             PathBuf::from(r"C:\Program Files\Steam"),
-        ];
+        ]);
+        for drive in b'C'..=b'Z' {
+            let drive = drive as char;
+            candidates.extend([
+                PathBuf::from(format!(r"{drive}:\Steam")),
+                PathBuf::from(format!(r"{drive}:\Program Files (x86)\Steam")),
+                PathBuf::from(format!(r"{drive}:\Program Files\Steam")),
+            ]);
+        }
+        candidates.dedup();
+        return candidates;
     }
 
     #[cfg(target_os = "linux")]
@@ -53,6 +64,69 @@ fn steam_path_candidates() -> Vec<PathBuf> {
 
     #[allow(unreachable_code)]
     Vec::new()
+}
+
+#[cfg(target_os = "windows")]
+fn windows_registry_steam_paths() -> Vec<PathBuf> {
+    use windows_sys::Win32::System::Registry::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE};
+
+    let entries = [
+        (HKEY_CURRENT_USER, r"Software\Valve\Steam", "SteamPath", false),
+        (HKEY_CURRENT_USER, r"Software\Valve\Steam", "SteamExe", true),
+        (HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node\Valve\Steam", "InstallPath", false),
+        (HKEY_LOCAL_MACHINE, r"SOFTWARE\Valve\Steam", "InstallPath", false),
+    ];
+    let mut paths = Vec::new();
+    for (root, key, value, executable) in entries {
+        if let Some(mut path) = windows_registry_string(root, key, value) {
+            if executable {
+                path.pop();
+            }
+            if !path.as_os_str().is_empty() && !paths.contains(&path) {
+                paths.push(path);
+            }
+        }
+    }
+    paths
+}
+
+#[cfg(target_os = "windows")]
+fn windows_registry_string(
+    root: windows_sys::Win32::System::Registry::HKEY,
+    subkey: &str,
+    value: &str,
+) -> Option<PathBuf> {
+    use std::ptr::{null, null_mut};
+    use windows_sys::Win32::Foundation::ERROR_SUCCESS;
+    use windows_sys::Win32::System::Registry::{
+        RegCloseKey, RegOpenKeyExW, RegQueryValueExW, HKEY, KEY_READ, REG_EXPAND_SZ, REG_SZ,
+    };
+
+    let subkey: Vec<u16> = subkey.encode_utf16().chain(Some(0)).collect();
+    let value: Vec<u16> = value.encode_utf16().chain(Some(0)).collect();
+    let mut key: HKEY = null_mut();
+    if unsafe { RegOpenKeyExW(root, subkey.as_ptr(), 0, KEY_READ, &mut key) } != ERROR_SUCCESS {
+        return None;
+    }
+    let result = (|| {
+        let mut value_type = 0;
+        let mut byte_count = 0_u32;
+        if unsafe { RegQueryValueExW(key, value.as_ptr(), null(), &mut value_type, null_mut(), &mut byte_count) } != ERROR_SUCCESS
+            || !matches!(value_type, REG_SZ | REG_EXPAND_SZ)
+            || byte_count < 2
+        {
+            return None;
+        }
+        let mut buffer = vec![0_u16; byte_count as usize / 2];
+        if unsafe { RegQueryValueExW(key, value.as_ptr(), null(), &mut value_type, buffer.as_mut_ptr().cast(), &mut byte_count) } != ERROR_SUCCESS {
+            return None;
+        }
+        let end = buffer.iter().position(|character| *character == 0).unwrap_or(buffer.len());
+        let path = String::from_utf16_lossy(&buffer[..end]).trim().replace('/', r"\");
+        (!path.is_empty()).then(|| PathBuf::from(path))
+    })();
+    unsafe { RegCloseKey(key) };
+    result
 }
 
 #[cfg(any(target_os = "macos", test))]

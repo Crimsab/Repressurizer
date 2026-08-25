@@ -15,7 +15,9 @@ test("product dialogs close when the backdrop is clicked", async ({ page }) => {
   await expect(dialog).toBeHidden();
 });
 
-test("toolbar tools can be configured from right click and Settings", async ({ page }, testInfo: TestInfo) => {
+test("toolbar tools can be configured from right click and Settings", async ({
+  page,
+}, testInfo: TestInfo) => {
   await page.setViewportSize({ width: 1366, height: 900 });
   await page.goto("/");
 
@@ -34,10 +36,32 @@ test("toolbar tools can be configured from right click and Settings", async ({ p
   await page.getByRole("button", { name: "Settings" }).click();
   const settings = page.getByRole("dialog", { name: "Settings" });
   await settings.getByRole("button", { name: "Toolbar", exact: true }).click();
-  await expect(settings.getByRole("heading", { name: "Toolbar" })).toBeVisible();
-  await expect(settings.getByText("Storage Planner", { exact: true })).toBeVisible();
+  await expect(
+    settings.getByRole("heading", { name: "Toolbar" }),
+  ).toBeVisible();
+  await expect(
+    settings.getByRole("button", { name: "Toolbar", exact: true }),
+  ).toHaveAttribute("aria-current", "page");
+  await expect(
+    settings.getByRole("button", { name: "General", exact: true }),
+  ).not.toHaveAttribute("aria-current", "page");
+  await expect(
+    settings.getByText("Storage Planner", { exact: true }),
+  ).toBeVisible();
+
+  await settings
+    .getByTestId("toolbar-tool-profiles")
+    .dragTo(settings.getByTestId("toolbar-tool-inbox"));
+  const order = await page.evaluate(async () => {
+    const { useSettingsStore } = await import("/src/stores/settingsStore.ts");
+    return useSettingsStore.getState().toolbarToolOrder;
+  });
+  expect(order[0]).toBe("profiles");
 
   const path = testInfo.outputPath("toolbar-settings-desktop.png");
   await page.screenshot({ path, fullPage: true });
-  await testInfo.attach("toolbar-settings-desktop", { path, contentType: "image/png" });
+  await testInfo.attach("toolbar-settings-desktop", {
+    path,
+    contentType: "image/png",
+  });
 });

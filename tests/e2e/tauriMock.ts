@@ -5,12 +5,18 @@ import { readFileSync } from "node:fs";
 // the "What's new" changelog dialog never opens during the default e2e run.
 // Tests that exercise the dialog override this value explicitly.
 export const currentAppVersion = (
-  JSON.parse(readFileSync(new URL("../../package.json", import.meta.url), "utf8")) as { version: string }
+  JSON.parse(
+    readFileSync(new URL("../../package.json", import.meta.url), "utf8"),
+  ) as { version: string }
 ).version;
 
 export async function installTauriMock(page: Page) {
   const fulfillSteamHeader = async (route: Route) => {
-    const appId = route.request().url().match(/\/apps\/(\d+)\//)?.[1] ?? "0";
+    const appId =
+      route
+        .request()
+        .url()
+        .match(/\/apps\/(\d+)\//)?.[1] ?? "0";
     const hue = Number(appId) % 360;
     const svg = `
       <svg xmlns="http://www.w3.org/2000/svg" width="920" height="430" viewBox="0 0 920 430">
@@ -29,12 +35,30 @@ export async function installTauriMock(page: Page) {
   };
 
   if (process.env.REPRESSURIZER_REAL_STEAM_IMAGES !== "1") {
-    await page.route("https://cdn.akamai.steamstatic.com/steam/apps/*/header.jpg", fulfillSteamHeader);
-    await page.route("https://cdn.akamai.steamstatic.com/steam/apps/*/capsule_231x87.jpg", fulfillSteamHeader);
-    await page.route("https://steamcdn-a.akamaihd.net/steam/apps/*/header.jpg", fulfillSteamHeader);
-    await page.route("https://steamcdn-a.akamaihd.net/steam/apps/*/capsule_231x87.jpg", fulfillSteamHeader);
-    await page.route("https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/**/header.jpg*", fulfillSteamHeader);
-    await page.route("https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/**/capsule_231x87.jpg*", fulfillSteamHeader);
+    await page.route(
+      "https://cdn.akamai.steamstatic.com/steam/apps/*/header.jpg",
+      fulfillSteamHeader,
+    );
+    await page.route(
+      "https://cdn.akamai.steamstatic.com/steam/apps/*/capsule_231x87.jpg",
+      fulfillSteamHeader,
+    );
+    await page.route(
+      "https://steamcdn-a.akamaihd.net/steam/apps/*/header.jpg",
+      fulfillSteamHeader,
+    );
+    await page.route(
+      "https://steamcdn-a.akamaihd.net/steam/apps/*/capsule_231x87.jpg",
+      fulfillSteamHeader,
+    );
+    await page.route(
+      "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/**/header.jpg*",
+      fulfillSteamHeader,
+    );
+    await page.route(
+      "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/**/capsule_231x87.jpg*",
+      fulfillSteamHeader,
+    );
     await page.route(
       "https://shared.fastly.steamstatic.com/community_assets/images/apps/**",
       fulfillSteamHeader,
@@ -80,14 +104,16 @@ export async function installTauriMock(page: Page) {
       updateChannel: "stable",
       includeSteamFamilyNonGames: false,
       automationPublishEnabled: true,
-      automationPublishUrl: "http://example.local:3045/api/steam/repressurizer/import",
+      automationPublishUrl:
+        "http://example.local:3045/api/steam/repressurizer/import",
       automationPublishBearerToken: "",
       automationPublishIntervalHours: 24,
       automationPublishLastChecksum: "a32:1fdd332b",
       automationPublishLastPublishedAt: "2026-06-18T21:25:19.000Z",
       automationPublishLastAttemptedAt: "2026-06-18T21:25:19.000Z",
       automationPublishLastStatus: "success",
-      automationPublishLastMessage: "Automation export published with HTTP 200.",
+      automationPublishLastMessage:
+        "Automation export published with HTTP 200.",
       automationPublishLastHttpStatus: 200,
       automationPublishLogs: [
         {
@@ -101,7 +127,8 @@ export async function installTauriMock(page: Page) {
           id: "skipped-1",
           timestamp: "2026-06-18T20:25:19.000Z",
           status: "skipped",
-          message: "Automation export skipped: snapshot checksum has not changed.",
+          message:
+            "Automation export skipped: snapshot checksum has not changed.",
           httpStatus: 0,
         },
         {
@@ -115,16 +142,76 @@ export async function installTauriMock(page: Page) {
     };
 
     const games = [
-      { appid: 632470, name: "Disco Elysium - The Final Cut", playtime_forever: 720, img_icon_url: null, rtime_last_played: 1_775_000_000 },
-      { appid: 1145360, name: "Hades", playtime_forever: 1800, img_icon_url: null, rtime_last_played: 1_776_000_000 },
-      { appid: 753640, name: "Outer Wilds", playtime_forever: 0, img_icon_url: null, rtime_last_played: 0 },
-      { appid: 39140, name: "FINAL FANTASY VII", playtime_forever: 0, img_icon_url: null, rtime_last_played: 0 },
-      { appid: 12100, name: "Grand Theft Auto III", playtime_forever: 90, img_icon_url: null, rtime_last_played: 0 },
-      { appid: 1546970, name: "Grand Theft Auto III – The Definitive Edition", playtime_forever: 0, img_icon_url: null, rtime_last_played: 0 },
-      { appid: 1462040, name: "FINAL FANTASY VII REMAKE INTERGRADE", playtime_forever: 240, img_icon_url: null, rtime_last_played: 0 },
-      { appid: 3280350, name: "DEATH STRANDING 2: ON THE BEACH", playtime_forever: 0, img_icon_url: null, rtime_last_played: 0 },
-      { appid: 2499860, name: "DRAGON QUEST VII Reimagined", playtime_forever: 0, img_icon_url: null, rtime_last_played: 0 },
-      { appid: 1643320, name: "S.T.A.L.K.E.R. 2: Heart of Chornobyl", playtime_forever: 0, img_icon_url: null, rtime_last_played: 0 },
+      {
+        appid: 632470,
+        name: "Disco Elysium - The Final Cut",
+        playtime_forever: 720,
+        img_icon_url: null,
+        rtime_last_played: 1_775_000_000,
+      },
+      {
+        appid: 1145360,
+        name: "Hades",
+        playtime_forever: 1800,
+        img_icon_url: null,
+        rtime_last_played: 1_776_000_000,
+      },
+      {
+        appid: 753640,
+        name: "Outer Wilds",
+        playtime_forever: 0,
+        img_icon_url: null,
+        rtime_last_played: 0,
+      },
+      {
+        appid: 39140,
+        name: "FINAL FANTASY VII",
+        playtime_forever: 0,
+        img_icon_url: null,
+        rtime_last_played: 0,
+      },
+      {
+        appid: 12100,
+        name: "Grand Theft Auto III",
+        playtime_forever: 90,
+        img_icon_url: null,
+        rtime_last_played: 0,
+      },
+      {
+        appid: 1546970,
+        name: "Grand Theft Auto III – The Definitive Edition",
+        playtime_forever: 0,
+        img_icon_url: null,
+        rtime_last_played: 0,
+      },
+      {
+        appid: 1462040,
+        name: "FINAL FANTASY VII REMAKE INTERGRADE",
+        playtime_forever: 240,
+        img_icon_url: null,
+        rtime_last_played: 0,
+      },
+      {
+        appid: 3280350,
+        name: "DEATH STRANDING 2: ON THE BEACH",
+        playtime_forever: 0,
+        img_icon_url: null,
+        rtime_last_played: 0,
+      },
+      {
+        appid: 2499860,
+        name: "DRAGON QUEST VII Reimagined",
+        playtime_forever: 0,
+        img_icon_url: null,
+        rtime_last_played: 0,
+      },
+      {
+        appid: 1643320,
+        name: "S.T.A.L.K.E.R. 2: Heart of Chornobyl",
+        playtime_forever: 0,
+        img_icon_url: null,
+        rtime_last_played: 0,
+      },
     ];
 
     const collections = [
@@ -218,14 +305,31 @@ export async function installTauriMock(page: Page) {
       }),
     };
     const mockFiles: Record<string, string> = {};
-    const rememberMockFiles = () => window.localStorage.setItem("repressurizer-mock-files", JSON.stringify(mockFiles));
+    const rememberMockFiles = () =>
+      window.localStorage.setItem(
+        "repressurizer-mock-files",
+        JSON.stringify(mockFiles),
+      );
 
-    window.localStorage.setItem("repressurizer-settings", JSON.stringify(settings));
-    const diaryBackups: Array<{ name: string; description: string; created_at_ms: number; files: string[] }> = [];
+    window.localStorage.setItem(
+      "repressurizer-settings",
+      JSON.stringify(settings),
+    );
+    const diaryBackups: Array<{
+      name: string;
+      description: string;
+      created_at_ms: number;
+      files: string[];
+    }> = [];
     const diaryBackupFiles: Record<string, Record<string, string>> = {};
     let diaryBackupCounter = 0;
-    if (window.localStorage.getItem("repressurizer-last-seen-version") == null) {
-      window.localStorage.setItem("repressurizer-last-seen-version", currentVersion);
+    if (
+      window.localStorage.getItem("repressurizer-last-seen-version") == null
+    ) {
+      window.localStorage.setItem(
+        "repressurizer-last-seen-version",
+        currentVersion,
+      );
     }
     let autostartEnabled = settings.startOnLogin;
     const notifications: Array<{ title: string; body?: string }> = [];
@@ -233,19 +337,38 @@ export async function installTauriMock(page: Page) {
       try {
         return {
           ...settings,
-          ...JSON.parse(window.localStorage.getItem("repressurizer-settings") ?? "{}"),
+          ...JSON.parse(
+            window.localStorage.getItem("repressurizer-settings") ?? "{}",
+          ),
         };
       } catch {
         return settings;
       }
     };
     const mockAchievementStates = () => {
-      const count = Number(window.localStorage.getItem("repressurizer-achievement-count") ?? 3);
+      const count = Number(
+        window.localStorage.getItem("repressurizer-achievement-count") ?? 3,
+      );
       if (count <= 3) {
         return [
-          { apiName: "ACH_START", achieved: true, unlockTime: 1_700_000_000, valid: true },
-          { apiName: "ACH_SECRET", achieved: false, unlockTime: 0, valid: true },
-          { apiName: "ACH_COMPLETE", achieved: false, unlockTime: 0, valid: true },
+          {
+            apiName: "ACH_START",
+            achieved: true,
+            unlockTime: 1_700_000_000,
+            valid: true,
+          },
+          {
+            apiName: "ACH_SECRET",
+            achieved: false,
+            unlockTime: 0,
+            valid: true,
+          },
+          {
+            apiName: "ACH_COMPLETE",
+            achieved: false,
+            unlockTime: 0,
+            valid: true,
+          },
         ];
       }
       return Array.from({ length: count }, (_, index) => ({
@@ -306,8 +429,31 @@ export async function installTauriMock(page: Page) {
     });
 
     const tauriInternals = {
-      invoke: async (cmd: string, args?: Record<string, unknown>, invokeOptions?: { headers?: Record<string, string> }) => {
+      invoke: async (
+        cmd: string,
+        args?: Record<string, unknown>,
+        invokeOptions?: { headers?: Record<string, string> },
+      ) => {
         switch (cmd) {
+          case "detect_steam":
+          case "detect_steam_at":
+            return {
+              steam_path: settings.steamPath,
+              users: [
+                {
+                  id3: settings.steamId3,
+                  id64: settings.steamId64,
+                  persona_name: settings.steamPersonaName,
+                  has_collections: true,
+                },
+                {
+                  id3: "654321",
+                  id64: "76561198000000001",
+                  persona_name: "DeckUser",
+                  has_collections: false,
+                },
+              ],
+            };
           case "plugin:log|log":
             return null;
           case "plugin:event|listen":
@@ -319,50 +465,62 @@ export async function installTauriMock(page: Page) {
           case "plugin:updater|check":
             window.localStorage.setItem(
               "repressurizer-last-updater-target",
-              String(args?.target ?? "")
+              String(args?.target ?? ""),
             );
             window.localStorage.setItem(
               "repressurizer-last-updater-allow-downgrades",
-              String(args?.allowDowngrades ?? false)
+              String(args?.allowDowngrades ?? false),
             );
             return null;
           case "plugin:dialog|confirm":
             window.localStorage.setItem(
               "repressurizer-last-confirm-message",
-              String(args?.message ?? "")
+              String(args?.message ?? ""),
             );
             return true;
           case "plugin:dialog|message":
             window.localStorage.setItem(
               "repressurizer-last-confirm-message",
-              String(args?.message ?? "")
+              String(args?.message ?? ""),
             );
             return "Ok";
           case "plugin:dialog|open": {
-            const options = args?.options as { defaultPath?: string } | undefined;
+            const options = args?.options as
+              { defaultPath?: string } | undefined;
             const backupPath =
               "C:\\\\Users\\\\DemoUser\\\\AppData\\\\Roaming\\\\Repressurizer\\\\sam_backups\\\\1145360\\\\mock-before.json";
             window.localStorage.setItem(
               "repressurizer-last-dialog-default-path",
-              String(options?.defaultPath ?? "")
+              String(options?.defaultPath ?? ""),
             );
-            return window.localStorage.getItem("repressurizer-mock-open-path") ?? backupPath;
+            return (
+              window.localStorage.getItem("repressurizer-mock-open-path") ??
+              backupPath
+            );
           }
           case "plugin:dialog|save": {
-            const options = args?.options as { defaultPath?: string } | undefined;
+            const options = args?.options as
+              { defaultPath?: string } | undefined;
             const exportPath = `C:\\Users\\DemoUser\\Documents\\${String(
               options?.defaultPath ?? "repressurizer-export.json",
             )}`;
-            window.localStorage.setItem("repressurizer-last-save-path", exportPath);
+            window.localStorage.setItem(
+              "repressurizer-last-save-path",
+              exportPath,
+            );
             return exportPath;
           }
           case "plugin:fs|write_text_file": {
             const payload = args as unknown;
-            const writtenText = Array.isArray(payload) || payload instanceof Uint8Array
-              ? new TextDecoder().decode(new Uint8Array(payload as number[]))
-              : String(payload);
+            const writtenText =
+              Array.isArray(payload) || payload instanceof Uint8Array
+                ? new TextDecoder().decode(new Uint8Array(payload as number[]))
+                : String(payload);
             const path = decodeURIComponent(invokeOptions?.headers?.path ?? "");
-            if (path) { mockFiles[path] = writtenText; rememberMockFiles(); }
+            if (path) {
+              mockFiles[path] = writtenText;
+              rememberMockFiles();
+            }
             window.localStorage.setItem(
               "repressurizer-last-written-text",
               writtenText,
@@ -370,19 +528,39 @@ export async function installTauriMock(page: Page) {
             return null;
           }
           case "plugin:fs|read_text_file": {
-            const body = mockFiles[String(args?.path ?? "")] ?? window.localStorage.getItem("repressurizer-mock-read-text") ?? "";
+            const body =
+              mockFiles[String(args?.path ?? "")] ??
+              window.localStorage.getItem("repressurizer-mock-read-text") ??
+              "";
             return Array.from(new TextEncoder().encode(body));
           }
           case "plugin:fs|read_dir": {
             const folder = String(args?.path ?? "").replace(/[\\/]+$/, "");
-            return Object.keys(mockFiles).filter((path) => path.startsWith(`${folder}/`) && !path.slice(folder.length + 1).includes("/")).map((path) => ({ name: path.slice(folder.length + 1), isDirectory: false, isFile: true, isSymlink: false }));
+            return Object.keys(mockFiles)
+              .filter(
+                (path) =>
+                  path.startsWith(`${folder}/`) &&
+                  !path.slice(folder.length + 1).includes("/"),
+              )
+              .map((path) => ({
+                name: path.slice(folder.length + 1),
+                isDirectory: false,
+                isFile: true,
+                isSymlink: false,
+              }));
           }
           case "plugin:fs|rename": {
-            const oldPath = String(args?.oldPath ?? args?.old_path ?? ""); const newPath = String(args?.newPath ?? args?.new_path ?? "");
-            mockFiles[newPath] = mockFiles[oldPath]; delete mockFiles[oldPath]; rememberMockFiles(); return null;
+            const oldPath = String(args?.oldPath ?? args?.old_path ?? "");
+            const newPath = String(args?.newPath ?? args?.new_path ?? "");
+            mockFiles[newPath] = mockFiles[oldPath];
+            delete mockFiles[oldPath];
+            rememberMockFiles();
+            return null;
           }
           case "plugin:fs|remove":
-            delete mockFiles[String(args?.path ?? "")]; rememberMockFiles(); return null;
+            delete mockFiles[String(args?.path ?? "")];
+            rememberMockFiles();
+            return null;
           case "plugin:autostart|is_enabled":
             return autostartEnabled;
           case "plugin:autostart|enable":
@@ -391,33 +569,80 @@ export async function installTauriMock(page: Page) {
           case "plugin:autostart|disable":
             autostartEnabled = false;
             return null;
-          case "get_startup_context":
-            {
-              const requestedKind = new URLSearchParams(window.location.search).get("updater-kind");
-              const updaterKind = requestedKind === "windows-portable"
+          case "get_startup_context": {
+            const requestedKind = new URLSearchParams(
+              window.location.search,
+            ).get("updater-kind");
+            const updaterKind =
+              requestedKind === "windows-portable"
                 ? "windows-portable"
                 : requestedKind === "linux-system-package"
                   ? "linux-system-package"
                   : "windows-installer";
-              return {
-                launchedFromAutostart: false,
-                mainWindowCreated: true,
-                updaterKind,
-                updaterCanInstall: updaterKind === "windows-installer",
-                updaterTarget: "windows-x86_64",
-              };
-            }
+            return {
+              launchedFromAutostart: false,
+              mainWindowCreated: true,
+              updaterKind,
+              updaterCanInstall: updaterKind === "windows-installer",
+              updaterTarget: "windows-x86_64",
+            };
+          }
           case "fetch_library":
             return games;
           case "load_installed_library":
             return [632470, 1145360, 39140];
           case "load_storage_inventory":
             return {
-              libraries: [{ path: "C:\\Program Files (x86)\\Steam", drive: "C:", totalBytes: 512 * 1024 ** 3, freeBytes: 76 * 1024 ** 3 }],
+              libraries: [
+                {
+                  path: "C:\\Program Files (x86)\\Steam",
+                  drive: "C:",
+                  totalBytes: 512 * 1024 ** 3,
+                  freeBytes: 76 * 1024 ** 3,
+                },
+                {
+                  path: "D:\\SteamLibrary",
+                  drive: "D:",
+                  totalBytes: 1024 * 1024 ** 3,
+                  freeBytes: 420 * 1024 ** 3,
+                },
+              ],
               installs: [
-                { appid: 632470, libraryPath: "C:\\Program Files (x86)\\Steam", installPath: "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Disco Elysium", gameBytes: 18 * 1024 ** 3, workshopBytes: 1 * 1024 ** 3, shaderCacheBytes: 200 * 1024 ** 2, compatdataBytes: 800 * 1024 ** 2, totalBytes: 20 * 1024 ** 3, scannedAt: 1_787_000_000 },
-                { appid: 1145360, libraryPath: "C:\\Program Files (x86)\\Steam", installPath: "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Hades", gameBytes: 14 * 1024 ** 3, workshopBytes: 0, shaderCacheBytes: 100 * 1024 ** 2, compatdataBytes: 400 * 1024 ** 2, totalBytes: 14.5 * 1024 ** 3, scannedAt: 1_787_000_000 },
-                { appid: 39140, libraryPath: "C:\\Program Files (x86)\\Steam", installPath: "C:\\Program Files (x86)\\Steam\\steamapps\\common\\FINAL FANTASY VII", gameBytes: 3 * 1024 ** 3, workshopBytes: 0, shaderCacheBytes: 0, compatdataBytes: 0, totalBytes: 3 * 1024 ** 3, scannedAt: 1_787_000_000 },
+                {
+                  appid: 632470,
+                  libraryPath: "C:\\Program Files (x86)\\Steam",
+                  installPath:
+                    "C:\\Program Files (x86)\\Steam\\steamapps\\common\\Disco Elysium",
+                  gameBytes: 18 * 1024 ** 3,
+                  workshopBytes: 1 * 1024 ** 3,
+                  shaderCacheBytes: 200 * 1024 ** 2,
+                  compatdataBytes: 800 * 1024 ** 2,
+                  totalBytes: 20 * 1024 ** 3,
+                  scannedAt: 1_787_000_000,
+                },
+                {
+                  appid: 1145360,
+                  libraryPath: "D:\\SteamLibrary",
+                  installPath: "D:\\SteamLibrary\\steamapps\\common\\Hades",
+                  gameBytes: 14 * 1024 ** 3,
+                  workshopBytes: 0,
+                  shaderCacheBytes: 100 * 1024 ** 2,
+                  compatdataBytes: 400 * 1024 ** 2,
+                  totalBytes: 14.5 * 1024 ** 3,
+                  scannedAt: 1_787_000_000,
+                },
+                {
+                  appid: 39140,
+                  libraryPath: "C:\\Program Files (x86)\\Steam",
+                  installPath:
+                    "C:\\Program Files (x86)\\Steam\\steamapps\\common\\FINAL FANTASY VII",
+                  gameBytes: 3 * 1024 ** 3,
+                  workshopBytes: 0,
+                  shaderCacheBytes: 0,
+                  compatdataBytes: 0,
+                  totalBytes: 3 * 1024 ** 3,
+                  scannedAt: 1_787_000_000,
+                },
               ],
             };
           case "fetch_steam_app_list":
@@ -449,34 +674,50 @@ export async function installTauriMock(page: Page) {
               3280350: "Mar 19, 2026",
               2499860: "Feb 5, 2026",
             };
-            const hashedImages: Record<number, { header: string; capsule: string }> = {
+            const hashedImages: Record<
+              number,
+              { header: string; capsule: string }
+            > = {
               3280350: {
-                header: "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/3280350/6270c77b0729e2df0a17d660286eeddfd9169386/header.jpg",
-                capsule: "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/3280350/6e07f61e2585bae97d2406d45666a7ee70543792/capsule_231x87.jpg",
+                header:
+                  "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/3280350/6270c77b0729e2df0a17d660286eeddfd9169386/header.jpg",
+                capsule:
+                  "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/3280350/6e07f61e2585bae97d2406d45666a7ee70543792/capsule_231x87.jpg",
               },
               2499860: {
-                header: "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/2499860/ea0c655407c078a8994b7e91256c79d90169133a/header.jpg",
-                capsule: "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/2499860/9d1e5917fb47c7af55a5134a6f7eb302fea2fb16/capsule_231x87.jpg",
+                header:
+                  "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/2499860/ea0c655407c078a8994b7e91256c79d90169133a/header.jpg",
+                capsule:
+                  "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/2499860/9d1e5917fb47c7af55a5134a6f7eb302fea2fb16/capsule_231x87.jpg",
               },
             };
             return {
               app_id: appId,
               name: names[appId] ?? `App ${appId}`,
-              genres: [39140, 1462040, 2499860].includes(appId) ? ["RPG"] : ["Adventure"],
-              categories: appId === 1145360 ? ["Single-player", "Steam Achievements"] : ["Single-player"],
+              genres: [39140, 1462040, 2499860].includes(appId)
+                ? ["RPG"]
+                : ["Adventure"],
+              categories:
+                appId === 1145360
+                  ? ["Single-player", "Steam Achievements"]
+                  : ["Single-player"],
               release_date: years[appId] ?? "Jan 4, 2008",
               metacritic_score: appId === 12100 ? 93 : null,
               developers: ["Demo Studio"],
               publishers: ["Demo Publisher"],
               supported_languages: ["English"],
               platforms: { windows: true, mac: false, linux: false },
-              header_image: hashedImages[appId]?.header ?? `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appId}/header.jpg`,
-              capsule_image: hashedImages[appId]?.capsule ?? `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appId}/capsule_231x87.jpg`,
+              header_image:
+                hashedImages[appId]?.header ??
+                `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appId}/header.jpg`,
+              capsule_image:
+                hashedImages[appId]?.capsule ??
+                `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${appId}/capsule_231x87.jpg`,
               price_initial: null,
               price_final: null,
               price_currency: null,
               is_free: false,
-              estimated_install_bytes: (4 + appId % 20) * 1024 ** 3,
+              estimated_install_bytes: (4 + (appId % 20)) * 1024 ** 3,
               deck_status: appId % 3 === 0 ? "playable" : "verified",
               full_controller_support: true,
               external_launcher: false,
@@ -498,12 +739,27 @@ export async function installTauriMock(page: Page) {
             };
           }
           case "fetch_store_release_date":
-            return { app_id: Number(args?.appId ?? args?.app_id ?? 0), release_date: "1 Jan, 2020" };
+            return {
+              app_id: Number(args?.appId ?? args?.app_id ?? 0),
+              release_date: "1 Jan, 2020",
+            };
           case "fetch_store_release_dates":
-            return ((args?.appIds ?? args?.app_ids ?? []) as number[]).map((appId) => ({ app_id: Number(appId), release_date: "1 Jan, 2020" }));
+            return ((args?.appIds ?? args?.app_ids ?? []) as number[]).map(
+              (appId) => ({
+                app_id: Number(appId),
+                release_date: "1 Jan, 2020",
+              }),
+            );
           case "fetch_gg_deals_price": {
-            const requestCount = Number(window.localStorage.getItem("repressurizer-gg-deals-request-count") ?? "0");
-            window.localStorage.setItem("repressurizer-gg-deals-request-count", String(requestCount + 1));
+            const requestCount = Number(
+              window.localStorage.getItem(
+                "repressurizer-gg-deals-request-count",
+              ) ?? "0",
+            );
+            window.localStorage.setItem(
+              "repressurizer-gg-deals-request-count",
+              String(requestCount + 1),
+            );
             return {
               appId: Number(args?.appId ?? 0),
               url: "https://gg.deals/game/hades/",
@@ -515,9 +771,16 @@ export async function installTauriMock(page: Page) {
             };
           }
           case "load_collections":
-            return JSON.parse(window.localStorage.getItem("repressurizer-mock-steam-collections") ?? JSON.stringify(collections));
+            return JSON.parse(
+              window.localStorage.getItem(
+                "repressurizer-mock-steam-collections",
+              ) ?? JSON.stringify(collections),
+            );
           case "save_collections":
-            window.localStorage.setItem("repressurizer-mock-saved-collections", JSON.stringify(args?.collections ?? []));
+            window.localStorage.setItem(
+              "repressurizer-mock-saved-collections",
+              JSON.stringify(args?.collections ?? []),
+            );
             return null;
           case "fetch_family_library":
             return {
@@ -536,44 +799,67 @@ export async function installTauriMock(page: Page) {
           case "create_manual_backup":
             return null;
           case "load_details_cache":
-            return window.localStorage.getItem("repressurizer-mock-details-cache");
+            return window.localStorage.getItem(
+              "repressurizer-mock-details-cache",
+            );
           case "load_failed_cache":
-            return window.localStorage.getItem("repressurizer-mock-failed-cache");
+            return window.localStorage.getItem(
+              "repressurizer-mock-failed-cache",
+            );
           case "load_achievements_cache":
           case "load_friends_cache":
           case "load_wishlist_cache":
             return null;
           case "load_hltb_cache":
-            return window.localStorage.getItem("repressurizer-mock-hltb-cache") ?? JSON.stringify({
-              10: { main_story: 22, main_extra: 32, completionist: 55 },
-              1426210: { main_story: 14, main_extra: 16, completionist: 20 },
-              632470: { main_story: 22, main_extra: 32, completionist: 55 },
-              753640: { main_story: 16, main_extra: 22, completionist: 28 },
-              1145360: { main_story: 22, main_extra: 50, completionist: 95 },
-              1643320: { main_story: 36, main_extra: 60, completionist: 100 },
-              3280350: { main_story: 40, main_extra: 60, completionist: 100 },
-            });
+            return (
+              window.localStorage.getItem("repressurizer-mock-hltb-cache") ??
+              JSON.stringify({
+                10: { main_story: 22, main_extra: 32, completionist: 55 },
+                1426210: { main_story: 14, main_extra: 16, completionist: 20 },
+                632470: { main_story: 22, main_extra: 32, completionist: 55 },
+                753640: { main_story: 16, main_extra: 22, completionist: 28 },
+                1145360: { main_story: 22, main_extra: 50, completionist: 95 },
+                1643320: { main_story: 36, main_extra: 60, completionist: 100 },
+                3280350: { main_story: 40, main_extra: 60, completionist: 100 },
+              })
+            );
           case "load_app_data":
-            if (args?.key === "steam_family.json") return JSON.stringify(familyCache);
+            if (args?.key === "steam_family.json")
+              return JSON.stringify(familyCache);
             return appData[String(args?.key ?? "")] ?? null;
           case "save_app_data":
             if (args?.key && typeof args.data === "string") {
               appData[String(args.key)] = args.data;
               window.localStorage.setItem(
                 `repressurizer-app-data:${String(args.key)}`,
-                args.data
+                args.data,
               );
             }
             return null;
           case "write_export_file":
-            window.localStorage.setItem("repressurizer-last-written-text", String(args?.contents ?? ""));
-            window.localStorage.setItem("repressurizer-last-export-path", String(args?.path ?? ""));
+            window.localStorage.setItem(
+              "repressurizer-last-written-text",
+              String(args?.contents ?? ""),
+            );
+            window.localStorage.setItem(
+              "repressurizer-last-export-path",
+              String(args?.path ?? ""),
+            );
             return null;
           case "write_export_bundle": {
             const files = (args?.files ?? {}) as Record<string, string>;
-            window.localStorage.setItem("repressurizer-last-export-bundle", JSON.stringify(Object.keys(files)));
-            window.localStorage.setItem("repressurizer-last-written-text", files["index.json"] ?? "");
-            window.localStorage.setItem("repressurizer-last-export-path", String(args?.root ?? ""));
+            window.localStorage.setItem(
+              "repressurizer-last-export-bundle",
+              JSON.stringify(Object.keys(files)),
+            );
+            window.localStorage.setItem(
+              "repressurizer-last-written-text",
+              files["index.json"] ?? "",
+            );
+            window.localStorage.setItem(
+              "repressurizer-last-export-path",
+              String(args?.root ?? ""),
+            );
             return null;
           }
           case "list_diary_backups":
@@ -581,21 +867,39 @@ export async function installTauriMock(page: Page) {
           case "create_diary_backup": {
             diaryBackupCounter += 1;
             const backupName = `diary-backup-20260819_12000${diaryBackupCounter}`;
-            const files = ["diary.json", "diary-templates.json", "diary-status-events.json", "diary-achievements.json", "reviews.json", "notes.json", "statuses.json"];
+            const files = [
+              "diary.json",
+              "diary-templates.json",
+              "diary-status-events.json",
+              "diary-achievements.json",
+              "reviews.json",
+              "notes.json",
+              "statuses.json",
+            ];
             diaryBackups.unshift({
               name: backupName,
               description: String(args?.description ?? ""),
               created_at_ms: Date.now(),
               files,
             });
-            diaryBackupFiles[backupName] = Object.fromEntries(files.map((key) => [key, `backup:${key}`]));
-            window.localStorage.setItem("repressurizer-last-diary-backup", backupName);
+            diaryBackupFiles[backupName] = Object.fromEntries(
+              files.map((key) => [key, `backup:${key}`]),
+            );
+            window.localStorage.setItem(
+              "repressurizer-last-diary-backup",
+              backupName,
+            );
             return backupName;
           }
           case "restore_diary_backup": {
-            const restored = diaryBackups.find((backup) => backup.name === String(args?.name ?? ""));
+            const restored = diaryBackups.find(
+              (backup) => backup.name === String(args?.name ?? ""),
+            );
             if (!restored) throw new Error("Diary backup not found");
-            window.localStorage.setItem("repressurizer-last-diary-restore", restored.name);
+            window.localStorage.setItem(
+              "repressurizer-last-diary-restore",
+              restored.name,
+            );
             return null;
           }
           case "read_diary_backup_file": {
@@ -604,14 +908,23 @@ export async function installTauriMock(page: Page) {
           }
           case "restore_diary_backup_files": {
             const name = String(args?.name ?? "");
-            const restored = diaryBackups.find((backup) => backup.name === name);
+            const restored = diaryBackups.find(
+              (backup) => backup.name === name,
+            );
             if (!restored) throw new Error("Diary backup not found");
-            const keys = ((args?.keys ?? []) as unknown[]).map(String).filter((key) => restored.files.includes(key));
-            window.localStorage.setItem("repressurizer-last-diary-restore", JSON.stringify({ name, keys }));
+            const keys = ((args?.keys ?? []) as unknown[])
+              .map(String)
+              .filter((key) => restored.files.includes(key));
+            window.localStorage.setItem(
+              "repressurizer-last-diary-restore",
+              JSON.stringify({ name, keys }),
+            );
             return keys;
           }
           case "delete_diary_backup": {
-            const index = diaryBackups.findIndex((backup) => backup.name === String(args?.name ?? ""));
+            const index = diaryBackups.findIndex(
+              (backup) => backup.name === String(args?.name ?? ""),
+            );
             if (index === -1) throw new Error("Diary backup not found");
             diaryBackups.splice(index, 1);
             delete diaryBackupFiles[String(args?.name ?? "")];
@@ -620,7 +933,10 @@ export async function installTauriMock(page: Page) {
           case "fetch_hltb":
             return { main_story: 12, main_extra: 18, completionist: 30 };
           case "run_name_categorizer": {
-            const games = (args?.games ?? []) as Array<{ appid: number; name: string }>;
+            const games = (args?.games ?? []) as Array<{
+              appid: number;
+              name: string;
+            }>;
             const config = (args?.config ?? {}) as {
               prefix?: string;
               skip_leading_the?: boolean;
@@ -631,8 +947,13 @@ export async function installTauriMock(page: Page) {
             let gamesCategorized = 0;
             for (const game of games) {
               const rawTitle = String(game.name ?? "").trim();
-              const title = config.skip_leading_the === false ? rawTitle : rawTitle.replace(/^the\s+/i, "");
-              const first = [...title].find((character) => !/\s/.test(character));
+              const title =
+                config.skip_leading_the === false
+                  ? rawTitle
+                  : rawTitle.replace(/^the\s+/i, "");
+              const first = [...title].find(
+                (character) => !/\s/.test(character),
+              );
               if (!first) continue;
               const bucket = /[A-Za-z]/.test(first)
                 ? first.toUpperCase()
@@ -662,16 +983,22 @@ export async function installTauriMock(page: Page) {
               max_flags?: number;
               included_flags?: string[];
             };
-            const included = new Set((config.included_flags ?? []).map((item) => item.toLowerCase()));
+            const included = new Set(
+              (config.included_flags ?? []).map((item) => item.toLowerCase()),
+            );
             const assignments: Record<string, number[]> = {};
             let gamesCategorized = 0;
             for (const detail of gameDetails) {
               let added = 0;
               for (const flag of detail.categories ?? []) {
-                if (included.size > 0 && !included.has(flag.toLowerCase())) continue;
+                if (included.size > 0 && !included.has(flag.toLowerCase()))
+                  continue;
                 if (config.max_flags && added >= config.max_flags) break;
                 const name = `${config.prefix ?? ""}${flag}`;
-                assignments[name] = [...(assignments[name] ?? []), detail.app_id];
+                assignments[name] = [
+                  ...(assignments[name] ?? []),
+                  detail.app_id,
+                ];
                 added += 1;
               }
               if (added > 0) gamesCategorized += 1;
@@ -692,16 +1019,25 @@ export async function installTauriMock(page: Page) {
               max_languages?: number;
               included_languages?: string[];
             };
-            const included = new Set((config.included_languages ?? []).map((item) => item.toLowerCase()));
+            const included = new Set(
+              (config.included_languages ?? []).map((item) =>
+                item.toLowerCase(),
+              ),
+            );
             const assignments: Record<string, number[]> = {};
             let gamesCategorized = 0;
             for (const detail of gameDetails) {
               let added = 0;
               for (const language of detail.supported_languages ?? []) {
-                if (included.size > 0 && !included.has(language.toLowerCase())) continue;
-                if (config.max_languages && added >= config.max_languages) break;
+                if (included.size > 0 && !included.has(language.toLowerCase()))
+                  continue;
+                if (config.max_languages && added >= config.max_languages)
+                  break;
                 const name = `${config.prefix ?? ""}${language}`;
-                assignments[name] = [...(assignments[name] ?? []), detail.app_id];
+                assignments[name] = [
+                  ...(assignments[name] ?? []),
+                  detail.app_id,
+                ];
                 added += 1;
               }
               if (added > 0) gamesCategorized += 1;
@@ -715,13 +1051,17 @@ export async function installTauriMock(page: Page) {
           case "fetch_achievements":
             return {
               total: mockAchievements().length,
-              achieved: mockAchievements().filter((achievement) => achievement.achieved).length,
+              achieved: mockAchievements().filter(
+                (achievement) => achievement.achieved,
+              ).length,
               achievements: mockAchievements(),
             };
           case "fetch_achievements_summary":
             return [
               mockAchievementStates().length,
-              mockAchievementStates().filter((achievement) => achievement.achieved).length,
+              mockAchievementStates().filter(
+                (achievement) => achievement.achieved,
+              ).length,
             ];
           case "load_sam_achievement_schema":
           case "refresh_sam_achievement_schema":
@@ -730,15 +1070,16 @@ export async function installTauriMock(page: Page) {
               String(
                 Number(
                   window.localStorage.getItem(
-                    "repressurizer-sam-schema-refresh-count"
-                  ) ?? 0
-                ) + 1
-              )
+                    "repressurizer-sam-schema-refresh-count",
+                  ) ?? 0,
+                ) + 1,
+              ),
             );
             return mockAchievementStates().map((achievement) => {
               const runtimeOnly =
-                window.localStorage.getItem("repressurizer-runtime-only-achievement") ===
-                achievement.apiName;
+                window.localStorage.getItem(
+                  "repressurizer-runtime-only-achievement",
+                ) === achievement.apiName;
               return {
                 apiName: achievement.apiName,
                 permission: 0,
@@ -768,9 +1109,11 @@ export async function installTauriMock(page: Page) {
               steamPathExists: true,
               steamRunning: ready,
               steamClientLibraryFound: true,
-              steamClientLibraryPath: "C:\\\\Program Files (x86)\\\\Steam\\\\steamclient64.dll",
+              steamClientLibraryPath:
+                "C:\\\\Program Files (x86)\\\\Steam\\\\steamclient64.dll",
               localBridgeFound: true,
-              localBridgePath: "C:\\\\Program Files\\\\Repressurizer\\\\Repressurizer.exe",
+              localBridgePath:
+                "C:\\\\Program Files\\\\Repressurizer\\\\Repressurizer.exe",
               writesSteam: ready,
               capabilities: [
                 {
@@ -778,14 +1121,16 @@ export async function installTauriMock(page: Page) {
                   label: "Steam Web API achievement summaries",
                   status: "ready",
                   writesSteam: false,
-                  reason: "Already used by Repressurizer for read-only achievement progress.",
+                  reason:
+                    "Already used by Repressurizer for read-only achievement progress.",
                 },
                 {
                   id: "samProbe",
                   label: "SAM local preflight",
                   status: "ready",
                   writesSteam: false,
-                  reason: "Checks Steam install, Steam client library, embedded bridge mode, and Steam process status.",
+                  reason:
+                    "Checks Steam install, Steam client library, embedded bridge mode, and Steam process status.",
                 },
                 {
                   id: "samReadAchievements",
@@ -808,7 +1153,9 @@ export async function installTauriMock(page: Page) {
               ],
               notes: ready
                 ? ["Embedded Repressurizer SAM bridge was invoked."]
-                : ["Steam does not appear to be running; SAM-style local reads require the Steam client and logged-in user."],
+                : [
+                    "Steam does not appear to be running; SAM-style local reads require the Steam client and logged-in user.",
+                  ],
             };
           }
           case "sam_backup_dir":
@@ -823,7 +1170,9 @@ export async function installTauriMock(page: Page) {
                 phase: "after",
                 capturedAt: "2026-06-20T12:00:01.000Z",
                 achievementCount: mockAchievementStates().length,
-                unlockedCount: mockAchievementStates().filter((achievement) => achievement.achieved).length,
+                unlockedCount: mockAchievementStates().filter(
+                  (achievement) => achievement.achieved,
+                ).length,
                 canRestoreUnlockTimes: false,
               },
               {
@@ -852,13 +1201,19 @@ export async function installTauriMock(page: Page) {
           case "open_sam_backup_dir":
             window.localStorage.setItem(
               "repressurizer-open-sam-backup-dir-app-id",
-              String(args?.appId ?? 0)
+              String(args?.appId ?? 0),
             );
             return null;
           case "sam_achievement_action": {
-            const delayMs = Number(window.localStorage.getItem("repressurizer-sam-action-delay-ms") ?? 0);
+            const delayMs = Number(
+              window.localStorage.getItem(
+                "repressurizer-sam-action-delay-ms",
+              ) ?? 0,
+            );
             if (delayMs > 0) {
-              await new Promise((resolve) => window.setTimeout(resolve, delayMs));
+              await new Promise((resolve) =>
+                window.setTimeout(resolve, delayMs),
+              );
             }
             const input = args?.input as {
               appId?: number;
@@ -868,14 +1223,17 @@ export async function installTauriMock(page: Page) {
               allowUnverifiedPermissions?: boolean;
             };
             const action = input?.action ?? "unlock";
-            window.localStorage.setItem("repressurizer-last-sam-action", action);
+            window.localStorage.setItem(
+              "repressurizer-last-sam-action",
+              action,
+            );
             window.localStorage.setItem(
               "repressurizer-last-sam-backup-path",
-              String(input?.backupPath ?? "")
+              String(input?.backupPath ?? ""),
             );
             window.localStorage.setItem(
               "repressurizer-last-sam-allow-unverified",
-              String(input?.allowUnverifiedPermissions ?? false)
+              String(input?.allowUnverifiedPermissions ?? false),
             );
             const requested = new Set(input?.achievementIds ?? []);
             const after = mockAchievementStates().map((achievement) => {
@@ -896,7 +1254,7 @@ export async function installTauriMock(page: Page) {
             });
             const changed = after.filter((achievement) => {
               const before = mockAchievementStates().find(
-                (state) => state.apiName === achievement.apiName
+                (state) => state.apiName === achievement.apiName,
               );
               return before?.achieved !== achievement.achieved;
             }).length;
@@ -912,8 +1270,10 @@ export async function installTauriMock(page: Page) {
                 "store_stats=true",
                 "post_store_target_state=desired",
               ],
-              beforeBackupPath: "C:\\\\Users\\\\DemoUser\\\\AppData\\\\Roaming\\\\Repressurizer\\\\sam_backups\\\\1145360\\\\mock-before.json",
-              afterBackupPath: "C:\\\\Users\\\\DemoUser\\\\AppData\\\\Roaming\\\\Repressurizer\\\\sam_backups\\\\1145360\\\\mock-after.json",
+              beforeBackupPath:
+                "C:\\\\Users\\\\DemoUser\\\\AppData\\\\Roaming\\\\Repressurizer\\\\sam_backups\\\\1145360\\\\mock-before.json",
+              afterBackupPath:
+                "C:\\\\Users\\\\DemoUser\\\\AppData\\\\Roaming\\\\Repressurizer\\\\sam_backups\\\\1145360\\\\mock-after.json",
               before: {
                 version: 1,
                 appId: Number(input?.appId ?? 0),
@@ -948,7 +1308,9 @@ export async function installTauriMock(page: Page) {
       convertFileSrc: (path: string) => path,
     };
 
-    (window as unknown as { __TAURI_INTERNALS__: typeof tauriInternals }).__TAURI_INTERNALS__ = tauriInternals;
+    (
+      window as unknown as { __TAURI_INTERNALS__: typeof tauriInternals }
+    ).__TAURI_INTERNALS__ = tauriInternals;
     (
       window as unknown as {
         __TAURI_EVENT_PLUGIN_INTERNALS__: { unregisterListener: () => void };

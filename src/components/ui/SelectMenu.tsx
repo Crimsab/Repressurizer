@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import { CaretDown, Check } from "@phosphor-icons/react";
 
@@ -34,7 +41,8 @@ interface MenuPosition {
   bottom?: number;
 }
 
-const cn = (...classes: Array<string | false | null | undefined>) => classes.filter(Boolean).join(" ");
+const cn = (...classes: Array<string | false | null | undefined>) =>
+  classes.filter(Boolean).join(" ");
 
 export function SelectMenu<T extends string>({
   value,
@@ -57,7 +65,10 @@ export function SelectMenu<T extends string>({
   const menuRef = useRef<HTMLDivElement | null>(null);
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState<MenuPosition | null>(null);
-  const selected = useMemo(() => options.find((option) => option.value === value), [options, value]);
+  const selected = useMemo(
+    () => options.find((option) => option.value === value),
+    [options, value],
+  );
   const selectedLabel = selected?.label ?? placeholder;
   const accessibleLabel = ariaLabel
     ? `${ariaLabel}: ${selectedLabel}`
@@ -73,16 +84,26 @@ export function SelectMenu<T extends string>({
     const gutter = 8;
     const gap = 6;
     const preferredMaxHeight = 240;
-    const estimatedHeight = Math.min(preferredMaxHeight, Math.max(44, options.length * 34 + 8));
+    const estimatedHeight = Math.min(
+      preferredMaxHeight,
+      Math.max(44, options.length * 34 + 8),
+    );
     const triggerWidth = rect.width;
     const menuWidth = Math.max(triggerWidth, 156);
     const spaceBelow = window.innerHeight - rect.bottom - gutter - gap;
     const spaceAbove = rect.top - gutter - gap;
-    const shouldOpenUp = spaceBelow < estimatedHeight && spaceAbove > spaceBelow;
-    const maxHeight = Math.max(96, Math.min(preferredMaxHeight, shouldOpenUp ? spaceAbove : spaceBelow));
+    const shouldOpenUp =
+      spaceBelow < estimatedHeight && spaceAbove > spaceBelow;
+    const maxHeight = Math.max(
+      96,
+      Math.min(preferredMaxHeight, shouldOpenUp ? spaceAbove : spaceBelow),
+    );
 
     let left = align === "right" ? rect.right - menuWidth : rect.left;
-    left = Math.max(gutter, Math.min(left, window.innerWidth - menuWidth - gutter));
+    left = Math.max(
+      gutter,
+      Math.min(left, window.innerWidth - menuWidth - gutter),
+    );
 
     setPosition(
       shouldOpenUp
@@ -97,16 +118,20 @@ export function SelectMenu<T extends string>({
             width: menuWidth,
             maxHeight,
             top: rect.bottom + gap,
-          }
+          },
     );
   }, [align, options.length]);
 
   const focusSelectedOption = useCallback(() => {
     requestAnimationFrame(() => {
       const optionButtons = Array.from(
-        menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="option"]:not(:disabled)') ?? []
+        menuRef.current?.querySelectorAll<HTMLButtonElement>(
+          '[role="option"]:not(:disabled)',
+        ) ?? [],
       );
-      const selectedOption = optionButtons.find((option) => option.getAttribute("aria-selected") === "true");
+      const selectedOption = optionButtons.find(
+        (option) => option.getAttribute("aria-selected") === "true",
+      );
       (selectedOption ?? optionButtons[0])?.focus({ preventScroll: true });
     });
   }, []);
@@ -119,7 +144,11 @@ export function SelectMenu<T extends string>({
 
     const handlePointerDown = (event: PointerEvent) => {
       const target = event.target as Node;
-      if (buttonRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+      if (
+        buttonRef.current?.contains(target) ||
+        menuRef.current?.contains(target)
+      )
+        return;
       setOpen(false);
     };
 
@@ -144,91 +173,116 @@ export function SelectMenu<T extends string>({
   }, [focusSelectedOption, open, updatePosition]);
 
   const buttonSizeClass =
-    size === "sm"
-      ? "h-8 px-2.5 text-xs"
-      : "h-9 px-3 text-sm";
+    size === "sm" ? "h-8 px-2.5 text-xs" : "h-9 px-3 text-sm";
 
-  const menu = open && position && typeof document !== "undefined"
-    ? createPortal(
-        <div
-          ref={menuRef}
-          id={menuId}
-          role="listbox"
-          onKeyDown={(event) => {
-            const optionButtons = Array.from(
-              menuRef.current?.querySelectorAll<HTMLButtonElement>('[role="option"]:not(:disabled)') ?? []
-            );
-            if (!optionButtons.length) return;
+  const menu =
+    open && position && typeof document !== "undefined"
+      ? createPortal(
+          <div
+            ref={menuRef}
+            id={menuId}
+            role="listbox"
+            onKeyDown={(event) => {
+              const optionButtons = Array.from(
+                menuRef.current?.querySelectorAll<HTMLButtonElement>(
+                  '[role="option"]:not(:disabled)',
+                ) ?? [],
+              );
+              if (!optionButtons.length) return;
 
-            const currentIndex = Math.max(0, optionButtons.indexOf(document.activeElement as HTMLButtonElement));
-            const focusOption = (index: number) => {
-              event.preventDefault();
-              optionButtons[index]?.focus({ preventScroll: true });
-            };
+              const currentIndex = Math.max(
+                0,
+                optionButtons.indexOf(
+                  document.activeElement as HTMLButtonElement,
+                ),
+              );
+              const focusOption = (index: number) => {
+                event.preventDefault();
+                optionButtons[index]?.focus({ preventScroll: true });
+              };
 
-            if (event.key === "ArrowDown") focusOption((currentIndex + 1) % optionButtons.length);
-            if (event.key === "ArrowUp") focusOption((currentIndex - 1 + optionButtons.length) % optionButtons.length);
-            if (event.key === "Home") focusOption(0);
-            if (event.key === "End") focusOption(optionButtons.length - 1);
-            if (event.key === "Escape") {
-              event.preventDefault();
-              event.stopPropagation();
-              setOpen(false);
-              buttonRef.current?.focus();
-            }
-          }}
-          style={{
-            position: "fixed",
-            left: position.left,
-            width: position.width,
-            maxHeight: position.maxHeight,
-            top: position.top,
-            bottom: position.bottom,
-          }}
-          className={cn(
-            "animate-fade-in-stable z-[90] overflow-auto rounded-xl border border-repressurizer-border bg-repressurizer-surface py-1 shadow-pop",
-            menuClassName
-          )}
-        >
-          {options.map((option) => {
-            const active = option.value === value;
-            return (
-              <button
-                key={option.value || "__empty"}
-                type="button"
-                role="option"
-                aria-selected={active}
-                aria-disabled={option.disabled || undefined}
-                disabled={option.disabled}
-                onClick={() => {
-                  onChange(option.value);
-                  setOpen(false);
-                  buttonRef.current?.focus();
-                }}
-                className={cn(
-                  "relative flex w-full items-start gap-2 px-3 py-1.5 text-left text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-45",
-                  active
-                    ? "bg-repressurizer-accent/[0.12] font-medium text-repressurizer-accent"
-                    : "text-repressurizer-text-muted hover:bg-repressurizer-surface-hover hover:text-white"
-                )}
-              >
-                {active && <span aria-hidden="true" className="absolute inset-y-1 left-0 w-0.5 rounded-full bg-repressurizer-accent" />}
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate leading-none">{option.label}</span>
-                  {option.description && (
-                    <span className="mt-0.5 block truncate text-[10px] text-repressurizer-text-faint">
-                      {option.description}
-                    </span>
+              if (event.key === "ArrowDown")
+                focusOption((currentIndex + 1) % optionButtons.length);
+              if (event.key === "ArrowUp")
+                focusOption(
+                  (currentIndex - 1 + optionButtons.length) %
+                    optionButtons.length,
+                );
+              if (event.key === "Home") focusOption(0);
+              if (event.key === "End") focusOption(optionButtons.length - 1);
+              if (event.key === "Escape") {
+                event.preventDefault();
+                event.stopPropagation();
+                setOpen(false);
+                buttonRef.current?.focus();
+              }
+            }}
+            style={{
+              position: "fixed",
+              zIndex: 100,
+              left: position.left,
+              width: position.width,
+              maxHeight: position.maxHeight,
+              top: position.top,
+              bottom: position.bottom,
+            }}
+            className={cn(
+              "animate-fade-in-stable overflow-auto rounded-xl border border-repressurizer-border bg-repressurizer-surface-raised py-1 shadow-pop",
+              menuClassName,
+            )}
+          >
+            {options.map((option) => {
+              const active = option.value === value;
+              return (
+                <button
+                  key={option.value || "__empty"}
+                  type="button"
+                  role="option"
+                  aria-selected={active}
+                  aria-disabled={option.disabled || undefined}
+                  disabled={option.disabled}
+                  onClick={() => {
+                    onChange(option.value);
+                    setOpen(false);
+                    buttonRef.current?.focus();
+                  }}
+                  className={cn(
+                    "relative flex w-full items-start gap-2 px-3 py-1.5 text-left text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-45",
+                    active
+                      ? "bg-repressurizer-accent/[0.12] font-medium text-repressurizer-accent"
+                      : "text-repressurizer-text-muted hover:bg-repressurizer-surface-hover hover:text-white",
                   )}
-                </span>
-                {active && <Check size={12} className="mt-0.5 shrink-0" weight="bold" />}
-              </button>
-            );
-          })}
-        </div>,
-        buttonRef.current?.closest('[role="dialog"]') ?? document.body
-      )
-    : null;
+                >
+                  {active && (
+                    <span
+                      aria-hidden="true"
+                      className="absolute inset-y-1 left-0 w-0.5 rounded-full bg-repressurizer-accent"
+                    />
+                  )}
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate leading-none">
+                      {option.label}
+                    </span>
+                    {option.description && (
+                      <span className="mt-0.5 block truncate text-[10px] text-repressurizer-text-faint">
+                        {option.description}
+                      </span>
+                    )}
+                  </span>
+                  {active && (
+                    <Check
+                      size={12}
+                      className="mt-0.5 shrink-0"
+                      weight="bold"
+                    />
+                  )}
+                </button>
+              );
+            })}
+          </div>,
+          buttonRef.current?.closest('[role="dialog"]') ?? document.body,
+        )
+      : null;
 
   return (
     <div className={cn("min-w-0", className)}>
@@ -236,7 +290,7 @@ export function SelectMenu<T extends string>({
         <span
           className={cn(
             "mb-1 block text-[10px] font-medium uppercase tracking-wider text-repressurizer-text-faint",
-            labelClassName
+            labelClassName,
           )}
         >
           {label}
@@ -264,13 +318,18 @@ export function SelectMenu<T extends string>({
           open
             ? "border-repressurizer-accent/70 bg-repressurizer-accent/10 text-repressurizer-accent shadow-[0_0_0_1px_rgba(16,185,129,0.35)]"
             : "border-repressurizer-border bg-repressurizer-surface/60 text-repressurizer-text hover:border-repressurizer-border hover:bg-repressurizer-surface-hover hover:text-white",
-          buttonClassName
+          buttonClassName,
         )}
       >
-        <span className="min-w-0 flex-1 truncate leading-none">{selectedLabel}</span>
+        <span className="min-w-0 flex-1 truncate leading-none">
+          {selectedLabel}
+        </span>
         <CaretDown
           size={12}
-          className={cn("shrink-0 text-repressurizer-text-faint transition-transform", open && "rotate-180")}
+          className={cn(
+            "shrink-0 text-repressurizer-text-faint transition-transform",
+            open && "rotate-180",
+          )}
           weight="bold"
         />
       </button>
