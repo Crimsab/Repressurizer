@@ -5,7 +5,8 @@ export type MetadataProvider =
   | "steam-achievements"
   | "steam-family"
   | "steam-release-dates"
-  | "hltb";
+  | "hltb"
+  | "storage";
 
 export type ProviderOutcome =
   | "success"
@@ -93,4 +94,10 @@ export function stableEventId(parts: Array<string | number | boolean | null | un
     hash = Math.imul(hash, 0x01000193);
   }
   return `evt_${(hash >>> 0).toString(16).padStart(8, "0")}`;
+}
+
+export function providerRefreshAllowed(record: ProviderHealthRecord | undefined, now = Date.now()): { allowed: boolean; retryAt: number | null } {
+  if (!record || !["rate-limited", "transient-error"].includes(record.lastOutcome)) return { allowed: true, retryAt: null };
+  const base = record.lastOutcome === "rate-limited" ? 5 * 60_000 : 30_000; const wait = Math.min(60 * 60_000, base * 2 ** Math.min(6, Math.max(0, record.consecutiveFailures - 1))); const retryAt = record.lastAttemptAt + wait;
+  return { allowed: now >= retryAt, retryAt };
 }

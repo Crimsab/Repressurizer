@@ -55,6 +55,7 @@ import {
   HardDrives,
   Backpack,
   Package,
+  Pulse,
 } from "@phosphor-icons/react";
 
 const loadSettingsPage = () => import("../settings/SettingsPage").then((m) => ({ default: m.SettingsPage }));
@@ -73,6 +74,7 @@ const loadProfileManager = () => import("../profiles/ProfileManager").then((m) =
 const loadStoragePlanner = () => import("../storage/StoragePlanner").then((m) => ({ default: m.StoragePlanner }));
 const loadPackMyDeck = () => import("../storage/PackMyDeck").then((m) => ({ default: m.PackMyDeck }));
 const loadCommunityRulePacks = () => import("../community/CommunityRulePacks").then((m) => ({ default: m.CommunityRulePacks }));
+const loadMetadataHealth = () => import("../metadata/MetadataHealthCenter").then((m) => ({ default: m.MetadataHealthCenter }));
 const SettingsPage = lazy(loadSettingsPage);
 const ExportDialog = lazy(loadExportDialog);
 const AutoCategorizeDialog = lazy(loadAutoCategorizeDialog);
@@ -89,6 +91,7 @@ const ProfileManager = lazy(loadProfileManager);
 const StoragePlanner = lazy(loadStoragePlanner);
 const PackMyDeck = lazy(loadPackMyDeck);
 const CommunityRulePacks = lazy(loadCommunityRulePacks);
+const MetadataHealthCenter = lazy(loadMetadataHealth);
 const preload = (loader: () => Promise<unknown>) => { void loader(); };
 
 function LazyOverlay({ children }: { children: ReactNode }) {
@@ -200,6 +203,7 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
   const [showStorage, setShowStorage] = useState(false);
   const [showDeckPack, setShowDeckPack] = useState(false);
   const [showCommunityPacks, setShowCommunityPacks] = useState(false);
+  const [showMetadataHealth, setShowMetadataHealth] = useState(false);
   const [showMoreTools, setShowMoreTools] = useState(false);
   const [showSavePreview, setShowSavePreview] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -218,6 +222,7 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
     { key: "storage", label: t("toolbar.storage"), Icon: HardDrives, open: () => setShowStorage(true), loader: loadStoragePlanner, badge: 0 },
     { key: "deck-pack", label: t("toolbar.deckPack"), Icon: Backpack, open: () => setShowDeckPack(true), loader: loadPackMyDeck, badge: 0 },
     { key: "community-packs", label: t("toolbar.communityPacks"), Icon: Package, open: () => setShowCommunityPacks(true), loader: loadCommunityRulePacks, badge: 0 },
+    { key: "metadata-health", label: t("toolbar.metadataHealth"), Icon: Pulse, open: () => setShowMetadataHealth(true), loader: loadMetadataHealth, badge: 0 },
     { key: "achievements", label: t("toolbar.achievements"), Icon: Trophy, open: () => setShowAchievements(true), loader: loadAchievementsPage, badge: 0 },
     { key: "wishlist", label: t("toolbar.wishlist"), Icon: BookmarkSimple, open: () => setShowWishlist(true), loader: loadWishlistPage, badge: 0 },
     { key: "friends", label: t("toolbar.friendCompare"), Icon: UsersThree, open: () => setShowFriendCompare(true), loader: loadFriendCompareDialog, badge: 0 },
@@ -697,6 +702,11 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
       {showCommunityPacks && (
         <LazyOverlay>
           <CommunityRulePacks onClose={() => setShowCommunityPacks(false)} />
+        </LazyOverlay>
+      )}
+      {showMetadataHealth && (
+        <LazyOverlay>
+          <MetadataHealthCenter onClose={() => setShowMetadataHealth(false)} onRefreshLibrary={onRefreshLibrary} />
         </LazyOverlay>
       )}
       {pendingConflict && (
