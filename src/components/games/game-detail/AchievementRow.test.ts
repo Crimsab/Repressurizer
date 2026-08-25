@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { AchievementInfo, AchievementSummary } from "../../../lib/types";
 import {
+  achievementIconCandidates,
   isProtectedAchievement,
   mergeAchievementsWithSamSchema,
   sortAchievements,
@@ -23,6 +24,28 @@ function achievement(
 }
 
 describe("achievement detail helpers", () => {
+  it("prefers Steam's current community asset CDN for legacy icon URLs", () => {
+    const item = achievement("Pal_Achievement_67", true);
+    item.icon =
+      "https://steamcdn-a.akamaihd.net/steamcommunity/public/images/apps/1623730/4fdae6f7bfdc6bf912aa5d72eb133ca75fd666a9.jpg";
+
+    expect(achievementIconCandidates(item)).toEqual([
+      "https://shared.fastly.steamstatic.com/community_assets/images/apps/1623730/4fdae6f7bfdc6bf912aa5d72eb133ca75fd666a9.jpg",
+      item.icon,
+    ]);
+  });
+
+  it("falls back from the preferred locked icon to the unlocked icon", () => {
+    const item = achievement("ACH_LOCKED", false);
+    item.icon_gray = "https://example.test/gray.jpg";
+    item.icon = "https://example.test/color.jpg";
+
+    expect(achievementIconCandidates(item)).toEqual([
+      item.icon_gray,
+      item.icon,
+    ]);
+  });
+
   it("sorts unlocked achievements first and newest unlock first", () => {
     const source = [
       achievement("locked", false),

@@ -35,6 +35,10 @@ export async function installTauriMock(page: Page) {
     await page.route("https://steamcdn-a.akamaihd.net/steam/apps/*/capsule_231x87.jpg", fulfillSteamHeader);
     await page.route("https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/**/header.jpg*", fulfillSteamHeader);
     await page.route("https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/**/capsule_231x87.jpg*", fulfillSteamHeader);
+    await page.route(
+      "https://shared.fastly.steamstatic.com/community_assets/images/apps/**",
+      fulfillSteamHeader,
+    );
   }
 
   await page.addInitScript((currentVersion) => {
@@ -270,7 +274,10 @@ export async function installTauriMock(page: Page) {
                 : "ok",
         achieved: state.achieved,
         unlock_time: state.unlockTime,
-        icon: null,
+        icon:
+          state.apiName === "ACH_START"
+            ? "https://steamcdn-a.akamaihd.net/steamcommunity/public/images/apps/1623730/4fdae6f7bfdc6bf912aa5d72eb133ca75fd666a9.jpg"
+            : null,
         icon_gray: null,
       }));
 

@@ -1,4 +1,5 @@
-import { Check, Lock } from "@phosphor-icons/react";
+import { useEffect, useMemo, useState } from "react";
+import { Check, Lock, Trophy } from "@phosphor-icons/react";
 import type {
   AchievementInfo,
   AchievementSummary,
@@ -58,18 +59,7 @@ export function AchievementRow({
         </button>
       )}
 
-      {/* Icon */}
-      {(achievement.icon || achievement.icon_gray) && (
-        <img
-          src={
-            achievement.achieved
-              ? achievement.icon ?? undefined
-              : achievement.icon_gray ?? undefined
-          }
-          alt=""
-          className="h-9 w-9 rounded-lg"
-        />
-      )}
+      <AchievementIcon achievement={achievement} />
 
       {/* Info */}
       <div className="flex-1 min-w-0">
@@ -125,6 +115,76 @@ export function AchievementRow({
         </button>
       )}
     </div>
+  );
+}
+
+const LEGACY_COMMUNITY_IMAGE_PREFIX =
+  "/steamcommunity/public/images/apps/";
+const CURRENT_COMMUNITY_IMAGE_PREFIX = "/community_assets/images/apps/";
+
+function canonicalAchievementIconUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    if (parsed.pathname.startsWith(LEGACY_COMMUNITY_IMAGE_PREFIX)) {
+      parsed.protocol = "https:";
+      parsed.host = "shared.fastly.steamstatic.com";
+      parsed.pathname = parsed.pathname.replace(
+        LEGACY_COMMUNITY_IMAGE_PREFIX,
+        CURRENT_COMMUNITY_IMAGE_PREFIX
+      );
+      return parsed.toString();
+    }
+  } catch {
+    return url;
+  }
+  return url;
+}
+
+export function achievementIconCandidates(
+  achievement: AchievementInfo
+): string[] {
+  const preferred = achievement.achieved
+    ? [achievement.icon, achievement.icon_gray]
+    : [achievement.icon_gray, achievement.icon];
+  const candidates = preferred.flatMap((url) => {
+    if (!url) return [];
+    const canonical = canonicalAchievementIconUrl(url);
+    return canonical === url ? [url] : [canonical, url];
+  });
+  return [...new Set(candidates)];
+}
+
+function AchievementIcon({ achievement }: { achievement: AchievementInfo }) {
+  const candidates = useMemo(
+    () => achievementIconCandidates(achievement),
+    [achievement.achieved, achievement.icon, achievement.icon_gray]
+  );
+  const [candidateIndex, setCandidateIndex] = useState(0);
+
+  useEffect(() => {
+    setCandidateIndex(0);
+  }, [achievement.api_name, candidates[0]]);
+
+  const src = candidates[candidateIndex];
+  if (!src) {
+    return (
+      <span
+        aria-hidden="true"
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-repressurizer-border-subtle bg-repressurizer-surface text-repressurizer-text-faint"
+      >
+        <Trophy size={18} weight="duotone" />
+      </span>
+    );
+  }
+
+  return (
+    <img
+      src={src}
+      alt=""
+      loading="lazy"
+      className="h-9 w-9 shrink-0 rounded-lg object-cover"
+      onError={() => setCandidateIndex((current) => current + 1)}
+    />
   );
 }
 

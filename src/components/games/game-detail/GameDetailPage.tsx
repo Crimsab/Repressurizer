@@ -558,10 +558,13 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
         </div>
 
         {/* Tabs */}
-        <div className="flex h-10 shrink-0 border-b border-repressurizer-border">
+        <div
+          className="flex h-10 shrink-0 items-stretch overflow-hidden border-b border-repressurizer-border"
+          data-testid="game-detail-tabs"
+        >
           <button
             onClick={() => setTab("info")}
-            className={`flex h-full items-center px-6 text-sm transition-colors ${
+            className={`flex h-full shrink-0 items-center px-3 text-sm transition-colors sm:px-6 ${
               tab === "info"
                 ? "border-b-2 border-repressurizer-accent text-white"
                 : "text-repressurizer-text-muted hover:text-white"
@@ -571,7 +574,7 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
           </button>
           <button
             onClick={() => setTab("achievements")}
-            className={`flex h-full items-center gap-2 px-6 text-sm transition-colors ${
+            className={`flex h-full shrink-0 items-center gap-2 px-3 text-sm transition-colors sm:px-6 ${
               tab === "achievements"
                 ? "border-b-2 border-repressurizer-accent text-white"
                 : "text-repressurizer-text-muted hover:text-white"
@@ -585,21 +588,23 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
               </span>
             )}
           </button>
-          <div className="flex-1" />
+          <div className="min-w-1 flex-1" />
           <button
             onClick={handleRefreshDetails}
             disabled={refreshingDetails}
-            className="btn-press inline-flex h-full items-center gap-1.5 px-4 text-sm text-repressurizer-text-muted transition-colors hover:text-white disabled:opacity-40"
+            aria-label={t("settings.refresh")}
+            className="btn-press inline-flex h-full shrink-0 items-center gap-1.5 px-3 text-sm text-repressurizer-text-muted transition-colors hover:text-white disabled:opacity-40 sm:px-4"
           >
             <ArrowsClockwise size={14} className={refreshingDetails ? "animate-spin" : ""} />
-            {t("settings.refresh")}
+            <span className="hidden sm:inline">{t("settings.refresh")}</span>
           </button>
           <button
             onClick={() => openPath(`https://store.steampowered.com/app/${game.appid}`)}
-            className="btn-press inline-flex h-full items-center gap-1.5 px-4 text-sm text-repressurizer-text-muted transition-colors hover:text-white"
+            aria-label={t("detail.steamStore")}
+            className="btn-press inline-flex h-full shrink-0 items-center gap-1.5 px-3 text-sm text-repressurizer-text-muted transition-colors hover:text-white sm:px-4"
           >
             <ArrowSquareOut size={14} />
-            {t("detail.steamStore")}
+            <span className="hidden sm:inline">{t("detail.steamStore")}</span>
           </button>
         </div>
 
