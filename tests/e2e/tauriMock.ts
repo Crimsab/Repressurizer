@@ -476,6 +476,12 @@ export async function installTauriMock(page: Page) {
               price_final: null,
               price_currency: null,
               is_free: false,
+              estimated_install_bytes: (4 + appId % 20) * 1024 ** 3,
+              deck_status: appId % 3 === 0 ? "playable" : "verified",
+              full_controller_support: true,
+              external_launcher: false,
+              offline_support: true,
+              first_launch_online: false,
             };
           }
           case "fetch_gg_deals_price": {

@@ -53,6 +53,7 @@ import {
   ClockCounterClockwise,
   UserCircle,
   HardDrives,
+  Backpack,
 } from "@phosphor-icons/react";
 
 const loadSettingsPage = () => import("../settings/SettingsPage").then((m) => ({ default: m.SettingsPage }));
@@ -69,6 +70,7 @@ const loadCollectionTimeMachine = () => import("../collections/CollectionTimeMac
 const loadCollectionConflictResolver = () => import("../collections/CollectionConflictResolver").then((m) => ({ default: m.CollectionConflictResolver }));
 const loadProfileManager = () => import("../profiles/ProfileManager").then((m) => ({ default: m.ProfileManager }));
 const loadStoragePlanner = () => import("../storage/StoragePlanner").then((m) => ({ default: m.StoragePlanner }));
+const loadPackMyDeck = () => import("../storage/PackMyDeck").then((m) => ({ default: m.PackMyDeck }));
 const SettingsPage = lazy(loadSettingsPage);
 const ExportDialog = lazy(loadExportDialog);
 const AutoCategorizeDialog = lazy(loadAutoCategorizeDialog);
@@ -83,6 +85,7 @@ const CollectionTimeMachine = lazy(loadCollectionTimeMachine);
 const CollectionConflictResolver = lazy(loadCollectionConflictResolver);
 const ProfileManager = lazy(loadProfileManager);
 const StoragePlanner = lazy(loadStoragePlanner);
+const PackMyDeck = lazy(loadPackMyDeck);
 const preload = (loader: () => Promise<unknown>) => { void loader(); };
 
 function LazyOverlay({ children }: { children: ReactNode }) {
@@ -192,6 +195,7 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
   const [pendingConflict, setPendingConflict] = useState<ThreeWayMergeAnalysis | null>(null);
   const [showProfiles, setShowProfiles] = useState(false);
   const [showStorage, setShowStorage] = useState(false);
+  const [showDeckPack, setShowDeckPack] = useState(false);
   const [showMoreTools, setShowMoreTools] = useState(false);
   const [showSavePreview, setShowSavePreview] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -208,6 +212,7 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
     { key: "time-machine", label: t("toolbar.timeMachine"), Icon: ClockCounterClockwise, open: () => setShowTimeMachine(true), loader: loadCollectionTimeMachine, badge: 0 },
     { key: "profiles", label: t("toolbar.profiles"), Icon: UserCircle, open: () => setShowProfiles(true), loader: loadProfileManager, badge: 0 },
     { key: "storage", label: t("toolbar.storage"), Icon: HardDrives, open: () => setShowStorage(true), loader: loadStoragePlanner, badge: 0 },
+    { key: "deck-pack", label: t("toolbar.deckPack"), Icon: Backpack, open: () => setShowDeckPack(true), loader: loadPackMyDeck, badge: 0 },
     { key: "achievements", label: t("toolbar.achievements"), Icon: Trophy, open: () => setShowAchievements(true), loader: loadAchievementsPage, badge: 0 },
     { key: "wishlist", label: t("toolbar.wishlist"), Icon: BookmarkSimple, open: () => setShowWishlist(true), loader: loadWishlistPage, badge: 0 },
     { key: "friends", label: t("toolbar.friendCompare"), Icon: UsersThree, open: () => setShowFriendCompare(true), loader: loadFriendCompareDialog, badge: 0 },
@@ -677,6 +682,11 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
       {showStorage && (
         <LazyOverlay>
           <StoragePlanner onClose={() => setShowStorage(false)} />
+        </LazyOverlay>
+      )}
+      {showDeckPack && (
+        <LazyOverlay>
+          <PackMyDeck onClose={() => setShowDeckPack(false)} />
         </LazyOverlay>
       )}
       {pendingConflict && (

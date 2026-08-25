@@ -140,6 +140,12 @@ export interface GameDetails {
   price_country_code?: string | null;
   price_cache?: Record<string, GamePriceSnapshot>;
   is_free: boolean;
+  estimated_install_bytes?: number | null;
+  deck_status?: "verified" | "playable" | "unsupported" | "unknown";
+  full_controller_support?: boolean | null;
+  external_launcher?: boolean | null;
+  offline_support?: boolean | null;
+  first_launch_online?: boolean | null;
 }
 
 export interface GamePriceSnapshot {

@@ -1,0 +1,9 @@
+import { describe, expect, test } from "vitest";
+import { buildDeckPack, type DeckPackCandidate, type DeckPackConfig } from "./deckPack";
+const game = (appId: number, size: number, categories: DeckPackCandidate["categories"]): DeckPackCandidate => ({ appId, name: `Game ${appId}`, sizeBytes: size, installed: false, deckStatus: "verified", fullController: true, externalLauncher: false, offline: true, firstLaunchOnline: false, durationHours: 10, categories });
+const config: DeckPackConfig = { availableBytes: 100, safetyPercent: 10, gameCount: 3, wantedCategories: ["short", "offline", "narrative"], deckFilter: "verified", requireController: true, noLauncher: true, requireOffline: true, minHours: null, maxHours: null, installation: "any", locked: [], excluded: [], seed: 1 };
+describe("Pack My Deck", () => {
+  test("respects capacity, safety margin, exclusions, and variety", () => { const result = buildDeckPack([game(1, 30, ["short"]), game(2, 30, ["narrative"]), game(3, 30, ["offline"]), game(4, 20, ["short"])], { ...config, excluded: [4] }); expect(result.usedBytes).toBeLessThanOrEqual(90); expect(result.items.map((item) => item.appId).sort()).toEqual([1, 2, 3]); expect(new Set(result.items.flatMap((item) => item.categories)).size).toBe(3); });
+  test("keeps mandatory items visible even when they overflow", () => { const result = buildDeckPack([game(1, 95, ["long"])], { ...config, locked: [1], gameCount: 1 }); expect(result.items[0].reasons[0]).toBe("Required game"); expect(result.overflowBytes).toBe(5); });
+  test("is stable for a seed and changes controlled tie breaks on reroll", () => { const games = [game(1, 20, ["short"]), game(2, 20, ["short"]), game(3, 20, ["short"]), game(4, 20, ["short"])]; expect(buildDeckPack(games, config).items).toEqual(buildDeckPack(games, config).items); expect(buildDeckPack(games, { ...config, seed: 2 }).items.map((x) => x.appId)).not.toEqual(buildDeckPack(games, config).items.map((x) => x.appId)); });
+});
