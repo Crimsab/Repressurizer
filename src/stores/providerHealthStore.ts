@@ -26,6 +26,10 @@ interface ProviderHealthState extends PersistedProviderHealth {
     appId?: number,
     observedAt?: number,
   ) => void;
+  recordBatch: (
+    provider: MetadataProvider,
+    observations: ReadonlyArray<{ outcome: ProviderOutcome; appId?: number; observedAt?: number }>,
+  ) => void;
   recordError: (provider: MetadataProvider, error: unknown, appId?: number) => void;
   clearProvider: (provider: MetadataProvider) => void;
 }
@@ -100,6 +104,34 @@ export const useProviderHealthStore = create<ProviderHealthState>((set) => ({
       queuePersist({ providers, games });
       return { providers, games };
     }),
+
+  recordBatch: (provider, observations) => {
+    if (!observations.length) return;
+    set((state) => {
+      let providerRecord = state.providers[provider];
+      const providerGames = { ...(state.games[provider] ?? {}) };
+      for (const observation of observations) {
+        providerRecord = recordProviderObservation(
+          providerRecord,
+          provider,
+          observation.outcome,
+          observation.observedAt,
+        );
+        if (observation.appId !== undefined) {
+          providerGames[observation.appId] = recordProviderObservation(
+            providerGames[observation.appId],
+            provider,
+            observation.outcome,
+            observation.observedAt,
+          );
+        }
+      }
+      const providers = { ...state.providers, [provider]: providerRecord };
+      const games = { ...state.games, [provider]: providerGames };
+      queuePersist({ providers, games });
+      return { providers, games };
+    });
+  },
 
   recordError: (provider, error, appId) => {
     useProviderHealthStore.getState().record(provider, classifyProviderError(error), appId);

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { rankStorageCandidates, simulateReclaim, targetBytes } from "./storagePlanner";
-const install = (appid: number, totalBytes: number) => ({ appid, totalBytes, gameBytes: totalBytes, workshopBytes: 0, shaderCacheBytes: 0, compatdataBytes: 0, libraryPath: "/steam", installPath: `/steam/${appid}`, scannedAt: 1 });
+const install = (appid: number, totalBytes: number) => ({ appid, totalBytes, gameBytes: totalBytes, workshopBytes: 0, shaderCacheBytes: 0, compatdataBytes: 0, libraryPath: "/steam", installPath: `/steam/${appid}`, scannedAt: 1, scanTruncated: false });
 describe("storage planner", () => {
   test("ranks explainably while excluding protected and unsynced-save games", () => {
     const base = { name: "Game", playtimeMinutes: 0, lastPlayed: 0, status: "none" as const, achievementPercent: null, remainingHours: null, deckCompatible: null, protection: null, protectedUntil: null, hasUnsyncedSaves: null };

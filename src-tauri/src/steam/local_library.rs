@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 
 const PACKAGEINFO_MAGIC_27: u32 = 0x06_56_55_27;
 const PACKAGEINFO_MAGIC_28: u32 = 0x06_56_55_28;
+const MAX_STORAGE_SCAN_ENTRIES: usize = 1_000_000;
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "camelCase")]
@@ -34,6 +35,7 @@ pub struct StorageInstall {
     pub compatdata_bytes: u64,
     pub total_bytes: u64,
     pub scanned_at: u64,
+    pub scan_truncated: bool,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -209,30 +211,34 @@ pub fn load_storage_inventory(steam_path: String) -> Result<StorageInventory, St
             let install_dir =
                 vdf_string_value(&manifest, "installdir").unwrap_or_else(|| appid.to_string());
             let install_path = steamapps.join("common").join(install_dir);
-            let game_bytes = directory_size(&install_path);
-            let workshop_bytes = directory_size(
+            let game = directory_size(&install_path);
+            let workshop = directory_size(
                 &steamapps
                     .join("workshop")
                     .join("content")
                     .join(appid.to_string()),
             );
-            let shader_cache_bytes =
+            let shader_cache =
                 directory_size(&steamapps.join("shadercache").join(appid.to_string()));
-            let compatdata_bytes =
-                directory_size(&steamapps.join("compatdata").join(appid.to_string()));
+            let compatdata = directory_size(&steamapps.join("compatdata").join(appid.to_string()));
             installs.push(StorageInstall {
                 appid,
                 library_path: library_root.to_string_lossy().into_owned(),
                 install_path: install_path.to_string_lossy().into_owned(),
-                game_bytes,
-                workshop_bytes,
-                shader_cache_bytes,
-                compatdata_bytes,
-                total_bytes: game_bytes
-                    .saturating_add(workshop_bytes)
-                    .saturating_add(shader_cache_bytes)
-                    .saturating_add(compatdata_bytes),
+                game_bytes: game.bytes,
+                workshop_bytes: workshop.bytes,
+                shader_cache_bytes: shader_cache.bytes,
+                compatdata_bytes: compatdata.bytes,
+                total_bytes: game
+                    .bytes
+                    .saturating_add(workshop.bytes)
+                    .saturating_add(shader_cache.bytes)
+                    .saturating_add(compatdata.bytes),
                 scanned_at,
+                scan_truncated: game.truncated
+                    || workshop.truncated
+                    || shader_cache.truncated
+                    || compatdata.truncated,
             });
         }
     }
@@ -251,22 +257,60 @@ fn vdf_string_value(content: &str, wanted_key: &str) -> Option<String> {
     })
 }
 
-fn directory_size(root: &Path) -> u64 {
-    let Ok(metadata) = fs::symlink_metadata(root) else {
-        return 0;
-    };
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct DirectorySize {
+    bytes: u64,
+    truncated: bool,
+}
+
+fn directory_size(root: &Path) -> DirectorySize {
+    let mut bytes = 0_u64;
+    let mut visited = 0_usize;
+    let mut stack = vec![root.to_path_buf()];
+
+    while let Some(path) = stack.pop() {
+        if visited >= MAX_STORAGE_SCAN_ENTRIES {
+            return DirectorySize {
+                bytes,
+                truncated: true,
+            };
+        }
+        visited += 1;
+
+        let Ok(metadata) = fs::symlink_metadata(&path) else {
+            continue;
+        };
+        if is_link_like(&metadata) {
+            continue;
+        }
+        if metadata.is_file() {
+            bytes = bytes.saturating_add(metadata.len());
+            continue;
+        }
+        let Ok(entries) = fs::read_dir(&path) else {
+            continue;
+        };
+        stack.extend(entries.flatten().map(|entry| entry.path()));
+    }
+
+    DirectorySize {
+        bytes,
+        truncated: false,
+    }
+}
+
+fn is_link_like(metadata: &fs::Metadata) -> bool {
     if metadata.file_type().is_symlink() {
-        return 0;
+        return true;
     }
-    if metadata.is_file() {
-        return metadata.len();
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
+        return metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0;
     }
-    let Ok(entries) = fs::read_dir(root) else {
-        return 0;
-    };
-    entries.flatten().fold(0_u64, |total, entry| {
-        total.saturating_add(directory_size(&entry.path()))
-    })
+    #[cfg(not(windows))]
+    false
 }
 
 fn drive_label(path: &Path) -> String {
@@ -796,7 +840,48 @@ mod tests {
         assert_eq!(inventory.installs[0].game_bytes, 11);
         assert_eq!(inventory.installs[0].workshop_bytes, 7);
         assert_eq!(inventory.installs[0].total_bytes, 18);
+        assert!(!inventory.installs[0].scan_truncated);
         fs::remove_dir_all(steam_path).unwrap();
+    }
+
+    #[test]
+    fn scans_deep_directories_without_recursive_calls() {
+        let root = temp_steam_dir("deep-storage");
+        let mut current = root.clone();
+        for _ in 0..256 {
+            current = current.join("d");
+            fs::create_dir_all(&current).unwrap();
+        }
+        fs::write(current.join("payload.bin"), vec![0_u8; 23]).unwrap();
+
+        assert_eq!(
+            directory_size(&root),
+            DirectorySize {
+                bytes: 23,
+                truncated: false
+            }
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn does_not_follow_directory_symlinks() {
+        use std::os::unix::fs::symlink;
+
+        let root = temp_steam_dir("storage-symlink");
+        fs::create_dir_all(root.join("data")).unwrap();
+        fs::write(root.join("data").join("payload.bin"), vec![0_u8; 19]).unwrap();
+        symlink(&root, root.join("data").join("loop")).unwrap();
+
+        assert_eq!(
+            directory_size(&root),
+            DirectorySize {
+                bytes: 19,
+                truncated: false
+            }
+        );
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

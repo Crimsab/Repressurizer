@@ -5,6 +5,8 @@ export interface DeckPackConfig { availableBytes: number; safetyPercent: number;
 export interface DeckPackItem extends DeckPackCandidate { reasons: string[]; limitations: string[]; priority: number; }
 export interface DeckPackResult { items: DeckPackItem[]; capacityBytes: number; usedBytes: number; remainingBytes: number; overflowBytes: number; missingLocked: number[]; limitations: string[]; }
 
+const MAX_PACK_GAME_COUNT = 100;
+
 function randomRank(seed: number, appId: number): number { let value = (seed ^ appId) >>> 0; value = Math.imul(value ^ value >>> 16, 0x45d9f3b); value = Math.imul(value ^ value >>> 16, 0x45d9f3b); return (value ^ value >>> 16) >>> 0; }
 function passes(candidate: DeckPackCandidate, config: DeckPackConfig): boolean {
   if (candidate.sizeBytes === null || candidate.sizeBytes <= 0 || config.excluded.includes(candidate.appId)) return false;
@@ -23,14 +25,17 @@ function explain(candidate: DeckPackCandidate, wanted: readonly DeckPackCategory
 }
 
 export function buildDeckPack(candidates: readonly DeckPackCandidate[], config: DeckPackConfig): DeckPackResult {
-  const capacityBytes = Math.floor(Math.max(0, config.availableBytes) * (1 - Math.max(0, Math.min(90, config.safetyPercent)) / 100)); const byId = new Map(candidates.map((item) => [item.appId, item])); const items: DeckPackItem[] = []; const categories = new Set<DeckPackCategory>(); const missingLocked: number[] = [];
-  for (const appId of [...new Set(config.locked)]) { const candidate = byId.get(appId); if (!candidate || candidate.sizeBytes === null || config.excluded.includes(appId)) { missingLocked.push(appId); continue; } const info = explain(candidate, config.wantedCategories, categories); items.push({ ...candidate, ...info, reasons: ["Required game", ...info.reasons], priority: items.length + 1 }); candidate.categories.forEach((item) => categories.add(item)); }
-  let used = items.reduce((sum, item) => sum + (item.sizeBytes ?? 0), 0); const pool = candidates.filter((candidate) => !items.some((item) => item.appId === candidate.appId) && passes(candidate, config));
-  while (items.length < Math.max(1, config.gameCount)) {
-    const fitting = pool.filter((candidate) => !items.some((item) => item.appId === candidate.appId) && used + (candidate.sizeBytes ?? 0) <= capacityBytes); if (!fitting.length) break;
+  const availableBytes = Number.isFinite(config.availableBytes) ? config.availableBytes : 0;
+  const safetyPercent = Number.isFinite(config.safetyPercent) ? config.safetyPercent : 15;
+  const targetCount = Math.max(1, Math.min(MAX_PACK_GAME_COUNT, Math.trunc(Number.isFinite(config.gameCount) ? config.gameCount : 8)));
+  const capacityBytes = Math.floor(Math.max(0, availableBytes) * (1 - Math.max(0, Math.min(90, safetyPercent)) / 100)); const byId = new Map(candidates.map((item) => [item.appId, item])); const items: DeckPackItem[] = []; const selectedIds = new Set<number>(); const excludedIds = new Set(config.excluded); const categories = new Set<DeckPackCategory>(); const missingLocked: number[] = [];
+  for (const appId of [...new Set(config.locked)].slice(0, MAX_PACK_GAME_COUNT)) { const candidate = byId.get(appId); if (!candidate || candidate.sizeBytes === null || excludedIds.has(appId)) { missingLocked.push(appId); continue; } const info = explain(candidate, config.wantedCategories, categories); items.push({ ...candidate, ...info, reasons: ["Required game", ...info.reasons], priority: items.length + 1 }); selectedIds.add(appId); candidate.categories.forEach((item) => categories.add(item)); }
+  let used = items.reduce((sum, item) => sum + (item.sizeBytes ?? 0), 0); const pool = candidates.filter((candidate) => !selectedIds.has(candidate.appId) && passes(candidate, config));
+  while (items.length < targetCount) {
+    const fitting = pool.filter((candidate) => !selectedIds.has(candidate.appId) && used + (candidate.sizeBytes ?? 0) <= capacityBytes); if (!fitting.length) break;
     fitting.sort((left, right) => { const score = (candidate: DeckPackCandidate) => candidate.categories.filter((item) => config.wantedCategories.includes(item)).length * 12 + candidate.categories.filter((item) => !categories.has(item)).length * 8 + (candidate.installed ? 2 : 0); const delta = score(right) - score(left); return delta || randomRank(config.seed, left.appId) - randomRank(config.seed, right.appId) || left.appId - right.appId; });
-    const candidate = fitting[0]; const info = explain(candidate, config.wantedCategories, categories); items.push({ ...candidate, ...info, priority: items.length + 1 }); used += candidate.sizeBytes ?? 0; candidate.categories.forEach((item) => categories.add(item));
+    const candidate = fitting[0]; const info = explain(candidate, config.wantedCategories, categories); items.push({ ...candidate, ...info, priority: items.length + 1 }); selectedIds.add(candidate.appId); used += candidate.sizeBytes ?? 0; candidate.categories.forEach((item) => categories.add(item));
   }
-  const limitations = [missingLocked.length ? `${missingLocked.length} required games have no usable size or are excluded` : null, items.length < config.gameCount ? "Not enough eligible games fit the available space" : null, items.some((item) => item.limitations.length) ? "Some compatibility metadata is incomplete" : null].filter((item): item is string => !!item);
+  const limitations = [missingLocked.length ? `${missingLocked.length} required games have no usable size or are excluded` : null, items.length < targetCount ? "Not enough eligible games fit the available space" : null, items.some((item) => item.limitations.length) ? "Some compatibility metadata is incomplete" : null].filter((item): item is string => !!item);
   return { items, capacityBytes, usedBytes: used, remainingBytes: Math.max(0, capacityBytes - used), overflowBytes: Math.max(0, used - capacityBytes), missingLocked, limitations };
 }
