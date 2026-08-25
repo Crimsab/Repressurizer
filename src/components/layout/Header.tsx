@@ -14,6 +14,7 @@ import { analyzeThreeWayCollectionMerge, type ThreeWayMergeAnalysis } from "../.
 import { buildSavePreview, type SavePreview } from "../../lib/savePreview";
 import { hasAdvancedFilters } from "../../lib/search";
 import { useT, type TranslationKey } from "../../lib/i18n";
+import { type ToolbarToolId } from "../../lib/toolbarTools";
 import { DialogOverlay } from "../ui/DialogOverlay";
 import { Tooltip } from "../ui/Tooltip";
 import {
@@ -183,7 +184,7 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
   const discardChanges = useCategoryStore((s) => s.discardChanges);
   const historyLen = useCategoryStore((s) => s._history.length);
   const futureLen = useCategoryStore((s) => s._future.length);
-  const { steamPath, steamId3 } = useSettingsStore();
+  const { steamPath, steamId3, toolbarToolOrder, toolbarPinnedToolIds, toolbarHiddenToolIds, toolbarVisibleCount, setSettings } = useSettingsStore();
 
   const [showSettings, setShowSettings] = useState(false);
   const [showExport, setShowExport] = useState(false);
@@ -205,6 +206,7 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
   const [showCommunityPacks, setShowCommunityPacks] = useState(false);
   const [showMetadataHealth, setShowMetadataHealth] = useState(false);
   const [showMoreTools, setShowMoreTools] = useState(false);
+  const [toolbarContextKey, setToolbarContextKey] = useState<ToolbarToolId | null>(null);
   const [showSavePreview, setShowSavePreview] = useState(false);
   const [saving, setSaving] = useState(false);
   const [steamRunningForSave, setSteamRunningForSave] = useState<boolean | null>(null);
@@ -231,18 +233,32 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
     { key: "stats", label: t("toolbar.stats"), Icon: ChartBar, open: () => setShowStats(true), loader: loadStatsPage, badge: 0 },
     { key: "export", label: t("toolbar.export"), Icon: Export, open: () => openExportDialog(), loader: loadExportDialog, badge: 0 },
   ];
+  const enabledToolKeys = new Set(toolbarHiddenToolIds);
+  const toolsByKey = new Map(secondaryTools.map((tool) => [tool.key, tool]));
+  const orderedTools = toolbarToolOrder.flatMap((key) => {
+    const tool = toolsByKey.get(key);
+    return tool && !enabledToolKeys.has(key) ? [tool] : [];
+  });
+  const pinnedKeySet = new Set(toolbarPinnedToolIds);
+  const pinnedTools = orderedTools.filter((tool) => pinnedKeySet.has(tool.key)).slice(0, toolbarVisibleCount);
+  const visiblePinnedKeys = new Set(pinnedTools.map((tool) => tool.key));
+  const configureTool = (key: ToolbarToolId, action: "pin" | "hide") => {
+    if (action === "hide") setSettings({ toolbarHiddenToolIds: [...new Set([...toolbarHiddenToolIds, key])] });
+    else setSettings({ toolbarPinnedToolIds: pinnedKeySet.has(key) ? toolbarPinnedToolIds.filter((id) => id !== key) : [...toolbarPinnedToolIds, key] });
+    setToolbarContextKey(null);
+  };
 
   useEffect(() => {
     if (exportOpenVersion > 0) setShowExport(true);
   }, [exportOpenVersion]);
 
   useEffect(() => {
-    if (!showMoreTools) return;
+    if (!showMoreTools && !toolbarContextKey) return;
     const handlePointerDown = (event: PointerEvent) => {
-      if (!moreToolsRef.current?.contains(event.target as Node)) setShowMoreTools(false);
+      if (!moreToolsRef.current?.contains(event.target as Node)) { setShowMoreTools(false); setToolbarContextKey(null); }
     };
     const handleKeyDown = (event: globalThis.KeyboardEvent) => {
-      if (event.key === "Escape") setShowMoreTools(false);
+      if (event.key === "Escape") { setShowMoreTools(false); setToolbarContextKey(null); }
     };
     document.addEventListener("pointerdown", handlePointerDown);
     document.addEventListener("keydown", handleKeyDown);
@@ -250,7 +266,7 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
       document.removeEventListener("pointerdown", handlePointerDown);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [showMoreTools]);
+  }, [showMoreTools, toolbarContextKey]);
 
   useEffect(() => {
     let unlisten: (() => void) | undefined;
@@ -525,12 +541,13 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
             )}
           </ToolbarIconButton>
 
-          {secondaryTools.map(({ key, label, Icon, open, loader, badge }) => (
+          {pinnedTools.map(({ key, label, Icon, open, loader, badge }) => (
             <ToolbarIconButton
               key={key}
               label={label}
               wrapperClassName="hidden min-[1120px]:inline-flex"
               onClick={open}
+              onContextMenu={(event) => { event.preventDefault(); setShowMoreTools(false); setToolbarContextKey(key as ToolbarToolId); }}
               onPointerEnter={() => preload(loader)}
               onFocus={() => preload(loader)}
               className="btn-press relative flex h-8 w-8 items-center justify-center rounded-lg text-repressurizer-text-muted transition-colors hover:bg-repressurizer-surface-hover hover:text-white"
@@ -540,11 +557,11 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
             </ToolbarIconButton>
           ))}
 
-          <div ref={moreToolsRef} className="relative min-[1120px]:hidden">
+          <div ref={moreToolsRef} className="relative">
             <ToolbarIconButton
               label={t("toolbar.more")}
               type="button"
-              onClick={() => setShowMoreTools((open) => !open)}
+              onClick={() => { setToolbarContextKey(null); setShowMoreTools((open) => !open); }}
               aria-haspopup="menu"
               aria-expanded={showMoreTools}
               className="btn-press flex h-8 w-8 items-center justify-center rounded-lg text-repressurizer-text-muted transition-colors hover:bg-repressurizer-surface-hover hover:text-white"
@@ -557,7 +574,7 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
                 aria-label={t("toolbar.more")}
                 className="absolute right-0 top-full z-50 mt-1.5 w-56 rounded-xl border border-repressurizer-border bg-repressurizer-surface p-1.5 shadow-pop"
               >
-                {secondaryTools.map(({ key, label, Icon, open, loader, badge }) => (
+                {orderedTools.map(({ key, label, Icon, open, loader, badge }) => (
                   <button
                     key={key}
                     type="button"
@@ -568,7 +585,7 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
                     }}
                     onPointerEnter={() => preload(loader)}
                     onFocus={() => preload(loader)}
-                    className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs text-repressurizer-text transition-colors hover:bg-repressurizer-surface-hover focus:bg-repressurizer-surface-hover focus:outline-none"
+                    className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-xs text-repressurizer-text transition-colors hover:bg-repressurizer-surface-hover focus:bg-repressurizer-surface-hover focus:outline-none ${visiblePinnedKeys.has(key) ? "min-[1120px]:hidden" : ""}`}
                   >
                     <Icon size={15} className="text-repressurizer-text-muted" />
                     <span className="min-w-0 flex-1">{label}</span>
@@ -609,6 +626,7 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
                 </button>
               </div>
             )}
+            {toolbarContextKey && <div role="menu" className="absolute right-0 top-full z-50 mt-1.5 w-52 rounded-xl border border-repressurizer-border bg-repressurizer-surface p-1.5 shadow-pop"><button type="button" role="menuitem" onClick={() => configureTool(toolbarContextKey, "pin")} className="flex w-full rounded-lg px-3 py-2 text-left text-xs text-repressurizer-text-muted hover:bg-repressurizer-surface-hover hover:text-white">{t(pinnedKeySet.has(toolbarContextKey) ? "settings.toolbar.inMore" : "settings.toolbar.pinned")}</button><button type="button" role="menuitem" onClick={() => configureTool(toolbarContextKey, "hide")} className="flex w-full rounded-lg px-3 py-2 text-left text-xs text-repressurizer-text-muted hover:bg-repressurizer-surface-hover hover:text-white">{t("settings.toolbar.hidden")}</button></div>}
           </div>
 
           {/* Settings */}

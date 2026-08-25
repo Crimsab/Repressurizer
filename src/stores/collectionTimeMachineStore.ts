@@ -72,9 +72,18 @@ function parsed(raw: string | null): PersistedTimeMachine | null {
     if (value.version !== SCHEMA_VERSION || !Array.isArray(value.snapshots) || !Array.isArray(value.events)) return null;
     const snapshots = value.snapshots.map(parseCollectionSnapshot).filter((snapshot): snapshot is CollectionSnapshot => Boolean(snapshot));
     const snapshotIds = new Set(snapshots.map((snapshot) => snapshot.id));
-    const events = value.events
+    const parsedEvents = value.events
       .filter((event) => event && snapshotIds.has(event.beforeSnapshotId) && snapshotIds.has(event.afterSnapshotId))
       .map((event) => ({ ...event, steamLibraryPath: typeof event.steamLibraryPath === "string" ? event.steamLibraryPath : "unknown" }));
+    const snapshotsById = new Map(snapshots.map((snapshot) => [snapshot.id, snapshot]));
+    const uniqueTransitions = new Map<string, CollectionTimelineEvent>();
+    for (const event of parsedEvents) {
+      const before = snapshotsById.get(event.beforeSnapshotId);
+      // An empty-to-full Steam event is startup discovery, not known history.
+      if (event.origin === "steam" && before?.collections.length === 0) continue;
+      uniqueTransitions.set(`${event.beforeSnapshotId}\u001f${event.afterSnapshotId}\u001f${event.origin}`, event);
+    }
+    const events = [...uniqueTransitions.values()].sort((left, right) => left.occurredAt - right.occurredAt);
     const retention: SnapshotRetention = ["all", "30-days", "100-snapshots"].includes(value.retention ?? "") ? value.retention! : "100-snapshots";
     return prune({ version: SCHEMA_VERSION, retention, snapshots, events, pinnedSnapshotIds: (value.pinnedSnapshotIds ?? []).filter((id) => snapshotIds.has(id)) });
   } catch {
@@ -102,6 +111,7 @@ export const useCollectionTimeMachineStore = create<CollectionTimeMachineState>(
     const event = createTimelineEvent({ before: beforeSnapshot, after: afterSnapshot, origin, occurredAt });
     if (!event) return null;
     const state = get();
+    if (state.events.some((candidate) => candidate.beforeSnapshotId === event.beforeSnapshotId && candidate.afterSnapshotId === event.afterSnapshotId && candidate.origin === event.origin)) return null;
     const snapshotsById = new Map(state.snapshots.map((snapshot) => [snapshot.id, snapshot]));
     if (!snapshotsById.has(beforeSnapshot.id)) snapshotsById.set(beforeSnapshot.id, beforeSnapshot);
     if (!snapshotsById.has(afterSnapshot.id)) snapshotsById.set(afterSnapshot.id, afterSnapshot);

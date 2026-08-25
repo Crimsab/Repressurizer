@@ -6,6 +6,7 @@ export type SettingsTab =
   | "steam"
   | "automation"
   | "appearance"
+  | "toolbar"
   | "data"
   | "backups"
   | "ignored"

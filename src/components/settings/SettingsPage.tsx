@@ -33,6 +33,7 @@ import {
   UsersThree,
   MagnifyingGlass,
   Wrench,
+  SlidersHorizontal,
 } from "@phosphor-icons/react";
 import { useT } from "../../lib/i18n";
 import { DialogOverlay } from "../ui/DialogOverlay";
@@ -70,6 +71,7 @@ import { CoreSettingsSection } from "./CoreSettingsSections";
 import { MaintenanceSettingsSection } from "./data/MaintenanceSettingsSection";
 import { useMaintenanceSettings } from "./data/useMaintenanceSettings";
 import { IntegrationsSettingsSection } from "./IntegrationsSettingsSection";
+import { ToolbarSettingsTab } from "./ToolbarSettingsTab";
 
 const AppearanceTab = lazy(() =>
   import("./AppearanceSettingsTab").then((module) => ({ default: module.AppearanceTab }))
@@ -556,6 +558,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
     { id: "steam", label: t("settings.steam"), icon: <UsersThree size={14} /> },
     { id: "automation", label: t("settings.automation"), icon: <CloudArrowDown size={14} /> },
     { id: "appearance", label: t("settings.appearance"), icon: <Palette size={14} /> },
+    { id: "toolbar", label: t("settings.toolbar.title"), icon: <SlidersHorizontal size={14} /> },
     { id: "data", label: t("settings.data"), icon: <Database size={14} /> },
     { id: "backups", label: t("settings.backups"), icon: <ClockCounterClockwise size={14} /> },
     {
@@ -887,6 +890,8 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
               <AppearanceTab isSectionVisible={isSectionVisible} />
             </Suspense>
           )}
+
+          {tab === "toolbar" && <ToolbarSettingsTab />}
 
           {tab === "backups" && (
             <BackupsTab

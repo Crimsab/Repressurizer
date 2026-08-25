@@ -14,6 +14,7 @@ import { isHltbTimeMode } from "../lib/hltb";
 import { normalizeCategoryColors } from "../lib/categoryColors";
 import { DEFAULT_CATEGORY_CHIP_STYLE, normalizeCategoryChipStyle } from "../lib/categoryChipStyles";
 import { DEFAULT_DETAILS_CACHE_MAX_AGE_DAYS } from "../lib/detailsCache";
+import { DEFAULT_PINNED_TOOLS, DEFAULT_TOOLBAR_ORDER, normalizeToolbarIds } from "../lib/toolbarTools";
 
 interface SettingsState extends AppSettings {
   hydrateFromDisk: () => Promise<void>;
@@ -54,6 +55,10 @@ const defaults: AppSettings = {
   showDetailHltb: true,
   showDetailMetacritic: true,
   showDetailPrice: true,
+  toolbarToolOrder: DEFAULT_TOOLBAR_ORDER,
+  toolbarPinnedToolIds: DEFAULT_PINNED_TOOLS,
+  toolbarHiddenToolIds: [],
+  toolbarVisibleCount: 4,
   hltbConcurrency: 5,
   achievementsConcurrency: 5,
   steamDetailsDelayMs: 1200,
@@ -226,6 +231,10 @@ function normalizeSettings(raw: Partial<AppSettings>): AppSettings {
     libraryRefreshCacheMode: normalizeLibraryRefreshCacheMode(raw),
     categoryColors: normalizeCategoryColors(raw.categoryColors),
     categoryChipStyle: normalizeCategoryChipStyle(raw.categoryChipStyle),
+    toolbarToolOrder: normalizeToolbarIds(raw.toolbarToolOrder, true),
+    toolbarPinnedToolIds: normalizeToolbarIds(raw.toolbarPinnedToolIds ?? DEFAULT_PINNED_TOOLS, false),
+    toolbarHiddenToolIds: normalizeToolbarIds(raw.toolbarHiddenToolIds, false),
+    toolbarVisibleCount: clampInteger(raw.toolbarVisibleCount, defaults.toolbarVisibleCount, 0, 8),
     updateChannel: raw.updateChannel === "beta" ? "beta" : "stable",
     automationPublishPayload: normalizeAutomationPublishPayload(raw.automationPublishPayload),
     mcpPermissionMode: raw.mcpPermissionMode === "manageLibrary" || raw.mcpPermissionMode === "full"

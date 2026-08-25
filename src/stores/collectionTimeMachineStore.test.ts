@@ -18,6 +18,8 @@ describe("collectionTimeMachineStore", () => {
     useCollectionTimeMachineStore.getState().recordTransition({ before: [collection([1])], after: [collection([1, 2])], origin: "autocat", steamAccountId: "account", occurredAt: 20 });
     expect(useCollectionTimeMachineStore.getState().snapshots).toHaveLength(2);
     expect(useCollectionTimeMachineStore.getState().events).toHaveLength(2);
+    expect(useCollectionTimeMachineStore.getState().recordTransition({ before: [collection([1])], after: [collection([1, 2])], origin: "manual", steamAccountId: "account", occurredAt: 30 })).toBeNull();
+    expect(useCollectionTimeMachineStore.getState().events).toHaveLength(2);
   });
 
   it("retains pinned content when pruning old events", () => {

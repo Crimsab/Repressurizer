@@ -849,6 +849,9 @@ function AppContent() {
       const before = previous;
       previousReference = state.collections;
       previous = structuredClone(state.collections);
+      // The first Steam load establishes a baseline. Treating [] -> library as
+      // a change made every launch claim that every collection/game was added.
+      if (before.length === 0 && state._lastChangeOrigin === "steam") return;
       useCollectionTimeMachineStore.getState().recordTransition({
         before,
         after: state.collections,

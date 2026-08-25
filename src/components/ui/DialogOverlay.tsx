@@ -3,6 +3,7 @@ import {
   useRef,
   type HTMLAttributes,
   type KeyboardEvent,
+  type PointerEvent,
   type ReactNode,
   type RefObject,
 } from "react";
@@ -21,6 +22,7 @@ interface DialogOverlayProps extends Omit<HTMLAttributes<HTMLDivElement>, "child
   label: string;
   onClose: () => void;
   initialFocusRef?: RefObject<HTMLElement | null>;
+  closeOnBackdrop?: boolean;
 }
 
 export function DialogOverlay({
@@ -28,7 +30,9 @@ export function DialogOverlay({
   label,
   onClose,
   onKeyDown,
+  onPointerDown,
   initialFocusRef,
+  closeOnBackdrop = true,
   ...props
 }: DialogOverlayProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -86,6 +90,13 @@ export function DialogOverlay({
     }
   };
 
+  const handlePointerDown = (event: PointerEvent<HTMLDivElement>) => {
+    onPointerDown?.(event);
+    if (!event.defaultPrevented && closeOnBackdrop && event.target === event.currentTarget) {
+      onClose();
+    }
+  };
+
   return (
     <div
       {...props}
@@ -95,6 +106,7 @@ export function DialogOverlay({
       aria-label={label}
       tabIndex={-1}
       onKeyDown={handleKeyDown}
+      onPointerDown={handlePointerDown}
     >
       {children}
     </div>

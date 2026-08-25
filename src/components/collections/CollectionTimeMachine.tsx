@@ -17,6 +17,7 @@ import { useSettingsStore } from "../../stores/settingsStore";
 import { useToastStore } from "../../stores/toastStore";
 import { DialogOverlay } from "../ui/DialogOverlay";
 import { ResizableDialogPanel } from "../ui/ResizableDialogPanel";
+import { SelectMenu } from "../ui/SelectMenu";
 
 interface RestorePreview {
   target: CollectionSnapshot;
@@ -26,8 +27,7 @@ interface RestorePreview {
 }
 
 function snapshotLabel(snapshot: CollectionSnapshot): string {
-  const device = snapshot.deviceId.length > 12 ? `${snapshot.deviceId.slice(0, 12)}…` : snapshot.deviceId;
-  return `${new Intl.DateTimeFormat(undefined, { dateStyle: "short", timeStyle: "short" }).format(snapshot.createdAt)} · ${device}`;
+  return new Intl.DateTimeFormat(undefined, { dateStyle: "short", timeStyle: "short" }).format(snapshot.createdAt);
 }
 
 export function CollectionTimeMachine({ onClose }: { onClose: () => void }) {
@@ -104,14 +104,11 @@ export function CollectionTimeMachine({ onClose }: { onClose: () => void }) {
         <aside className="min-h-0 overflow-y-auto border-b border-repressurizer-border-subtle p-3 md:border-b-0 md:border-r">
           <div className="mb-3 flex items-center justify-between gap-2">
             <span className="text-[10px] font-semibold uppercase tracking-wide text-repressurizer-text-faint">{t("timeMachine.timeline")}</span>
-            <select aria-label={t("timeMachine.retention")} value={timeMachine.retention} onChange={(event) => timeMachine.setRetention(event.target.value as SnapshotRetention)} className="rounded-md border border-repressurizer-border bg-repressurizer-bg px-2 py-1 text-[10px] text-repressurizer-text">
-              <option value="all">{t("timeMachine.retention.all")}</option><option value="30-days">{t("timeMachine.retention.30days")}</option><option value="100-snapshots">{t("timeMachine.retention.100")}</option>
-            </select>
+            <SelectMenu value={timeMachine.retention} onChange={(value) => timeMachine.setRetention(value as SnapshotRetention)} options={[{ value: "all", label: t("timeMachine.retention.all") }, { value: "30-days", label: t("timeMachine.retention.30days") }, { value: "100-snapshots", label: t("timeMachine.retention.100") }]} ariaLabel={t("timeMachine.retention")} size="sm" />
           </div>
           {events.length ? <div className="space-y-2">{events.map((event) => <button data-testid={`time-machine-event-${event.id}`} key={event.id} onClick={() => setSelectedEventId(event.id)} className={`w-full rounded-xl border p-3 text-left ${selectedEvent?.id === event.id ? "border-repressurizer-accent bg-repressurizer-accent/5" : "border-repressurizer-border-subtle bg-repressurizer-bg/45"}`}>
             <div className="flex items-center justify-between gap-2"><span className="text-xs font-medium text-white">{t(`timeMachine.origin.${event.origin}` as TranslationKey)}</span><time className="text-[9px] text-repressurizer-text-faint">{new Intl.DateTimeFormat(undefined, { dateStyle: "short", timeStyle: "short" }).format(event.occurredAt)}</time></div>
             <p className="mt-1 text-[10px] text-repressurizer-text-muted">{t("timeMachine.event.summary", { collections: event.diff.created + event.diff.deleted + event.diff.renamed + event.diff.colors + event.diff.reordered, added: event.diff.gamesAdded, removed: event.diff.gamesRemoved })}</p>
-            <p className="mt-1 truncate text-[9px] text-repressurizer-text-faint" title={event.steamLibraryPath}>{event.steamAccountId} · {event.deviceId} · {event.steamLibraryPath}</p>
           </button>)}</div> : <p className="py-16 text-center text-xs text-repressurizer-text-faint">{t("timeMachine.empty")}</p>}
         </aside>
         <main className="min-h-0 overflow-y-auto p-4">
@@ -130,8 +127,8 @@ export function CollectionTimeMachine({ onClose }: { onClose: () => void }) {
           </> : <p className="py-16 text-center text-xs text-repressurizer-text-faint">{t("timeMachine.selectTwo")}</p>}
           {target && <section className="sticky bottom-0 mt-5 rounded-xl border border-repressurizer-border bg-repressurizer-surface/95 p-3 shadow-pop backdrop-blur">
             <div className="flex flex-wrap items-end gap-2">
-              <label className="min-w-40 flex-1 space-y-1"><span className="text-[9px] uppercase text-repressurizer-text-faint">{t("timeMachine.restore.mode")}</span><select value={restoreMode} onChange={(event) => setRestoreMode(event.target.value as SelectiveRestoreMode)} className="w-full rounded-lg border border-repressurizer-border bg-repressurizer-bg px-2 py-1.5 text-xs text-repressurizer-text"><option value="full">{t("timeMachine.restore.full")}</option><option value="collection">{t("timeMachine.restore.collection")}</option><option value="added">{t("timeMachine.restore.added")}</option><option value="removed">{t("timeMachine.restore.removed")}</option><option value="rename">{t("timeMachine.restore.rename")}</option></select></label>
-              {restoreMode === "collection" && <label className="min-w-44 flex-1 space-y-1"><span className="text-[9px] uppercase text-repressurizer-text-faint">{t("timeMachine.restore.chooseCollection")}</span><select value={restoreIdentity} onChange={(event) => setRestoreIdentity(event.target.value)} className="w-full rounded-lg border border-repressurizer-border bg-repressurizer-bg px-2 py-1.5 text-xs text-repressurizer-text">{selectableChanges.map((change) => <option key={change.identity} value={change.identity}>{change.after?.name ?? change.before?.name ?? change.identity}</option>)}</select></label>}
+              <SelectMenu value={restoreMode} onChange={(value) => setRestoreMode(value as SelectiveRestoreMode)} options={[{ value: "full", label: t("timeMachine.restore.full") }, { value: "collection", label: t("timeMachine.restore.collection") }, { value: "added", label: t("timeMachine.restore.added") }, { value: "removed", label: t("timeMachine.restore.removed") }, { value: "rename", label: t("timeMachine.restore.rename") }]} label={t("timeMachine.restore.mode")} ariaLabel={t("timeMachine.restore.mode")} className="min-w-40 flex-1" size="sm" />
+              {restoreMode === "collection" && <SelectMenu value={restoreIdentity} onChange={setRestoreIdentity} options={selectableChanges.map((change) => ({ value: change.identity, label: change.after?.name ?? change.before?.name ?? change.identity }))} label={t("timeMachine.restore.chooseCollection")} ariaLabel={t("timeMachine.restore.chooseCollection")} className="min-w-44 flex-1" size="sm" />}
               <button onClick={() => timeMachine.togglePinned(target.id)} className="inline-flex items-center gap-1 rounded-lg border border-repressurizer-border px-3 py-2 text-xs text-repressurizer-text-muted"><PushPin size={13} />{t(timeMachine.pinnedSnapshotIds.includes(target.id) ? "timeMachine.unpin" : "timeMachine.pin")}</button>
               <button onClick={() => void exportSnapshot()} className="inline-flex items-center gap-1 rounded-lg border border-repressurizer-border px-3 py-2 text-xs text-repressurizer-text-muted"><DownloadSimple size={13} />{t("timeMachine.export")}</button>
               <button onClick={openRestorePreview} className="inline-flex items-center gap-1 rounded-lg bg-repressurizer-accent px-3 py-2 text-xs font-medium text-white"><ArrowCounterClockwise size={13} />{t("timeMachine.restore.preview")}</button>
@@ -146,7 +143,7 @@ export function CollectionTimeMachine({ onClose }: { onClose: () => void }) {
 }
 
 function SnapshotSelect({ label, value, snapshots, onChange }: { label: string; value: string; snapshots: CollectionSnapshot[]; onChange: (value: string) => void }) {
-  return <label className="space-y-1"><span className="text-[10px] font-semibold uppercase tracking-wide text-repressurizer-text-faint">{label}</span><select aria-label={label} value={value} onChange={(event) => onChange(event.target.value)} className="w-full rounded-lg border border-repressurizer-border bg-repressurizer-bg px-3 py-2 text-xs text-repressurizer-text">{snapshots.map((snapshot) => <option key={snapshot.id} value={snapshot.id}>{snapshotLabel(snapshot)}</option>)}</select></label>;
+  return <SelectMenu value={value} onChange={onChange} options={snapshots.map((snapshot) => ({ value: snapshot.id, label: snapshotLabel(snapshot) }))} label={label} ariaLabel={label} />;
 }
 
 function Metric({ label, value }: { label: string; value: number }) { return <div className="rounded-lg border border-repressurizer-border-subtle bg-repressurizer-bg/55 p-2 text-center"><p className="font-mono text-sm text-white">{value}</p><p className="text-[9px] text-repressurizer-text-faint">{label}</p></div>; }

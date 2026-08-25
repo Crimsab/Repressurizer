@@ -30,6 +30,7 @@ const settings: AppSettings = {
   showDetailHltb: true,
   showDetailMetacritic: true,
   showDetailPrice: true,
+  toolbarToolOrder: [], toolbarPinnedToolIds: [], toolbarHiddenToolIds: [], toolbarVisibleCount: 4,
   hltbConcurrency: 5,
   hltbTimeMode: "main_story",
   achievementsConcurrency: 5,

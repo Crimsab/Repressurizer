@@ -453,6 +453,10 @@ export interface AppSettings {
   showDetailHltb: boolean;
   showDetailMetacritic: boolean;
   showDetailPrice: boolean;
+  toolbarToolOrder: string[];
+  toolbarPinnedToolIds: string[];
+  toolbarHiddenToolIds: string[];
+  toolbarVisibleCount: number;
   // Fetch settings
   hltbConcurrency: number;
   achievementsConcurrency: number;

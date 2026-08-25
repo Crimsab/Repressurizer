@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Pulse as Activity, ArrowClockwise, WarningCircle, X } from "@phosphor-icons/react";
 import { gameMetadataOverall, metadataRefreshIds, METADATA_PROVIDERS, summarizeProvider } from "../../lib/metadataHealth";
-import { providerDataState, providerRefreshAllowed, type MetadataProvider } from "../../lib/providerHealth";
+import { providerDataState, providerRefreshAllowed, type MetadataProvider, type ProviderHealthRecord } from "../../lib/providerHealth";
 import { useProviderHealthStore } from "../../stores/providerHealthStore";
 import { useMetadataHealthStore } from "../../stores/metadataHealthStore";
 import { useBackgroundFetchStore } from "../../stores/backgroundFetchStore";
@@ -9,15 +9,32 @@ import { useGameStore } from "../../stores/gameStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { useStoragePlannerStore } from "../../stores/storagePlannerStore";
 import { useToastStore } from "../../stores/toastStore";
+import { useAchievementsStore } from "../../stores/achievementsStore";
+import { useFamilyStore } from "../../stores/familyStore";
+import { useHltbStore } from "../../stores/hltbStore";
+import { useSteamRatingsStore } from "../../stores/steamRatingsStore";
 import { useT, type TranslationKey } from "../../lib/i18n";
 import { DialogOverlay } from "../ui/DialogOverlay";
 import { ResizableDialogPanel } from "../ui/ResizableDialogPanel";
 type RefreshMode = "all" | "missing" | "stale";
 const GAME_PROVIDERS: MetadataProvider[] = ["steam-details", "steam-reviews", "steam-achievements", "steam-release-dates", "hltb", "storage"];
+function cachedRecord(provider: MetadataProvider, observedAt: number | null): ProviderHealthRecord { const at = observedAt && observedAt < 1_000_000_000_000 ? observedAt * 1000 : observedAt ?? 0; return { provider, lastAttemptAt: at, lastSuccessAt: at || null, lastOutcome: "success", consecutiveFailures: 0, successCount: 1, missingCount: 0, failureCount: 0 }; }
 
 export function MetadataHealthCenter({ onClose, onRefreshLibrary }: { onClose: () => void; onRefreshLibrary: () => void }) {
-  const t = useT(); const health = useProviderHealthStore(); const settings = useMetadataHealthStore(); const games = useGameStore((state) => state.games); const steamPath = useSettingsStore((state) => state.steamPath); const toast = useToastStore; const [query, setQuery] = useState(""); const maxAgeMs = settings.freshnessDays * 86_400_000; const appIds = Object.keys(games).map(Number); const summaries = METADATA_PROVIDERS.map((provider) => summarizeProvider(provider, health.providers[provider], health.games[provider], maxAgeMs));
-  const rows = useMemo(() => Object.values(games).map((game) => { const states = GAME_PROVIDERS.map((provider) => providerDataState(health.games[provider]?.[game.appid], maxAgeMs)); return { game, states, overall: gameMetadataOverall(states) }; }).filter((row) => row.game.name.toLowerCase().includes(query.toLowerCase())).sort((left, right) => left.overall.localeCompare(right.overall) || left.game.name.localeCompare(right.game.name)).slice(0, 200), [games, health.games, maxAgeMs, query]);
+  const t = useT(); const health = useProviderHealthStore(); const settings = useMetadataHealthStore(); const games = useGameStore((state) => state.games); const details = useGameStore((state) => state.details); const ratings = useSteamRatingsStore((state) => state.ratings); const achievements = useAchievementsStore((state) => state.summaries); const hltb = useHltbStore((state) => state.data); const familyApps = useFamilyStore((state) => state.apps); const familyFetchedAt = useFamilyStore((state) => state.lastFetched); const inventory = useStoragePlannerStore((state) => state.inventory); const steamPath = useSettingsStore((state) => state.steamPath); const toast = useToastStore; const [query, setQuery] = useState(""); const maxAgeMs = settings.freshnessDays * 86_400_000; const appIds = Object.keys(games).map(Number);
+  const observedGames = useMemo(() => {
+    const result: Partial<Record<MetadataProvider, Record<number, ProviderHealthRecord>>> = { "steam-library": Object.fromEntries(appIds.map((appId) => [appId, cachedRecord("steam-library", null)])), "steam-details": {}, "steam-reviews": {}, "steam-achievements": {}, "steam-family": {}, "steam-release-dates": {}, hltb: {}, storage: {} };
+    for (const [id, detail] of Object.entries(details)) { result["steam-details"]![Number(id)] = cachedRecord("steam-details", detail.fetched_at ?? null); if (detail.store_release_date_fetched_at) result["steam-release-dates"]![Number(id)] = cachedRecord("steam-release-dates", detail.store_release_date_fetched_at); }
+    for (const [id, rating] of Object.entries(ratings)) result["steam-reviews"]![Number(id)] = cachedRecord("steam-reviews", rating.fetched_at);
+    for (const id of Object.keys(achievements)) result["steam-achievements"]![Number(id)] = cachedRecord("steam-achievements", null);
+    for (const id of Object.keys(hltb)) result.hltb![Number(id)] = cachedRecord("hltb", null);
+    for (const id of Object.keys(familyApps)) result["steam-family"]![Number(id)] = cachedRecord("steam-family", familyFetchedAt);
+    for (const install of inventory?.installs ?? []) result.storage![install.appid] = cachedRecord("storage", install.scannedAt);
+    for (const provider of METADATA_PROVIDERS) result[provider] = { ...(result[provider] ?? {}), ...(health.games[provider] ?? {}) };
+    return result;
+  }, [achievements, appIds.join(","), details, familyApps, familyFetchedAt, health.games, hltb, inventory, ratings]);
+  const summaries = METADATA_PROVIDERS.map((provider) => { const cached = Object.values(observedGames[provider] ?? {}); const inferred = cached.length ? cached.reduce((latest, record) => record.lastAttemptAt > latest.lastAttemptAt ? record : latest) : undefined; return summarizeProvider(provider, health.providers[provider] ?? inferred, observedGames[provider], maxAgeMs); });
+  const rows = useMemo(() => Object.values(games).map((game) => { const states = GAME_PROVIDERS.map((provider) => providerDataState(observedGames[provider]?.[game.appid], maxAgeMs)); return { game, states, overall: gameMetadataOverall(states) }; }).filter((row) => row.game.name.toLowerCase().includes(query.toLowerCase())).sort((left, right) => left.overall.localeCompare(right.overall) || left.game.name.localeCompare(right.game.name)).slice(0, 200), [games, maxAgeMs, observedGames, query]);
   const refreshProvider = (provider: MetadataProvider, mode: RefreshMode, onlyAppId?: number) => { const allowed = providerRefreshAllowed(health.providers[provider]); if (!allowed.allowed) { toast.getState().info(t("health.backoff", { time: new Date(allowed.retryAt!).toLocaleTimeString() })); return; } const ids = onlyAppId ? [onlyAppId] : metadataRefreshIds(mode, appIds, health.games[provider], maxAgeMs); const items = ids.flatMap((appId) => games[appId] ? [{ appId, name: games[appId].name }] : []); const fetch = useBackgroundFetchStore.getState(); if (provider === "steam-library") return onRefreshLibrary(); if (provider === "steam-details") fetch.startDetailsFetch(ids, { force: mode === "all" }); else if (provider === "hltb") fetch.startHltbFetch(items); else if (provider === "steam-achievements") fetch.startAchievementsFetch(items); else if (provider === "steam-reviews") fetch.startRatingsFetch(items, { force: mode === "all" }); else if (provider === "steam-release-dates") fetch.startStoreReleaseDateFetch(items, { force: mode === "all" }); else if (provider === "storage") void useStoragePlannerStore.getState().refresh(steamPath).catch(() => {}); else toast.getState().info(t("health.familySettings")); };
   const refreshScope = (mode: RefreshMode) => { for (const provider of METADATA_PROVIDERS) if (provider !== "steam-family") refreshProvider(provider, mode); };
   return <DialogOverlay label={t("health.title")} onClose={onClose} className="fixed inset-0 z-[80] flex items-center justify-center bg-black/70 p-3 backdrop-blur-md"><ResizableDialogPanel dialogId="metadata-health" defaultSize={{ width: 1160, height: 800 }} minSize={{ width: 700, height: 540 }} className="relative flex min-h-0 flex-col overflow-hidden rounded-2xl border border-repressurizer-border bg-repressurizer-surface shadow-dialog">{({ sizeControls }) => <>
