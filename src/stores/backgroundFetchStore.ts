@@ -7,6 +7,7 @@ import { useSteamRatingsStore } from "./steamRatingsStore";
 import { useFailedGamesStore } from "./failedGamesStore";
 import { useHltbIgnoredStore } from "./hltbIgnoredStore";
 import { useSettingsStore } from "./settingsStore";
+import { useProviderHealthStore } from "./providerHealthStore";
 import { extractReleaseYear } from "../lib/search";
 import { detailsPriceNeedsCurrencyRefresh } from "../lib/prices";
 import { bestAvailableReleaseDate, storeReleaseDateNeedsRefresh } from "../lib/releaseDates";
@@ -563,6 +564,7 @@ async function _runDetailsLoop(missingIds: number[], run: RunToken) {
       const detail = await fetchGameDetails(id, cc);
       if (!isCurrent()) return;
       buffer.push(detail);
+      useProviderHealthStore.getState().record("steam-details", "success", id);
       successfulDetailIds.add(id);
       addToRecent("detailsRecentNames", `✓ ${name}`);
       console.log(`[Details] ✓ ${name} (${id})`);
@@ -572,12 +574,14 @@ async function _runDetailsLoop(missingIds: number[], run: RunToken) {
     } catch (e) {
       if (!isCurrent()) return;
       if (isPermanentError(e)) {
+        useProviderHealthStore.getState().record("steam-details", "unavailable", id);
         const failed = _getState().detailsFailed + 1;
         _setState({ detailsFailed: failed });
         failedGamesStore.recordFailure(id);
         addToRecent("detailsRecentNames", `✗ ${name} (unavailable)`);
         console.warn(`[Details] ✗ ${name} (${id}): ${e} — confirmed unavailable`);
       } else {
+        useProviderHealthStore.getState().recordError("steam-details", e, id);
         console.warn(`[Details] ✗ ${name} (${id}): ${e}`);
         onDetailsFail(id);
         retryQueue.push(id);
@@ -627,6 +631,7 @@ async function _runDetailsLoop(missingIds: number[], run: RunToken) {
         const detail = await fetchGameDetails(id, cc);
         if (!isCurrent()) return;
         buffer.push(detail);
+        useProviderHealthStore.getState().record("steam-details", "success", id);
         successfulDetailIds.add(id);
         addToRecent("detailsRecentNames", `✓ ${name}`);
         console.log(`[Details] ✓ retry ${name} (${id})`);
@@ -638,10 +643,12 @@ async function _runDetailsLoop(missingIds: number[], run: RunToken) {
         const failed = _getState().detailsFailed + 1;
         _setState({ detailsFailed: failed });
         if (isPermanentError(e)) {
+          useProviderHealthStore.getState().record("steam-details", "unavailable", id);
           console.warn(`[Details] ✗ retry ${name} (${id}): ${e} — confirmed unavailable`);
           addToRecent("detailsRecentNames", `✗ ${name} (unavailable)`);
           failedGamesStore.recordFailure(id);
         } else {
+          useProviderHealthStore.getState().recordError("steam-details", e, id);
           console.warn(`[Details] ✗ retry ${name} (${id}): ${e} — transient, will retry next run`);
           addToRecent("detailsRecentNames", `⚠ ${name} (retry later)`);
           onDetailsFail(id);
@@ -713,6 +720,7 @@ async function _runStoreReleaseDateLoop(items: Array<{ appId: number; name: stri
       for (const { appId, name } of batch) {
         const result = resultsById.get(appId);
         if (!result) {
+          useProviderHealthStore.getState().record("steam-release-dates", "transient-error", appId);
           failed++;
           addToRecent("releaseDatesRecentNames", `⚠ ${name} (retry later)`);
           console.warn(`[ReleaseDates] ✗ ${name} (${appId}): no result returned`);
@@ -720,6 +728,9 @@ async function _runStoreReleaseDateLoop(items: Array<{ appId: number; name: stri
         }
 
         buffer.push(result);
+        useProviderHealthStore
+          .getState()
+          .record("steam-release-dates", result.release_date ? "success" : "missing", appId);
         const label = result.release_date ? `${name} · ${result.release_date}` : `${name} · no Store date`;
         addToRecent("releaseDatesRecentNames", label);
         console.log(`[ReleaseDates] ✓ ${name} (${appId}): ${result.release_date ?? "no Store date"}`);
@@ -728,6 +739,9 @@ async function _runStoreReleaseDateLoop(items: Array<{ appId: number; name: stri
     } catch (e) {
       if (!isCurrent()) return;
       failed += batch.length;
+      for (const { appId } of batch) {
+        useProviderHealthStore.getState().recordError("steam-release-dates", e, appId);
+      }
       addToRecent("releaseDatesRecentNames", `⚠ Batch ${batchStart + 1}-${batchEnd} failed`);
       console.warn(`[ReleaseDates] ✗ batch ${batchStart + 1}-${batchEnd}: ${e}`);
     }
@@ -786,6 +800,7 @@ async function _runHltbLoop(items: Array<{ appId: number; name: string }>, run: 
         const result = await fetchHltb(name, appId, releaseYear);
         if (!isCurrent()) return;
         if (result) {
+          useProviderHealthStore.getState().record("hltb", "success", appId);
           useHltbStore.getState().setData(appId, result);
           const selectedHours =
             getHltbHours(result, useSettingsStore.getState().hltbTimeMode) ??
@@ -794,6 +809,7 @@ async function _runHltbLoop(items: Array<{ appId: number; name: string }>, run: 
           addToRecent("hltbRecentNames", `${name} · ${summary}`);
           console.log(`[HLTB] ✓ ${name}: ${summary}`);
         } else {
+          useProviderHealthStore.getState().record("hltb", "missing", appId);
           addToRecent("hltbRecentNames", `${name} · not found`);
           console.log(`[HLTB] Not found: ${name}`);
           // Record as "not found" so it gets ignored next run
@@ -801,6 +817,7 @@ async function _runHltbLoop(items: Array<{ appId: number; name: string }>, run: 
         }
       } catch (e) {
         if (!isCurrent()) return;
+        useProviderHealthStore.getState().recordError("hltb", e, appId);
         console.error(`[HLTB] Error "${name}":`, e);
       }
     }));
@@ -849,11 +866,13 @@ async function _runAchievementsLoop(items: Array<{ appId: number; name: string }
         const [total, achieved] = await fetchAchievementsSummary(apiKey, steamId64, appId);
         if (!isCurrent()) return;
         useAchievementsStore.getState().setSummary(appId, { total, achieved, achievements: [] });
+        useProviderHealthStore.getState().record("steam-achievements", "success", appId);
         const label = total > 0 ? `${name} · ${achieved}/${total}` : `${name} · no achievements`;
         addToRecent("achievementsRecentNames", `✓ ${label}`);
         console.log(`[Achievements] ✓ ${name}: ${achieved}/${total}`);
       } catch (e) {
         if (!isCurrent()) return;
+        useProviderHealthStore.getState().recordError("steam-achievements", e, appId);
         console.warn(`[Achievements] ✗ ${name} (${appId}): ${e}`);
         addToRecent("achievementsRecentNames", `✗ ${name}`);
       }
@@ -898,6 +917,7 @@ async function _runRatingsLoop(items: Array<{ appId: number; name: string }>, ru
         const summary = await fetchSteamReviewSummary(appId);
         if (!isCurrent()) return;
         useSteamRatingsStore.getState().setRating(appId, summary);
+        useProviderHealthStore.getState().record("steam-reviews", "success", appId);
         const label = summary.total_reviews > 0
           ? `${name} · ${summary.review_score_desc || `${summary.positive_percentage ?? 0}%`}`
           : `${name} · no reviews`;
@@ -908,6 +928,7 @@ async function _runRatingsLoop(items: Array<{ appId: number; name: string }>, ru
       } catch (e) {
         if (!isCurrent()) return;
         if (isSteamReviewRateLimitedError(e)) {
+          useProviderHealthStore.getState().record("steam-reviews", "rate-limited", appId);
           console.warn(`[Ratings] rate-limited while fetching ${name} (${appId}): ${e}`);
           rateLimitRetries++;
           const cooldownMinutes = ratingsCooldownMinutes();
@@ -924,6 +945,7 @@ async function _runRatingsLoop(items: Array<{ appId: number; name: string }>, ru
         }
 
         failed++;
+        useProviderHealthStore.getState().recordError("steam-reviews", e, appId);
         addToRecent("ratingsRecentNames", `✗ ${name}`);
         console.warn(`[Ratings] ✗ ${name} (${appId}): ${e}`);
         processed = true;

@@ -27,6 +27,8 @@ import {
 import { useSteamAppIndexStore } from "./stores/steamAppIndexStore";
 import { useSteamRatingsStore } from "./stores/steamRatingsStore";
 import { useAppNameOverrideStore } from "./stores/appNameOverrideStore";
+import { useProviderHealthStore } from "./stores/providerHealthStore";
+import { useEntityJournalStore } from "./stores/entityJournalStore";
 import {
   fetchLibrary,
   loadCollections,
@@ -208,6 +210,8 @@ function AppContent() {
   const hydrateSteamAppIndex = useSteamAppIndexStore((s) => s.hydrate);
   const hydrateSteamRatings = useSteamRatingsStore((s) => s.hydrateCache);
   const hydrateAppNames = useAppNameOverrideStore((s) => s.hydrate);
+  const hydrateProviderHealth = useProviderHealthStore((s) => s.hydrate);
+  const hydrateEntityJournal = useEntityJournalStore((s) => s.hydrate);
   const hydrateSettingsFromDisk = useSettingsStore((s) => s.hydrateFromDisk);
   const setCollections = useCategoryStore((s) => s.setCollections);
   const [reloading, setReloading] = useState(false);
@@ -523,6 +527,8 @@ function AppContent() {
         useFamilyStore.getState().hydrate(),
         useAppNameOverrideStore.getState().hydrate(),
       ]);
+      useProviderHealthStore.getState().record("steam-library", "success");
+      useProviderHealthStore.getState().record("steam-family", "success");
       const familyGames = useFamilyStore.getState().sharedGamesAsOwned();
       const cachedDetails = useGameStore.getState().details;
       const appIndex = useSteamAppIndexStore.getState().data;
@@ -575,6 +581,7 @@ function AppContent() {
         await sendWorkflowNotification(message, true);
       }
     } catch (e) {
+      useProviderHealthStore.getState().recordError("steam-library", e);
       await appLog.error("Steam library refresh failed", { error: String(e) });
       setReloadError(String(e));
       toast.getState().error(`Failed to load library: ${e}`);
@@ -770,6 +777,8 @@ function AppContent() {
     hydrateSteamAppIndex();
     hydrateSteamRatings();
     hydrateAppNames();
+    hydrateProviderHealth();
+    hydrateEntityJournal();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [interactiveStartupReady]);
 
