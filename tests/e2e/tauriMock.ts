@@ -484,6 +484,23 @@ export async function installTauriMock(page: Page) {
               first_launch_online: false,
             };
           }
+          case "fetch_steam_review_summary": {
+            const appId = Number(args?.appId ?? args?.app_id ?? 0);
+            return {
+              app_id: appId,
+              review_score: 8,
+              review_score_desc: "Very Positive",
+              total_positive: 850,
+              total_negative: 150,
+              total_reviews: 1000,
+              positive_percentage: 85,
+              fetched_at: Date.now(),
+            };
+          }
+          case "fetch_store_release_date":
+            return { app_id: Number(args?.appId ?? args?.app_id ?? 0), release_date: "1 Jan, 2020" };
+          case "fetch_store_release_dates":
+            return ((args?.appIds ?? args?.app_ids ?? []) as number[]).map((appId) => ({ app_id: Number(appId), release_date: "1 Jan, 2020" }));
           case "fetch_gg_deals_price": {
             const requestCount = Number(window.localStorage.getItem("repressurizer-gg-deals-request-count") ?? "0");
             window.localStorage.setItem("repressurizer-gg-deals-request-count", String(requestCount + 1));

@@ -227,12 +227,12 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
       ).length;
       const runtimeOnlyCount = schema.length - localPermissionCount;
       if (schema.length > 0) {
-        setAchievements((current) => {
-          if (!current) return current;
+        const current = useAchievementsStore.getState().summaries[game.appid] ?? achievements;
+        if (current) {
           const next = mergeAchievementsWithSamSchema(current, schema);
+          setAchievements(next);
           useAchievementsStore.getState().setSummary(game.appid, next);
-          return next;
-        });
+        }
       }
       setSamSchemaKey(key);
       setSamSchemaStatus({
@@ -310,34 +310,33 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
 
   const applySamResultToAchievements = useCallback(
     (result: SamAchievementActionResult) => {
-      setAchievements((current) => {
-        if (!current) return current;
-        const states = new Map(
-          result.after.achievements
-            .filter((state) => state.valid)
-            .map((state) => [state.apiName, state])
-        );
-        if (states.size === 0) return current;
+      const current = useAchievementsStore.getState().summaries[game.appid] ?? achievements;
+      if (!current) return;
+      const states = new Map(
+        result.after.achievements
+          .filter((state) => state.valid)
+          .map((state) => [state.apiName, state])
+      );
+      if (states.size === 0) return;
 
-        const nextAchievements = current.achievements.map((achievement) => {
-          const state = states.get(achievement.api_name);
-          if (!state) return achievement;
-          return {
-            ...achievement,
-            achieved: state.achieved,
-            unlock_time: state.unlockTime,
-          };
-        });
-        const next: AchievementSummary = {
-          total: current.total,
-          achieved: nextAchievements.filter((achievement) => achievement.achieved).length,
-          achievements: sortAchievements(nextAchievements),
+      const nextAchievements = current.achievements.map((achievement) => {
+        const state = states.get(achievement.api_name);
+        if (!state) return achievement;
+        return {
+          ...achievement,
+          achieved: state.achieved,
+          unlock_time: state.unlockTime,
         };
-        useAchievementsStore.getState().setSummary(game.appid, next);
-        return next;
       });
+      const next: AchievementSummary = {
+        total: current.total,
+        achieved: nextAchievements.filter((achievement) => achievement.achieved).length,
+        achievements: sortAchievements(nextAchievements),
+      };
+      setAchievements(next);
+      useAchievementsStore.getState().setSummary(game.appid, next);
     },
-    [game.appid]
+    [achievements, game.appid]
   );
 
   const handleSamAchievementAction = useCallback(
