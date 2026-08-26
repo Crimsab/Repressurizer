@@ -4,7 +4,20 @@ All notable user-facing changes are generated from release tags and Conventional
 
 Run `bun run changelog:write` after changing release tags or commit history.
 
-## 0.8.0 - Unreleased
+## 0.8.1 - Unreleased
+
+### Fixed
+
+- Search the full Steam library from Kanban add-game menus and separate games
+  already on the board from games that need to be added.
+- Restore removed Diary cards when AutoCat moves them, report the real target
+  column, and preserve removals through undo.
+- Keep completed, beaten, playing, and abandoned statuses synchronized with
+  their Kanban columns through a configurable view option.
+- Submit the global search back to the main library results and keep AutoCat
+  condition controls compact at desktop and mobile widths.
+
+## 0.8.0 - 2026-08-26
 
 > **Major planning and safety update:** Session Planner, Tonight Queue, Library
 > Changes Inbox, Rule Inspector, Collection Time Machine, conflict resolution,
@@ -28,9 +41,6 @@ Run `bun run changelog:write` after changing release tags or commit history.
   Palworld's **To the World Tree**.
 - Validate atomic data writes before replacement and update the vulnerable `h2`
   dependency.
-
-This entry remains unreleased until the validated commit is tagged. No release
-artifact is produced by the local 0.8.0 preparation branch.
 
 ## 0.7.0 - 2026-08-20
 

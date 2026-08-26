@@ -176,6 +176,7 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
   const cachedDetailsCount = Object.keys(details).length;
   const ignoredCount = useFailedGamesStore((s) => s.ignoredIds().length);
   const collections = useCategoryStore((s) => s.collections);
+  const setActiveCategory = useCategoryStore((s) => s.setActiveCategory);
   const savedCollections = useCategoryStore((s) => s._saved);
   const dirty = useCategoryStore((s) => s.dirty);
   const setCollections = useCategoryStore((s) => s.setCollections);
@@ -346,7 +347,14 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
         </h1>
 
         {/* Search */}
-        <div className="group relative min-w-0 max-w-md flex-1">
+        <form
+          role="search"
+          className="group relative min-w-0 max-w-md flex-1"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (searchQuery.trim()) setActiveCategory("all");
+          }}
+        >
           <MagnifyingGlass
             size={15}
             weight="bold"
@@ -367,7 +375,7 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
               {t("search.advanced.hint")}
             </span>
           )}
-        </div>
+        </form>
 
         <div className="flex shrink-0 items-center gap-1.5">
           {/* View toggle */}

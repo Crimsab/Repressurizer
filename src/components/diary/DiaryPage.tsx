@@ -220,6 +220,15 @@ export function DiaryPage() {
   const [selectedAppId, setSelectedAppId] = useState<number | null>(null);
   const [activeSectionByGame, setActiveSectionByGame] = useState<Record<number, string>>({});
   const [viewOptionsOpen, setViewOptionsOpen] = useState(false);
+
+  useEffect(() => {
+    if (!preferences.kanbanSyncStatuses || boardPrefs.removedAppIds.length === 0) return;
+    const statusAssigned = boardPrefs.removedAppIds.filter((appId) => {
+      const status = statuses[appId] ?? "none";
+      return status === "playing" || status === "beaten" || status === "completed" || status === "abandoned";
+    });
+    if (statusAssigned.length > 0) restoreRemovedGames(statusAssigned);
+  }, [boardPrefs.removedAppIds, preferences.kanbanSyncStatuses, restoreRemovedGames, statuses]);
   const [exportOpen, setExportOpen] = useState(false);
   const [backupOpen, setBackupOpen] = useState(false);
   const [diaryAutoCatOpen, setDiaryAutoCatOpen] = useState(false);
@@ -483,6 +492,7 @@ export function DiaryPage() {
     // setBoardOrder rewrites every rank in the destination column, so include
     // that full list in the undo snapshot in addition to the moved cards.
     const snapshot = captureActionSnapshot([...new Set([...appIds, ...orderedAppIds])]);
+    restoreRemovedGames(appIds);
     if (column.kind === "custom" && column.custom) {
       setBulkCustomAssignment(appIds, column.custom.id);
     } else {
@@ -491,7 +501,7 @@ export function DiaryPage() {
     }
     setBoardOrder(orderedAppIds);
     showUndoToast(t("diary.kanban.moved", { count: appIds.length, column: column.label }), snapshot, appIds.length);
-  }, [applyStatusBatch, captureActionSnapshot, setBoardOrder, setBulkCustomAssignment, showUndoToast, t]);
+  }, [applyStatusBatch, captureActionSnapshot, restoreRemovedGames, setBoardOrder, setBulkCustomAssignment, showUndoToast, t]);
 
   const removeDiaryGames = useCallback((appIds: number[]) => {
     const ids = [...new Set(appIds)];
@@ -693,6 +703,7 @@ export function DiaryPage() {
       ) : (
         <DiaryLibrary
           games={filteredGames}
+          kanbanGames={allDiaryGames}
           gamesById={games}
           details={details}
           entries={entries}
@@ -837,8 +848,9 @@ function DiaryAdvancedFilterBadge({ query, t }: { query: string; t: ReturnType<t
   );
 }
 
-function DiaryLibrary({ games, gamesById, details, entries, statuses, reviews, journal, pages, collections, board, boardPrefs, sessions, hltbData, hltbTimeMode, statusEvents, achievements, language, preferences, query, statusFilter, statusCounts, sortBy, categoryFilter, viewOptionsOpen, actionHistoryCount, t, onQueryChange, onStatusChange, onSortChange, onCategoryChange, onViewChange, onViewOptionsToggle, onExport, onBackup, onOpenAutoCategorize, onOpenShortcuts, onOpenActionHistory, onPreferencesChange, onSelectGame, onApplyStatus, onSetBoardOrder, onBulkStatusChange, onBulkPriorityChange, onRemoveGames, onRestoreRemovedGames, onMoveGames, onSetColumnColor, onToggleColumnHidden, onAddCustomColumn, onRenameCustomColumn, onRemoveCustomColumn, onMergeCustomColumn, onRemoveEmptyCustomColumns, onMoveCustomColumn, onSetCustomAssignment, onSetPriority, onOpenGame }: {
+function DiaryLibrary({ games, kanbanGames, gamesById, details, entries, statuses, reviews, journal, pages, collections, board, boardPrefs, sessions, hltbData, hltbTimeMode, statusEvents, achievements, language, preferences, query, statusFilter, statusCounts, sortBy, categoryFilter, viewOptionsOpen, actionHistoryCount, t, onQueryChange, onStatusChange, onSortChange, onCategoryChange, onViewChange, onViewOptionsToggle, onExport, onBackup, onOpenAutoCategorize, onOpenShortcuts, onOpenActionHistory, onPreferencesChange, onSelectGame, onApplyStatus, onSetBoardOrder, onBulkStatusChange, onBulkPriorityChange, onRemoveGames, onRestoreRemovedGames, onMoveGames, onSetColumnColor, onToggleColumnHidden, onAddCustomColumn, onRenameCustomColumn, onRemoveCustomColumn, onMergeCustomColumn, onRemoveEmptyCustomColumns, onMoveCustomColumn, onSetCustomAssignment, onSetPriority, onOpenGame }: {
   games: OwnedGame[];
+  kanbanGames: OwnedGame[];
   gamesById: Record<number, OwnedGame>;
   details: Record<number, GameDetails>;
   entries: Record<number, DiaryEntry>;
@@ -966,7 +978,7 @@ function DiaryLibrary({ games, gamesById, details, entries, statuses, reviews, j
       </div>
     </div>
     <div hidden={preferences.libraryView !== "kanban"} className="flex min-h-0 flex-1 flex-col">
-      <DiaryKanbanBoard games={games} details={details} entries={entries} statuses={statuses} reviews={reviews} journal={journal} pages={pages} board={board} boardPrefs={boardPrefs} language={language} showArchived={preferences.showArchived} forceStatus={statusFilter === "archived" ? "archived" : undefined} wipLimit={preferences.kanbanWipLimit} t={t} onApplyStatus={onApplyStatus} onSetBoardOrder={onSetBoardOrder} onSetPriority={onSetPriority} onBulkStatusChange={onBulkStatusChange} onBulkPriorityChange={onBulkPriorityChange} onRemoveGames={onRemoveGames} onRestoreRemovedGames={onRestoreRemovedGames} onMoveGames={onMoveGames} onOpenGame={(appId) => onOpenGame(appId)} onSetColumnColor={onSetColumnColor} onToggleColumnHidden={onToggleColumnHidden} onAddCustomColumn={onAddCustomColumn} onRenameCustomColumn={onRenameCustomColumn} onRemoveCustomColumn={onRemoveCustomColumn} onMergeCustomColumn={onMergeCustomColumn} onRemoveEmptyCustomColumns={onRemoveEmptyCustomColumns} onMoveCustomColumn={onMoveCustomColumn} onSetCustomAssignment={onSetCustomAssignment} />
+      <DiaryKanbanBoard games={games} kanbanGames={kanbanGames} libraryGames={Object.values(gamesById)} details={details} entries={entries} statuses={statuses} reviews={reviews} journal={journal} pages={pages} board={board} boardPrefs={boardPrefs} language={language} showArchived={preferences.showArchived} forceStatus={statusFilter === "archived" ? "archived" : undefined} wipLimit={preferences.kanbanWipLimit} t={t} onApplyStatus={onApplyStatus} onSetBoardOrder={onSetBoardOrder} onSetPriority={onSetPriority} onBulkStatusChange={onBulkStatusChange} onBulkPriorityChange={onBulkPriorityChange} onRemoveGames={onRemoveGames} onRestoreRemovedGames={onRestoreRemovedGames} onMoveGames={onMoveGames} onOpenGame={(appId) => onOpenGame(appId)} onSetColumnColor={onSetColumnColor} onToggleColumnHidden={onToggleColumnHidden} onAddCustomColumn={onAddCustomColumn} onRenameCustomColumn={onRenameCustomColumn} onRemoveCustomColumn={onRemoveCustomColumn} onMergeCustomColumn={onMergeCustomColumn} onRemoveEmptyCustomColumns={onRemoveEmptyCustomColumns} onMoveCustomColumn={onMoveCustomColumn} onSetCustomAssignment={onSetCustomAssignment} />
     </div>
     <div hidden={preferences.libraryView !== "timeline"} className="flex min-h-0 flex-1 flex-col">
       <DiaryTimeline games={gamesById} visibleAppIds={visibleAppIds} sessions={sessions} journal={journal} pages={pages} reviews={reviews} statusEvents={statusEvents} achievements={achievements} achievementsSyncing={achievementsSyncing} language={language} preferences={preferences} t={t} onOpenGame={onOpenGame} onLayoutChange={(timelineLayout) => onPreferencesChange({ timelineLayout })} onSyncAchievements={() => void handleSyncAchievements()} onToggleKind={(kind) => { const hidden = new Set(preferences.timelineHiddenKinds); if (hidden.has(kind)) hidden.delete(kind); else hidden.add(kind); onPreferencesChange({ timelineHiddenKinds: [...hidden] }); }} onGameContextMenu={(appId, x, y) => setGameMenu({ appId, x: Math.min(x, window.innerWidth - 260), y: Math.min(y, window.innerHeight - 340) })} />
@@ -1056,6 +1068,8 @@ function DiaryViewOptions({ preferences, onChange, onClose, t }: { preferences: 
       <label className="flex cursor-pointer items-center justify-between gap-3 rounded-lg px-2 py-2 text-xs text-repressurizer-text transition-colors hover:bg-repressurizer-surface-hover"><span>{t("diary.journal.showTime")}</span><input type="checkbox" checked={preferences.showTime} onChange={(event) => onChange({ showTime: event.target.checked })} className="h-4 w-4 accent-repressurizer-accent" /></label>
       <div className={`flex items-center justify-between gap-3 px-2 py-2 text-xs ${preferences.showTime ? "text-repressurizer-text" : "text-repressurizer-text-faint"}`}><span>{t("diary.journal.hourCycle")}</span><SelectMenu<DiaryHourCycle> value={preferences.hourCycle} options={[{ value: "auto", label: t("diary.journal.hourCycle.auto") }, { value: "12", label: t("diary.journal.hourCycle.12") }, { value: "24", label: t("diary.journal.hourCycle.24") }]} onChange={(hourCycle) => onChange({ hourCycle })} disabled={!preferences.showTime} ariaLabel={t("diary.journal.hourCycle")} size="sm" className="w-32" buttonClassName="border-repressurizer-border-subtle bg-repressurizer-bg text-[11px]" /></div>
       <div className="my-2 border-t border-repressurizer-border-subtle" />
+      <label className="flex cursor-pointer items-center justify-between gap-3 rounded-lg px-2 py-2 text-xs text-repressurizer-text transition-colors hover:bg-repressurizer-surface-hover"><span>{t("diary.kanban.syncStatuses")}</span><input type="checkbox" checked={preferences.kanbanSyncStatuses} onChange={(event) => onChange({ kanbanSyncStatuses: event.target.checked })} aria-label={t("diary.kanban.syncStatuses")} className="h-4 w-4 accent-repressurizer-accent" /></label>
+      <p className="px-2 pb-2 text-[10px] leading-relaxed text-repressurizer-text-faint">{t("diary.kanban.syncStatuses.desc")}</p>
       <label className="flex items-center justify-between gap-3 px-2 py-2 text-xs text-repressurizer-text"><span>{t("diary.kanban.wipLimit")}</span><input type="number" min={0} max={20} value={preferences.kanbanWipLimit} onChange={(event) => onChange({ kanbanWipLimit: Math.min(20, Math.max(0, Math.floor(Number(event.target.value) || 0))) })} aria-label={t("diary.kanban.wipLimit")} className="w-16 rounded-md border border-repressurizer-border bg-repressurizer-bg px-2 py-1 text-[11px] text-repressurizer-text outline-none" /></label>
       <p className="px-2 pb-1 text-[10px] leading-relaxed text-repressurizer-text-faint">{t("diary.kanban.wipLimit.desc")}</p>
     </div>

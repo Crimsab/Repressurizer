@@ -165,6 +165,19 @@ test("loads the main library surface with mocked Steam data", async ({ page }, t
   await testInfo.attach("dashboard", { path: screenshotPath, contentType: "image/png" });
 });
 
+test("submitting the global search returns to matching library results", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Diary" }).click();
+  await expect(page.getByTestId("diary-workspace")).toBeVisible();
+
+  await page.locator("[data-search-input]").fill("Outer Wilds");
+  await page.locator("[data-search-input]").press("Enter");
+
+  await expect(page.getByTestId("diary-workspace")).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: "Outer Wilds", exact: true })).toBeVisible();
+  await expect(page.locator(".game-card")).toHaveCount(1);
+});
+
 test("opens the gaming backlog diary workspace", async ({ page }, testInfo) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Diary" }).click();
@@ -603,6 +616,66 @@ test("Diary kanban board moves cards and the timeline lists diary events", async
   await page.locator('[data-testid="diary-timeline-event-rail"][data-kind="session"]').filter({ hasText: "Hades" }).getByRole("button", { name: /Hades/ }).first().click();
   await expect(page.getByTestId("diary-hero-image")).toBeVisible();
   await expect(page.getByTestId("diary-hero-image").locator("img")).toHaveAttribute("src", /1145360/);
+});
+
+test("Diary Kanban add-game search separates board cards from library games", async ({ page }, testInfo) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Diary" }).click();
+  await page.getByTestId("diary-view-kanban").click();
+  await page.getByRole("button", { name: "View options" }).click();
+  await page.getByLabel("Sync progress statuses").uncheck();
+  await page.getByRole("button", { name: "View options" }).click();
+
+  await page.evaluate(async () => {
+    const { useDiaryStore } = await import("/src/stores/diaryStore.ts");
+    useDiaryStore.getState().clearBulkDiaryState([1145360]);
+  });
+  await expect(page.getByTestId("diary-kanban-card-1145360")).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Add game: Finished" }).click();
+  await page.getByTestId("diary-kanban-addgame-search").fill("Outer");
+  await expect(page.getByTestId("diary-kanban-addgame-section-kanban")).toContainText("Outer Wilds");
+  await expect(page.getByTestId("diary-kanban-addgame-row-753640")).toHaveAttribute("data-source", "kanban");
+
+  await page.getByTestId("diary-kanban-addgame-search").fill("Hades");
+  await expect(page.getByTestId("diary-kanban-addgame-section-library")).toContainText("Hades");
+  await expect(page.getByTestId("diary-kanban-addgame-row-1145360")).toHaveAttribute("data-source", "library");
+  await page.waitForTimeout(220);
+  const screenshotPath = testInfo.outputPath("diary-kanban-library-search.png");
+  await page.screenshot({ path: screenshotPath, fullPage: true });
+  await testInfo.attach("diary-kanban-library-search", { path: screenshotPath, contentType: "image/png" });
+
+  await page.getByTestId("diary-kanban-addgame-row-1145360").click();
+  await expect(page.getByTestId("diary-kanban-column-finished")).toContainText("Hades");
+  await expect.poll(() => page.evaluate(async () => {
+    const { useDiaryStore } = await import("/src/stores/diaryStore.ts");
+    return useDiaryStore.getState().boardPrefs.removedAppIds.includes(1145360);
+  })).toBe(false);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("button", { name: "Add game: Finished" }).click();
+  await page.getByTestId("diary-kanban-addgame-search").fill("Outer");
+  await expectNoHorizontalOverflow(page);
+  const mobileScreenshotPath = testInfo.outputPath("diary-kanban-library-search-mobile.png");
+  await page.screenshot({ path: mobileScreenshotPath, fullPage: true });
+  await testInfo.attach("diary-kanban-library-search-mobile", { path: mobileScreenshotPath, contentType: "image/png" });
+});
+
+test("Diary Kanban status sync restores progress cards when enabled", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Diary" }).click();
+  await page.getByTestId("diary-view-kanban").click();
+  await page.evaluate(async () => {
+    const { useDiaryStore } = await import("/src/stores/diaryStore.ts");
+    const { useStatusStore } = await import("/src/stores/statusStore.ts");
+    useStatusStore.getState().setStatus(1145360, "completed");
+    useDiaryStore.getState().clearBulkDiaryState([1145360]);
+  });
+  await expect(page.getByTestId("diary-kanban-column-finished")).toContainText("Hades");
+  await expect.poll(() => page.evaluate(async () => {
+    const { useDiaryStore } = await import("/src/stores/diaryStore.ts");
+    return useDiaryStore.getState().boardPrefs.removedAppIds.includes(1145360);
+  })).toBe(false);
 });
 
 test("Diary Kanban Escape clears the active card selection", async ({ page }) => {
@@ -1300,6 +1373,28 @@ test("AutoCat custom rule creates one category from a title condition", async ({
   await expectNoHorizontalOverflow(page);
 });
 
+test("AutoCat numeric conditions stay compact and responsive", async ({ page }, testInfo) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.goto("/");
+  await page.getByRole("button", { name: /Auto-Categorize/ }).click();
+  const dialog = page.locator(".fixed.inset-0").filter({
+    has: page.getByRole("heading", { name: "Auto-Categorize" }),
+  });
+  await dialog.getByRole("button", { name: /Custom rule/ }).click();
+  await dialog.getByRole("button", { name: "Add condition" }).click();
+  await page.getByRole("option", { name: /Numeric metadata/ }).click();
+  await expect(dialog.locator("span").filter({ hasText: /^Numeric metadata$/ })).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+  const screenshotPath = testInfo.outputPath("autocat-numeric-condition-layout.png");
+  await page.screenshot({ path: screenshotPath, fullPage: true });
+  await testInfo.attach("autocat-numeric-condition-layout", { path: screenshotPath, contentType: "image/png" });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expectNoHorizontalOverflow(page);
+  const mobileScreenshotPath = testInfo.outputPath("autocat-numeric-condition-layout-mobile.png");
+  await page.screenshot({ path: mobileScreenshotPath, fullPage: true });
+  await testInfo.attach("autocat-numeric-condition-layout-mobile", { path: mobileScreenshotPath, contentType: "image/png" });
+});
+
 test("AutoCat blocks an incomplete custom condition before running", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: /Auto-Categorize/ }).click();
@@ -1358,6 +1453,13 @@ test("AutoCat custom preview renders the selected AND/OR rule", async ({ page },
 test("Diary AutoCat assigns matched games to the selected Kanban column", async ({ page }, testInfo) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Diary" }).click();
+  await page.getByRole("button", { name: "View options" }).click();
+  await page.getByLabel("Sync progress statuses").uncheck();
+  await page.getByRole("button", { name: "View options" }).click();
+  await page.evaluate(async () => {
+    const { useDiaryStore } = await import("/src/stores/diaryStore.ts");
+    useDiaryStore.getState().clearBulkDiaryState([1145360]);
+  });
   await page.getByTestId("diary-autocat-button").click();
 
   const dialog = page.locator(".fixed.inset-0").filter({
@@ -1421,13 +1523,17 @@ test("Diary AutoCat assigns matched games to the selected Kanban column", async 
 
   await page.getByTestId("diary-history-button").click();
   const history = page.getByTestId("diary-action-history-dialog");
-  await expect(history).toContainText("Diary AutoCat applied to 1 games.");
+  await expect(history).toContainText("Moved 1 games to To play.");
   await page.reload();
   await page.getByRole("button", { name: "Diary" }).click();
   await page.getByTestId("diary-history-button").click();
   await page.getByTestId("diary-action-history-dialog").getByRole("button", { name: "Undo", exact: true }).first().click();
   await page.getByTestId("diary-view-kanban").click();
-  await expect(page.getByTestId("diary-kanban-column-playing")).toContainText("Hades");
+  await expect(page.getByTestId("diary-kanban-card-1145360")).toHaveCount(0);
+  await expect.poll(() => page.evaluate(async () => {
+    const { useDiaryStore } = await import("/src/stores/diaryStore.ts");
+    return useDiaryStore.getState().boardPrefs.removedAppIds.includes(1145360);
+  })).toBe(true);
 });
 
 test("Diary AutoCat can create a Kanban column for a combined rule", async ({ page }) => {

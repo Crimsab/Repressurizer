@@ -176,6 +176,7 @@ export function AutoCategorizeDialog({ onClose, initialTarget = "collections" }:
   const addCustomColumn = useDiaryStore((s) => s.addCustomColumn);
   const captureBulkSnapshot = useDiaryStore((s) => s.captureBulkSnapshot);
   const restoreBulkSnapshot = useDiaryStore((s) => s.restoreBulkSnapshot);
+  const restoreRemovedGames = useDiaryStore((s) => s.restoreRemovedGames);
   const setBulkDecision = useDiaryStore((s) => s.setBulkDecision);
   const setBulkMarkedBacklog = useDiaryStore((s) => s.setBulkMarkedBacklog);
   const setBulkCustomAssignment = useDiaryStore((s) => s.setBulkCustomAssignment);
@@ -1094,6 +1095,13 @@ export function AutoCategorizeDialog({ onClose, initialTarget = "collections" }:
         setDiaryUndoNotice(t("auto.diary.undoDone"));
       };
 
+      // A matched library game may have been explicitly removed from Diary.
+      // Moving it must restore the card as well as update its status/column;
+      // otherwise AutoCat reports success while the board remains unchanged.
+      if (diaryAction === "existingColumn" || diaryMoveMatches) {
+        restoreRemovedGames(appIds);
+      }
+
       if (diaryAction === "newColumn") {
         const requestedName = sanitizeDiaryColumnLabel(
           diaryNewColumnName.trim() || suggestedNewColumnName
@@ -1145,20 +1153,22 @@ export function AutoCategorizeDialog({ onClose, initialTarget = "collections" }:
         applyDiaryTarget(appIds, diaryTargetColumn);
       }
 
-      setDiaryAppliedSummary(
-        diaryAction === "existingColumn" || diaryMoveMatches
+      const targetLabel = diaryColumns.find((column) => column.key === diaryTargetColumn)?.label ?? diaryTargetColumn;
+      const appliedMessage = diaryAction === "existingColumn"
+        ? t("diary.kanban.moved", { count: appIds.length, column: targetLabel })
+        : diaryMoveMatches
           ? t("auto.diary.applied", { count: appIds.length })
-          : t("auto.diary.createdOnly", { count: createdColumnIds.length }),
-      );
+          : t("auto.diary.createdOnly", { count: createdColumnIds.length });
+      setDiaryAppliedSummary(appliedMessage);
       historyId = pushActionHistory({
-        label: t("auto.diary.applied", { count: appIds.length }),
+        label: appliedMessage,
         count: appIds.length,
         snapshot: actionSnapshot,
       });
       setDiaryUndo(() => undoDiaryRun);
       useToastStore.getState().addAction(
         "success",
-        t("auto.diary.applied", { count: appIds.length }),
+        appliedMessage,
         t("common.undo"),
         undoDiaryRun,
       );

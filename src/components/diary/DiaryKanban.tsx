@@ -75,8 +75,10 @@ function colorWithAlpha(hex: string, alpha: number): string {
 
 const PRIORITY_EDGE: Record<DiaryPriority, string | null> = { high: "#fb7185", normal: null, low: "#64748b" };
 
-export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, details, entries, statuses, reviews, journal, pages, board, boardPrefs, language, showArchived, forceStatus, wipLimit, t, onBulkStatusChange, onBulkPriorityChange, onRemoveGames, onRestoreRemovedGames, onMoveGames, onOpenGame, onSetColumnColor, onToggleColumnHidden, onAddCustomColumn, onRenameCustomColumn, onRemoveCustomColumn, onMergeCustomColumn, onRemoveEmptyCustomColumns, onMoveCustomColumn }: {
+export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, kanbanGames, libraryGames, details, entries, statuses, reviews, journal, pages, board, boardPrefs, language, showArchived, forceStatus, wipLimit, t, onBulkStatusChange, onBulkPriorityChange, onRemoveGames, onRestoreRemovedGames, onMoveGames, onOpenGame, onSetColumnColor, onToggleColumnHidden, onAddCustomColumn, onRenameCustomColumn, onRemoveCustomColumn, onMergeCustomColumn, onRemoveEmptyCustomColumns, onMoveCustomColumn }: {
   games: OwnedGame[];
+  kanbanGames: OwnedGame[];
+  libraryGames: OwnedGame[];
   details: Record<number, GameDetails>;
   entries: Record<number, DiaryEntry>;
   statuses: Record<number, GameStatus>;
@@ -486,14 +488,17 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, details,
   }, [addGamePopover, columnMenu, columnsPopover, contextMenu]);
 
   const addGameResults = useMemo(() => {
-    if (!addGamePopover) return [];
+    if (!addGamePopover) return { onKanban: [] as OwnedGame[], inLibrary: [] as OwnedGame[] };
     const present = new Set((grouped.get(addGamePopover.column.key) ?? []).map((game) => game.appid));
+    const onKanban = new Set(kanbanGames.map((game) => game.appid));
     const query = addGameQuery.trim().toLocaleLowerCase(language);
-    return games
-      .filter((game) => !present.has(game.appid))
-      .filter((game) => !query || String(game.name ?? "").toLocaleLowerCase(language).includes(query))
-      .slice(0, 40);
-  }, [addGamePopover, addGameQuery, games, grouped, language]);
+    const matches = (game: OwnedGame) => !query || String(game.name ?? "").toLocaleLowerCase(language).includes(query);
+    const byName = (left: OwnedGame, right: OwnedGame) => String(left.name ?? "").localeCompare(String(right.name ?? ""), language);
+    return {
+      onKanban: kanbanGames.filter((game) => !present.has(game.appid) && matches(game)).sort(byName).slice(0, 24),
+      inLibrary: libraryGames.filter((game) => !onKanban.has(game.appid) && matches(game)).sort(byName).slice(0, 24),
+    };
+  }, [addGamePopover, addGameQuery, grouped, kanbanGames, language, libraryGames]);
 
   return (
     <div ref={kanbanRef} data-testid="diary-kanban" className="relative flex min-h-0 flex-1 flex-col">
@@ -617,7 +622,7 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, details,
                       const rect = event.currentTarget.getBoundingClientRect();
                       setAddGameQuery("");
                       setColumnMenu(null);
-                      setAddGamePopover({ anchor: { x: Math.max(8, Math.min(rect.left, window.innerWidth - 300)), y: Math.min(rect.bottom + 6, Math.max(8, window.innerHeight - 380)) }, column });
+                      setAddGamePopover({ anchor: { x: Math.max(8, Math.min(rect.left, window.innerWidth - 344)), y: Math.min(rect.bottom + 6, Math.max(8, window.innerHeight - 460)) }, column });
                     }}
                     className="focus-ring rounded-md p-1 transition-colors hover:bg-repressurizer-surface-hover"
                     style={{ color: column.color }}
@@ -747,7 +752,7 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, details,
             onClick={() => {
               setColumnMenu(null);
               setAddGameQuery("");
-              setAddGamePopover({ anchor: { x: Math.min(columnMenu.x, window.innerWidth - 300), y: Math.min(columnMenu.y + 40, Math.max(8, window.innerHeight - 380)) }, column: columnMenuColumn });
+              setAddGamePopover({ anchor: { x: Math.max(8, Math.min(columnMenu.x, window.innerWidth - 344)), y: Math.min(columnMenu.y + 40, Math.max(8, window.innerHeight - 460)) }, column: columnMenuColumn });
             }}
             className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-repressurizer-text transition-colors hover:bg-repressurizer-surface-hover hover:text-white"
           >
@@ -882,7 +887,7 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, details,
       )}
       {addGamePopover && createPortal(
         <>
-          <div data-kanban-addgame-popover data-testid="diary-kanban-addgame-popover" className="animate-fade-in fixed z-50 w-[288px] overflow-hidden rounded-xl border border-repressurizer-border bg-repressurizer-surface-raised/95 shadow-pop backdrop-blur-md" style={{ left: addGamePopover.anchor.x, top: addGamePopover.anchor.y }}>
+          <div data-kanban-addgame-popover data-testid="diary-kanban-addgame-popover" className="animate-fade-in fixed z-50 w-[min(336px,calc(100vw-16px))] overflow-hidden rounded-xl border border-repressurizer-border bg-repressurizer-surface-raised shadow-pop" style={{ left: addGamePopover.anchor.x, top: addGamePopover.anchor.y }}>
             <div className="border-b border-repressurizer-border-subtle px-3 py-2.5">
               <p className="truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-repressurizer-text-faint">{t("diary.kanban.addGame")}: {addGamePopover.column.label}</p>
               <label className="mt-2 flex items-center gap-2 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-bg px-2.5 py-1.5 transition-colors focus-within:border-repressurizer-accent/50">
@@ -890,18 +895,47 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, details,
                 <input autoFocus value={addGameQuery} onChange={(event) => setAddGameQuery(event.target.value)} placeholder={t("diary.kanban.addGame.search")} aria-label={t("diary.kanban.addGame.search")} data-testid="diary-kanban-addgame-search" className="min-w-0 flex-1 bg-transparent text-xs text-repressurizer-text outline-none placeholder:text-repressurizer-text-faint" />
               </label>
             </div>
-            <div className="max-h-64 overflow-y-auto p-1.5">
-              {addGameResults.length === 0 ? (
+            <div className="max-h-[min(420px,65vh)] overflow-y-auto p-1.5">
+              {addGameResults.onKanban.length === 0 && addGameResults.inLibrary.length === 0 ? (
                 <p className="px-2 py-4 text-center text-[11px] text-repressurizer-text-faint">{t("diary.kanban.addGame.none")}</p>
-              ) : addGameResults.map((game) => (
-                <button key={game.appid} type="button" data-testid={`diary-kanban-addgame-row-${game.appid}`} onClick={() => moveIds([game.appid], addGamePopover.column)} className="focus-ring flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-repressurizer-surface-hover">
-                  <span className="h-6 w-[40px] shrink-0 overflow-hidden rounded bg-repressurizer-bg">
-                    <SteamImage appId={game.appid} alt="" kind="capsule" className="h-full w-full object-cover" />
-                  </span>
-                  <span className="min-w-0 flex-1 truncate text-xs text-repressurizer-text">{String(game.name ?? "")}</span>
-                  <span className="shrink-0 font-mono text-[10px] tabular-nums text-repressurizer-text-faint">{formatHours(game.playtime_forever, language)}h</span>
-                </button>
-              ))}
+              ) : (
+                <div className="space-y-2">
+                  {addGameResults.onKanban.length > 0 && (
+                    <section data-testid="diary-kanban-addgame-section-kanban" aria-labelledby="diary-kanban-addgame-heading-kanban">
+                      <div id="diary-kanban-addgame-heading-kanban" className="flex items-center justify-between px-2 pb-1 pt-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-repressurizer-text-faint">
+                        <span>{t("diary.kanban.addGame.onKanban")}</span>
+                        <span className="font-mono tabular-nums">{addGameResults.onKanban.length}</span>
+                      </div>
+                      {addGameResults.onKanban.map((game) => {
+                        const currentColumn = columnOfGame(game);
+                        return (
+                          <button key={game.appid} type="button" data-source="kanban" data-testid={`diary-kanban-addgame-row-${game.appid}`} onClick={() => moveIds([game.appid], addGamePopover.column)} className="focus-ring flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-repressurizer-surface-hover">
+                            <span className="h-7 w-[46px] shrink-0 overflow-hidden rounded bg-repressurizer-bg"><SteamImage appId={game.appid} alt="" kind="capsule" className="h-full w-full object-cover" /></span>
+                            <span className="min-w-0 flex-1"><span className="block truncate text-xs text-repressurizer-text">{String(game.name ?? "")}</span><span className="block truncate text-[9px] text-repressurizer-text-faint">{currentColumn?.label ?? t("diary.kanban.addGame.onKanban")}</span></span>
+                            <ArrowRight size={12} className="shrink-0 text-repressurizer-text-faint" aria-hidden="true" />
+                          </button>
+                        );
+                      })}
+                    </section>
+                  )}
+                  {addGameResults.inLibrary.length > 0 && (
+                    <section data-testid="diary-kanban-addgame-section-library" aria-labelledby="diary-kanban-addgame-heading-library" className={addGameResults.onKanban.length > 0 ? "border-t border-repressurizer-border-subtle pt-2" : ""}>
+                      <div id="diary-kanban-addgame-heading-library" className="flex items-center justify-between px-2 pb-1 pt-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-repressurizer-text-faint">
+                        <span>{t("diary.kanban.addGame.library")}</span>
+                        <span className="font-mono tabular-nums">{addGameResults.inLibrary.length}</span>
+                      </div>
+                      {addGameResults.inLibrary.map((game) => (
+                        <button key={game.appid} type="button" data-source="library" data-testid={`diary-kanban-addgame-row-${game.appid}`} onClick={() => moveIds([game.appid], addGamePopover.column)} className="focus-ring flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-repressurizer-surface-hover">
+                          <span className="h-7 w-[46px] shrink-0 overflow-hidden rounded bg-repressurizer-bg"><SteamImage appId={game.appid} alt="" kind="capsule" className="h-full w-full object-cover" /></span>
+                          <span className="min-w-0 flex-1 truncate text-xs text-repressurizer-text">{String(game.name ?? "")}</span>
+                          <span className="shrink-0 font-mono text-[9px] tabular-nums text-repressurizer-text-faint">{formatHours(game.playtime_forever, language)}h</span>
+                          <Plus size={12} className="shrink-0 text-repressurizer-accent" aria-hidden="true" />
+                        </button>
+                      ))}
+                    </section>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </>,

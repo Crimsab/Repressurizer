@@ -1,5 +1,5 @@
 import { Fragment, useMemo, type ReactNode } from "react";
-import { Trash, CopySimple, Funnel, Warning, Plus } from "@phosphor-icons/react";
+import { Trash, CopySimple, Funnel, Warning } from "@phosphor-icons/react";
 import {
   conditionIssue,
   customConditionId,
@@ -214,7 +214,7 @@ export function CustomRuleBuilder({ config, onChange, collections, diaryMode = f
       </div>
 
       <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg p-3">
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
+        <div className="mb-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
           <div>
             <p className="text-sm font-medium text-repressurizer-text">{t("auto.custom.conditions")}</p>
             <p className="text-xs text-repressurizer-text-faint">
@@ -225,8 +225,8 @@ export function CustomRuleBuilder({ config, onChange, collections, diaryMode = f
                   : t("auto.custom.logicAll")}
             </p>
           </div>
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <label className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-repressurizer-text-faint">
+          <div className="grid gap-2 sm:grid-cols-[minmax(180px,1fr)_minmax(190px,1fr)] lg:min-w-[420px]">
+            <label className="grid grid-cols-[auto_minmax(132px,1fr)] items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-repressurizer-text-faint">
               <span>{t("auto.custom.match")}</span>
               <SelectMenu<"all" | "any" | "mixed">
                 value={matchMode}
@@ -245,7 +245,6 @@ export function CustomRuleBuilder({ config, onChange, collections, diaryMode = f
                 buttonClassName="normal-case tracking-normal font-normal"
               />
             </label>
-            <Plus size={14} weight="bold" className="text-repressurizer-accent" />
             <SelectMenu<AddConditionMenuValue>
               value="__add"
               options={addConditionMenuOptions}
@@ -255,7 +254,8 @@ export function CustomRuleBuilder({ config, onChange, collections, diaryMode = f
               ariaLabel={t("auto.custom.addCondition")}
               size="sm"
               align="right"
-              buttonClassName="min-w-40 border-repressurizer-accent/40 bg-repressurizer-accent/10 text-repressurizer-accent"
+              className="w-full"
+              buttonClassName="w-full border-repressurizer-accent/40 bg-repressurizer-accent/10 text-repressurizer-accent"
             />
           </div>
         </div>
@@ -673,7 +673,7 @@ function MetadataNumberConditionEditor({
 }) {
   const t = useT();
   return (
-    <div className="grid gap-2 sm:grid-cols-[180px_minmax(0,1fr)]">
+    <div className="grid max-w-[760px] gap-2 sm:grid-cols-[minmax(180px,240px)_repeat(2,minmax(140px,240px))] sm:items-end">
       <SelectMenu<CustomNumericMetadataCondition["field"]>
         value={condition.field}
         options={[
@@ -685,10 +685,8 @@ function MetadataNumberConditionEditor({
         onChange={(field) => onChange({ ...condition, field })}
         size="sm"
       />
-      <div className="grid gap-2 sm:grid-cols-2">
-        <NumberInput label={t("auto.custom.min")} value={condition.min} onChange={(min) => onChange({ ...condition, min })} />
-        <NumberInput label={t("auto.custom.max")} value={condition.max} onChange={(max) => onChange({ ...condition, max })} />
-      </div>
+      <NumberInput label={t("auto.custom.min")} value={condition.min} onChange={(min) => onChange({ ...condition, min })} />
+      <NumberInput label={t("auto.custom.max")} value={condition.max} onChange={(max) => onChange({ ...condition, max })} />
     </div>
   );
 }

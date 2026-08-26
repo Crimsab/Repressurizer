@@ -289,6 +289,10 @@ function normalizeSettings(raw: Partial<AppSettings>): AppSettings {
 }
 
 function syncHttpPolicy(proxySettings: AppSettings["proxySettings"]) {
+  // Browser previews and documentation builds do not expose the Tauri bridge.
+  // Skipping the native-only command there keeps the console actionable while
+  // Tauri and the E2E bridge continue to receive the policy normally.
+  if (typeof window !== "undefined" && !("__TAURI_INTERNALS__" in window)) return;
   try {
     invoke("configure_http_policy", { settings: proxySettings }).catch((error) => {
       console.warn("[Settings] Failed to configure HTTP policy:", error);

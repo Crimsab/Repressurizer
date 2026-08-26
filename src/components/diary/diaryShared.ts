@@ -69,6 +69,8 @@ export interface DiaryPreferences {
   inspectorWidth: number;
   /** Soft cap for the Kanban "playing" column; 0 disables it. */
   kanbanWipLimit: number;
+  /** Keeps non-empty progress statuses visible in their matching Kanban columns. */
+  kanbanSyncStatuses: boolean;
   timelineLayout: DiaryTimelineLayout;
   /** Timeline event kinds the user turned off; persisted across sessions. */
   timelineHiddenKinds: string[];
@@ -86,6 +88,7 @@ export const DEFAULT_PREFERENCES: DiaryPreferences = {
   gameListWidth: 272,
   inspectorWidth: 300,
   kanbanWipLimit: 0,
+  kanbanSyncStatuses: true,
   timelineLayout: "rail",
   timelineHiddenKinds: [],
 };
@@ -111,6 +114,7 @@ export function loadPreferences(): DiaryPreferences {
       gameListWidth: Math.min(420, Math.max(220, Number(parsed.gameListWidth) || DEFAULT_PREFERENCES.gameListWidth)),
       inspectorWidth: Math.min(440, Math.max(260, Number(parsed.inspectorWidth) || DEFAULT_PREFERENCES.inspectorWidth)),
       kanbanWipLimit: Math.min(20, Math.max(0, Math.floor(Number(parsed.kanbanWipLimit) || 0))),
+      kanbanSyncStatuses: parsed.kanbanSyncStatuses !== false,
       timelineLayout: parsed.timelineLayout === "cards" || parsed.timelineLayout === "compact" ? parsed.timelineLayout : "rail",
       timelineHiddenKinds: [...new Set((Array.isArray(parsed.timelineHiddenKinds) ? parsed.timelineHiddenKinds : []).filter((kind): kind is string => typeof kind === "string" && TIMELINE_KIND_VALUES.includes(kind as never)))].slice(0, 6),
     };
