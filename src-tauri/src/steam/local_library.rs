@@ -2,10 +2,12 @@ use serde::Serialize;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 const PACKAGEINFO_MAGIC_27: u32 = 0x06_56_55_27;
 const PACKAGEINFO_MAGIC_28: u32 = 0x06_56_55_28;
-const MAX_STORAGE_SCAN_ENTRIES: usize = 1_000_000;
+const MAX_STORAGE_SCAN_ENTRIES: usize = 250_000;
+const MAX_STORAGE_SCAN_DURATION: Duration = Duration::from_secs(3);
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq, PartialOrd, Ord)]
 #[serde(rename_all = "camelCase")]
@@ -172,7 +174,13 @@ pub fn load_installed_library(steam_path: String) -> Result<Vec<u64>, String> {
 }
 
 #[tauri::command]
-pub fn load_storage_inventory(steam_path: String) -> Result<StorageInventory, String> {
+pub async fn load_storage_inventory(steam_path: String) -> Result<StorageInventory, String> {
+    tauri::async_runtime::spawn_blocking(move || build_storage_inventory(&steam_path))
+        .await
+        .map_err(|error| format!("Storage scan worker failed: {error}"))?
+}
+
+fn build_storage_inventory(steam_path: &str) -> Result<StorageInventory, String> {
     let steam_root = PathBuf::from(steam_path.trim());
     if !steam_root.join("steamapps").is_dir() {
         return Err(format!(
@@ -186,6 +194,7 @@ pub fn load_storage_inventory(steam_path: String) -> Result<StorageInventory, St
         .as_secs();
     let mut libraries = Vec::new();
     let mut installs = Vec::new();
+    let mut scan_budget = DirectoryScanBudget::new();
     for library_root in steam_library_roots(&steam_root) {
         let steamapps = library_root.join("steamapps");
         if !steamapps.is_dir() {
@@ -211,16 +220,33 @@ pub fn load_storage_inventory(steam_path: String) -> Result<StorageInventory, St
             let install_dir =
                 vdf_string_value(&manifest, "installdir").unwrap_or_else(|| appid.to_string());
             let install_path = steamapps.join("common").join(install_dir);
-            let game = directory_size(&install_path);
-            let workshop = directory_size(
-                &steamapps
-                    .join("workshop")
-                    .join("content")
-                    .join(appid.to_string()),
+            // Steam already records these two expensive directory totals. Reading
+            // the manifests avoids walking every game and Workshop file whenever
+            // the planner opens. Fall back to a filesystem scan for old or
+            // incomplete manifests.
+            let game = manifest_size(&manifest)
+                .map(complete_directory_size)
+                .unwrap_or_else(|| directory_size_with_budget(&install_path, &mut scan_budget));
+            let workshop_path = steamapps
+                .join("workshop")
+                .join("content")
+                .join(appid.to_string());
+            let workshop_manifest = steamapps
+                .join("workshop")
+                .join(format!("appworkshop_{appid}.acf"));
+            let workshop = fs::read_to_string(&workshop_manifest)
+                .ok()
+                .and_then(|content| manifest_size(&content))
+                .map(complete_directory_size)
+                .unwrap_or_else(|| directory_size_with_budget(&workshop_path, &mut scan_budget));
+            let shader_cache = directory_size_with_budget(
+                &steamapps.join("shadercache").join(appid.to_string()),
+                &mut scan_budget,
             );
-            let shader_cache =
-                directory_size(&steamapps.join("shadercache").join(appid.to_string()));
-            let compatdata = directory_size(&steamapps.join("compatdata").join(appid.to_string()));
+            let compatdata = directory_size_with_budget(
+                &steamapps.join("compatdata").join(appid.to_string()),
+                &mut scan_budget,
+            );
             installs.push(StorageInstall {
                 appid,
                 library_path: library_root.to_string_lossy().into_owned(),
@@ -250,6 +276,17 @@ pub fn load_storage_inventory(steam_path: String) -> Result<StorageInventory, St
     })
 }
 
+fn manifest_size(content: &str) -> Option<u64> {
+    vdf_string_value(content, "SizeOnDisk")?.parse().ok()
+}
+
+fn complete_directory_size(bytes: u64) -> DirectorySize {
+    DirectorySize {
+        bytes,
+        truncated: false,
+    }
+}
+
 fn vdf_string_value(content: &str, wanted_key: &str) -> Option<String> {
     content.lines().find_map(|line| {
         let values = parse_vdf_quoted_strings(line);
@@ -263,19 +300,42 @@ struct DirectorySize {
     truncated: bool,
 }
 
+struct DirectoryScanBudget {
+    started: Instant,
+    visited: usize,
+}
+
+impl DirectoryScanBudget {
+    fn new() -> Self {
+        Self {
+            started: Instant::now(),
+            visited: 0,
+        }
+    }
+
+    fn exhausted(&self) -> bool {
+        self.visited >= MAX_STORAGE_SCAN_ENTRIES
+            || self.started.elapsed() >= MAX_STORAGE_SCAN_DURATION
+    }
+}
+
+#[cfg(test)]
 fn directory_size(root: &Path) -> DirectorySize {
+    directory_size_with_budget(root, &mut DirectoryScanBudget::new())
+}
+
+fn directory_size_with_budget(root: &Path, budget: &mut DirectoryScanBudget) -> DirectorySize {
     let mut bytes = 0_u64;
-    let mut visited = 0_usize;
     let mut stack = vec![root.to_path_buf()];
 
     while let Some(path) = stack.pop() {
-        if visited >= MAX_STORAGE_SCAN_ENTRIES {
+        if budget.exhausted() {
             return DirectorySize {
                 bytes,
                 truncated: true,
             };
         }
-        visited += 1;
+        budget.visited += 1;
 
         let Ok(metadata) = fs::symlink_metadata(&path) else {
             continue;
@@ -290,7 +350,15 @@ fn directory_size(root: &Path) -> DirectorySize {
         let Ok(entries) = fs::read_dir(&path) else {
             continue;
         };
-        stack.extend(entries.flatten().map(|entry| entry.path()));
+        for entry in entries.flatten() {
+            if budget.exhausted() {
+                return DirectorySize {
+                    bytes,
+                    truncated: true,
+                };
+            }
+            stack.push(entry.path());
+        }
     }
 
     DirectorySize {
@@ -809,14 +877,19 @@ mod tests {
     }
 
     #[test]
-    fn scans_actual_storage_components_without_following_missing_paths() {
+    fn loads_manifest_sizes_without_walking_game_or_workshop_files() {
         let steam_path = temp_steam_dir("storage-inventory");
         let steamapps = steam_path.join("steamapps");
         fs::create_dir_all(steamapps.join("common").join("Demo Game")).unwrap();
         fs::create_dir_all(steamapps.join("workshop").join("content").join("42")).unwrap();
         fs::write(
             steamapps.join("appmanifest_42.acf"),
-            "\"AppState\"\n{\n\"appid\" \"42\"\n\"installdir\" \"Demo Game\"\n}",
+            "\"AppState\"\n{\n\"appid\" \"42\"\n\"installdir\" \"Demo Game\"\n\"SizeOnDisk\" \"101\"\n}",
+        )
+        .unwrap();
+        fs::write(
+            steamapps.join("workshop").join("appworkshop_42.acf"),
+            "\"AppWorkshop\"\n{\n\"appid\" \"42\"\n\"SizeOnDisk\" \"17\"\n}",
         )
         .unwrap();
         fs::write(
@@ -834,13 +907,32 @@ mod tests {
         )
         .unwrap();
 
-        let inventory = load_storage_inventory(steam_path.to_string_lossy().into_owned()).unwrap();
+        let inventory = build_storage_inventory(&steam_path.to_string_lossy()).unwrap();
         assert_eq!(inventory.installs.len(), 1);
         assert_eq!(inventory.installs[0].appid, 42);
-        assert_eq!(inventory.installs[0].game_bytes, 11);
-        assert_eq!(inventory.installs[0].workshop_bytes, 7);
-        assert_eq!(inventory.installs[0].total_bytes, 18);
+        assert_eq!(inventory.installs[0].game_bytes, 101);
+        assert_eq!(inventory.installs[0].workshop_bytes, 17);
+        assert_eq!(inventory.installs[0].total_bytes, 118);
         assert!(!inventory.installs[0].scan_truncated);
+        fs::remove_dir_all(steam_path).unwrap();
+    }
+
+    #[test]
+    fn falls_back_to_directory_sizes_when_manifests_lack_totals() {
+        let steam_path = temp_steam_dir("storage-inventory-fallback");
+        let steamapps = steam_path.join("steamapps");
+        let game_path = steamapps.join("common").join("Demo Game");
+        fs::create_dir_all(&game_path).unwrap();
+        fs::write(
+            steamapps.join("appmanifest_42.acf"),
+            "\"AppState\"\n{\n\"appid\" \"42\"\n\"installdir\" \"Demo Game\"\n}",
+        )
+        .unwrap();
+        fs::write(game_path.join("game.bin"), vec![0_u8; 11]).unwrap();
+
+        let inventory = build_storage_inventory(&steam_path.to_string_lossy()).unwrap();
+        assert_eq!(inventory.installs[0].game_bytes, 11);
+        assert_eq!(inventory.installs[0].total_bytes, 11);
         fs::remove_dir_all(steam_path).unwrap();
     }
 
