@@ -25,16 +25,42 @@ export function ToolbarSettingsTab() {
     const tool = TOOLBAR_TOOLS.find((candidate) => candidate.id === id);
     return tool ? [tool] : [];
   });
-  const updateList = (
-    key: "toolbarPinnedToolIds" | "toolbarHiddenToolIds",
+  const visiblePinnedIds = settings.toolbarToolOrder
+    .filter(
+      (id) =>
+        settings.toolbarPinnedToolIds.includes(id) &&
+        !settings.toolbarHiddenToolIds.includes(id),
+    )
+    .slice(0, settings.toolbarVisibleCount);
+  const visiblePinnedSet = new Set(visiblePinnedIds);
+  const setLocation = (
     id: ToolbarToolId,
-    enabled: boolean,
+    location: "header" | "more" | "hidden",
   ) => {
-    const current = settings[key] as string[];
+    const withoutId = (items: string[]) => items.filter((item) => item !== id);
     settings.setSettings({
-      [key]: enabled
-        ? [...new Set([...current, id])]
-        : current.filter((item) => item !== id),
+      toolbarHiddenToolIds:
+        location === "hidden"
+          ? [...new Set([...withoutId(settings.toolbarHiddenToolIds), id])]
+          : withoutId(settings.toolbarHiddenToolIds),
+      toolbarPinnedToolIds:
+        location === "header"
+          ? [...new Set([...withoutId(settings.toolbarPinnedToolIds), id])]
+          : withoutId(settings.toolbarPinnedToolIds),
+    });
+  };
+  const setVisibleCount = (value: number) => {
+    const nextCount = Math.max(0, Math.min(8, Math.round(value || 0)));
+    const retainedPinnedIds = settings.toolbarToolOrder
+      .filter(
+        (id) =>
+          settings.toolbarPinnedToolIds.includes(id) &&
+          !settings.toolbarHiddenToolIds.includes(id),
+      )
+      .slice(0, nextCount);
+    settings.setSettings({
+      toolbarVisibleCount: nextCount,
+      toolbarPinnedToolIds: retainedPinnedIds,
     });
   };
   const move = (id: ToolbarToolId, delta: number) => {
@@ -70,18 +96,15 @@ export function ToolbarSettingsTab() {
           min={0}
           max={8}
           value={settings.toolbarVisibleCount}
-          onChange={(event) =>
-            settings.setSettings({
-              toolbarVisibleCount: Number(event.target.value),
-            })
-          }
+          onChange={(event) => setVisibleCount(Number(event.target.value))}
           className="w-16 rounded-lg border border-repressurizer-border bg-repressurizer-surface px-2 py-1 text-right text-repressurizer-text"
         />
       </label>
       <div className="space-y-2">
         {tools.map((tool, index) => {
           const hidden = settings.toolbarHiddenToolIds.includes(tool.id);
-          const pinned = settings.toolbarPinnedToolIds.includes(tool.id);
+          const pinned = visiblePinnedSet.has(tool.id);
+          const headerFull = !pinned && visiblePinnedIds.length >= settings.toolbarVisibleCount;
           return (
             <div
               key={tool.id}
@@ -124,33 +147,40 @@ export function ToolbarSettingsTab() {
               <span className="min-w-36 flex-1 text-sm text-repressurizer-text">
                 {t(tool.labelKey)}
               </span>
-              <button
-                type="button"
-                onClick={() =>
-                  updateList("toolbarHiddenToolIds", tool.id, !hidden)
-                }
-                className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[10px] ${hidden ? "border-repressurizer-border text-repressurizer-text-faint" : "border-repressurizer-accent/40 text-repressurizer-accent"}`}
+              <div
+                className="flex items-center rounded-lg border border-repressurizer-border bg-repressurizer-surface p-0.5"
+                role="group"
+                aria-label={t(tool.labelKey)}
               >
-                {hidden ? <EyeSlash size={12} /> : <Eye size={12} />}
-                {t(
-                  hidden ? "settings.toolbar.hidden" : "settings.toolbar.shown",
-                )}
-              </button>
-              <button
-                type="button"
-                disabled={hidden}
-                onClick={() =>
-                  updateList("toolbarPinnedToolIds", tool.id, !pinned)
-                }
-                className={`inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-[10px] disabled:opacity-35 ${pinned ? "border-repressurizer-accent/40 text-repressurizer-accent" : "border-repressurizer-border text-repressurizer-text-muted"}`}
-              >
-                <PushPin size={12} />
-                {t(
-                  pinned
-                    ? "settings.toolbar.pinned"
-                    : "settings.toolbar.inMore",
-                )}
-              </button>
+                <button
+                  type="button"
+                  disabled={headerFull}
+                  aria-pressed={pinned}
+                  onClick={() => setLocation(tool.id, "header")}
+                  className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10px] transition-colors disabled:cursor-not-allowed disabled:opacity-30 ${pinned ? "bg-repressurizer-accent/15 text-repressurizer-accent" : "text-repressurizer-text-faint hover:text-repressurizer-text"}`}
+                >
+                  <PushPin size={12} />
+                  {t("settings.toolbar.pinned")}
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={!hidden && !pinned}
+                  onClick={() => setLocation(tool.id, "more")}
+                  className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10px] transition-colors ${!hidden && !pinned ? "bg-repressurizer-accent/15 text-repressurizer-accent" : "text-repressurizer-text-faint hover:text-repressurizer-text"}`}
+                >
+                  <Eye size={12} />
+                  {t("settings.toolbar.inMore")}
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={hidden}
+                  onClick={() => setLocation(tool.id, "hidden")}
+                  className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10px] transition-colors ${hidden ? "bg-repressurizer-danger/10 text-repressurizer-danger" : "text-repressurizer-text-faint hover:text-repressurizer-text"}`}
+                >
+                  <EyeSlash size={12} />
+                  {t("settings.toolbar.hidden")}
+                </button>
+              </div>
               <button
                 type="button"
                 aria-label={t("settings.toolbar.moveUp")}

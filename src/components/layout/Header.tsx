@@ -234,17 +234,22 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
     { key: "stats", label: t("toolbar.stats"), Icon: ChartBar, open: () => setShowStats(true), loader: loadStatsPage, badge: 0 },
     { key: "export", label: t("toolbar.export"), Icon: Export, open: () => openExportDialog(), loader: loadExportDialog, badge: 0 },
   ];
-  const enabledToolKeys = new Set(toolbarHiddenToolIds);
+  const hiddenToolKeys = new Set(toolbarHiddenToolIds);
   const toolsByKey = new Map(secondaryTools.map((tool) => [tool.key, tool]));
   const orderedTools = toolbarToolOrder.flatMap((key) => {
     const tool = toolsByKey.get(key);
-    return tool && !enabledToolKeys.has(key) ? [tool] : [];
+    return tool && !hiddenToolKeys.has(key) ? [tool] : [];
   });
   const pinnedKeySet = new Set(toolbarPinnedToolIds);
   const pinnedTools = orderedTools.filter((tool) => pinnedKeySet.has(tool.key)).slice(0, toolbarVisibleCount);
   const visiblePinnedKeys = new Set(pinnedTools.map((tool) => tool.key));
   const configureTool = (key: ToolbarToolId, action: "pin" | "hide") => {
-    if (action === "hide") setSettings({ toolbarHiddenToolIds: [...new Set([...toolbarHiddenToolIds, key])] });
+    if (action === "hide") {
+      setSettings({
+        toolbarHiddenToolIds: [...new Set([...toolbarHiddenToolIds, key])],
+        toolbarPinnedToolIds: toolbarPinnedToolIds.filter((id) => id !== key),
+      });
+    }
     else setSettings({ toolbarPinnedToolIds: pinnedKeySet.has(key) ? toolbarPinnedToolIds.filter((id) => id !== key) : [...toolbarPinnedToolIds, key] });
     setToolbarContextKey(null);
   };

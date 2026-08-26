@@ -592,7 +592,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
     <DialogOverlay
       label={t("settings.title")}
       onClose={onClose}
-      className="fixed inset-0 z-50 flex items-start justify-center overflow-auto bg-black/60 p-4 backdrop-blur-sm sm:p-6"
+      className="fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-black/60 p-4 backdrop-blur-sm sm:p-6"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <ResizableDialogPanel

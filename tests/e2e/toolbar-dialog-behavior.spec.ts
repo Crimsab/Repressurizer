@@ -47,9 +47,14 @@ test("toolbar tools can be configured from right click and Settings", async ({
 
   const toolbarState = await page.evaluate(async () => {
     const { useSettingsStore } = await import("/src/stores/settingsStore.ts");
-    return useSettingsStore.getState().toolbarHiddenToolIds;
+    const state = useSettingsStore.getState();
+    return {
+      hidden: state.toolbarHiddenToolIds,
+      pinned: state.toolbarPinnedToolIds,
+    };
   });
-  expect(toolbarState).toContain("storage");
+  expect(toolbarState.hidden).toContain("storage");
+  expect(toolbarState.pinned).not.toContain("storage");
 
   await page.getByRole("button", { name: "Settings" }).click();
   const settings = page.getByRole("dialog", { name: "Settings" });
@@ -67,6 +72,18 @@ test("toolbar tools can be configured from right click and Settings", async ({
     settings.getByText("Storage Planner", { exact: true }),
   ).toBeVisible();
 
+  const storageRow = settings.getByTestId("toolbar-tool-storage");
+  await storageRow.getByRole("button", { name: "Keep in More" }).click();
+  await expect(storageRow.getByRole("button", { name: "Keep in More" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await storageRow.getByRole("button", { name: "Pin to header" }).click();
+  await expect(storageRow.getByRole("button", { name: "Pin to header" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+
   await settings
     .getByTestId("toolbar-tool-profiles")
     .dragTo(settings.getByTestId("toolbar-tool-inbox"));
@@ -79,6 +96,32 @@ test("toolbar tools can be configured from right click and Settings", async ({
   const path = testInfo.outputPath("toolbar-settings-desktop.png");
   await page.screenshot({ path, fullPage: true });
   await testInfo.attach("toolbar-settings-desktop", {
+    path,
+    contentType: "image/png",
+  });
+});
+
+test("toolbar Settings stays ordered and contained on mobile", async ({
+  page,
+}, testInfo: TestInfo) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+
+  await page.getByRole("button", { name: "More tools" }).click();
+  await page.getByRole("menuitem", { name: "Settings" }).click();
+  const settings = page.getByRole("dialog", { name: "Settings" });
+  await settings.getByRole("button", { name: "Toolbar", exact: true }).click();
+  await expect(settings.getByRole("heading", { name: "Toolbar" })).toBeVisible();
+
+  const overflow = await settings.evaluate((dialog) => ({
+    clientWidth: dialog.clientWidth,
+    scrollWidth: dialog.scrollWidth,
+  }));
+  expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth + 1);
+
+  const path = testInfo.outputPath("toolbar-settings-mobile.png");
+  await page.screenshot({ path, fullPage: true });
+  await testInfo.attach("toolbar-settings-mobile", {
     path,
     contentType: "image/png",
   });
