@@ -267,9 +267,7 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
   useEffect(() => {
     if (tab !== "achievements") return;
     if (details && !gameHasSteamAchievements(details)) {
-      const empty: AchievementSummary = { total: 0, achieved: 0, achievements: [] };
-      setAchievements(empty);
-      setLoadingAchievements(false);
+      void loadAchievementData(false, details);
       setSamProbe(null);
       return;
     }

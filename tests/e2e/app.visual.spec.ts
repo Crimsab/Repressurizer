@@ -2664,6 +2664,15 @@ test("achievement details do not probe SAM while the integration is disabled", a
 });
 
 test("games without Steam achievements skip the Steam Achievement Manager panel", async ({ page }) => {
+  const renderLoopErrors: string[] = [];
+  page.on("console", (message) => {
+    if (
+      message.type() === "error" &&
+      message.text().includes("Maximum update depth exceeded")
+    ) {
+      renderLoopErrors.push(message.text());
+    }
+  });
   await page.goto("/");
 
   await page.locator(".game-card").filter({ hasText: "Outer Wilds" }).dblclick();
@@ -2674,6 +2683,7 @@ test("games without Steam achievements skip the Steam Achievement Manager panel"
 
   await expect(detail.getByText("This game has no achievements.")).toBeVisible();
   await expect(detail.getByRole("heading", { name: "Steam Achievement Manager" })).toBeHidden();
+  expect(renderLoopErrors).toEqual([]);
 });
 
 test("opens organized settings tabs, automation logs, and Steam controls without layout overflow", async ({ page }, testInfo) => {
