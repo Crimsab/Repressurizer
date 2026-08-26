@@ -71,10 +71,25 @@ fn windows_registry_steam_paths() -> Vec<PathBuf> {
     use windows_sys::Win32::System::Registry::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE};
 
     let entries = [
-        (HKEY_CURRENT_USER, r"Software\Valve\Steam", "SteamPath", false),
+        (
+            HKEY_CURRENT_USER,
+            r"Software\Valve\Steam",
+            "SteamPath",
+            false,
+        ),
         (HKEY_CURRENT_USER, r"Software\Valve\Steam", "SteamExe", true),
-        (HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node\Valve\Steam", "InstallPath", false),
-        (HKEY_LOCAL_MACHINE, r"SOFTWARE\Valve\Steam", "InstallPath", false),
+        (
+            HKEY_LOCAL_MACHINE,
+            r"SOFTWARE\WOW6432Node\Valve\Steam",
+            "InstallPath",
+            false,
+        ),
+        (
+            HKEY_LOCAL_MACHINE,
+            r"SOFTWARE\Valve\Steam",
+            "InstallPath",
+            false,
+        ),
     ];
     let mut paths = Vec::new();
     for (root, key, value, executable) in entries {
@@ -111,18 +126,42 @@ fn windows_registry_string(
     let result = (|| {
         let mut value_type = 0;
         let mut byte_count = 0_u32;
-        if unsafe { RegQueryValueExW(key, value.as_ptr(), null(), &mut value_type, null_mut(), &mut byte_count) } != ERROR_SUCCESS
+        if unsafe {
+            RegQueryValueExW(
+                key,
+                value.as_ptr(),
+                null(),
+                &mut value_type,
+                null_mut(),
+                &mut byte_count,
+            )
+        } != ERROR_SUCCESS
             || !matches!(value_type, REG_SZ | REG_EXPAND_SZ)
             || byte_count < 2
         {
             return None;
         }
         let mut buffer = vec![0_u16; byte_count as usize / 2];
-        if unsafe { RegQueryValueExW(key, value.as_ptr(), null(), &mut value_type, buffer.as_mut_ptr().cast(), &mut byte_count) } != ERROR_SUCCESS {
+        if unsafe {
+            RegQueryValueExW(
+                key,
+                value.as_ptr(),
+                null(),
+                &mut value_type,
+                buffer.as_mut_ptr().cast(),
+                &mut byte_count,
+            )
+        } != ERROR_SUCCESS
+        {
             return None;
         }
-        let end = buffer.iter().position(|character| *character == 0).unwrap_or(buffer.len());
-        let path = String::from_utf16_lossy(&buffer[..end]).trim().replace('/', r"\");
+        let end = buffer
+            .iter()
+            .position(|character| *character == 0)
+            .unwrap_or(buffer.len());
+        let path = String::from_utf16_lossy(&buffer[..end])
+            .trim()
+            .replace('/', r"\");
         (!path.is_empty()).then(|| PathBuf::from(path))
     })();
     unsafe { RegCloseKey(key) };
