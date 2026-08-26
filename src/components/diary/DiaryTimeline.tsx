@@ -172,12 +172,15 @@ export const DiaryTimeline = memo(function DiaryTimeline({ games, visibleAppIds,
   const handleTimelineScroll = () => {
     const container = scrollRef.current;
     if (!container || months.length === 0) return;
-    const containerTop = container.getBoundingClientRect().top;
+    const activationLine = container.getBoundingClientRect().top + 90;
     let active: string | null = null;
+    let closestDistance = Number.POSITIVE_INFINITY;
     for (const section of Array.from(container.querySelectorAll("[data-month-key]"))) {
       const rect = (section as HTMLElement).getBoundingClientRect();
-      if (rect.top <= containerTop + 90) active = (section as HTMLElement).dataset.monthKey ?? null;
-      else break;
+      const distance = Math.abs(rect.top - activationLine);
+      if (distance >= closestDistance) continue;
+      closestDistance = distance;
+      active = (section as HTMLElement).dataset.monthKey ?? null;
     }
     if (active) setCurrentMonth(active);
   };
