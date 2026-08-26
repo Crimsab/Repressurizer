@@ -7,7 +7,6 @@ import {
   ChartDonut,
   DownloadSimple,
   HardDrives,
-  Info,
   ListBullets,
   ShieldCheck,
   SquaresFour,
@@ -35,6 +34,11 @@ import { ResizableDialogPanel } from "../ui/ResizableDialogPanel";
 import { SelectMenu } from "../ui/SelectMenu";
 import { Tooltip } from "../ui/Tooltip";
 import type { StorageLibrary } from "../../lib/types";
+import {
+  serializeStorageExport,
+  storageExportExtension,
+  type StorageExportFormat,
+} from "../../lib/storageExport";
 
 const GB = 1_073_741_824;
 const bytes = (value: number) =>
@@ -59,6 +63,7 @@ export function StoragePlanner({ onClose }: { onClose: () => void }) {
   const [freePercent, setFreePercent] = useState(20);
   const [libraryPath, setLibraryPath] = useState("");
   const [view, setView] = useState<StorageView>("list");
+  const [exportFormat, setExportFormat] = useState<StorageExportFormat>("json");
   const refreshSmart = async () => {
     try {
       if (!steamPath.trim()) throw new Error("Steam path is empty");
@@ -101,17 +106,16 @@ export function StoragePlanner({ onClose }: { onClose: () => void }) {
         )
         .flatMap((install): StoragePlannerGame[] => {
           const game = games[install.appid];
-          if (!game) return [];
           const summary = achievements[install.appid];
           const estimate = hltb[install.appid]?.main_story;
-          const playedHours = game.playtime_forever / 60;
+          const playedHours = (game?.playtime_forever ?? 0) / 60;
           const protection = storage.protections[install.appid];
           return [
             {
               appid: install.appid,
-              name: game.name,
-              playtimeMinutes: game.playtime_forever,
-              lastPlayed: game.rtime_last_played,
+              name: game?.name ?? `App ${install.appid}`,
+              playtimeMinutes: game?.playtime_forever ?? 0,
+              lastPlayed: game?.rtime_last_played ?? 0,
               status: statuses[install.appid] ?? "none",
               achievementPercent: summary?.total
                 ? Math.round((summary.achieved / summary.total) * 100)
@@ -153,36 +157,31 @@ export function StoragePlanner({ onClose }: { onClose: () => void }) {
     freePercent,
     library: goalLibrary,
   });
-  const exportList = async () => {
+  const exportReport = async () => {
+    const extension = storageExportExtension(exportFormat);
+    const scopeLabel = selectedLibrary?.drive ?? t("storage.allLibraries");
+    const filenameScope = selectedLibrary?.drive.replace(/[^a-z0-9]/gi, "") || "all-libraries";
     const path = await save({
-      defaultPath: "repressurizer-uninstall-plan.json",
-      filters: [{ name: "JSON", extensions: ["json"] }],
+      defaultPath: `repressurizer-storage-${filenameScope}.${extension}`,
+      filters: [{
+        name: exportFormat === "markdown" ? "Markdown" : exportFormat.toUpperCase(),
+        extensions: [extension],
+      }],
     });
     if (!path) return;
-    const items = suggestions
-      .filter((item) => selected.has(item.appid))
-      .map((item) => ({
-        appId: item.appid,
-        name: item.name,
-        reclaimBytes: item.install.totalBytes,
-        library: item.install.libraryPath,
-        reasons: item.reasons,
-        limitations: item.limitations,
-      }));
     await writeTextFile(
       path,
-      JSON.stringify(
-        {
-          exportedAt: Date.now(),
-          goalBytes: goal,
-          reclaimBytes: reclaim,
-          items,
-        },
-        null,
-        2,
-      ),
+      serializeStorageExport({
+        generatedAt: Date.now(),
+        libraries: selectedLibrary ? [selectedLibrary] : libraries,
+        games: candidates,
+        selectedAppIds: selected,
+        scopeLabel,
+        goalBytes: goal,
+        reclaimBytes: reclaim,
+      }, exportFormat),
     );
-    toast.getState().success(t("storage.exported"));
+    toast.getState().success(t("storage.export.reportDone"));
   };
   return (
     <DialogOverlay
@@ -283,7 +282,7 @@ export function StoragePlanner({ onClose }: { onClose: () => void }) {
               <div className="grid grid-cols-2 gap-3 py-4 sm:grid-cols-4">
                 <Metric
                   label={t("storage.used")}
-                  value={bytes(storageUsed(storage.inventory?.installs ?? []))}
+                  value={bytes(storageUsed(candidates.map((game) => game.install)))}
                 />
                 <Metric label={t("storage.goal")} value={bytes(goal)} />
                 <Metric
@@ -301,10 +300,6 @@ export function StoragePlanner({ onClose }: { onClose: () => void }) {
                   {storage.error}
                 </p>
               )}
-              <p className="mb-3 flex items-center gap-1.5 text-[10px] text-amber-300">
-                <Info size={12} />
-                {t("storage.safetyNotice")}
-              </p>
               {view === "list" ? (
                 <div className="space-y-2">
                   {suggestions.map((game) => (
@@ -320,7 +315,7 @@ export function StoragePlanner({ onClose }: { onClose: () => void }) {
               ) : (
                 <StorageVisualization
                   view={view}
-                  suggestions={suggestions}
+                  games={candidates}
                   libraries={selectedLibrary ? [selectedLibrary] : libraries}
                   selected={selected}
                   onToggle={(appId) => storage.toggleUninstall(appId)}
@@ -330,22 +325,36 @@ export function StoragePlanner({ onClose }: { onClose: () => void }) {
             <footer className="flex flex-wrap items-center justify-between gap-2 border-t border-repressurizer-border px-4 py-3">
               <p className="text-[10px] text-repressurizer-text-faint">
                 <ShieldCheck size={12} className="mr-1 inline" />
-                {t("storage.noDelete")}
+                {t("storage.simulationOnly")}
               </p>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap items-center justify-end gap-2">
                 <button
                   onClick={() => storage.clearList()}
+                  disabled={!selected.size}
                   className="rounded-lg border border-repressurizer-border px-3 py-2 text-xs text-repressurizer-text-muted"
                 >
                   {t("storage.clear")}
                 </button>
+                <SelectMenu
+                  value={exportFormat}
+                  onChange={(value) => setExportFormat(value as StorageExportFormat)}
+                  options={[
+                    { value: "json", label: "JSON", description: t("storage.export.json") },
+                    { value: "csv", label: "CSV", description: t("storage.export.csv") },
+                    { value: "markdown", label: "Markdown", description: t("storage.export.markdown") },
+                    { value: "txt", label: t("storage.export.txt"), description: t("storage.export.txtDescription") },
+                  ]}
+                  ariaLabel={t("storage.export.format")}
+                  size="sm"
+                  align="right"
+                  className="w-32"
+                />
                 <button
-                  onClick={() => void exportList()}
-                  disabled={!selected.size}
-                  className="inline-flex items-center gap-1 rounded-lg bg-repressurizer-accent px-3 py-2 text-xs font-medium text-white disabled:opacity-40"
+                  onClick={() => void exportReport()}
+                  className="inline-flex items-center gap-1 rounded-lg bg-repressurizer-accent px-3 py-2 text-xs font-medium text-white"
                 >
                   <DownloadSimple size={13} />
-                  {t("storage.export")}
+                  {t("storage.export.report")}
                 </button>
               </div>
             </footer>
@@ -524,18 +533,19 @@ function StorageRow({
 }
 function StorageVisualization({
   view,
-  suggestions,
+  games,
   libraries,
   selected,
   onToggle,
 }: {
   view: Exclude<StorageView, "list">;
-  suggestions: ReturnType<typeof rankStorageCandidates>;
+  games: StoragePlannerGame[];
   libraries: StorageLibrary[];
   selected: Set<number>;
   onToggle: (appId: number) => void;
 }) {
-  const items = suggestions;
+  const t = useT();
+  const items = games;
   const total = Math.max(
     items.reduce((sum, item) => sum + item.install.totalBytes, 0),
     1,
@@ -544,7 +554,7 @@ function StorageVisualization({
     return (
       <div
         data-testid="storage-treemap"
-        className="flex min-h-[360px] flex-col gap-1 overflow-hidden rounded-lg border border-repressurizer-border bg-[#090b0d] p-1 md:flex-row"
+        className="space-y-3"
       >
         {visualLibraries(libraries, items).filter((library) => library.games.length > 0).map((library) => (
           <DiskTreemap
@@ -585,16 +595,29 @@ function StorageVisualization({
     cursor += (game.install.totalBytes / total) * 100;
     return `${colors[index]} ${start}% ${cursor}%`;
   });
-  if (cursor < 100) segments.push(`#27272a ${cursor}% 100%`);
+  const otherGames = items.slice(8);
+  const otherTotal = otherGames.reduce(
+    (sum, game) => sum + game.install.totalBytes,
+    0,
+  );
+  if (otherTotal > 0) segments.push(`#3f3f46 ${cursor}% 100%`);
   return (
     <div
       data-testid="storage-pie"
       className="grid items-center gap-6 py-4 sm:grid-cols-[minmax(220px,0.8fr)_1.2fr]"
     >
-      <div
-        className="mx-auto aspect-square w-full max-w-72 rounded-full border-[26px] border-repressurizer-surface shadow-inner"
-        style={{ background: `conic-gradient(${segments.join(",")})` }}
-      />
+      <div className="relative mx-auto aspect-square w-full max-w-72">
+        <div
+          className="absolute inset-0 rounded-full shadow-inner"
+          style={{ background: `conic-gradient(${segments.join(",")})` }}
+        />
+        <div className="absolute inset-[28%] flex flex-col items-center justify-center rounded-full border border-repressurizer-border bg-repressurizer-bg text-center shadow-lg">
+          <strong className="text-sm text-white">{bytes(total)}</strong>
+          <span className="text-[9px] uppercase text-repressurizer-text-faint">
+            {t("storage.steamGames")}
+          </span>
+        </div>
+      </div>
       <div className="space-y-2">
         {items.slice(0, 8).map((game, index) => (
           <button
@@ -614,12 +637,27 @@ function StorageVisualization({
             </span>
           </button>
         ))}
+        {otherTotal > 0 && (
+          <div
+            data-testid="storage-pie-other"
+            className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5"
+            title={otherGames.map((game) => game.name).join(", ")}
+          >
+            <span className="h-2.5 w-2.5 rounded-sm bg-zinc-600" />
+            <span className="min-w-0 flex-1 truncate text-xs text-repressurizer-text">
+              {t("storage.otherGames", { count: otherGames.length })}
+            </span>
+            <span className="font-mono text-[10px] text-repressurizer-text-muted">
+              {bytes(otherTotal)}
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-type VisualGame = ReturnType<typeof rankStorageCandidates>[number];
+type VisualGame = StoragePlannerGame;
 type VisualLibrary = StorageLibrary & { games: VisualGame[] };
 
 function visualLibraries(
@@ -717,11 +755,11 @@ const treemapColors = [
 ];
 
 function libraryNodes(library: VisualLibrary): TreemapNode[] {
-  return library.games.map((game, index) => ({
+  return library.games.map((game) => ({
       id: String(game.appid),
       label: game.name,
       value: game.install.totalBytes,
-      color: treemapColors[index % treemapColors.length],
+      color: treemapColors[game.appid % treemapColors.length],
       game,
     })).filter((node) => node.value > 0)
     .sort((left, right) => right.value - left.value);
@@ -744,11 +782,13 @@ function DiskTreemap({
   const rects = binaryTreemap(libraryNodes(library));
   return (
     <section
-      className="flex min-h-52 min-w-0 flex-col overflow-hidden border border-white/10 bg-black md:min-h-0"
-      style={{ flexGrow: Math.max(1, installed), flexBasis: 0 }}
+      className="flex h-[min(46vh,430px)] min-h-64 min-w-0 flex-col overflow-hidden rounded-lg border border-white/10 bg-black"
     >
-      <header className="flex items-center justify-between gap-2 border-b border-white/10 bg-white/[0.04] px-2 py-1 text-[10px]">
-        <strong className="truncate text-zinc-200">{library.drive}</strong>
+      <header className="flex items-center justify-between gap-2 border-b border-white/10 bg-white/[0.05] px-3 py-2 text-[10px]">
+        <span className="min-w-0">
+          <strong className="block truncate text-xs text-zinc-100">{library.drive}</strong>
+          <span className="block truncate font-mono text-[9px] text-zinc-600">{library.path}</span>
+        </span>
         <span className="shrink-0 font-mono text-zinc-500">
           {bytes(installed)} {t("storage.steamGames")} · {bytes(library.freeBytes)} {t("storage.free")}
         </span>
@@ -757,7 +797,7 @@ function DiskTreemap({
         {rects.map((rect) => {
           const game = rect.game!;
           const active = selected.has(game.appid);
-          const labelFits = rect.width > 11 && rect.height > 9;
+          const labelFits = rect.width > 12 && rect.height > 10;
           const style = {
             left: `${rect.x}%`,
             top: `${rect.y}%`,
@@ -769,7 +809,13 @@ function DiskTreemap({
             <button
               key={rect.id}
               type="button"
-              title={`${game.name} · ${bytes(rect.value)}`}
+              title={[
+                `${game.name} · ${bytes(rect.value)} · ${library.drive}`,
+                `${t("storage.content.game")}: ${bytes(game.install.gameBytes)}`,
+                `${t("storage.content.workshop")}: ${bytes(game.install.workshopBytes)}`,
+                `${t("storage.content.shader")}: ${bytes(game.install.shaderCacheBytes)}`,
+                `${t("storage.content.compat")}: ${bytes(game.install.compatdataBytes)}`,
+              ].join("\n")}
               aria-label={`${t("storage.addList")} ${game.name}`}
               aria-pressed={active}
               onClick={() => onToggle(game.appid)}
@@ -822,16 +868,13 @@ function GameContentTreemap({
             width: `${rect.width}%`,
             height: `${rect.height}%`,
             backgroundColor: color,
+            backgroundImage:
+              "linear-gradient(rgba(255,255,255,.07) 1px, transparent 1px), linear-gradient(90deg, rgba(0,0,0,.22) 1px, transparent 1px)",
+            backgroundSize: "14px 14px",
             opacity: parts.find((part) => part.id === rect.id)?.opacity ?? 1,
           }}
           className="absolute border border-black/25 shadow-[inset_0_0_12px_rgba(255,255,255,0.08)]"
-        >
-          {rect.width > 24 && rect.height > 24 && (
-            <span className="absolute bottom-1 left-1 truncate text-[8px] text-white/65">
-              {rect.label}
-            </span>
-          )}
-        </span>
+        />
       ))}
     </span>
   );

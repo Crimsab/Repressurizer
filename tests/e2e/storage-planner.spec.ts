@@ -21,6 +21,7 @@ test("storage planner explains candidates and simulates a reversible list", asyn
   await expect(
     dialog.getByRole("button", { name: /All Steam libraries/ }),
   ).toBeVisible();
+  await expect(dialog.getByText(/Save synchronization cannot/)).toHaveCount(0);
   await dialog
     .getByRole("checkbox", { name: /Add to uninstall list Disco Elysium/ })
     .check();
@@ -40,6 +41,18 @@ test("storage planner offers treemap, bars, and distribution views", async ({
   const dialog = await openPlanner(page);
   await dialog.getByRole("button", { name: "Treemap view" }).click();
   await expect(dialog.getByTestId("storage-treemap")).toBeVisible();
+  const cDisk = dialog.getByTestId("storage-treemap").getByText("C:", { exact: true });
+  const dDisk = dialog.getByTestId("storage-treemap").getByText("D:", { exact: true });
+  const cBox = await cDisk.boundingBox();
+  const dBox = await dDisk.boundingBox();
+  expect(cBox).not.toBeNull();
+  expect(dBox).not.toBeNull();
+  expect(dBox!.y).toBeGreaterThan(cBox!.y);
+  const discoTile = dialog.getByRole("button", {
+    name: /Add to uninstall list Disco Elysium/,
+  });
+  await expect(discoTile).toHaveAttribute("title", /Workshop: 1.0 GB/);
+  await expect(dialog.getByTestId("storage-treemap").getByText("Game files")).toHaveCount(0);
   const treemap = testInfo.outputPath("storage-treemap-desktop.png");
   await page.screenshot({ path: treemap, fullPage: true });
   await testInfo.attach("storage-treemap-desktop", {
@@ -68,6 +81,20 @@ test("storage planner offers treemap, bars, and distribution views", async ({
     path: pie,
     contentType: "image/png",
   });
+});
+test("storage planner exports the visible report without requiring a removal selection", async ({
+  page,
+}) => {
+  await page.goto("/");
+  const dialog = await openPlanner(page);
+  await dialog.getByRole("button", { name: /Export format: JSON/ }).click();
+  await page.getByRole("option", { name: /CSV/ }).click();
+  await dialog.getByRole("button", { name: "Export report" }).click();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("repressurizer-last-save-path"))).toMatch(/\.csv$/);
+  const written = await page.evaluate(() => localStorage.getItem("repressurizer-last-written-text"));
+  expect(written).toContain('"app_id","name","library"');
+  expect(written).toContain("Disco Elysium - The Final Cut");
+  expect(written).toContain("Hades");
 });
 test("storage planner is horizontally contained on mobile", async ({
   page,
