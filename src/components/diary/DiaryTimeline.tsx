@@ -112,6 +112,8 @@ export const DiaryTimeline = memo(function DiaryTimeline({ games, visibleAppIds,
   const [collapsedGames, setCollapsedGames] = useState<Set<string>>(new Set());
   const [currentMonth, setCurrentMonth] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const suppressScrollTrackingRef = useRef(false);
+  const scrollTrackingTimerRef = useRef<number | null>(null);
 
   const toggleSetEntry = (setter: (updater: (current: Set<string>) => Set<string>) => void, key: string) => {
     setter((current) => {
@@ -161,17 +163,28 @@ export const DiaryTimeline = memo(function DiaryTimeline({ games, visibleAppIds,
     if (currentMonth === null && months.length > 0) setCurrentMonth(months[0].key);
   }, [currentMonth, months]);
 
+  useEffect(() => () => {
+    if (scrollTrackingTimerRef.current !== null) window.clearTimeout(scrollTrackingTimerRef.current);
+  }, []);
+
   const scrollToMonth = (monthKey: string) => {
     setCurrentMonth(monthKey);
     const container = scrollRef.current;
     if (!container) return;
     const target = container.querySelector(`[data-month-key="${monthKey}"]`);
-    if (target) (target as HTMLElement).scrollIntoView({ block: "start", behavior: "smooth" });
+    if (!target) return;
+    suppressScrollTrackingRef.current = true;
+    if (scrollTrackingTimerRef.current !== null) window.clearTimeout(scrollTrackingTimerRef.current);
+    (target as HTMLElement).scrollIntoView({ block: "start", behavior: "auto" });
+    scrollTrackingTimerRef.current = window.setTimeout(() => {
+      suppressScrollTrackingRef.current = false;
+      scrollTrackingTimerRef.current = null;
+    }, 100);
   };
 
   const handleTimelineScroll = () => {
     const container = scrollRef.current;
-    if (!container || months.length === 0) return;
+    if (!container || months.length === 0 || suppressScrollTrackingRef.current) return;
     const activationLine = container.getBoundingClientRect().top + 90;
     let active: string | null = null;
     let closestDistance = Number.POSITIVE_INFINITY;
