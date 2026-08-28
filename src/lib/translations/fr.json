@@ -1627,7 +1627,7 @@
   "dialog.resize": "Redimensionner la fenêtre. Utilisez les flèches pour l’ajuster.",
   "settings.updates.banner.desc": "Téléchargez et redémarrez quand vous êtes prêt.",
   "settings.updates.autoCheck": "Vérifier automatiquement les mises à jour",
-  "settings.updates.autoCheck.desc": "Cherche une nouvelle release GitHub peu après le lancement puis toutes les {hours} heures pendant que l'app est ouverte.",
+  "settings.updates.autoCheck.desc": "Recherche une nouvelle release GitHub peu après le lancement, au retour depuis la zone de notification si nécessaire, puis toutes les {hours} heures pendant que l'app est ouverte.",
   "settings.updates.autoCheck.interval": "Vérifier toutes les",
   "settings.background": "Général et arrière-plan",
   "settings.interval.minutes": "{count} min",

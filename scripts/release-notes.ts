@@ -37,7 +37,7 @@ const mainNotes = buildCommitNotes(repo, tag, previousTag, compareUrl);
 const highlight = releaseHighlight(tag);
 
 const releaseNotes = [
-  highlight ? `## Big update\n\n${highlight}\n` : null,
+  highlight ? `## Release highlights\n\n${highlight}\n` : null,
   mainNotes,
   "---",
   "## Downloads",

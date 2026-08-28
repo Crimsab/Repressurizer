@@ -1627,7 +1627,7 @@
   "dialog.resize": "Resize dialog. Use the arrow keys to adjust.",
   "settings.updates.banner.desc": "Download and restart when you are ready.",
   "settings.updates.autoCheck": "Automatically check for updates",
-  "settings.updates.autoCheck.desc": "Look for a new GitHub release shortly after startup and every {hours} hours while the app is open.",
+  "settings.updates.autoCheck.desc": "Look for a new GitHub release shortly after startup, when returning from the tray if due, and every {hours} hours while the app is open.",
   "settings.updates.autoCheck.interval": "Check every",
   "settings.background": "Background",
   "settings.interval.minutes": "{count} min",

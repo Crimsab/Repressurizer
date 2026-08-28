@@ -1627,7 +1627,7 @@
   "dialog.resize": "Cambiar el tamaño del diálogo. Usa las flechas para ajustarlo.",
   "settings.updates.banner.desc": "Descarga y reinicia cuando quieras.",
   "settings.updates.autoCheck": "Buscar actualizaciones automáticamente",
-  "settings.updates.autoCheck.desc": "Busca una nueva release de GitHub poco después del inicio y cada {hours} horas mientras la app está abierta.",
+  "settings.updates.autoCheck.desc": "Busca una nueva release de GitHub poco después del inicio, al volver desde la bandeja cuando corresponda y cada {hours} horas mientras la app está abierta.",
   "settings.updates.autoCheck.interval": "Comprobar cada",
   "settings.background": "General y segundo plano",
   "settings.interval.minutes": "{count} min",

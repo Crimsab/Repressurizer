@@ -49,7 +49,13 @@ import {
   getStartupContext,
 } from "./lib/tauri";
 import type { StartupContext } from "./lib/tauri";
-import { checkForAppUpdate, manualUpdateMessageKey } from "./lib/updater";
+import {
+  checkForAppUpdate,
+  DEFAULT_UPDATE_CHECK_INTERVAL_HOURS,
+  manualUpdateMessageKey,
+  MIN_UPDATE_CHECK_INTERVAL_HOURS,
+  shouldCheckForAppUpdateAfterResume,
+} from "./lib/updater";
 import { mergeCollectionOnlyGames } from "./lib/libraryMerge";
 import {
   automationPublishDue,
@@ -86,9 +92,7 @@ const SetupWizard = lazy(() => import("./components/setup/SetupWizard").then((m)
 const OnboardingTour = lazy(() => import("./components/ui/OnboardingTour").then((m) => ({ default: m.OnboardingTour })));
 
 const DEFAULT_LIBRARY_REFRESH_INTERVAL_MINUTES = 30;
-const DEFAULT_UPDATE_CHECK_INTERVAL_HOURS = 12;
 const MIN_LIBRARY_REFRESH_INTERVAL_MINUTES = 5;
-const MIN_UPDATE_CHECK_INTERVAL_HOURS = 1;
 
 class ErrorBoundary extends Component<
   { children: ReactNode },
@@ -240,6 +244,7 @@ function AppContent() {
   const [installingUpdate, setInstallingUpdate] = useState(false);
   const toast = useToastStore;
   const checkingUpdatesRef = useRef(false);
+  const lastUpdateCheckAtRef = useRef(0);
   const availableUpdateRef = useRef<Update | null>(null);
   const installingUpdateRef = useRef(false);
   const checkForUpdatesRef = useRef<(notify?: boolean) => Promise<void>>(async () => {});
@@ -307,6 +312,7 @@ function AppContent() {
     }
 
     checkingUpdatesRef.current = true;
+    lastUpdateCheckAtRef.current = Date.now();
     try {
       if (!startupContext?.updaterTarget) {
         throw new Error(t("settings.updates.targetUnavailable"));
@@ -526,9 +532,24 @@ function AppContent() {
       libraryResumeRefreshStateRef.current,
       Date.now(),
     );
-    if (!nextState) return;
+    if (!nextState) return false;
     libraryResumeRefreshStateRef.current = nextState;
     void reloadLibraryRef.current(false).catch(() => {});
+    return true;
+  };
+
+  const requestUpdateCheckAfterResume = () => {
+    const currentSettings = useSettingsStore.getState();
+    if (
+      !currentSettings.setupComplete ||
+      currentSettings.checkUpdatesOnStartup === false ||
+      !shouldCheckForAppUpdateAfterResume(
+        lastUpdateCheckAtRef.current,
+        Date.now(),
+        currentSettings.updateAutoCheckIntervalHours,
+      )
+    ) return;
+    void checkForUpdatesRef.current(false);
   };
 
   const reloadLibraryFromStores = async (notify = false, startupBackup = false) => {
@@ -670,7 +691,9 @@ function AppContent() {
     };
     const handleShown = () => {
       setWindowActivated(true);
-      requestLibraryRefreshAfterResume();
+      if (requestLibraryRefreshAfterResume()) {
+        requestUpdateCheckAfterResume();
+      }
     };
     listen("repressurizer-window-shown", handleShown)
       .then((fn) => {

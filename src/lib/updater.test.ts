@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   channelUpdaterTarget,
+  shouldCheckForAppUpdateAfterResume,
   shouldAllowStableReturn,
 } from "./updater";
 
@@ -28,5 +29,20 @@ describe("updater channels", () => {
     expect(shouldAllowStableReturn("0.6.0-beta.2", "beta")).toBe(false);
     expect(shouldAllowStableReturn("0.6.0", "stable")).toBe(false);
     expect(shouldAllowStableReturn("0.0.0-preview.12", "stable")).toBe(false);
+  });
+
+  it("checks for updates on tray resume only when the configured interval is due", () => {
+    const hour = 60 * 60 * 1000;
+
+    expect(shouldCheckForAppUpdateAfterResume(0, hour, 12)).toBe(true);
+    expect(shouldCheckForAppUpdateAfterResume(hour, 12 * hour, 12)).toBe(false);
+    expect(shouldCheckForAppUpdateAfterResume(hour, 13 * hour, 12)).toBe(true);
+  });
+
+  it("clamps overly frequent checks and recovers from a backwards clock", () => {
+    const hour = 60 * 60 * 1000;
+
+    expect(shouldCheckForAppUpdateAfterResume(hour, 1.5 * hour, 0)).toBe(false);
+    expect(shouldCheckForAppUpdateAfterResume(2 * hour, hour, 12)).toBe(true);
   });
 });

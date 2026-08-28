@@ -15,6 +15,22 @@ export type ManualUpdateMessageKey =
   | "settings.updates.manual.package"
   | "settings.updates.manual.unsupported";
 
+export const DEFAULT_UPDATE_CHECK_INTERVAL_HOURS = 12;
+export const MIN_UPDATE_CHECK_INTERVAL_HOURS = 1;
+
+export function shouldCheckForAppUpdateAfterResume(
+  lastCheckedAt: number,
+  now: number,
+  intervalHours = DEFAULT_UPDATE_CHECK_INTERVAL_HOURS
+): boolean {
+  if (lastCheckedAt <= 0 || now < lastCheckedAt) return true;
+  const effectiveHours = Math.max(
+    MIN_UPDATE_CHECK_INTERVAL_HOURS,
+    intervalHours || DEFAULT_UPDATE_CHECK_INTERVAL_HOURS
+  );
+  return now - lastCheckedAt >= effectiveHours * 60 * 60 * 1000;
+}
+
 export function manualUpdateMessageKey(kind: UpdaterKind): ManualUpdateMessageKey {
   if (kind === "windows-portable") return "settings.updates.manual.portable";
   if (kind === "linux-system-package") return "settings.updates.manual.package";

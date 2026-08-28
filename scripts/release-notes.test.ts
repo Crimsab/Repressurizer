@@ -51,7 +51,7 @@ describe("release notes", () => {
     expect(notes).toContain("Repressurizer-cli-linux-x86_64.tar.gz");
   });
 
-  it("marks the 0.7.0 feature release as a big update", () => {
+  it("presents the 0.7.0 feature summary as release highlights", () => {
     const repository = mkdtempSync(join(tmpdir(), "repressurizer-release-notes-big-update-"));
     temporaryRepositories.push(repository);
 
@@ -78,7 +78,8 @@ describe("release notes", () => {
 
     expect(result.status, result.stderr).toBe(0);
     const notes = readFileSync(output, "utf8");
-    expect(notes).toContain("## Big update");
+    expect(notes).toContain("## Release highlights");
+    expect(notes).not.toContain("## Big update");
     expect(notes).toContain("This is a big update with a complete Diary workspace");
   });
 });

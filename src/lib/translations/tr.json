@@ -1627,7 +1627,7 @@
   "dialog.resize": "Pencereyi yeniden boyutlandır. Ayarlamak için ok tuşlarını kullanın.",
   "settings.updates.banner.desc": "Hazır olduğunda indirip yeniden başlat.",
   "settings.updates.autoCheck": "Güncellemeleri otomatik denetle",
-  "settings.updates.autoCheck.desc": "Başlangıçtan kısa süre sonra ve uygulama açıkken her {hours} saatte yeni GitHub sürümünü denetler.",
+  "settings.updates.autoCheck.desc": "Başlangıçtan kısa süre sonra, zamanı geldiyse sistem tepsisinden geri dönüldüğünde ve uygulama açıkken her {hours} saatte yeni GitHub sürümünü denetler.",
   "settings.updates.autoCheck.interval": "Her",
   "settings.background": "Genel ve arka plan",
   "settings.interval.minutes": "{count} dk",

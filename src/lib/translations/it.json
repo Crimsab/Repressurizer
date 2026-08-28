@@ -1627,7 +1627,7 @@
   "dialog.resize": "Ridimensiona la finestra. Usa i tasti freccia per regolarla.",
   "settings.updates.banner.desc": "Scarica e riavvia quando sei pronto.",
   "settings.updates.autoCheck": "Controlla aggiornamenti automaticamente",
-  "settings.updates.autoCheck.desc": "Cerca una nuova release GitHub poco dopo l'avvio e ogni {hours} ore mentre l'app resta aperta.",
+  "settings.updates.autoCheck.desc": "Cerca una nuova release GitHub poco dopo l'avvio, quando riapri dalla tray se il controllo è previsto, e ogni {hours} ore mentre l'app resta aperta.",
   "settings.updates.autoCheck.interval": "Controlla ogni",
   "settings.background": "Generale e background",
   "settings.interval.minutes": "{count} min",

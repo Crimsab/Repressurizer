@@ -1074,6 +1074,21 @@ test("portable builds explain manual updates without offering in-place installat
   await testInfo.attach("portable-updates", { path: screenshotPath, contentType: "image/png" });
 });
 
+test("automatic update settings explain tray resume checks", async ({ page }, testInfo) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Settings" }).click();
+  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+  await settingsDialog.getByRole("button", { name: "About", exact: true }).click();
+
+  await expect(settingsDialog.getByText("Automatically check for updates")).toBeVisible();
+  await expect(settingsDialog.getByText(/when returning from the tray if due/)).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+
+  const screenshotPath = testInfo.outputPath("automatic-update-tray-check.png");
+  await page.screenshot({ path: screenshotPath, fullPage: true });
+  await testInfo.attach("automatic-update-tray-check", { path: screenshotPath, contentType: "image/png" });
+});
+
 test("keeps every header action reachable at the minimum window size", async ({ page }) => {
   await page.setViewportSize({ width: 900, height: 600 });
   await page.goto("/");
