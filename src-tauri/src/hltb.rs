@@ -95,23 +95,11 @@ fn default_endpoints() -> Vec<HltbEndpoint> {
 
 fn endpoint_set(base_url: &str) -> Vec<HltbEndpoint> {
     let base = base_url.trim_end_matches('/');
-    vec![
-        HltbEndpoint {
-            name: "bleed",
-            init_url: format!("{}/api/bleed/init", base),
-            search_url: format!("{}/api/bleed", base),
-        },
-        HltbEndpoint {
-            name: "find",
-            init_url: format!("{}/api/find/init", base),
-            search_url: format!("{}/api/find", base),
-        },
-        HltbEndpoint {
-            name: "finder",
-            init_url: format!("{}/api/finder/init", base),
-            search_url: format!("{}/api/finder", base),
-        },
-    ]
+    vec![HltbEndpoint {
+        name: "site",
+        init_url: format!("{}/api/search/site/init", base),
+        search_url: format!("{}/api/search/site", base),
+    }]
 }
 
 fn value_to_seconds(v: &JsonValue) -> Option<f64> {
@@ -422,9 +410,6 @@ async fn fetch_fresh_token(
     let status = resp.status();
     let text = resp.text().await.unwrap_or_default();
 
-    if status.as_u16() == 404 {
-        return Ok(None);
-    }
     if !status.is_success() {
         return Err(format!(
             "HLTB token endpoint {} returned {}: {}",
@@ -567,9 +552,6 @@ async fn search_endpoint(
         (status, text) = send_search(client, endpoint, &token, search_name).await?;
     }
 
-    if status.as_u16() == 404 {
-        return Ok(Vec::new());
-    }
     if !status.is_success() {
         return Err(format!(
             "HLTB search {} returned {}: {}",
@@ -771,7 +753,7 @@ mod tests {
     #[test]
     fn includes_hp_fields_in_payload() {
         let token = HltbToken {
-            endpoint_key: "https://howlongtobeat.com/api/bleed/init".to_string(),
+            endpoint_key: "https://howlongtobeat.com/api/search/site/init".to_string(),
             token: "token".to_string(),
             hp_key: Some("ign_key".to_string()),
             hp_val: Some("hp-value".to_string()),
@@ -825,11 +807,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn fetches_from_bleed_with_hp_token() {
+    async fn fetches_from_site_search_with_hp_token() {
         let server = MockServer::start().await;
 
         Mock::given(method("GET"))
-            .and(path("/api/bleed/init"))
+            .and(path("/api/search/site/init"))
             .respond_with(ResponseTemplate::new(200).set_body_json(json!({
                 "token": "search-token",
                 "hpKey": "ign_test",
@@ -840,7 +822,7 @@ mod tests {
             .await;
 
         Mock::given(method("POST"))
-            .and(path("/api/bleed"))
+            .and(path("/api/search/site"))
             .and(header("x-auth-token", "search-token"))
             .and(header("x-hp-key", "ign_test"))
             .and(header("x-hp-val", "hp-value"))
@@ -905,6 +887,86 @@ mod tests {
         assert_eq!(data.main_extra, Some(60.0));
         assert_eq!(data.completionist, Some(100.0));
         assert_eq!(data.game_id, Some(123));
+    }
+
+    #[tokio::test]
+    async fn reports_removed_token_endpoint_as_provider_error() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/api/search/site/init"))
+            .respond_with(ResponseTemplate::new(404))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = reqwest::Client::builder()
+            .user_agent(UA)
+            .build()
+            .expect("client");
+        let endpoints = vec![endpoint_set(&server.uri()).remove(0)];
+        let error = fetch_hltb_inner(&client, &endpoints, "Half-Life 2", Some(4248), Some(2004))
+            .await
+            .expect_err("a removed provider endpoint must not look like a missing game");
+
+        assert!(error.contains("returned 404"));
+    }
+
+    #[tokio::test]
+    async fn reports_removed_search_endpoint_as_provider_error() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/api/search/site/init"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+                "token": "search-token"
+            })))
+            .expect(1)
+            .mount(&server)
+            .await;
+        Mock::given(method("POST"))
+            .and(path("/api/search/site"))
+            .respond_with(ResponseTemplate::new(404))
+            .expect(1)
+            .mount(&server)
+            .await;
+
+        let client = reqwest::Client::builder()
+            .user_agent(UA)
+            .build()
+            .expect("client");
+        let endpoints = vec![endpoint_set(&server.uri()).remove(0)];
+        let error = fetch_hltb_inner(&client, &endpoints, "Half-Life 2", Some(4248), Some(2004))
+            .await
+            .expect_err("a removed provider endpoint must not look like a missing game");
+
+        assert!(error.contains("returned 404"));
+    }
+
+    #[tokio::test]
+    #[ignore]
+    async fn live_hltb_issue_86_half_life_2() {
+        if std::env::var("REPRESSURIZER_HLTB_LIVE").ok().as_deref() != Some("1") {
+            eprintln!("set REPRESSURIZER_HLTB_LIVE=1 to run the live HLTB issue test");
+            return;
+        }
+
+        let client = reqwest::Client::builder()
+            .user_agent(UA)
+            .build()
+            .expect("client");
+        let data = fetch_hltb_inner(
+            &client,
+            &default_endpoints(),
+            "Half-Life 2",
+            Some(4248),
+            Some(2004),
+        )
+        .await
+        .expect("live lookup should not error")
+        .expect("Half-Life 2 should be found even with the issue reporter's App ID");
+
+        assert!(data.main_story.is_some());
     }
 
     #[tokio::test]
