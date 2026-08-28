@@ -12,7 +12,7 @@ import { detailsPriceNeedsCurrencyRefresh } from "../../lib/prices";
 import { storeReleaseDateNeedsRefresh } from "../../lib/releaseDates";
 import { steamRatingIdsNeedingFetch } from "../../lib/steamRatings";
 import { startCachePreparation } from "../../lib/cachePreparation";
-import { Circle, X, FolderSimplePlus, Spinner, FolderMinus, Robot } from "@phosphor-icons/react";
+import { Circle, X, FolderSimplePlus, Spinner, FolderMinus, Lightbulb, Robot } from "@phosphor-icons/react";
 import { useT, type TranslationKey } from "../../lib/i18n";
 
 const STATUS_OPTIONS: { value: GameStatus; labelKey: TranslationKey }[] = [
@@ -22,6 +22,13 @@ const STATUS_OPTIONS: { value: GameStatus; labelKey: TranslationKey }[] = [
   { value: "abandoned", labelKey: "status.abandoned" },
   { value: "none",      labelKey: "status.clear" },
 ];
+
+const KANBAN_SHORTCUT_KEYS = {
+  move: "WASD",
+  arrows: "← ↑ ↓ →",
+  select: "Space",
+  selectColumn: "Ctrl+A",
+} as const;
 
 // ---- Fetch detail popover ----
 function FetchPopover({
@@ -119,7 +126,7 @@ function FetchPopover({
   );
 }
 
-export function StatusBar() {
+export function StatusBar({ showKanbanTip = false }: { showKanbanTip?: boolean }) {
   const t = useT();
   const gameCount = useGameStore((s) => Object.keys(s.games).length);
   const games = useGameStore((s) => s.games);
@@ -238,11 +245,33 @@ export function StatusBar() {
 
   return (
     <footer
+      data-testid="statusbar"
       className="flex items-center gap-4 border-t border-repressurizer-border-subtle bg-repressurizer-surface/50 px-4 py-1 text-[11px] text-repressurizer-text-faint font-mono tabular-nums"
       onMouseDown={() => { setShowDetailsPopover(false); setShowHltbPopover(false); setShowAchievementsPopover(false); setShowRatingsPopover(false); setShowReleaseDatesPopover(false); }}
     >
-      <span>{t("statusbar.games", { count: gameCount })}</span>
-      <span>{t("statusbar.categories", { count: categoryCount })}</span>
+      <span className="shrink-0">{t("statusbar.games", { count: gameCount })}</span>
+      <span className="shrink-0">{t("statusbar.categories", { count: categoryCount })}</span>
+
+      {showKanbanTip && selectedCount === 0 && (
+        <span
+          data-testid="statusbar-kanban-tip"
+          className="hidden min-w-0 items-center gap-1.5 overflow-hidden font-sans text-[10px] text-repressurizer-text-muted xl:inline-flex"
+          title={`${t("statusbar.kanbanTip.move")}: ${KANBAN_SHORTCUT_KEYS.move} / ${KANBAN_SHORTCUT_KEYS.arrows} · ${t("statusbar.kanbanTip.select")}: ${KANBAN_SHORTCUT_KEYS.select} · ${t("statusbar.kanbanTip.selectColumn")}: ${KANBAN_SHORTCUT_KEYS.selectColumn}`}
+        >
+          <Lightbulb size={12} weight="duotone" className="shrink-0 text-amber-300" />
+          <span className="shrink-0 font-semibold text-amber-200">{t("statusbar.kanbanTip")}</span>
+          <span className="shrink-0">{t("statusbar.kanbanTip.move")}</span>
+          <StatusBarKey>{KANBAN_SHORTCUT_KEYS.move}</StatusBarKey>
+          <span aria-hidden="true">/</span>
+          <StatusBarKey>{KANBAN_SHORTCUT_KEYS.arrows}</StatusBarKey>
+          <span aria-hidden="true" className="text-repressurizer-text-faint">·</span>
+          <span className="shrink-0">{t("statusbar.kanbanTip.select")}</span>
+          <StatusBarKey>{KANBAN_SHORTCUT_KEYS.select}</StatusBarKey>
+          <span aria-hidden="true" className="text-repressurizer-text-faint">·</span>
+          <span className="shrink-0">{t("statusbar.kanbanTip.selectColumn")}</span>
+          <StatusBarKey>{KANBAN_SHORTCUT_KEYS.selectColumn}</StatusBarKey>
+        </span>
+      )}
 
       {selectedCount > 1 && (
         <span className="inline-flex items-center gap-2 text-repressurizer-accent font-sans text-[11px]">
@@ -496,5 +525,13 @@ export function StatusBar() {
         </span>
       )}
     </footer>
+  );
+}
+
+function StatusBarKey({ children }: { children: string }) {
+  return (
+    <kbd className="shrink-0 rounded border border-repressurizer-border bg-repressurizer-bg/80 px-1 py-px font-mono text-[9px] leading-none text-repressurizer-text">
+      {children}
+    </kbd>
   );
 }

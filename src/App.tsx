@@ -262,6 +262,7 @@ function AppContent() {
   const [startupContext, setStartupContext] = useState<StartupContext | null>(null);
   const [windowActivated, setWindowActivated] = useState(false);
   const [settingsHydrated, setSettingsHydrated] = useState(false);
+  const [showKanbanFooterTip, setShowKanbanFooterTip] = useState(false);
   const [updateChangelog, setUpdateChangelog] = useState<{
     previousVersion: string;
     currentVersion: string;
@@ -356,6 +357,10 @@ function AppContent() {
       setActiveCategory("all");
     }
   }, [activeCategory, setActiveCategory, settings.showDiary]);
+
+  useEffect(() => {
+    if (activeCategory !== "diary" || !settings.showDiary) setShowKanbanFooterTip(false);
+  }, [activeCategory, settings.showDiary]);
 
   useEffect(() => {
     hydrateSettingsFromDisk()
@@ -963,7 +968,7 @@ function AppContent() {
           </div>
           <main className="flex flex-1 flex-col overflow-hidden">
             {activeCategory === "diary" && settings.showDiary ? (
-              <DiaryPage />
+              <DiaryPage onKanbanVisibilityChange={setShowKanbanFooterTip} />
             ) : (
               <>
                 {settings.showFilterBar !== false && <FilterBar />}
@@ -985,7 +990,7 @@ function AppContent() {
             }}
           />
         )}
-        <StatusBar />
+        <StatusBar showKanbanTip={showKanbanFooterTip} />
       </div>
       {showOnboarding && (
         <Suspense fallback={null}>

@@ -140,7 +140,7 @@ function makeTemplateContext(game: OwnedGame, detail: GameDetails | undefined, s
   };
 }
 
-export function DiaryPage() {
+export function DiaryPage({ onKanbanVisibilityChange }: { onKanbanVisibilityChange?: (visible: boolean) => void } = {}) {
   const t = useT();
   const language = useSettingsStore((state) => state.language || "en");
   const games = useGameStore((state) => state.games);
@@ -221,6 +221,11 @@ export function DiaryPage() {
   const [selectedAppId, setSelectedAppId] = useState<number | null>(null);
   const [activeSectionByGame, setActiveSectionByGame] = useState<Record<number, string>>({});
   const [viewOptionsOpen, setViewOptionsOpen] = useState(false);
+
+  useEffect(() => {
+    onKanbanVisibilityChange?.(selectedAppId === null && preferences.libraryView === "kanban");
+    return () => onKanbanVisibilityChange?.(false);
+  }, [onKanbanVisibilityChange, preferences.libraryView, selectedAppId]);
 
   useEffect(() => {
     if (!preferences.kanbanSyncStatuses || boardPrefs.removedAppIds.length === 0) return;

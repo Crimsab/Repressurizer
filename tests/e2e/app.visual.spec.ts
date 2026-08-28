@@ -493,6 +493,14 @@ test("Diary kanban board moves cards and the timeline lists diary events", async
   await expect(page.getByRole("button", { name: /Auto-Categorize: Diary/ })).toBeVisible();
 
   await expect(page.getByTestId("diary-kanban")).toBeVisible();
+  const kanbanTip = page.getByTestId("statusbar-kanban-tip");
+  await expect(kanbanTip).toBeVisible();
+  await expect(kanbanTip).toContainText("WASD");
+  await expect(kanbanTip).toContainText("Space");
+  await expect(kanbanTip).toContainText("Ctrl+A");
+  const footerScreenshotPath = testInfo.outputPath("diary-kanban-footer-tip.png");
+  await page.getByTestId("statusbar").screenshot({ path: footerScreenshotPath });
+  await testInfo.attach("diary-kanban-footer-tip", { path: footerScreenshotPath, contentType: "image/png" });
   await expect(page.getByTestId("diary-kanban-column-backlog")).toContainText("Outer Wilds");
   await expect(page.getByTestId("diary-kanban-column-playing")).toContainText("Disco Elysium");
 
@@ -586,6 +594,7 @@ test("Diary kanban board moves cards and the timeline lists diary events", async
   // Timeline: three layouts plus event filters.
   await page.getByTestId("diary-view-timeline").click();
   await expect(page.getByTestId("diary-timeline")).toBeVisible();
+  await expect(kanbanTip).toHaveCount(0);
   await expect(page.locator('[data-testid="diary-timeline-event-rail"][data-kind="session"]').filter({ hasText: "Hades" })).toBeVisible();
   await page.getByTestId("diary-timeline-layout-cards").click();
   await expect(page.getByTestId("diary-timeline-game-1145360").first()).toBeVisible();
