@@ -37,4 +37,3 @@ export function parseAppIdImportText(text: string): AppIdImportParseResult {
 
   return { appIds, duplicateCount, invalidEntries };
 }
-
