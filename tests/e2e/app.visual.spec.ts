@@ -646,9 +646,25 @@ test("Diary Kanban add-game search separates board cards from library games", as
   await expect(page.getByTestId("diary-kanban-card-1145360")).toHaveCount(0);
 
   await page.getByRole("button", { name: "Add game: Finished" }).click();
+  const librarySection = page.getByTestId("diary-kanban-addgame-section-library");
+  const kanbanSection = page.getByTestId("diary-kanban-addgame-section-kanban");
+  await expect(librarySection).toBeVisible();
+  await expect(kanbanSection).toBeAttached();
+  const [libraryBox, kanbanBox] = await Promise.all([librarySection.boundingBox(), kanbanSection.boundingBox()]);
+  expect(libraryBox).not.toBeNull();
+  expect(kanbanBox).not.toBeNull();
+  expect(libraryBox!.y).toBeLessThan(kanbanBox!.y);
+  await expect(page.getByTestId("diary-kanban-addgame-count-library")).not.toHaveText("24");
+  await page.waitForTimeout(220);
+  const hierarchyScreenshotPath = testInfo.outputPath("diary-kanban-addgame-hierarchy.png");
+  await page.screenshot({ path: hierarchyScreenshotPath, fullPage: true });
+  await testInfo.attach("diary-kanban-addgame-hierarchy", { path: hierarchyScreenshotPath, contentType: "image/png" });
+
   await page.getByTestId("diary-kanban-addgame-search").fill("Outer");
   await expect(page.getByTestId("diary-kanban-addgame-section-kanban")).toContainText("Outer Wilds");
   await expect(page.getByTestId("diary-kanban-addgame-row-753640")).toHaveAttribute("data-source", "kanban");
+  await page.getByTestId("diary-kanban-addgame-row-753640").hover();
+  await expect(page.getByTestId("diary-kanban-addgame-action-753640")).toHaveCSS("color", "rgb(126, 184, 255)");
 
   await page.getByTestId("diary-kanban-addgame-search").fill("Hades");
   await expect(page.getByTestId("diary-kanban-addgame-section-library")).toContainText("Hades");
@@ -672,6 +688,46 @@ test("Diary Kanban add-game search separates board cards from library games", as
   const mobileScreenshotPath = testInfo.outputPath("diary-kanban-library-search-mobile.png");
   await page.screenshot({ path: mobileScreenshotPath, fullPage: true });
   await testInfo.attach("diary-kanban-library-search-mobile", { path: mobileScreenshotPath, contentType: "image/png" });
+});
+
+test("Diary Kanban reorders columns persistently without resizing existing columns", async ({ page }, testInfo) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Diary" }).click();
+  await page.getByTestId("diary-view-kanban").click();
+
+  const playingColumn = page.getByTestId("diary-kanban-column-playing");
+  const widthBefore = (await playingColumn.boundingBox())?.width;
+  expect(widthBefore).toBeGreaterThan(0);
+
+  const backlogHandle = page.getByTestId("diary-kanban-column-drag-backlog");
+  const playingBox = await playingColumn.boundingBox();
+  expect(playingBox).not.toBeNull();
+  await backlogHandle.dragTo(playingColumn, { targetPosition: { x: playingBox!.width - 8, y: 24 } });
+  await expect.poll(() => page.locator("[data-column-key]").evaluateAll((nodes) => nodes.map((node) => node.getAttribute("data-column-key")))).toEqual(expect.arrayContaining(["playing", "backlog"]));
+  const reordered = await page.locator("[data-column-key]").evaluateAll((nodes) => nodes.map((node) => node.getAttribute("data-column-key")));
+  expect(reordered.indexOf("backlog")).toBeGreaterThan(reordered.indexOf("playing"));
+
+  await page.getByTestId("diary-kanban-columns-button").click();
+  await page.getByTestId("diary-kanban-new-column-name").fill("Paused");
+  await page.getByTestId("diary-kanban-new-column-add").click();
+  await expect(page.locator('[data-column-name="Paused"]')).toBeVisible();
+  const widthAfter = (await playingColumn.boundingBox())?.width;
+  expect(widthAfter).toBeCloseTo(widthBefore!, 0);
+  const compactButtonBox = await page.getByTestId("diary-kanban-columns-button").boundingBox();
+  expect(compactButtonBox?.width).toBeLessThanOrEqual(42);
+  expect(compactButtonBox?.height).toBeLessThanOrEqual(42);
+  await page.getByTestId("diary-kanban-columns-button").click();
+
+  const screenshotPath = testInfo.outputPath("diary-kanban-reordered-columns.png");
+  await page.screenshot({ path: screenshotPath, fullPage: true });
+  await testInfo.attach("diary-kanban-reordered-columns", { path: screenshotPath, contentType: "image/png" });
+
+  await page.reload();
+  await page.getByRole("button", { name: "Diary" }).click();
+  await page.getByTestId("diary-view-kanban").click();
+  const persisted = await page.locator("[data-column-key]").evaluateAll((nodes) => nodes.map((node) => node.getAttribute("data-column-key")));
+  expect(persisted.indexOf("backlog")).toBeGreaterThan(persisted.indexOf("playing"));
+  await expect(page.locator('[data-column-name="Paused"]')).toBeVisible();
 });
 
 test("Diary Kanban right-click archives and removes cards", async ({ page }) => {

@@ -158,7 +158,7 @@
   "diary.kanban.deselectAll": "Deseleziona colonna",
   "diary.kanban.contextMenu": "Azioni card",
   "diary.kanban.columns": "Colonne",
-  "diary.kanban.columns.hint": "Le colonne rispecchiano gli stati del diario. Scegli un colore o nascondi quelle che non usi.",
+  "diary.kanban.columns.hint": "Trascina la maniglia di una colonna per riordinarla. Colori, visibilità e ordine vengono salvati automaticamente.",
   "diary.kanban.statusColumns": "Colonne di stato",
   "diary.kanban.customColumns": "Colonne personalizzate",
   "diary.kanban.customColumns.empty": "Crea le tue colonne per tutto ciò che non è uno stato.",

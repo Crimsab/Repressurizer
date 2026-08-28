@@ -194,6 +194,7 @@ export function DiaryPage() {
   const mergeCustomColumn = useDiaryStore((state) => state.mergeCustomColumn);
   const removeEmptyCustomColumns = useDiaryStore((state) => state.removeEmptyCustomColumns);
   const moveCustomColumn = useDiaryStore((state) => state.moveCustomColumn);
+  const setColumnOrder = useDiaryStore((state) => state.setColumnOrder);
   const setCustomAssignment = useDiaryStore((state) => state.setCustomAssignment);
   const addPage = useDiaryStore((state) => state.addPage);
   const updatePage = useDiaryStore((state) => state.updatePage);
@@ -727,6 +728,7 @@ export function DiaryPage() {
           onMergeCustomColumn={mergeCustomColumnWithHistory}
           onRemoveEmptyCustomColumns={removeEmptyColumnsWithHistory}
           onMoveCustomColumn={moveCustomColumnWithHistory}
+          onSetColumnOrder={setColumnOrder}
           onSetCustomAssignment={setCustomAssignment}
           onSetPriority={setPriority}
           language={language}
@@ -848,7 +850,7 @@ function DiaryAdvancedFilterBadge({ query, t }: { query: string; t: ReturnType<t
   );
 }
 
-function DiaryLibrary({ games, kanbanGames, gamesById, details, entries, statuses, reviews, journal, pages, collections, board, boardPrefs, sessions, hltbData, hltbTimeMode, statusEvents, achievements, language, preferences, query, statusFilter, statusCounts, sortBy, categoryFilter, viewOptionsOpen, actionHistoryCount, t, onQueryChange, onStatusChange, onSortChange, onCategoryChange, onViewChange, onViewOptionsToggle, onExport, onBackup, onOpenAutoCategorize, onOpenShortcuts, onOpenActionHistory, onPreferencesChange, onSelectGame, onApplyStatus, onSetBoardOrder, onBulkStatusChange, onBulkPriorityChange, onRemoveGames, onRestoreRemovedGames, onMoveGames, onSetColumnColor, onToggleColumnHidden, onAddCustomColumn, onRenameCustomColumn, onRemoveCustomColumn, onMergeCustomColumn, onRemoveEmptyCustomColumns, onMoveCustomColumn, onSetCustomAssignment, onSetPriority, onOpenGame }: {
+function DiaryLibrary({ games, kanbanGames, gamesById, details, entries, statuses, reviews, journal, pages, collections, board, boardPrefs, sessions, hltbData, hltbTimeMode, statusEvents, achievements, language, preferences, query, statusFilter, statusCounts, sortBy, categoryFilter, viewOptionsOpen, actionHistoryCount, t, onQueryChange, onStatusChange, onSortChange, onCategoryChange, onViewChange, onViewOptionsToggle, onExport, onBackup, onOpenAutoCategorize, onOpenShortcuts, onOpenActionHistory, onPreferencesChange, onSelectGame, onApplyStatus, onSetBoardOrder, onBulkStatusChange, onBulkPriorityChange, onRemoveGames, onRestoreRemovedGames, onMoveGames, onSetColumnColor, onToggleColumnHidden, onAddCustomColumn, onRenameCustomColumn, onRemoveCustomColumn, onMergeCustomColumn, onRemoveEmptyCustomColumns, onMoveCustomColumn, onSetColumnOrder, onSetCustomAssignment, onSetPriority, onOpenGame }: {
   games: OwnedGame[];
   kanbanGames: OwnedGame[];
   gamesById: Record<number, OwnedGame>;
@@ -883,6 +885,7 @@ function DiaryLibrary({ games, kanbanGames, gamesById, details, entries, statuse
   onMergeCustomColumn: (sourceId: string, targetId: string) => void;
   onRemoveEmptyCustomColumns: () => void;
   onMoveCustomColumn: (columnId: string, direction: -1 | 1) => void;
+  onSetColumnOrder: (columnKeys: string[]) => void;
   onSetCustomAssignment: (appId: number, columnId: string | null) => void;
   onSetPriority: (appId: number, priority: DiaryPriority) => void;
   t: ReturnType<typeof useT>;
@@ -978,7 +981,7 @@ function DiaryLibrary({ games, kanbanGames, gamesById, details, entries, statuse
       </div>
     </div>
     <div hidden={preferences.libraryView !== "kanban"} className="flex min-h-0 flex-1 flex-col">
-      <DiaryKanbanBoard games={games} kanbanGames={kanbanGames} libraryGames={Object.values(gamesById)} details={details} entries={entries} statuses={statuses} reviews={reviews} journal={journal} pages={pages} board={board} boardPrefs={boardPrefs} language={language} showArchived={preferences.showArchived} forceStatus={statusFilter === "archived" ? "archived" : undefined} wipLimit={preferences.kanbanWipLimit} t={t} onApplyStatus={onApplyStatus} onSetBoardOrder={onSetBoardOrder} onSetPriority={onSetPriority} onBulkStatusChange={onBulkStatusChange} onBulkPriorityChange={onBulkPriorityChange} onRemoveGames={onRemoveGames} onRestoreRemovedGames={onRestoreRemovedGames} onMoveGames={onMoveGames} onOpenGame={(appId) => onOpenGame(appId)} onSetColumnColor={onSetColumnColor} onToggleColumnHidden={onToggleColumnHidden} onAddCustomColumn={onAddCustomColumn} onRenameCustomColumn={onRenameCustomColumn} onRemoveCustomColumn={onRemoveCustomColumn} onMergeCustomColumn={onMergeCustomColumn} onRemoveEmptyCustomColumns={onRemoveEmptyCustomColumns} onMoveCustomColumn={onMoveCustomColumn} onSetCustomAssignment={onSetCustomAssignment} />
+      <DiaryKanbanBoard games={games} kanbanGames={kanbanGames} libraryGames={Object.values(gamesById)} details={details} entries={entries} statuses={statuses} reviews={reviews} journal={journal} pages={pages} board={board} boardPrefs={boardPrefs} language={language} showArchived={preferences.showArchived} forceStatus={statusFilter === "archived" ? "archived" : undefined} wipLimit={preferences.kanbanWipLimit} t={t} onApplyStatus={onApplyStatus} onSetBoardOrder={onSetBoardOrder} onSetPriority={onSetPriority} onBulkStatusChange={onBulkStatusChange} onBulkPriorityChange={onBulkPriorityChange} onRemoveGames={onRemoveGames} onRestoreRemovedGames={onRestoreRemovedGames} onMoveGames={onMoveGames} onOpenGame={(appId) => onOpenGame(appId)} onSetColumnColor={onSetColumnColor} onToggleColumnHidden={onToggleColumnHidden} onAddCustomColumn={onAddCustomColumn} onRenameCustomColumn={onRenameCustomColumn} onRemoveCustomColumn={onRemoveCustomColumn} onMergeCustomColumn={onMergeCustomColumn} onRemoveEmptyCustomColumns={onRemoveEmptyCustomColumns} onMoveCustomColumn={onMoveCustomColumn} onSetColumnOrder={onSetColumnOrder} onSetCustomAssignment={onSetCustomAssignment} />
     </div>
     <div hidden={preferences.libraryView !== "timeline"} className="flex min-h-0 flex-1 flex-col">
       <DiaryTimeline games={gamesById} visibleAppIds={visibleAppIds} sessions={sessions} journal={journal} pages={pages} reviews={reviews} statusEvents={statusEvents} achievements={achievements} achievementsSyncing={achievementsSyncing} language={language} preferences={preferences} t={t} onOpenGame={onOpenGame} onLayoutChange={(timelineLayout) => onPreferencesChange({ timelineLayout })} onSyncAchievements={() => void handleSyncAchievements()} onToggleKind={(kind) => { const hidden = new Set(preferences.timelineHiddenKinds); if (hidden.has(kind)) hidden.delete(kind); else hidden.add(kind); onPreferencesChange({ timelineHiddenKinds: [...hidden] }); }} onGameContextMenu={(appId, x, y) => setGameMenu({ appId, x: Math.min(x, window.innerWidth - 260), y: Math.min(y, window.innerHeight - 340) })} />

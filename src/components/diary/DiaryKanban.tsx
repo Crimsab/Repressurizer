@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { createPortal } from "react-dom";
-import { Archive, ArrowDown, ArrowRight, ArrowUp, ArrowUpRight, CheckSquareOffset, GameController, MagnifyingGlass, Plus, Trash, Warning, X } from "@phosphor-icons/react";
+import { Archive, ArrowDown, ArrowRight, ArrowUp, ArrowUpRight, CheckSquareOffset, DotsSixVertical, GameController, MagnifyingGlass, Plus, Trash, Warning, X } from "@phosphor-icons/react";
 import { SteamImage } from "../games/SteamImage";
 import { SelectMenu } from "../ui/SelectMenu";
 import { useT } from "../../lib/i18n";
@@ -39,7 +39,8 @@ export function buildBoardColumns(boardPrefs: DiaryBoardPrefs, showArchived: boo
     if (hidden.has(custom.id)) continue;
     list.push({ key: custom.id, label: custom.name, color: boardPrefs.columnColors[custom.id] ?? custom.color, kind: "custom", custom });
   }
-  return list;
+  const rank = new Map(boardPrefs.columnOrder.map((columnKey, index) => [columnKey, index]));
+  return list.sort((left, right) => (rank.get(left.key) ?? Number.MAX_SAFE_INTEGER) - (rank.get(right.key) ?? Number.MAX_SAFE_INTEGER));
 }
 
 interface DropTarget {
@@ -75,7 +76,7 @@ function colorWithAlpha(hex: string, alpha: number): string {
 
 const PRIORITY_EDGE: Record<DiaryPriority, string | null> = { high: "#fb7185", normal: null, low: "#64748b" };
 
-export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, kanbanGames, libraryGames, details, entries, statuses, reviews, journal, pages, board, boardPrefs, language, showArchived, forceStatus, wipLimit, t, onBulkStatusChange, onBulkPriorityChange, onRemoveGames, onRestoreRemovedGames, onMoveGames, onOpenGame, onSetColumnColor, onToggleColumnHidden, onAddCustomColumn, onRenameCustomColumn, onRemoveCustomColumn, onMergeCustomColumn, onRemoveEmptyCustomColumns, onMoveCustomColumn }: {
+export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, kanbanGames, libraryGames, details, entries, statuses, reviews, journal, pages, board, boardPrefs, language, showArchived, forceStatus, wipLimit, t, onBulkStatusChange, onBulkPriorityChange, onRemoveGames, onRestoreRemovedGames, onMoveGames, onOpenGame, onSetColumnColor, onToggleColumnHidden, onAddCustomColumn, onRenameCustomColumn, onRemoveCustomColumn, onMergeCustomColumn, onRemoveEmptyCustomColumns, onMoveCustomColumn, onSetColumnOrder }: {
   games: OwnedGame[];
   kanbanGames: OwnedGame[];
   libraryGames: OwnedGame[];
@@ -109,6 +110,7 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, kanbanGa
   onMergeCustomColumn: (sourceId: string, targetId: string) => void;
   onRemoveEmptyCustomColumns: () => void;
   onMoveCustomColumn: (columnId: string, direction: -1 | 1) => void;
+  onSetColumnOrder: (columnKeys: string[]) => void;
   onSetCustomAssignment: (appId: number, columnId: string | null) => void;
 }) {
   const [draggingAppId, setDraggingAppId] = useState<number | null>(null);
@@ -122,6 +124,8 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, kanbanGa
   const [mergeSourceId, setMergeSourceId] = useState<string | null>(null);
   const [addGamePopover, setAddGamePopover] = useState<{ anchor: PopoverAnchor; column: BoardColumn } | null>(null);
   const [addGameQuery, setAddGameQuery] = useState("");
+  const [draggingColumnKey, setDraggingColumnKey] = useState<string | null>(null);
+  const [columnDropTarget, setColumnDropTarget] = useState<{ key: string; after: boolean } | null>(null);
 
   const kanbanRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ pointerId: number; startX: number; startY: number; appId: number } | null>(null);
@@ -131,6 +135,24 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, kanbanGa
   const ghostElementRef = useRef<HTMLDivElement | null>(null);
 
   const columns = useMemo(() => buildBoardColumns(boardPrefs, showArchived, t, forceStatus), [boardPrefs, forceStatus, showArchived, t]);
+
+  const reorderColumn = useCallback((sourceKey: string, targetKey: string, after: boolean) => {
+    if (sourceKey === targetKey) return;
+    const order = [...boardPrefs.columnOrder];
+    const sourceIndex = order.indexOf(sourceKey);
+    if (sourceIndex < 0 || !order.includes(targetKey)) return;
+    order.splice(sourceIndex, 1);
+    const targetIndex = order.indexOf(targetKey);
+    order.splice(targetIndex + (after ? 1 : 0), 0, sourceKey);
+    onSetColumnOrder(order);
+  }, [boardPrefs.columnOrder, onSetColumnOrder]);
+
+  const moveColumnStep = useCallback((columnKey: string, direction: -1 | 1) => {
+    const index = columns.findIndex((column) => column.key === columnKey);
+    const target = columns[index + direction];
+    if (index < 0 || !target) return;
+    reorderColumn(columnKey, target.key, direction > 0);
+  }, [columns, reorderColumn]);
 
   const columnOfGame = useMemo(() => {
     const byCustom = new Map(boardPrefs.customColumns.map((custom) => [custom.id, custom]));
@@ -488,15 +510,19 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, kanbanGa
   }, [addGamePopover, columnMenu, columnsPopover, contextMenu]);
 
   const addGameResults = useMemo(() => {
-    if (!addGamePopover) return { onKanban: [] as OwnedGame[], inLibrary: [] as OwnedGame[] };
+    if (!addGamePopover) return { onKanban: [] as OwnedGame[], inLibrary: [] as OwnedGame[], onKanbanCount: 0, inLibraryCount: 0 };
     const present = new Set((grouped.get(addGamePopover.column.key) ?? []).map((game) => game.appid));
     const onKanban = new Set(kanbanGames.map((game) => game.appid));
     const query = addGameQuery.trim().toLocaleLowerCase(language);
     const matches = (game: OwnedGame) => !query || String(game.name ?? "").toLocaleLowerCase(language).includes(query);
     const byName = (left: OwnedGame, right: OwnedGame) => String(left.name ?? "").localeCompare(String(right.name ?? ""), language);
+    const onKanbanMatches = kanbanGames.filter((game) => !present.has(game.appid) && matches(game)).sort(byName);
+    const inLibraryMatches = libraryGames.filter((game) => !onKanban.has(game.appid) && matches(game)).sort(byName);
     return {
-      onKanban: kanbanGames.filter((game) => !present.has(game.appid) && matches(game)).sort(byName).slice(0, 24),
-      inLibrary: libraryGames.filter((game) => !onKanban.has(game.appid) && matches(game)).sort(byName).slice(0, 24),
+      onKanban: onKanbanMatches.slice(0, 24),
+      inLibrary: inLibraryMatches.slice(0, 24),
+      onKanbanCount: onKanbanMatches.length,
+      inLibraryCount: inLibraryMatches.length,
     };
   }, [addGamePopover, addGameQuery, grouped, kanbanGames, language, libraryGames]);
 
@@ -579,11 +605,12 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, kanbanGa
           </div>
         </div>
       )}
-      <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto p-4 sm:p-6" role="list" aria-label={t("diary.kanban.board")} aria-multiselectable="true">
+      <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto p-4 pr-16 sm:p-6 sm:pr-20" role="list" aria-label={t("diary.kanban.board")} aria-multiselectable="true">
         {columns.map((column) => {
           const columnGames = grouped.get(column.key) ?? [];
           const overLimit = column.status === "playing" && wipLimit > 0 && columnGames.length > wipLimit;
           const isDropTarget = dropTarget?.columnKey === column.key && draggingAppId !== null;
+          const isColumnDropTarget = columnDropTarget?.key === column.key && draggingColumnKey !== null;
           return (
             <section
               key={column.key}
@@ -593,14 +620,30 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, kanbanGa
               aria-label={column.label}
               aria-keyshortcuts="W A S D ArrowUp ArrowDown ArrowLeft ArrowRight"
               onContextMenu={(event) => openColumnMenu(event, column.key)}
+              onDragOver={(event) => {
+                const hasColumnPayload = event.dataTransfer.types.includes("text/plain");
+                if ((!draggingColumnKey && !hasColumnPayload) || draggingColumnKey === column.key) return;
+                event.preventDefault();
+                const rect = event.currentTarget.getBoundingClientRect();
+                setColumnDropTarget({ key: column.key, after: event.clientX >= rect.left + rect.width / 2 });
+              }}
+              onDrop={(event) => {
+                const sourceKey = event.dataTransfer.getData("text/plain") || draggingColumnKey;
+                if (!sourceKey || sourceKey === column.key) return;
+                event.preventDefault();
+                const rect = event.currentTarget.getBoundingClientRect();
+                reorderColumn(sourceKey, column.key, event.clientX >= rect.left + rect.width / 2);
+                setDraggingColumnKey(null);
+                setColumnDropTarget(null);
+              }}
               onKeyDown={(event) => handleColumnKeyDown(event, column.key)}
               onPointerDown={(event) => {
                 const target = event.target as HTMLElement;
                 if (!target.closest("[data-kanban-card], button, input, textarea, select")) event.currentTarget.focus();
               }}
               tabIndex={0}
-              style={{ borderColor: `${column.color}80`, backgroundColor: `${column.color}0d` }}
-              className={`flex min-h-0 min-w-[230px] max-w-[380px] flex-1 basis-0 flex-col overflow-hidden rounded-xl border transition-[background-color,border-color,box-shadow] ${isDropTarget ? "bg-repressurizer-accent/[0.08] shadow-[0_0_0_1px_rgba(16,185,129,0.35),0_0_28px_rgba(16,185,129,0.14)] ring-2 ring-inset ring-repressurizer-accent/70" : "shadow-pop-sm"}`}
+              style={{ borderColor: `${column.color}80`, backgroundColor: `${column.color}0d`, boxShadow: isColumnDropTarget ? `inset 0 0 0 2px ${colorWithAlpha(column.color, 0.78)}, 0 0 22px ${colorWithAlpha(column.color, 0.16)}` : undefined }}
+              className={`flex min-h-0 w-[min(320px,calc(100vw-48px))] shrink-0 flex-col overflow-hidden rounded-xl border transition-[background-color,border-color,box-shadow] ${isDropTarget ? "bg-repressurizer-accent/[0.08] shadow-[0_0_0_1px_rgba(16,185,129,0.35),0_0_28px_rgba(16,185,129,0.14)] ring-2 ring-inset ring-repressurizer-accent/70" : "shadow-pop-sm"}`}
             >
               <header
                 data-testid={`diary-kanban-column-header-${column.key}`}
@@ -608,6 +651,29 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, kanbanGa
                 style={{ backgroundColor: `${column.color}26`, borderBottomColor: `${column.color}59` }}
               >
                 <span className="flex min-w-0 items-center gap-2">
+                  <button
+                    type="button"
+                    draggable
+                    data-testid={`diary-kanban-column-drag-${column.key}`}
+                    aria-label={`${t("diary.kanban.columns")}: ${column.label}`}
+                    title={t("diary.kanban.columns.hint")}
+                    onDragStart={(event) => {
+                      event.dataTransfer.effectAllowed = "move";
+                      event.dataTransfer.setData("text/plain", column.key);
+                      setDraggingColumnKey(column.key);
+                      setColumnDropTarget(null);
+                    }}
+                    onDragEnd={() => { setDraggingColumnKey(null); setColumnDropTarget(null); }}
+                    onKeyDown={(event) => {
+                      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+                      event.preventDefault();
+                      moveColumnStep(column.key, event.key === "ArrowLeft" ? -1 : 1);
+                    }}
+                    className="focus-ring -ml-1 cursor-grab rounded p-0.5 active:cursor-grabbing"
+                    style={{ color: column.color }}
+                  >
+                    <DotsSixVertical size={14} weight="bold" />
+                  </button>
                   <span aria-hidden="true" style={{ backgroundColor: column.color }} className="h-1.5 w-1.5 shrink-0 rounded-full" />
                   <span className="truncate text-[11px] font-semibold uppercase tracking-[0.1em]" style={{ color: column.color }}>{column.label}</span>
                   {isDropTarget && <span className="rounded-full bg-repressurizer-accent/15 px-1.5 py-0.5 text-[9px] font-medium normal-case tracking-normal text-repressurizer-accent">{t("diary.kanban.dropHere")}</span>}
@@ -688,28 +754,26 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, kanbanGa
             <p className="mt-1 text-xs text-repressurizer-text-faint">{t("diary.empty.desc")}</p>
           </div>
         )}
-        <div className="relative flex min-h-0 shrink-0 flex-col">
-          <button
-            type="button"
-            data-testid="diary-kanban-columns-button"
-            onClick={(event) => {
-              if (columnsPopover) {
-                setColumnsPopover(null);
-                return;
-              }
-              const rect = event.currentTarget.getBoundingClientRect();
-              setColumnsPopover({ x: Math.max(8, Math.min(rect.left - 284, window.innerWidth - 296)), y: Math.min(rect.bottom + 8, Math.max(8, window.innerHeight - 430)) });
-            }}
-            aria-expanded={columnsPopover !== null}
-            aria-label={t("diary.kanban.columns")}
-            title={t("diary.kanban.columns")}
-            className={`flex min-h-0 w-10 flex-col items-center justify-center gap-2 rounded-xl border px-1 py-4 transition-colors ${columnsPopover ? "border-repressurizer-accent/50 text-repressurizer-accent" : "border-dashed border-repressurizer-border text-repressurizer-text-faint hover:border-repressurizer-accent/40 hover:text-repressurizer-accent"}`}
-          >
-            <Plus size={16} />
-            <span className="text-[8px] font-semibold uppercase leading-none tracking-[0.18em] [writing-mode:vertical-rl]">{t("diary.kanban.columns")}</span>
-          </button>
-        </div>
       </div>
+      <button
+        type="button"
+        data-testid="diary-kanban-columns-button"
+        onClick={(event) => {
+          if (columnsPopover) {
+            setColumnsPopover(null);
+            return;
+          }
+          const rect = event.currentTarget.getBoundingClientRect();
+          setColumnsPopover({ x: Math.max(8, Math.min(rect.left - 284, window.innerWidth - 296)), y: Math.min(rect.bottom + 8, Math.max(8, window.innerHeight - 430)) });
+        }}
+        aria-expanded={columnsPopover !== null}
+        aria-label={t("diary.kanban.columns")}
+        title={t("diary.kanban.columns")}
+        className={`focus-ring absolute bottom-4 right-4 z-10 flex h-10 w-10 items-center justify-center rounded-xl border shadow-pop transition-colors sm:bottom-6 sm:right-6 ${columnsPopover ? "border-repressurizer-accent/50 bg-repressurizer-surface-raised text-repressurizer-accent" : "border-repressurizer-border bg-repressurizer-surface-raised/95 text-repressurizer-text-muted hover:border-repressurizer-accent/50 hover:text-repressurizer-accent"}`}
+      >
+        <Plus size={16} weight="bold" />
+        <span className="sr-only">{t("diary.kanban.columns")}</span>
+      </button>
       {ghost && createPortal(
         <div ref={ghostElementRef} className="pointer-events-none fixed left-0 top-0 z-[70] flex rotate-2 scale-[1.04] items-center gap-2 rounded-lg border border-repressurizer-accent/60 bg-repressurizer-surface-raised px-2 py-1.5 opacity-95 shadow-dialog" style={{ transform: `translate3d(${ghost.x + 10}px, ${ghost.y + 8}px, 0)` }}>
           <span className="h-6 w-[42px] shrink-0 overflow-hidden rounded bg-repressurizer-bg ring-1 ring-white/10">
@@ -917,11 +981,11 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, kanbanGa
       )}
       {addGamePopover && createPortal(
         <>
-          <div data-kanban-addgame-popover data-testid="diary-kanban-addgame-popover" className="animate-fade-in fixed z-50 w-[min(336px,calc(100vw-16px))] overflow-hidden rounded-xl border border-repressurizer-border bg-repressurizer-surface-raised shadow-pop" style={{ left: addGamePopover.anchor.x, top: addGamePopover.anchor.y }}>
+          <div data-kanban-addgame-popover data-testid="diary-kanban-addgame-popover" className="animate-fade-in fixed z-50 w-[min(336px,calc(100vw-16px))] overflow-hidden rounded-xl border bg-repressurizer-surface-raised shadow-pop" style={{ left: addGamePopover.anchor.x, top: addGamePopover.anchor.y, borderColor: colorWithAlpha(addGamePopover.column.color, 0.42), "--kanban-column-color": addGamePopover.column.color, "--kanban-column-soft": colorWithAlpha(addGamePopover.column.color, 0.1) } as CSSProperties}>
             <div className="border-b border-repressurizer-border-subtle px-3 py-2.5">
-              <p className="truncate text-[10px] font-semibold uppercase tracking-[0.12em] text-repressurizer-text-faint">{t("diary.kanban.addGame")}: {addGamePopover.column.label}</p>
-              <label className="mt-2 flex items-center gap-2 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-bg px-2.5 py-1.5 transition-colors focus-within:border-repressurizer-accent/50">
-                <MagnifyingGlass size={13} className="shrink-0 text-repressurizer-text-faint" />
+              <p className="truncate text-[10px] font-semibold uppercase tracking-[0.12em]"><span className="text-repressurizer-text-faint">{t("diary.kanban.addGame")}: </span><span style={{ color: addGamePopover.column.color }}>{addGamePopover.column.label}</span></p>
+              <label className="group/search mt-2 flex items-center gap-2 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-bg px-2.5 py-1.5 transition-colors focus-within:border-[var(--kanban-column-color)]">
+                <MagnifyingGlass size={13} className="shrink-0 text-repressurizer-text-faint transition-colors group-focus-within/search:text-[var(--kanban-column-color)]" />
                 <input autoFocus value={addGameQuery} onChange={(event) => setAddGameQuery(event.target.value)} placeholder={t("diary.kanban.addGame.search")} aria-label={t("diary.kanban.addGame.search")} data-testid="diary-kanban-addgame-search" className="min-w-0 flex-1 bg-transparent text-xs text-repressurizer-text outline-none placeholder:text-repressurizer-text-faint" />
               </label>
             </div>
@@ -930,38 +994,38 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, kanbanGa
                 <p className="px-2 py-4 text-center text-[11px] text-repressurizer-text-faint">{t("diary.kanban.addGame.none")}</p>
               ) : (
                 <div className="space-y-2">
+                  {addGameResults.inLibrary.length > 0 && (
+                    <section data-testid="diary-kanban-addgame-section-library" aria-labelledby="diary-kanban-addgame-heading-library">
+                      <div id="diary-kanban-addgame-heading-library" className="flex items-center justify-between px-2 pb-1 pt-0.5 text-[10px] font-semibold uppercase tracking-[0.12em]" style={{ color: addGamePopover.column.color }}>
+                        <span>{t("diary.kanban.addGame")}</span>
+                        <span data-testid="diary-kanban-addgame-count-library" className="rounded-full px-1.5 py-0.5 font-mono text-[9px] tabular-nums" style={{ backgroundColor: colorWithAlpha(addGamePopover.column.color, 0.14) }}>{addGameResults.inLibraryCount}</span>
+                      </div>
+                      {addGameResults.inLibrary.map((game) => (
+                        <button key={game.appid} type="button" data-source="library" data-testid={`diary-kanban-addgame-row-${game.appid}`} onClick={() => moveIds([game.appid], addGamePopover.column)} className="group focus-ring flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-[var(--kanban-column-soft)]">
+                          <span className="h-7 w-[46px] shrink-0 overflow-hidden rounded bg-repressurizer-bg"><SteamImage appId={game.appid} alt="" kind="capsule" className="h-full w-full object-cover" /></span>
+                          <span className="min-w-0 flex-1 truncate text-xs text-repressurizer-text">{String(game.name ?? "")}</span>
+                          <span className="shrink-0 font-mono text-[9px] tabular-nums text-repressurizer-text-faint">{formatHours(game.playtime_forever, language)}h</span>
+                          <Plus data-testid={`diary-kanban-addgame-action-${game.appid}`} size={13} weight="bold" className="shrink-0 text-repressurizer-text-faint transition-[color,transform] group-hover:scale-110 group-hover:text-[var(--kanban-column-color)] group-focus-visible:text-[var(--kanban-column-color)]" aria-hidden="true" />
+                        </button>
+                      ))}
+                    </section>
+                  )}
                   {addGameResults.onKanban.length > 0 && (
-                    <section data-testid="diary-kanban-addgame-section-kanban" aria-labelledby="diary-kanban-addgame-heading-kanban">
-                      <div id="diary-kanban-addgame-heading-kanban" className="flex items-center justify-between px-2 pb-1 pt-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-repressurizer-text-faint">
+                    <section data-testid="diary-kanban-addgame-section-kanban" aria-labelledby="diary-kanban-addgame-heading-kanban" className={addGameResults.inLibrary.length > 0 ? "border-t border-repressurizer-border-subtle pt-2" : ""}>
+                      <div id="diary-kanban-addgame-heading-kanban" className="flex items-center justify-between px-2 pb-1 pt-0.5 text-[10px] font-semibold uppercase tracking-[0.12em]" style={{ color: addGamePopover.column.color }}>
                         <span>{t("diary.kanban.addGame.onKanban")}</span>
-                        <span className="font-mono tabular-nums">{addGameResults.onKanban.length}</span>
+                        <span data-testid="diary-kanban-addgame-count-kanban" className="rounded-full px-1.5 py-0.5 font-mono text-[9px] tabular-nums" style={{ backgroundColor: colorWithAlpha(addGamePopover.column.color, 0.14) }}>{addGameResults.onKanbanCount}</span>
                       </div>
                       {addGameResults.onKanban.map((game) => {
                         const currentColumn = columnOfGame(game);
                         return (
-                          <button key={game.appid} type="button" data-source="kanban" data-testid={`diary-kanban-addgame-row-${game.appid}`} onClick={() => moveIds([game.appid], addGamePopover.column)} className="focus-ring flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-repressurizer-surface-hover">
+                          <button key={game.appid} type="button" data-source="kanban" data-testid={`diary-kanban-addgame-row-${game.appid}`} onClick={() => moveIds([game.appid], addGamePopover.column)} className="group focus-ring flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-[var(--kanban-column-soft)]">
                             <span className="h-7 w-[46px] shrink-0 overflow-hidden rounded bg-repressurizer-bg"><SteamImage appId={game.appid} alt="" kind="capsule" className="h-full w-full object-cover" /></span>
                             <span className="min-w-0 flex-1"><span className="block truncate text-xs text-repressurizer-text">{String(game.name ?? "")}</span><span className="block truncate text-[9px] text-repressurizer-text-faint">{currentColumn?.label ?? t("diary.kanban.addGame.onKanban")}</span></span>
-                            <ArrowRight size={12} className="shrink-0 text-repressurizer-text-faint" aria-hidden="true" />
+                            <ArrowRight data-testid={`diary-kanban-addgame-action-${game.appid}`} size={13} weight="bold" className="shrink-0 text-repressurizer-text-faint transition-[color,transform] group-hover:translate-x-0.5 group-hover:text-[var(--kanban-column-color)] group-focus-visible:text-[var(--kanban-column-color)]" aria-hidden="true" />
                           </button>
                         );
                       })}
-                    </section>
-                  )}
-                  {addGameResults.inLibrary.length > 0 && (
-                    <section data-testid="diary-kanban-addgame-section-library" aria-labelledby="diary-kanban-addgame-heading-library" className={addGameResults.onKanban.length > 0 ? "border-t border-repressurizer-border-subtle pt-2" : ""}>
-                      <div id="diary-kanban-addgame-heading-library" className="flex items-center justify-between px-2 pb-1 pt-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-repressurizer-text-faint">
-                        <span>{t("diary.kanban.addGame.library")}</span>
-                        <span className="font-mono tabular-nums">{addGameResults.inLibrary.length}</span>
-                      </div>
-                      {addGameResults.inLibrary.map((game) => (
-                        <button key={game.appid} type="button" data-source="library" data-testid={`diary-kanban-addgame-row-${game.appid}`} onClick={() => moveIds([game.appid], addGamePopover.column)} className="focus-ring flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-repressurizer-surface-hover">
-                          <span className="h-7 w-[46px] shrink-0 overflow-hidden rounded bg-repressurizer-bg"><SteamImage appId={game.appid} alt="" kind="capsule" className="h-full w-full object-cover" /></span>
-                          <span className="min-w-0 flex-1 truncate text-xs text-repressurizer-text">{String(game.name ?? "")}</span>
-                          <span className="shrink-0 font-mono text-[9px] tabular-nums text-repressurizer-text-faint">{formatHours(game.playtime_forever, language)}h</span>
-                          <Plus size={12} className="shrink-0 text-repressurizer-accent" aria-hidden="true" />
-                        </button>
-                      ))}
                     </section>
                   )}
                 </div>

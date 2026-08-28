@@ -158,7 +158,7 @@
   "diary.kanban.deselectAll": "Clear column selection",
   "diary.kanban.contextMenu": "Card actions",
   "diary.kanban.columns": "Columns",
-  "diary.kanban.columns.hint": "Columns mirror the diary statuses. Pick a color or hide the ones you don't use.",
+  "diary.kanban.columns.hint": "Drag a column handle to reorder it. Colors, visibility, and order are saved automatically.",
   "diary.kanban.statusColumns": "Status columns",
   "diary.kanban.customColumns": "Custom columns",
   "diary.kanban.customColumns.empty": "Create your own columns for anything that is not a status.",

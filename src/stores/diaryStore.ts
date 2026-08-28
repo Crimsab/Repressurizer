@@ -18,6 +18,8 @@ export interface DiaryBoardPrefs {
   columnColors: Record<string, string>;
   hiddenColumns: string[];
   customColumns: DiaryCustomColumn[];
+  /** Stable order for both built-in and custom Kanban columns. */
+  columnOrder: string[];
   /** appId -> custom column id (wins over the diary status on the board). */
   customAssignments: Record<string, string>;
   /** Games explicitly removed from Diary; independent from Steam playtime/status. */
@@ -148,6 +150,8 @@ interface DiaryState {
   mergeCustomColumn: (sourceId: string, targetId: string) => void;
   removeEmptyCustomColumns: () => string[];
   moveCustomColumn: (columnId: string, direction: -1 | 1) => void;
+  /** Persists the complete Kanban column order. Unknown keys are ignored. */
+  setColumnOrder: (columnKeys: string[]) => void;
   /** Moves a game onto a custom column, or back to status-driven columns when null. */
   setCustomAssignment: (appId: number, columnId: string | null) => void;
   /** Applies one decision to a batch of games and updates the play queue once. */
@@ -201,7 +205,8 @@ const BOARD_PREFS_APP_DATA_KEY = "diary-board.json";
 const ACHIEVEMENTS_STORAGE_KEY = "repressurizer-diary-achievements";
 const ACHIEVEMENTS_APP_DATA_KEY = "diary-achievements.json";
 
-const DEFAULT_BOARD_PREFS: DiaryBoardPrefs = { columnColors: {}, hiddenColumns: [], customColumns: [], customAssignments: {}, removedAppIds: [] };
+const DEFAULT_COLUMN_ORDER = ["backlog", "playing", "abandoned", "finished", "archived"];
+const DEFAULT_BOARD_PREFS: DiaryBoardPrefs = { columnColors: {}, hiddenColumns: [], customColumns: [], columnOrder: DEFAULT_COLUMN_ORDER, customAssignments: {}, removedAppIds: [] };
 
 function normalizeHexColor(value: unknown): string | null {
   if (typeof value !== "string") return null;
@@ -227,6 +232,14 @@ function normalizeBoardPrefs(value: unknown): DiaryBoardPrefs {
     })
     .slice(0, 12);
   const validIds = new Set(customColumns.map((column) => column.id));
+  const validColumnKeys = new Set([...DEFAULT_COLUMN_ORDER, ...validIds]);
+  const columnOrder = [...new Set(
+    (Array.isArray(raw.columnOrder) ? raw.columnOrder : [])
+      .filter((columnKey): columnKey is string => typeof columnKey === "string" && validColumnKeys.has(columnKey)),
+  )];
+  for (const columnKey of validColumnKeys) {
+    if (!columnOrder.includes(columnKey)) columnOrder.push(columnKey);
+  }
   const customAssignments: Record<string, string> = {};
   for (const [rawAppId, columnId] of Object.entries(raw.customAssignments ?? {})) {
     const appId = Number(rawAppId);
@@ -238,7 +251,7 @@ function normalizeBoardPrefs(value: unknown): DiaryBoardPrefs {
       .filter((appId) => Number.isFinite(appId) && appId > 0)
       .map(Math.trunc),
   )].slice(0, 10_000);
-  return { columnColors, hiddenColumns, customColumns, customAssignments, removedAppIds };
+  return { columnColors, hiddenColumns, customColumns, columnOrder, customAssignments, removedAppIds };
 }
 
 function readLocalBoardPrefs(): DiaryBoardPrefs {
@@ -807,7 +820,7 @@ export const useDiaryStore = create<DiaryState>((set, get) => ({
     if (!trimmed || !hex || get().boardPrefs.customColumns.length >= 12) return null;
     const id = `col-${makeId().slice(0, 12)}`;
     set((state) => {
-      const boardPrefs = { ...state.boardPrefs, customColumns: [...state.boardPrefs.customColumns, { id, name: trimmed, color: hex }] };
+      const boardPrefs = { ...state.boardPrefs, customColumns: [...state.boardPrefs.customColumns, { id, name: trimmed, color: hex }], columnOrder: [...state.boardPrefs.columnOrder, id] };
       persistBoardPrefs(boardPrefs);
       return { boardPrefs };
     });
@@ -829,7 +842,7 @@ export const useDiaryStore = create<DiaryState>((set, get) => ({
       if (assigned !== columnId) customAssignments[appId] = assigned;
     }
     const hiddenColumns = state.boardPrefs.hiddenColumns.filter((candidate) => candidate !== columnId);
-    const boardPrefs = { ...state.boardPrefs, customColumns, customAssignments, hiddenColumns };
+    const boardPrefs = { ...state.boardPrefs, customColumns, customAssignments, hiddenColumns, columnOrder: state.boardPrefs.columnOrder.filter((candidate) => candidate !== columnId) };
     persistBoardPrefs(boardPrefs);
     return { boardPrefs };
   }),
@@ -846,7 +859,7 @@ export const useDiaryStore = create<DiaryState>((set, get) => ({
     const hiddenColumns = state.boardPrefs.hiddenColumns.filter((columnId) => columnId !== sourceId);
     const columnColors = { ...state.boardPrefs.columnColors };
     delete columnColors[sourceId];
-    const boardPrefs = { ...state.boardPrefs, customColumns, customAssignments, hiddenColumns, columnColors };
+    const boardPrefs = { ...state.boardPrefs, customColumns, customAssignments, hiddenColumns, columnColors, columnOrder: state.boardPrefs.columnOrder.filter((candidate) => candidate !== sourceId) };
     persistBoardPrefs(boardPrefs);
     return { boardPrefs };
   }),
@@ -862,19 +875,35 @@ export const useDiaryStore = create<DiaryState>((set, get) => ({
       const columnColors = { ...current.boardPrefs.columnColors };
       for (const columnId of empty) delete columnColors[columnId];
       const customAssignments = Object.fromEntries(Object.entries(current.boardPrefs.customAssignments).filter(([, columnId]) => !empty.has(columnId)));
-      const boardPrefs = { ...current.boardPrefs, customColumns, hiddenColumns, columnColors, customAssignments };
+      const boardPrefs = { ...current.boardPrefs, customColumns, hiddenColumns, columnColors, customAssignments, columnOrder: current.boardPrefs.columnOrder.filter((columnId) => !empty.has(columnId)) };
       persistBoardPrefs(boardPrefs);
       return { boardPrefs };
     });
     return emptyIds;
   },
   moveCustomColumn: (columnId, direction) => set((state) => {
-    const index = state.boardPrefs.customColumns.findIndex((column) => column.id === columnId);
+    const customKeys = state.boardPrefs.columnOrder.filter((candidate) => state.boardPrefs.customColumns.some((column) => column.id === candidate));
+    const index = customKeys.indexOf(columnId);
     const nextIndex = index + direction;
-    if (index < 0 || nextIndex < 0 || nextIndex >= state.boardPrefs.customColumns.length) return state;
-    const customColumns = [...state.boardPrefs.customColumns];
-    [customColumns[index], customColumns[nextIndex]] = [customColumns[nextIndex], customColumns[index]];
-    const boardPrefs = { ...state.boardPrefs, customColumns };
+    if (index < 0 || nextIndex < 0 || nextIndex >= customKeys.length) return state;
+    const columnOrder = [...state.boardPrefs.columnOrder];
+    const sourceIndex = columnOrder.indexOf(columnId);
+    const targetIndex = columnOrder.indexOf(customKeys[nextIndex]);
+    [columnOrder[sourceIndex], columnOrder[targetIndex]] = [columnOrder[targetIndex], columnOrder[sourceIndex]];
+    const customColumns = [...state.boardPrefs.customColumns].sort((left, right) => columnOrder.indexOf(left.id) - columnOrder.indexOf(right.id));
+    const boardPrefs = { ...state.boardPrefs, customColumns, columnOrder };
+    persistBoardPrefs(boardPrefs);
+    return { boardPrefs };
+  }),
+  setColumnOrder: (columnKeys) => set((state) => {
+    const validKeys = new Set([...DEFAULT_COLUMN_ORDER, ...state.boardPrefs.customColumns.map((column) => column.id)]);
+    const columnOrder = [...new Set(columnKeys.filter((columnKey) => validKeys.has(columnKey)))];
+    for (const columnKey of validKeys) {
+      if (!columnOrder.includes(columnKey)) columnOrder.push(columnKey);
+    }
+    if (columnOrder.length === state.boardPrefs.columnOrder.length && columnOrder.every((columnKey, index) => columnKey === state.boardPrefs.columnOrder[index])) return state;
+    const customColumns = [...state.boardPrefs.customColumns].sort((left, right) => columnOrder.indexOf(left.id) - columnOrder.indexOf(right.id));
+    const boardPrefs = { ...state.boardPrefs, columnOrder, customColumns };
     persistBoardPrefs(boardPrefs);
     return { boardPrefs };
   }),

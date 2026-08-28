@@ -41,6 +41,7 @@ export function makeDiaryActionSnapshot(
       columnColors: { ...boardPrefs.columnColors },
       hiddenColumns: [...boardPrefs.hiddenColumns],
       customColumns: boardPrefs.customColumns.map((column) => ({ ...column })),
+      columnOrder: [...boardPrefs.columnOrder],
       customAssignments: { ...boardPrefs.customAssignments },
       removedAppIds: [...boardPrefs.removedAppIds],
     },
