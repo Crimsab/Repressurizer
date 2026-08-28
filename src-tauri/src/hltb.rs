@@ -984,6 +984,32 @@ mod tests {
         let cases = [
             ("Cyberpunk 2077", Some(1091500), Some(2020)),
             ("Death Stranding 2: On The Beach", Some(3280350), Some(2025)),
+            ("Hades", Some(1145360), Some(2020)),
+            ("Baldur's Gate 3", Some(1086940), Some(2023)),
+            (
+                "The Witcher 3: Wild Hunt - Complete Edition",
+                Some(292030),
+                Some(2015),
+            ),
+            (
+                "Grand Theft Auto III: The Definitive Edition",
+                Some(1546970),
+                Some(2021),
+            ),
+            (
+                "S.T.A.L.K.E.R. 2: Heart of Chornobyl",
+                Some(1643320),
+                Some(2024),
+            ),
+            (
+                "FINAL FANTASY VII REMAKE INTERGRADE",
+                Some(1462040),
+                Some(2022),
+            ),
+            ("Persona 5 Royal", Some(1687950), Some(2022)),
+            ("Resident Evil 4", Some(2050650), Some(2023)),
+            ("DOOM Eternal", Some(782330), Some(2020)),
+            ("ELDEN RING", Some(1245620), Some(2022)),
             (
                 "NieR:Automata Game of the YoRHa Edition",
                 Some(524220),
@@ -1009,8 +1035,8 @@ mod tests {
         }
 
         assert!(
-            found >= 3,
-            "expected at least 3 live HLTB matches, got {found}"
+            found >= 13,
+            "expected at least 13 live HLTB matches, got {found}"
         );
     }
 
