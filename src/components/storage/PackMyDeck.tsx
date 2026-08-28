@@ -67,8 +67,8 @@ export function PackMyDeck({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     const storage = useStoragePlannerStore.getState();
     const steamPath = useSettingsStore.getState().steamPath;
-    if (!storage.inventory && !storage.loading && steamPath)
-      void storage.refresh(steamPath).catch(() => {});
+    if (!storage.loading && steamPath)
+      void storage.refreshIfChanged(steamPath).catch(() => {});
   }, [inventory]);
   const installed = useMemo(() => new Set(installedIds), [installedIds]);
   const sizeById = useMemo(

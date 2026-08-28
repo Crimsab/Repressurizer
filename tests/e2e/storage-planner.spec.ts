@@ -16,12 +16,14 @@ test("storage planner explains candidates and simulates a reversible list", asyn
   await page.setViewportSize({ width: 1366, height: 900 });
   await page.goto("/");
   const dialog = await openPlanner(page);
+  await expect(dialog.getByTestId("storage-treemap")).toBeVisible();
   await expect(dialog.getByText("Disco Elysium - The Final Cut")).toBeVisible();
   await expect(dialog.getByText("Hades")).toBeVisible();
   await expect(
     dialog.getByRole("button", { name: /All Steam libraries/ }),
   ).toBeVisible();
   await expect(dialog.getByText(/Save synchronization cannot/)).toHaveCount(0);
+  await dialog.getByRole("button", { name: "List view" }).click();
   await dialog
     .getByRole("checkbox", { name: /Add to uninstall list Disco Elysium/ })
     .check();
@@ -39,7 +41,6 @@ test("storage planner offers treemap, bars, and distribution views", async ({
   await page.setViewportSize({ width: 1366, height: 900 });
   await page.goto("/");
   const dialog = await openPlanner(page);
-  await dialog.getByRole("button", { name: "Treemap view" }).click();
   await expect(dialog.getByTestId("storage-treemap")).toBeVisible();
   const cDisk = dialog.getByTestId("storage-treemap").getByText("C:", { exact: true });
   const dDisk = dialog.getByTestId("storage-treemap").getByText("D:", { exact: true });

@@ -62,27 +62,37 @@ export function StoragePlanner({ onClose }: { onClose: () => void }) {
   const [goalGb, setGoalGb] = useState(50);
   const [freePercent, setFreePercent] = useState(20);
   const [libraryPath, setLibraryPath] = useState("");
-  const [view, setView] = useState<StorageView>("list");
+  const [view, setView] = useState<StorageView>("treemap");
   const [exportFormat, setExportFormat] = useState<StorageExportFormat>("json");
-  const refreshSmart = async () => {
+  const refreshSmart = async (force = false) => {
     try {
       if (!steamPath.trim()) throw new Error("Steam path is empty");
-      await storage.refresh(steamPath);
+      if (force) await storage.refresh(steamPath);
+      else await storage.refreshIfChanged(steamPath);
     } catch (initialError) {
       try {
         const detected = await detectSteam();
         setSettings({ steamPath: detected.steam_path });
-        await storage.refresh(detected.steam_path);
+        if (force) await storage.refresh(detected.steam_path);
+        else await storage.refreshIfChanged(detected.steam_path);
       } catch {
         throw initialError;
       }
     }
   };
   useEffect(() => {
-    if (!storage.hydrated) void storage.hydrate();
-    if (!storage.inventory && !storage.loading)
-      void refreshSmart().catch(() => {});
-  }, [storage.hydrated, storage.inventory]); // eslint-disable-line react-hooks/exhaustive-deps
+    let active = true;
+    const openFromCache = async () => {
+      if (!useStoragePlannerStore.getState().hydrated) {
+        await useStoragePlannerStore.getState().hydrate();
+      }
+      if (active) await refreshSmart();
+    };
+    void openFromCache().catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const libraries = storage.inventory?.libraries ?? [];
   const selectedLibrary = libraryPath
     ? (libraries.find((item) => item.path === libraryPath) ?? null)
@@ -266,7 +276,7 @@ export function StoragePlanner({ onClose }: { onClose: () => void }) {
                 )}
                 <button
                   onClick={() =>
-                    void refreshSmart().catch((error) =>
+                    void refreshSmart(true).catch((error) =>
                       toast.getState().error(String(error)),
                     )
                   }

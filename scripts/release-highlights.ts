@@ -1,6 +1,6 @@
 const RELEASE_HIGHLIGHTS: Record<string, string> = {
   "0.8.2":
-    "This patch restores HowLongToBeat lookups, keeps storage scans responsive, and improves storage views and exports.",
+    "This patch restores HowLongToBeat lookups, adds smarter cached storage planning with per-disk views, and improves Diary Kanban actions.",
   "0.8.1":
     "This maintenance update fixes Kanban library search, AutoCat Diary moves, progress-status synchronization, and responsive rule layouts.",
   "0.8.0":
