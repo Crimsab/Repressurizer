@@ -1,4 +1,6 @@
 const RELEASE_HIGHLIGHTS: Record<string, string> = {
+  "0.8.3":
+    "This patch adds scalable, reversible App ID list imports with lightweight linked references, improves Kanban controls and guidance, restores clean AutoCat rule creation, and checks for updates after tray resume.",
   "0.8.2":
     "This patch restores HowLongToBeat lookups, adds smarter cached storage planning with per-disk views, and improves Diary Kanban actions.",
   "0.8.1":
