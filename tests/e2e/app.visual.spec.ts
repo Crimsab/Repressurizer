@@ -1763,6 +1763,49 @@ test("Diary AutoCat saves its destination with a reusable rule", async ({ page }
   await expect(dialog.getByTestId("autocat-destination")).toHaveAccessibleName("Destination: Diary / Kanban");
 });
 
+test("AutoCat starts a clean custom rule and keeps saved rules independent", async ({ page }, testInfo) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Diary" }).click();
+  await page.getByTestId("diary-autocat-button").click();
+  const dialog = page.locator(".fixed.inset-0").filter({ has: page.getByRole("heading", { name: "Auto-Categorize" }) });
+
+  await dialog.getByRole("button", { name: /Custom rule Build one/ }).click();
+  await dialog.getByRole("button", { name: "Title starts" }).click();
+  await dialog.locator('input[value="A"]').fill("Hades");
+  await dialog.getByPlaceholder("Preset name").fill("Hades rule");
+  await dialog.getByRole("button", { name: "Save", exact: true }).click();
+  await expect(dialog.getByText("Editing saved AutoCat", { exact: true })).toBeVisible();
+
+  await dialog.getByRole("button", { name: "New rule", exact: true }).click();
+  await expect(dialog.getByPlaceholder("Preset name")).toHaveValue("");
+  await expect(dialog.locator('input[value="Hades"]')).toHaveCount(0);
+  await expect(dialog.getByText("New unsaved AutoCat", { exact: true })).toBeVisible();
+  const desktopPath = testInfo.outputPath("autocat-new-rule-desktop.png");
+  await page.screenshot({ path: desktopPath, fullPage: true });
+  await testInfo.attach("autocat-new-rule-desktop", { path: desktopPath, contentType: "image/png" });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expectNoHorizontalOverflow(page);
+  const mobilePath = testInfo.outputPath("autocat-new-rule-mobile.png");
+  await page.screenshot({ path: mobilePath, fullPage: true });
+  await testInfo.attach("autocat-new-rule-mobile", { path: mobilePath, contentType: "image/png" });
+  await page.setViewportSize({ width: 1366, height: 900 });
+  await dialog.getByRole("button", { name: "Title starts" }).click();
+  await dialog.locator('input[value="A"]').fill("Night");
+  await dialog.getByPlaceholder("Preset name").fill("Night rule");
+  await dialog.getByRole("button", { name: "Save", exact: true }).click();
+  await dialog.getByRole("button", { name: "Back", exact: true }).click();
+
+  await expect(dialog.getByText("Hades rule", { exact: true })).toBeVisible();
+  await expect(dialog.getByText("Night rule", { exact: true })).toBeVisible();
+  await dialog.getByText("Hades rule", { exact: true }).click();
+  await expect(dialog.locator('input[value="Hades"]')).toBeVisible();
+  await expect(dialog.locator('input[value="Night"]')).toHaveCount(0);
+  await dialog.getByRole("button", { name: "Back", exact: true }).click();
+  await dialog.getByRole("button", { name: /Custom rule Build one/ }).click();
+  await expect(dialog.getByPlaceholder("Preset name")).toHaveValue("");
+  await expect(dialog.locator('input[value="Hades"]')).toHaveCount(0);
+});
+
 test("Diary AutoCat previews multiple saved IF rules before a shared action", async ({ page }, testInfo) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Diary" }).click();
@@ -1779,7 +1822,8 @@ test("Diary AutoCat previews multiple saved IF rules before a shared action", as
 
   await dialog.getByRole("button", { name: /Custom rule Build one/ }).click();
   await dialog.getByPlaceholder("e.g. Short games I already started").fill("Night rule");
-  await dialog.locator('input[value="Hades"]').fill("Night");
+  await dialog.getByRole("button", { name: "Title starts" }).click();
+  await dialog.locator('input[value="A"]').fill("Night");
   await dialog.getByPlaceholder("Preset name").fill("Night rule");
   await dialog.getByRole("button", { name: "Save", exact: true }).click();
   await dialog.getByRole("button", { name: "Back", exact: true }).click();

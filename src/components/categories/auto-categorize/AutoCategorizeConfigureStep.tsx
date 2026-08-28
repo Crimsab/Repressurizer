@@ -3,6 +3,7 @@ import {
   ArrowRight,
   CopySimple,
   FloppyDisk,
+  Plus,
   Warning,
 } from "@phosphor-icons/react";
 import type { CustomAutoCatConfigV1 } from "../../../lib/customAutoCategorize";
@@ -46,7 +47,7 @@ export function ConfigureStep({
   languageConfig, setLanguageConfig,
   platformConfig, setPlatformConfig, nameConfig, setNameConfig,
   ratingConfig, setRatingConfig,
-  hltbConfig, setHltbConfig, customConfig, setCustomConfig, collections, metadata, diaryMode = false, presetName, setPresetName, onSavePreset,
+  hltbConfig, setHltbConfig, customConfig, setCustomConfig, collections, metadata, diaryMode = false, presetName, setPresetName, onSavePreset, onNewRule,
   loadedPresetId, error, onBack, onNext, onCachedOnly, cachedOnlyAvailable, cachedOnlyMissingCount,
 }: {
   type: CategorizerType;
@@ -68,6 +69,7 @@ export function ConfigureStep({
   presetName: string;
   setPresetName: (name: string) => void;
   onSavePreset: () => void;
+  onNewRule: () => void;
   loadedPresetId: string | null;
   error: string;
   onBack: () => void;
@@ -80,9 +82,21 @@ export function ConfigureStep({
   return (
     <div className="space-y-5">
       <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3">
-        <label className="mb-1.5 block text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">
-          {t("auto.preset.saved")}
-        </label>
+        <div className="mb-1.5 flex items-center justify-between gap-3">
+          <label className="block text-[11px] uppercase tracking-wider text-repressurizer-text-faint font-medium">
+            {loadedPresetId ? t("auto.preset.editing") : t("auto.preset.new")}
+          </label>
+          {type === "custom" && (
+            <button
+              type="button"
+              onClick={onNewRule}
+              className="btn-press inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-repressurizer-text-muted transition-colors hover:bg-repressurizer-surface-hover hover:text-repressurizer-accent"
+            >
+              <Plus size={13} weight="bold" />
+              {t("auto.newRule")}
+            </button>
+          )}
+        </div>
         <div className="flex gap-2">
           <input
             type="text"

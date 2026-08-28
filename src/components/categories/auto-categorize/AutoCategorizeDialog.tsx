@@ -58,6 +58,7 @@ import {
   steamRatingIdsNeedingFetch,
 } from "../../../lib/steamRatings";
 import {
+  cloneDefaultCustomConfig,
   customRatingIdsNeedingFetch,
   evaluateCustomAutoCat,
   findIncompleteConditionIds,
@@ -390,8 +391,20 @@ export function AutoCategorizeDialog({ onClose, initialTarget = "collections" }:
     setType(t);
     setPresetName("");
     setLoadedPresetId(null);
+    if (t === "custom") setCustomConfig(cloneDefaultCustomConfig());
     persist.set({ lastType: t });
     gotoStep("configure");
+  };
+
+  const handleNewCustomRule = () => {
+    setCustomConfig(cloneDefaultCustomConfig());
+    setPresetName("");
+    setLoadedPresetId(null);
+    setDiaryAction("existingColumn");
+    setDiaryNewColumnName("");
+    setDiaryAutoColumnPrefix("");
+    setDiaryMoveMatches(true);
+    setRunError("");
   };
 
   const currentConfig = useCallback((): AutoCategorizePresetConfig => {
@@ -1293,6 +1306,7 @@ export function AutoCategorizeDialog({ onClose, initialTarget = "collections" }:
               presetName={presetName}
               setPresetName={setPresetName}
               onSavePreset={handleSavePreset}
+              onNewRule={handleNewCustomRule}
               loadedPresetId={loadedPresetId}
               error={runError}
               onBack={() => gotoStep("choose")}
