@@ -181,6 +181,7 @@ test("submitting the global search returns to matching library results", async (
 test("opens the gaming backlog diary workspace", async ({ page }, testInfo) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Diary" }).click();
+  await page.getByTestId("diary-view-grid").click();
 
   await expect(page.getByTestId("diary-workspace")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Diary", exact: true })).toBeVisible();
@@ -218,6 +219,7 @@ test("opens the gaming backlog diary workspace", async ({ page }, testInfo) => {
 test("Diary status filters show counts and make archived games discoverable", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Diary" }).click();
+  await page.getByTestId("diary-view-grid").click();
   const group = page.getByRole("group", { name: "Filter by status" });
   const expected: Array<[string, number]> = [
     ["All statuses", 11],
@@ -303,6 +305,7 @@ test("finish prompts only fire for observed threshold crossings and support skip
 test("Diary uses real game art, scoped Markdown pages, 1-10 scores, and timestamped notes", async ({ page }, testInfo) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Diary" }).click();
+  await page.getByTestId("diary-view-grid").click();
   await page.evaluate(async () => {
     const { useHltbStore } = await import("/src/stores/hltbStore.ts");
     useHltbStore.getState().setBulkData({ 632470: { main_story: 24, main_extra: 31, completionist: 46 } });
@@ -382,6 +385,7 @@ test("Diary uses real game art, scoped Markdown pages, 1-10 scores, and timestam
 test("Diary inspector keeps metadata padded and avoids trailing mobile space", async ({ page }, testInfo) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Diary" }).click();
+  await page.getByTestId("diary-view-grid").click();
   await page.setViewportSize({ width: 433, height: 550 });
   await page.getByTestId("diary-game-632470").click();
 
@@ -422,6 +426,7 @@ test("Diary inspector keeps metadata padded and avoids trailing mobile space", a
 test("Diary templates resolve game data and support persistent CRUD", async ({ page }, testInfo) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Diary" }).click();
+  await page.getByTestId("diary-view-grid").click();
   await page.getByTestId("diary-game-632470").click();
   await page.getByTestId("diary-overview-edit").click();
   const overview = page.getByRole("textbox", { name: "Overview" });
@@ -487,7 +492,6 @@ test("Diary kanban board moves cards and the timeline lists diary events", async
   await expect(page.getByRole("button", { name: "Diary backups" })).toBeVisible();
   await expect(page.getByRole("button", { name: /Auto-Categorize: Diary/ })).toBeVisible();
 
-  await page.getByTestId("diary-view-kanban").click();
   await expect(page.getByTestId("diary-kanban")).toBeVisible();
   await expect(page.getByTestId("diary-kanban-column-backlog")).toContainText("Outer Wilds");
   await expect(page.getByTestId("diary-kanban-column-playing")).toContainText("Disco Elysium");
@@ -518,6 +522,15 @@ test("Diary kanban board moves cards and the timeline lists diary events", async
   await expect(page.getByTestId("diary-kanban-selection")).toContainText("2");
   await page.getByTestId("diary-kanban-card-1145360").click({ button: "right" });
   await expect(page.getByTestId("diary-kanban-context-menu")).toBeVisible();
+  await expect(page.getByTestId("diary-kanban-context-archive")).toBeVisible();
+  await expect(page.getByTestId("diary-kanban-context-remove")).toBeVisible();
+  await page.waitForTimeout(200);
+  const contextMenuPath = testInfo.outputPath("diary-kanban-context-menu.png");
+  await page.screenshot({ path: contextMenuPath, fullPage: true });
+  await testInfo.attach("diary-kanban-context-menu", {
+    path: contextMenuPath,
+    contentType: "image/png",
+  });
   await page.getByTestId("diary-kanban-move-finished").click();
   await expect(page.getByTestId("diary-kanban-column-finished")).toContainText("Hades");
   await expect(page.getByTestId("diary-kanban-column-finished")).toContainText("Disco Elysium");
@@ -659,6 +672,23 @@ test("Diary Kanban add-game search separates board cards from library games", as
   const mobileScreenshotPath = testInfo.outputPath("diary-kanban-library-search-mobile.png");
   await page.screenshot({ path: mobileScreenshotPath, fullPage: true });
   await testInfo.attach("diary-kanban-library-search-mobile", { path: mobileScreenshotPath, contentType: "image/png" });
+});
+
+test("Diary Kanban right-click archives and removes cards", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Diary" }).click();
+  await expect(page.getByTestId("diary-kanban")).toBeVisible();
+
+  const hades = page.getByTestId("diary-kanban-card-1145360");
+  await hades.click({ button: "right" });
+  await page.getByTestId("diary-kanban-context-archive").click();
+  await expect(hades).toHaveCount(0);
+
+  const disco = page.getByTestId("diary-kanban-card-632470");
+  await disco.click({ button: "right" });
+  page.once("dialog", (confirmation) => confirmation.accept());
+  await page.getByTestId("diary-kanban-context-remove").click();
+  await expect(disco).toHaveCount(0);
 });
 
 test("Diary Kanban status sync restores progress cards when enabled", async ({ page }) => {
@@ -853,6 +883,7 @@ test("Diary bulk actions expose status, priority, removal, and undo", async ({ p
 test("Diary Kanban applies structured filters and exposes persistent action history", async ({ page }, testInfo) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Diary" }).click();
+  await page.getByTestId("diary-view-grid").click();
   const search = page.getByRole("searchbox", { name: "Search your backlog" });
   await search.fill("diary:backlog");
   await expect(page.getByTestId("diary-advanced-filter-active")).toBeVisible();
@@ -933,6 +964,7 @@ test("Diary upcoming view summarizes planning data and actions", async ({ page }
 test("diary extras: months, game timeline, custom chip, full-text search, persisted filters", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Diary" }).click();
+  await page.getByTestId("diary-view-grid").click();
   const testNow = Date.parse("2026-08-20T12:00:00Z");
   const diaryStoreUrl = await page.evaluate(() =>
     performance.getEntriesByType("resource").map((entry) => entry.name).find((name) => name.includes("/src/stores/diaryStore.ts?t="))

@@ -342,7 +342,7 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, kanbanGa
     setColumnMenu(null);
     setContextMenu({
       x: Math.min(event.clientX, window.innerWidth - 260),
-      y: Math.min(event.clientY, window.innerHeight - 340),
+      y: Math.min(event.clientY, window.innerHeight - 430),
       appIds,
     });
   }, [selection]);
@@ -739,6 +739,36 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, kanbanGa
             {(["high", "normal", "low"] as DiaryPriority[]).map((priority) => (
               <button key={priority} type="button" role="menuitem" onClick={() => { onBulkPriorityChange(contextMenu.appIds, priority); setContextMenu(null); }} className={`focus-ring flex-1 rounded-md border px-2 py-1.5 text-[10px] font-medium transition-colors ${priority === "high" ? "border-rose-400/30 bg-rose-400/10 text-rose-300 hover:bg-rose-400/20" : priority === "low" ? "border-repressurizer-border bg-repressurizer-surface text-repressurizer-text-faint hover:text-repressurizer-text" : "border-amber-400/25 bg-amber-400/10 text-amber-200 hover:bg-amber-400/20"}`}>{t(`diary.priority.${priority}`)}</button>
             ))}
+          </div>
+          <div className="mt-1 border-t border-repressurizer-border-subtle pt-1">
+            <button
+              type="button"
+              role="menuitem"
+              data-testid="diary-kanban-context-archive"
+              onClick={() => {
+                onBulkStatusChange(contextMenu.appIds, "archived");
+                setSelection(new Set());
+                setContextMenu(null);
+              }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-amber-300 transition-colors hover:bg-amber-400/15"
+            >
+              <Archive size={13} />
+              {t("diary.kanban.archiveSelected")}
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              data-testid="diary-kanban-context-remove"
+              onClick={() => {
+                onRemoveGames(contextMenu.appIds);
+                setSelection(new Set());
+                setContextMenu(null);
+              }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-repressurizer-danger transition-colors hover:bg-repressurizer-danger/15"
+            >
+              <Trash size={13} />
+              {t("diary.kanban.removeSelected")}
+            </button>
           </div>
           <button type="button" role="menuitem" onClick={() => { setSelection(new Set()); setContextMenu(null); }} className="mt-1 flex w-full items-center gap-2 border-t border-repressurizer-border-subtle px-3 py-2 text-left text-xs text-repressurizer-text-faint transition-colors hover:bg-repressurizer-surface-hover hover:text-repressurizer-text">{t("diary.kanban.clearSelection")}</button>
         </div>

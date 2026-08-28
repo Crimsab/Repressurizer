@@ -57,6 +57,7 @@ export const PRIORITY_DOT_STYLES: Record<DiaryPriority, string> = {
 };
 
 export interface DiaryPreferences {
+  version: 2;
   compact: boolean;
   showArchived: boolean;
   libraryView: DiaryLibraryView;
@@ -77,9 +78,10 @@ export interface DiaryPreferences {
 }
 
 export const DEFAULT_PREFERENCES: DiaryPreferences = {
+  version: 2,
   compact: true,
   showArchived: false,
-  libraryView: "grid",
+  libraryView: "kanban",
   showJournalPage: true,
   sortBy: "recent",
   dateFormat: "local",
@@ -102,10 +104,12 @@ export function loadPreferences(): DiaryPreferences {
     const raw = localStorage.getItem(PREFERENCES_KEY);
     if (!raw) return DEFAULT_PREFERENCES;
     const parsed = JSON.parse(raw) as Partial<DiaryPreferences>;
+    const isCurrentVersion = parsed.version === DEFAULT_PREFERENCES.version;
     return {
       ...DEFAULT_PREFERENCES,
       ...parsed,
-      libraryView: LIBRARY_VIEWS.includes(parsed.libraryView as DiaryLibraryView) ? (parsed.libraryView as DiaryLibraryView) : "grid",
+      version: DEFAULT_PREFERENCES.version,
+      libraryView: isCurrentVersion && LIBRARY_VIEWS.includes(parsed.libraryView as DiaryLibraryView) ? (parsed.libraryView as DiaryLibraryView) : "kanban",
       showJournalPage: parsed.showJournalPage !== false,
       sortBy: parsed.sortBy === "priority" || parsed.sortBy === "rating" || parsed.sortBy === "name" ? parsed.sortBy : "recent",
       dateFormat: parsed.dateFormat === "iso" ? "iso" : "local",
