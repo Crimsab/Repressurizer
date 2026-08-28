@@ -205,6 +205,7 @@ interface GameState {
 
   setGames: (games: OwnedGame[]) => void;
   mergeGames: (games: OwnedGame[]) => void;
+  removeCollectionOnlyGames: (appIds: Iterable<number>) => void;
   setInstalledAppIds: (appIds: readonly number[] | null) => void;
   setDetails: (appId: number, details: GameDetails) => void;
   setBulkDetails: (details: GameDetails[]) => void;
@@ -292,6 +293,21 @@ export const useGameStore = create<GameState>((set, get) => ({
         };
       }
       return { games: map };
+    }),
+
+  removeCollectionOnlyGames: (appIds) =>
+    set((state) => {
+      const requested = new Set(appIds);
+      if (requested.size === 0) return state;
+      const games = { ...state.games };
+      let changed = false;
+      for (const appId of requested) {
+        if (games[appId]?.is_collection_only) {
+          delete games[appId];
+          changed = true;
+        }
+      }
+      return changed ? { games } : state;
     }),
 
   setInstalledAppIds: (appIds) => {

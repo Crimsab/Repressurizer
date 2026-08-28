@@ -2502,7 +2502,7 @@ test("settings search finds local-only visibility and generated changelog", asyn
   await expect(changelogEntry.getByText("Windows: use MSI installer to avoid NSIS false positives")).toBeVisible();
 });
 
-test("imports a flat App ID list into new and existing collections without metadata requests", async ({ page }, testInfo) => {
+test("imports large App ID lists as lightweight, updatable, reversible references", async ({ page }, testInfo) => {
   await page.goto("/");
   await page.evaluate(() => {
     window.localStorage.setItem(
@@ -2523,14 +2523,29 @@ test("imports a flat App ID list into new and existing collections without metad
   const dialog = page.getByRole("dialog", { name: "Import App ID list" });
   await dialog.getByRole("button", { name: "Choose file" }).click();
   await expect(dialog.getByText("steamdb-appids.txt")).toBeVisible();
+  await expectNoHorizontalOverflow(page);
+
+  const sourceScreenshotPath = testInfo.outputPath("appid-import-source.png");
+  await page.screenshot({ path: sourceScreenshotPath, fullPage: true });
+  await testInfo.attach("appid-import-source", { path: sourceScreenshotPath, contentType: "image/png" });
+
+  await dialog.getByRole("button", { name: "Continue" }).click();
+  await expect(dialog.getByRole("button", { name: /Linked references/ })).toHaveAttribute("aria-pressed", "true");
+  await expect(dialog.getByText(/1 IDs are outside/)).toBeVisible();
+  const scopeScreenshotPath = testInfo.outputPath("appid-import-scope.png");
+  await page.screenshot({ path: scopeScreenshotPath, fullPage: true });
+  await testInfo.attach("appid-import-scope", { path: scopeScreenshotPath, contentType: "image/png" });
+
+  await dialog.getByRole("button", { name: "Continue" }).click();
+  await dialog.getByLabel("Collection name").fill("SteamDB Limited");
+  await dialog.getByRole("button", { name: "Continue" }).click();
   await expect(dialog.getByTestId("appid-import-valid")).toContainText("2");
-  await expect(dialog.getByTestId("appid-import-to-add")).toContainText("2");
+  await expect(dialog.getByTestId("appid-import-added")).toContainText("1");
+  await expect(dialog.getByTestId("appid-import-references")).toContainText("2");
   await expect(dialog.getByTestId("appid-import-duplicates")).toContainText("1");
   await expect(dialog.getByTestId("appid-import-invalid")).toContainText("1");
   await expect(dialog.getByTestId("appid-import-outside-library")).toContainText("1");
-  await dialog.getByLabel("Collection name").fill("SteamDB Limited");
-  await expect(dialog.getByRole("button", { name: "Import 2" })).toBeEnabled();
-  await expectNoHorizontalOverflow(page);
+  await expect(dialog.getByRole("button", { name: "Apply import" })).toBeEnabled();
 
   const screenshotPath = testInfo.outputPath("appid-import-preview.png");
   await page.screenshot({ path: screenshotPath, fullPage: true });
@@ -2544,37 +2559,51 @@ test("imports a flat App ID list into new and existing collections without metad
   const mobileScreenshotPath = testInfo.outputPath("appid-import-preview-mobile.png");
   await page.screenshot({ path: mobileScreenshotPath, fullPage: true });
   await testInfo.attach("appid-import-preview-mobile", { path: mobileScreenshotPath, contentType: "image/png" });
-  await dialog.getByText("Import preview").scrollIntoViewIfNeeded();
-  await expect(dialog.getByText("Import preview")).toBeInViewport();
-  const mobilePreviewScreenshotPath = testInfo.outputPath("appid-import-preview-mobile-stats.png");
-  await page.screenshot({ path: mobilePreviewScreenshotPath, fullPage: true });
-  await testInfo.attach("appid-import-preview-mobile-stats", { path: mobilePreviewScreenshotPath, contentType: "image/png" });
   await page.setViewportSize({ width: 1440, height: 1000 });
 
-  await dialog.getByRole("button", { name: "Import 2" }).click();
+  await dialog.getByRole("button", { name: "Apply import" }).click();
   await expect(dialog).toBeHidden();
   await expect.poll(() => page.evaluate(async () => {
     const { useCategoryStore } = await import("/src/stores/categoryStore.ts");
     const { useGameStore } = await import("/src/stores/gameStore.ts");
+    const { useAppIdImportStore } = await import("/src/stores/appIdImportStore.ts");
     const collection = useCategoryStore.getState().collections.find((item) => item.name === "SteamDB Limited");
     return {
       added: collection?.added ?? [],
-      localOnly: useGameStore.getState().games[999999]?.is_collection_only ?? false,
+      externalCreated: !!useGameStore.getState().games[999999],
+      savedIds: useAppIdImportStore.getState().batches[0]?.appIds ?? [],
+      autoUpdate: useAppIdImportStore.getState().batches[0]?.autoUpdate ?? false,
     };
-  })).toEqual({ added: [999999, 1145360], localOnly: true });
+  })).toEqual({ added: [1145360], externalCreated: false, savedIds: [999999, 1145360], autoUpdate: true });
 
   await settingsDialog.getByRole("button", { name: "Import App ID list" }).click();
-  const existingDialog = page.getByRole("dialog", { name: "Import App ID list" });
-  await existingDialog.getByRole("button", { name: "Existing collection" }).click();
-  await existingDialog.getByTestId("appid-import-target").click();
-  await page.getByRole("option", { name: "SteamDB Limited (2)" }).click();
-  await existingDialog.getByTestId("appid-import-text").fill("999999\n632470");
-  await expect(existingDialog.getByRole("button", { name: "Import 1" })).toBeEnabled();
-  await existingDialog.getByRole("button", { name: "Import 1" }).click();
+  const updateDialog = page.getByRole("dialog", { name: "Import App ID list" });
+  await updateDialog.getByRole("button", { name: "Load" }).click();
+  await updateDialog.getByRole("button", { name: "Back", exact: true }).click();
+  await updateDialog.getByTestId("appid-import-text").fill("1145360\n632470\n999999");
+  await updateDialog.getByRole("button", { name: "Continue" }).click();
+  await updateDialog.getByRole("button", { name: "Continue" }).click();
+  await expect(updateDialog.getByText(/destination stays fixed/)).toBeVisible();
+  await updateDialog.getByRole("button", { name: "Continue" }).click();
+  await expect(updateDialog.getByRole("button", { name: "Update import" })).toBeEnabled();
+  await updateDialog.getByRole("button", { name: "Update import" }).click();
   await expect.poll(() => page.evaluate(async () => {
     const { useCategoryStore } = await import("/src/stores/categoryStore.ts");
     return useCategoryStore.getState().collections.find((item) => item.name === "SteamDB Limited")?.added ?? [];
-  })).toEqual([999999, 1145360, 632470]);
+  })).toEqual([632470, 1145360]);
+
+  await page.evaluate(async () => {
+    const { useCategoryStore } = await import("/src/stores/categoryStore.ts");
+    const target = useCategoryStore.getState().collections.find((item) => item.name === "SteamDB Limited");
+    if (target) useCategoryStore.getState().addGameToCategory(target.key, 39140);
+  });
+  await settingsDialog.getByRole("button", { name: "Import App ID list" }).click();
+  const undoDialog = page.getByRole("dialog", { name: "Import App ID list" });
+  await undoDialog.getByRole("button", { name: "Undo" }).click();
+  await expect.poll(() => page.evaluate(async () => {
+    const { useCategoryStore } = await import("/src/stores/categoryStore.ts");
+    return useCategoryStore.getState().collections.find((item) => item.name === "SteamDB Limited")?.added ?? [];
+  })).toEqual([39140]);
 });
 
 test("game achievement details show Steam Achievement Manager preflight separately from Steam Web API data", async ({ page }, testInfo) => {

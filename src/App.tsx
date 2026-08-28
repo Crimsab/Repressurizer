@@ -38,6 +38,7 @@ import { useStoragePlannerStore } from "./stores/storagePlannerStore";
 import { useDeckPackStore } from "./stores/deckPackStore";
 import { useCommunityRulePackStore } from "./stores/communityRulePackStore";
 import { useMetadataHealthStore } from "./stores/metadataHealthStore";
+import { useAppIdImportStore } from "./stores/appIdImportStore";
 import {
   fetchLibrary,
   loadCollections,
@@ -57,6 +58,7 @@ import {
   shouldCheckForAppUpdateAfterResume,
 } from "./lib/updater";
 import { mergeCollectionOnlyGames } from "./lib/libraryMerge";
+import { reconcileLinkedAppIdImports } from "./lib/appIdImport";
 import {
   automationPublishDue,
   automationPublishStatusPatch,
@@ -235,6 +237,7 @@ function AppContent() {
   const hydrateDeckPacks = useDeckPackStore((s) => s.hydrate);
   const hydrateCommunityPacks = useCommunityRulePackStore((s) => s.hydrate);
   const hydrateMetadataHealth = useMetadataHealthStore((s) => s.hydrate);
+  const hydrateAppIdImports = useAppIdImportStore((s) => s.hydrate);
   const profileSync = useProfileSyncStore(useShallow((state) => ({ hydrated: state.hydrated, folder: state.folder, automatic: state.automatic, paused: state.paused, intervalMinutes: state.intervalMinutes, lastSyncAt: state.lastSyncAt })));
   const hydrateSettingsFromDisk = useSettingsStore((s) => s.hydrateFromDisk);
   const setCollections = useCategoryStore((s) => s.setCollections);
@@ -575,14 +578,20 @@ function AppContent() {
         loadInstalledLibrary(currentSettings.steamPath).catch(() => null),
         useFamilyStore.getState().hydrate(),
         useAppNameOverrideStore.getState().hydrate(),
+        useAppIdImportStore.getState().hydrate(),
       ]);
       useProviderHealthStore.getState().record("steam-library", "success");
       const familyGames = useFamilyStore.getState().sharedGamesAsOwned();
       const cachedDetails = useGameStore.getState().details;
       const appIndex = useSteamAppIndexStore.getState().data;
+      const resolvedCollections = reconcileLinkedAppIdImports(
+        collections,
+        games.map((game) => game.appid),
+        useAppIdImportStore.getState().batches,
+      );
       const mergedGames = mergeCollectionOnlyGames(
         [...games, ...familyGames],
-        collections,
+        resolvedCollections,
         cachedDetails,
         appIndex,
         useAppNameOverrideStore.getState().resolveName
@@ -591,7 +600,7 @@ function AppContent() {
         previousGameIds.size > 0
           ? mergedGames.filter((game) => !previousGameIds.has(game.appid)).length
           : 0;
-      console.log("Reloaded:", mergedGames.length, "games,", collections.length, "collections");
+      console.log("Reloaded:", mergedGames.length, "games,", resolvedCollections.length, "collections");
       await appLog.info("Steam library refreshed", {
         games: mergedGames.length,
         collections: collections.length,
@@ -601,6 +610,9 @@ function AppContent() {
       setInstalledAppIds(installedAppIds);
       usePlayHistoryStore.getState().observeLibrary(mergedGames);
       setCollections(collections);
+      if (resolvedCollections !== collections) {
+        useCategoryStore.getState().applyImportedCollections(resolvedCollections, "import");
+      }
       const familyState = useFamilyStore.getState();
       useLibraryInboxStore.getState().observe({
         games: Object.fromEntries(mergedGames.map((game) => [game.appid, game])),
@@ -608,7 +620,7 @@ function AppContent() {
         installedAppIds,
         familyAppIds: familyGames.map((game) => game.appid),
         familyObservedAt: familyState.lastFetched,
-        collections,
+        collections: resolvedCollections,
         details: useGameStore.getState().details,
         detailsMaxAgeDays: currentSettings.detailsCacheMaxAgeDays,
         hltbData: useHltbStore.getState().data,
@@ -855,6 +867,7 @@ function AppContent() {
     hydrateDeckPacks();
     hydrateCommunityPacks();
     hydrateMetadataHealth();
+    hydrateAppIdImports();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [interactiveStartupReady]);
 
