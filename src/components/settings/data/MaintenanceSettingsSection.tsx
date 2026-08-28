@@ -2,6 +2,7 @@ import {
   Bug,
   ClockCounterClockwise,
   Database,
+  ListNumbers,
   Stack,
   UploadSimple,
 } from "@phosphor-icons/react";
@@ -21,6 +22,7 @@ interface MaintenanceSettingsSectionProps {
   lastDepressurizerImport: DepressurizerProfileImport | null;
   lastDepressurizerDatabaseImport: DepressurizerDatabaseImport | null;
   onImportDepressurizerProfile: () => void;
+  onShowAppIdImport: () => void;
   onShowDepressurizerDatabaseImport: () => void;
   onImportShortcuts: () => void;
   onImportLegacyConfig: () => void;
@@ -38,6 +40,7 @@ export function MaintenanceSettingsSection({
   lastDepressurizerImport,
   lastDepressurizerDatabaseImport,
   onImportDepressurizerProfile,
+  onShowAppIdImport,
   onShowDepressurizerDatabaseImport,
   onImportShortcuts,
   onImportLegacyConfig,
@@ -52,6 +55,19 @@ export function MaintenanceSettingsSection({
         {t("settings.maintenance")}
       </h3>
       <div className="grid gap-3 md:grid-cols-2">
+        <MaintenanceAction
+          icon={
+            <ListNumbers
+              size={16}
+              weight="duotone"
+              className="mt-0.5 text-repressurizer-accent"
+            />
+          }
+          label={t("settings.appIdImport.action")}
+          description={t("settings.appIdImport.action.desc")}
+          disabled={false}
+          onClick={onShowAppIdImport}
+        />
         <MaintenanceAction
           icon={
             <UploadSimple

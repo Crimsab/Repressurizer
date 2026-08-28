@@ -61,6 +61,7 @@ import {
 import {
   DepressurizerDatabaseImportDialog,
 } from "./data/DepressurizerDatabaseImportDialog";
+import { AppIdImportDialog } from "./data/AppIdImportDialog";
 import { IgnoredSettingsTab, useIgnoredSettingsCount } from "./IgnoredSettingsTab";
 import { PerformanceSettingsSection } from "./PerformanceSettingsSection";
 import { AboutSettingsSections } from "./AboutSettingsSections";
@@ -393,7 +394,8 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
         label: t("settings.maintenance"),
         keywords: [
           t("settings.diagnostics.export"),
-          "diagnostics maintenance import export depressurizer profile database database.json json zip metadata tags hltb reviews names shortcuts non steam sharedconfig local license licensecache packageinfo categories favorites hidden filters autocat",
+          t("settings.appIdImport.action"),
+          "diagnostics maintenance import export app id appid text list steamdb depressurizer profile database database.json json zip metadata tags hltb reviews names shortcuts non steam sharedconfig local license licensecache packageinfo categories favorites hidden filters autocat",
         ],
       },
       {
@@ -858,6 +860,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
                     maintenance.lastDepressurizerDatabaseImport
                   }
                   onImportDepressurizerProfile={maintenance.handleImportDepressurizerProfile}
+                  onShowAppIdImport={maintenance.openAppIdImport}
                   onShowDepressurizerDatabaseImport={
                     maintenance.openDepressurizerDatabaseImport
                   }
@@ -936,6 +939,13 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
             onSelectFile={() => void maintenance.handleChooseDepressurizerDatabaseFile()}
             onImport={() => void maintenance.handleImportDepressurizerDatabase()}
             onClose={maintenance.closeDepressurizerDatabaseImport}
+          />
+        )}
+
+        {maintenance.showAppIdImport && (
+          <AppIdImportDialog
+            onClose={maintenance.closeAppIdImport}
+            onImported={(message) => setMessage(message, 5000)}
           />
         )}
 

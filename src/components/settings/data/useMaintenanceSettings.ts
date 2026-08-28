@@ -65,6 +65,7 @@ export function useMaintenanceSettings(
   );
   const [showDepressurizerDatabaseImport, setShowDepressurizerDatabaseImport] =
     useState(false);
+  const [showAppIdImport, setShowAppIdImport] = useState(false);
   const [depressurizerDatabaseOptions, setDepressurizerDatabaseOptions] =
     useState<DepressurizerDatabaseImportOptions>(
       DEFAULT_DEPRESSURIZER_DATABASE_IMPORT_OPTIONS
@@ -382,9 +383,12 @@ export function useMaintenanceSettings(
     lastDepressurizerImport,
     lastDepressurizerDatabaseImport,
     showDepressurizerDatabaseImport,
+    showAppIdImport,
     depressurizerDatabaseOptions,
     openDepressurizerDatabaseImport: () => setShowDepressurizerDatabaseImport(true),
     closeDepressurizerDatabaseImport: () => setShowDepressurizerDatabaseImport(false),
+    openAppIdImport: () => setShowAppIdImport(true),
+    closeAppIdImport: () => setShowAppIdImport(false),
     updateDepressurizerDatabaseOptions: (
       patch: Partial<DepressurizerDatabaseImportOptions>
     ) =>

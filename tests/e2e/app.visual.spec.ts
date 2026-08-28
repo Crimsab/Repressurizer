@@ -2502,6 +2502,81 @@ test("settings search finds local-only visibility and generated changelog", asyn
   await expect(changelogEntry.getByText("Windows: use MSI installer to avoid NSIS false positives")).toBeVisible();
 });
 
+test("imports a flat App ID list into new and existing collections without metadata requests", async ({ page }, testInfo) => {
+  await page.goto("/");
+  await page.evaluate(() => {
+    window.localStorage.setItem(
+      "repressurizer-mock-open-path",
+      "C:\\Users\\DemoUser\\Documents\\steamdb-appids.txt",
+    );
+    window.localStorage.setItem(
+      "repressurizer-mock-read-text",
+      "1145360\n999999\n1145360\ninvalid",
+    );
+  });
+
+  await page.getByRole("button", { name: "Settings" }).click();
+  const settingsDialog = page.getByRole("dialog", { name: "Settings" });
+  await settingsDialog.getByRole("button", { name: "Data", exact: true }).click();
+  await settingsDialog.getByRole("button", { name: "Import App ID list" }).click();
+
+  const dialog = page.getByRole("dialog", { name: "Import App ID list" });
+  await dialog.getByRole("button", { name: "Choose file" }).click();
+  await expect(dialog.getByText("steamdb-appids.txt")).toBeVisible();
+  await expect(dialog.getByTestId("appid-import-valid")).toContainText("2");
+  await expect(dialog.getByTestId("appid-import-to-add")).toContainText("2");
+  await expect(dialog.getByTestId("appid-import-duplicates")).toContainText("1");
+  await expect(dialog.getByTestId("appid-import-invalid")).toContainText("1");
+  await expect(dialog.getByTestId("appid-import-outside-library")).toContainText("1");
+  await dialog.getByLabel("Collection name").fill("SteamDB Limited");
+  await expect(dialog.getByRole("button", { name: "Import 2" })).toBeEnabled();
+  await expectNoHorizontalOverflow(page);
+
+  const screenshotPath = testInfo.outputPath("appid-import-preview.png");
+  await page.screenshot({ path: screenshotPath, fullPage: true });
+  await testInfo.attach("appid-import-preview", { path: screenshotPath, contentType: "image/png" });
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expectNoHorizontalOverflow(page);
+  await expect.poll(() => dialog.getByTestId("appid-import-body").evaluate(
+    (element) => element.scrollWidth <= element.clientWidth + 1,
+  )).toBe(true);
+  const mobileScreenshotPath = testInfo.outputPath("appid-import-preview-mobile.png");
+  await page.screenshot({ path: mobileScreenshotPath, fullPage: true });
+  await testInfo.attach("appid-import-preview-mobile", { path: mobileScreenshotPath, contentType: "image/png" });
+  await dialog.getByText("Import preview").scrollIntoViewIfNeeded();
+  await expect(dialog.getByText("Import preview")).toBeInViewport();
+  const mobilePreviewScreenshotPath = testInfo.outputPath("appid-import-preview-mobile-stats.png");
+  await page.screenshot({ path: mobilePreviewScreenshotPath, fullPage: true });
+  await testInfo.attach("appid-import-preview-mobile-stats", { path: mobilePreviewScreenshotPath, contentType: "image/png" });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+
+  await dialog.getByRole("button", { name: "Import 2" }).click();
+  await expect(dialog).toBeHidden();
+  await expect.poll(() => page.evaluate(async () => {
+    const { useCategoryStore } = await import("/src/stores/categoryStore.ts");
+    const { useGameStore } = await import("/src/stores/gameStore.ts");
+    const collection = useCategoryStore.getState().collections.find((item) => item.name === "SteamDB Limited");
+    return {
+      added: collection?.added ?? [],
+      localOnly: useGameStore.getState().games[999999]?.is_collection_only ?? false,
+    };
+  })).toEqual({ added: [999999, 1145360], localOnly: true });
+
+  await settingsDialog.getByRole("button", { name: "Import App ID list" }).click();
+  const existingDialog = page.getByRole("dialog", { name: "Import App ID list" });
+  await existingDialog.getByRole("button", { name: "Existing collection" }).click();
+  await existingDialog.getByTestId("appid-import-target").click();
+  await page.getByRole("option", { name: "SteamDB Limited (2)" }).click();
+  await existingDialog.getByTestId("appid-import-text").fill("999999\n632470");
+  await expect(existingDialog.getByRole("button", { name: "Import 1" })).toBeEnabled();
+  await existingDialog.getByRole("button", { name: "Import 1" }).click();
+  await expect.poll(() => page.evaluate(async () => {
+    const { useCategoryStore } = await import("/src/stores/categoryStore.ts");
+    return useCategoryStore.getState().collections.find((item) => item.name === "SteamDB Limited")?.added ?? [];
+  })).toEqual([999999, 1145360, 632470]);
+});
+
 test("game achievement details show Steam Achievement Manager preflight separately from Steam Web API data", async ({ page }, testInfo) => {
   await page.addInitScript(() => {
     const raw = window.localStorage.getItem("repressurizer-settings");
