@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { createPortal } from "react-dom";
-import { Archive, ArrowDown, ArrowRight, ArrowUp, ArrowUpRight, CheckSquareOffset, DotsSixVertical, GameController, MagnifyingGlass, Plus, Trash, Warning, X } from "@phosphor-icons/react";
+import { Archive, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, CheckSquareOffset, DotsSixVertical, GameController, MagnifyingGlass, Plus, Trash, Warning, X } from "@phosphor-icons/react";
 import { SteamImage } from "../games/SteamImage";
 import { SelectMenu } from "../ui/SelectMenu";
 import { useT } from "../../lib/i18n";
@@ -66,6 +66,12 @@ interface PopoverAnchor {
   y: number;
 }
 
+interface ColumnsPopoverAnchor {
+  x: number;
+  bottom: number;
+  maxHeight: number;
+}
+
 function colorWithAlpha(hex: string, alpha: number): string {
   const value = hex.replace("#", "");
   const red = parseInt(value.slice(0, 2), 16);
@@ -76,7 +82,7 @@ function colorWithAlpha(hex: string, alpha: number): string {
 
 const PRIORITY_EDGE: Record<DiaryPriority, string | null> = { high: "#fb7185", normal: null, low: "#64748b" };
 
-export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, kanbanGames, libraryGames, details, entries, statuses, reviews, journal, pages, board, boardPrefs, language, showArchived, forceStatus, wipLimit, t, onBulkStatusChange, onBulkPriorityChange, onRemoveGames, onRestoreRemovedGames, onMoveGames, onOpenGame, onSetColumnColor, onToggleColumnHidden, onAddCustomColumn, onRenameCustomColumn, onRemoveCustomColumn, onMergeCustomColumn, onRemoveEmptyCustomColumns, onMoveCustomColumn, onSetColumnOrder }: {
+export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, kanbanGames, libraryGames, details, entries, statuses, reviews, journal, pages, board, boardPrefs, language, showArchived, forceStatus, wipLimit, hideEmptyColumns, t, onBulkStatusChange, onBulkPriorityChange, onRemoveGames, onRestoreRemovedGames, onMoveGames, onOpenGame, onSetColumnColor, onToggleColumnHidden, onAddCustomColumn, onRenameCustomColumn, onRemoveCustomColumn, onMergeCustomColumn, onRemoveEmptyCustomColumns, onMoveCustomColumn, onSetColumnOrder }: {
   games: OwnedGame[];
   kanbanGames: OwnedGame[];
   libraryGames: OwnedGame[];
@@ -92,6 +98,7 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, kanbanGa
   showArchived: boolean;
   forceStatus?: DiaryViewStatus;
   wipLimit: number;
+  hideEmptyColumns: boolean;
   t: ReturnType<typeof useT>;
   onApplyStatus: (appId: number, status: DiaryViewStatus) => void;
   onSetBoardOrder: (orderedAppIds: number[]) => void;
@@ -120,7 +127,7 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, kanbanGa
   const [lastClicked, setLastClicked] = useState<{ columnKey: string; index: number } | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [columnMenu, setColumnMenu] = useState<ColumnMenuState | null>(null);
-  const [columnsPopover, setColumnsPopover] = useState<PopoverAnchor | null>(null);
+  const [columnsPopover, setColumnsPopover] = useState<ColumnsPopoverAnchor | null>(null);
   const [mergeSourceId, setMergeSourceId] = useState<string | null>(null);
   const [addGamePopover, setAddGamePopover] = useState<{ anchor: PopoverAnchor; column: BoardColumn } | null>(null);
   const [addGameQuery, setAddGameQuery] = useState("");
@@ -185,6 +192,8 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, kanbanGa
     return byColumn;
   }, [board, columnOfGame, columns, games]);
 
+  const boardColumns = useMemo(() => (hideEmptyColumns && !forceStatus ? columns.filter((column) => (grouped.get(column.key)?.length ?? 0) > 0) : columns), [columns, forceStatus, grouped, hideEmptyColumns]);
+
   const emptyCustomColumnCount = useMemo(() => {
     const assignedColumnIds = new Set(Object.values(boardPrefs.customAssignments));
     return boardPrefs.customColumns.filter((column) => !assignedColumnIds.has(column.id)).length;
@@ -213,16 +222,6 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, kanbanGa
     setAddGamePopover(null);
   }, [grouped, onMoveGames]);
 
-  const selectAllInColumn = useCallback((columnKey: string) => {
-    const columnIds = (grouped.get(columnKey) ?? []).map((game) => game.appid);
-    setSelection((current) => {
-      const next = new Set(current);
-      for (const appId of columnIds) next.add(appId);
-      return next;
-    });
-    setLastClicked(columnIds.length > 0 ? { columnKey, index: columnIds.length - 1 } : null);
-  }, [grouped]);
-
   const toggleColumnSelection = useCallback((columnKey: string) => {
     const columnIds = (grouped.get(columnKey) ?? []).map((game) => game.appid);
     if (columnIds.length === 0) return;
@@ -243,8 +242,8 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, kanbanGa
     const target = event.target as HTMLElement;
     if (target.closest("input, textarea, select, [contenteditable='true']")) return;
     event.preventDefault();
-    selectAllInColumn(columnKey);
-  }, [selectAllInColumn]);
+    toggleColumnSelection(columnKey);
+  }, [toggleColumnSelection]);
 
   const toggleCardSelection = useCallback((appId: number, columnKey: string, index: number, mode: "replace" | "toggle" | "range") => {
     const columnIds = (grouped.get(columnKey) ?? []).map((game) => game.appid);
@@ -497,6 +496,15 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, kanbanGa
   const columnMenuColumn = columnMenu ? columns.find((column) => column.key === columnMenu.columnKey) : undefined;
 
   useEffect(() => {
+    const onResize = () => {
+      setColumnsPopover(null);
+      setAddGamePopover(null);
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+
+  useEffect(() => {
     if (!columnsPopover && !addGamePopover && !contextMenu && !columnMenu) return;
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target as HTMLElement;
@@ -606,7 +614,7 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, kanbanGa
         </div>
       )}
       <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto p-4 pr-16 sm:p-6 sm:pr-20" role="list" aria-label={t("diary.kanban.board")} aria-multiselectable="true">
-        {columns.map((column) => {
+        {boardColumns.map((column) => {
           const columnGames = grouped.get(column.key) ?? [];
           const overLimit = column.status === "playing" && wipLimit > 0 && columnGames.length > wipLimit;
           const isDropTarget = dropTarget?.columnKey === column.key && draggingAppId !== null;
@@ -764,7 +772,11 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, kanbanGa
             return;
           }
           const rect = event.currentTarget.getBoundingClientRect();
-          setColumnsPopover({ x: Math.max(8, Math.min(rect.left - 284, window.innerWidth - 296)), y: Math.min(rect.bottom + 8, Math.max(8, window.innerHeight - 430)) });
+          setColumnsPopover({
+            x: Math.max(8, Math.min(rect.left - 284, window.innerWidth - 296)),
+            bottom: Math.max(8, window.innerHeight - rect.top + 8),
+            maxHeight: Math.max(160, Math.min(window.innerHeight * 0.7, rect.top - 16)),
+          });
         }}
         aria-expanded={columnsPopover !== null}
         aria-label={t("diary.kanban.columns")}
@@ -890,8 +902,24 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, kanbanGa
       )}
       {columnsPopover && createPortal(
         <>
-          <div data-kanban-columns-popover data-testid="diary-kanban-columns-popover" className="animate-fade-in fixed z-50 max-h-[70vh] w-72 overflow-y-auto rounded-xl border border-repressurizer-border bg-repressurizer-surface-raised/95 p-3 shadow-pop backdrop-blur-md" style={{ left: columnsPopover.x, top: columnsPopover.y }}>
-            <p className="mb-1.5 px-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-repressurizer-text-faint">{t("diary.kanban.statusColumns")}</p>
+          <div data-kanban-columns-popover data-testid="diary-kanban-columns-popover" className="animate-fade-in fixed z-50 w-72 overflow-y-auto rounded-xl border border-repressurizer-border bg-repressurizer-surface-raised/95 p-3 shadow-pop backdrop-blur-md" style={{ left: columnsPopover.x, bottom: columnsPopover.bottom, maxHeight: columnsPopover.maxHeight }}>
+            <p className="mb-1.5 px-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-repressurizer-text-faint">{t("diary.kanban.boardOrder")}</p>
+            <ol data-testid="diary-kanban-board-order" className="mb-1 space-y-0.5">
+              {columns.map((column, index) => (
+                <li key={column.key} data-testid={`diary-kanban-order-row-${column.key}`} className="flex items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-xs text-repressurizer-text transition-colors hover:bg-repressurizer-surface-hover">
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span aria-hidden="true" className="shrink-0 rounded-md bg-repressurizer-bg px-1.5 py-0.5 font-mono text-[9px] tabular-nums text-repressurizer-text-faint">{index + 1}</span>
+                    <span aria-hidden="true" style={{ backgroundColor: column.color }} className="h-1.5 w-1.5 shrink-0 rounded-full" />
+                    <span className="truncate">{column.label}</span>
+                  </span>
+                  <span className="flex shrink-0 items-center gap-0.5">
+                    <button type="button" data-testid={`diary-kanban-order-left-${column.key}`} aria-label={`${t("diary.kanban.moveColumnLeft")}: ${column.label}`} title={t("diary.kanban.moveColumnLeft")} disabled={index === 0} onClick={() => moveColumnStep(column.key, -1)} className="focus-ring rounded-md p-1 text-repressurizer-text-faint transition-colors hover:text-repressurizer-text disabled:cursor-not-allowed disabled:opacity-25"><ArrowLeft size={11} /></button>
+                    <button type="button" data-testid={`diary-kanban-order-right-${column.key}`} aria-label={`${t("diary.kanban.moveColumnRight")}: ${column.label}`} title={t("diary.kanban.moveColumnRight")} disabled={index === columns.length - 1} onClick={() => moveColumnStep(column.key, 1)} className="focus-ring rounded-md p-1 text-repressurizer-text-faint transition-colors hover:text-repressurizer-text disabled:cursor-not-allowed disabled:opacity-25"><ArrowRight size={11} /></button>
+                  </span>
+                </li>
+              ))}
+            </ol>
+            <p className="mb-1.5 mt-3 px-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-repressurizer-text-faint">{t("diary.kanban.statusColumns")}</p>
             <div className="space-y-0.5">
               {STATUS_KEYS.map((status) => (
                 <ColumnEditorRow
