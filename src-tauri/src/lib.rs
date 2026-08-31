@@ -13,9 +13,9 @@ pub mod steam;
 
 mod app_data;
 mod native_crash;
+mod portable_update;
 mod runtime_cache;
 mod updater;
-mod portable_update;
 #[cfg(test)]
 use app_data::validate_app_data_key;
 pub(crate) use app_data::{
@@ -199,7 +199,10 @@ fn disable_browser_accelerator_keys(window: &tauri::WebviewWindow) {
             };
 
             if let Err(error) = result {
-                log::debug!("Failed to disable WebView2 browser accelerator keys: {}", error);
+                log::debug!(
+                    "Failed to disable WebView2 browser accelerator keys: {}",
+                    error
+                );
             }
         }) {
             log::debug!("Failed to access webview for accelerator keys: {}", error);

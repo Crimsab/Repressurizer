@@ -1,8 +1,7 @@
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
-const RELEASES_API: &str =
-    "https://api.github.com/repos/Crimsab/Repressurizer/releases/latest";
+const RELEASES_API: &str = "https://api.github.com/repos/Crimsab/Repressurizer/releases/latest";
 const PORTABLE_ASSET: &str = "Repressurizer-portable.exe";
 const SUMS_ASSET: &str = "SHA256SUMS.txt";
 const STAGED_UPDATE_NAME: &str = "repressurizer-update.exe";
@@ -35,9 +34,7 @@ pub(crate) fn parse_sums_entry(sums: &str, asset: &str) -> Option<String> {
 fn version_triplet(value: &str) -> ((u64, u64, u64), bool) {
     let trimmed = value.trim().trim_start_matches('v');
     let core = trimmed.split(['-', '+']).next().unwrap_or_default();
-    let mut numbers = core
-        .split('.')
-        .map(|part| part.parse::<u64>().unwrap_or(0));
+    let mut numbers = core.split('.').map(|part| part.parse::<u64>().unwrap_or(0));
     let triplet = (
         numbers.next().unwrap_or(0),
         numbers.next().unwrap_or(0),
@@ -64,10 +61,7 @@ fn http_client() -> Result<reqwest::Client, String> {
 
 fn sha256_hex(bytes: &[u8]) -> String {
     let digest = Sha256::digest(bytes);
-    digest
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect()
+    digest.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
 #[tauri::command]
@@ -206,7 +200,13 @@ mod tests {
 
     #[test]
     fn ignores_missing_or_short_hashes() {
-        assert_eq!(parse_sums_entry("zz  Repressurizer-portable.exe", "Repressurizer-portable.exe"), None);
+        assert_eq!(
+            parse_sums_entry(
+                "zz  Repressurizer-portable.exe",
+                "Repressurizer-portable.exe"
+            ),
+            None
+        );
         assert_eq!(parse_sums_entry("", "Repressurizer-portable.exe"), None);
     }
 

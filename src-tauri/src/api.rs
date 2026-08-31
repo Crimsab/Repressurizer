@@ -942,17 +942,18 @@ fn write_response(stream: &mut TcpStream, response: ApiResponse) -> Result<(), S
 pub fn get_for_cli(route: &str, port_override: Option<u16>) -> Result<Value, String> {
     let path = normalize_cli_route(route);
     let settings = app_data::read_settings_json().unwrap_or_else(|_| json!({}));
-    let (descriptor_port, token) = if let Ok(descriptor) = integration_descriptor::read_live_descriptor() {
-        let port = descriptor
-            .base_url
-            .rsplit(':')
-            .next()
-            .and_then(|value| value.parse::<u16>().ok())
-            .ok_or_else(|| "live descriptor has an unparsable base_url".to_string())?;
-        (Some(port), descriptor.token)
-    } else {
-        (None, load_or_create_token()?)
-    };
+    let (descriptor_port, token) =
+        if let Ok(descriptor) = integration_descriptor::read_live_descriptor() {
+            let port = descriptor
+                .base_url
+                .rsplit(':')
+                .next()
+                .and_then(|value| value.parse::<u16>().ok())
+                .ok_or_else(|| "live descriptor has an unparsable base_url".to_string())?;
+            (Some(port), descriptor.token)
+        } else {
+            (None, load_or_create_token()?)
+        };
     let port = port_override
         .or(descriptor_port)
         .unwrap_or_else(|| configured_port(&settings));
@@ -999,8 +1000,8 @@ fn parse_http_json_response(raw: &str) -> Result<(u16, Value), String> {
         .and_then(|line| line.split_whitespace().nth(1))
         .and_then(|code| code.parse::<u16>().ok())
         .ok_or_else(|| "malformed HTTP status line".to_string())?;
-    let parsed = serde_json::from_str::<Value>(body)
-        .unwrap_or_else(|_| Value::String(body.to_string()));
+    let parsed =
+        serde_json::from_str::<Value>(body).unwrap_or_else(|_| Value::String(body.to_string()));
     Ok((status, parsed))
 }
 
@@ -1012,7 +1013,10 @@ mod cli_client_tests {
     #[test]
     fn normalizes_cli_routes() {
         assert_eq!(normalize_cli_route("status"), "v1/status");
-        assert_eq!(normalize_cli_route("/library/summary"), "v1/library/summary");
+        assert_eq!(
+            normalize_cli_route("/library/summary"),
+            "v1/library/summary"
+        );
         assert_eq!(normalize_cli_route("v1/collections"), "v1/collections");
         assert_eq!(normalize_cli_route(""), "v1/status");
     }

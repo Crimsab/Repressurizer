@@ -65,6 +65,18 @@ export function CommandPalette() {
 
   useEffect(() => {
     if (!open) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
     setQuery("");
     setActive(0);
     window.setTimeout(() => inputRef.current?.focus(), 0);
