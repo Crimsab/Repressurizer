@@ -939,7 +939,93 @@ fn write_response(stream: &mut TcpStream, response: ApiResponse) -> Result<(), S
         .map_err(|error| format!("failed to flush API response: {error}"))
 }
 
+pub fn get_for_cli(route: &str, port_override: Option<u16>) -> Result<Value, String> {
+    let path = normalize_cli_route(route);
+    let settings = app_data::read_settings_json().unwrap_or_else(|_| json!({}));
+    let (descriptor_port, token) = if let Ok(descriptor) = integration_descriptor::read_live_descriptor() {
+        let port = descriptor
+            .base_url
+            .rsplit(':')
+            .next()
+            .and_then(|value| value.parse::<u16>().ok())
+            .ok_or_else(|| "live descriptor has an unparsable base_url".to_string())?;
+        (Some(port), descriptor.token)
+    } else {
+        (None, load_or_create_token()?)
+    };
+    let port = port_override
+        .or(descriptor_port)
+        .unwrap_or_else(|| configured_port(&settings));
+    let mut stream = TcpStream::connect(("127.0.0.1", port))
+        .map_err(|error| format!("failed to connect to local API on 127.0.0.1:{port}: {error}"))?;
+    stream
+        .set_read_timeout(Some(Duration::from_secs(10)))
+        .map_err(|error| error.to_string())?;
+    write!(
+        stream,
+        "GET /{path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nAuthorization: Bearer {token}\r\nAccept: application/json\r\nConnection: close\r\n\r\n"
+    )
+    .map_err(|error| error.to_string())?;
+    let mut raw = Vec::new();
+    stream
+        .read_to_end(&mut raw)
+        .map_err(|error| format!("local API response read failed: {error}"))?;
+    let text = String::from_utf8_lossy(&raw).into_owned();
+    let (status, body) = parse_http_json_response(&text)?;
+    if status != 200 {
+        return Err(format!("local API returned HTTP {status}: {body}"));
+    }
+    Ok(body)
+}
+
+fn normalize_cli_route(route: &str) -> String {
+    let trimmed = route.trim().trim_start_matches('/');
+    if trimmed.is_empty() || trimmed == API_VERSION {
+        return format!("{API_VERSION}/status");
+    }
+    if trimmed.starts_with(&format!("{API_VERSION}/")) {
+        return trimmed.to_string();
+    }
+    format!("{API_VERSION}/{trimmed}")
+}
+
+fn parse_http_json_response(raw: &str) -> Result<(u16, Value), String> {
+    let (head, body) = raw
+        .split_once("\r\n\r\n")
+        .ok_or_else(|| "malformed HTTP response".to_string())?;
+    let status = head
+        .lines()
+        .next()
+        .and_then(|line| line.split_whitespace().nth(1))
+        .and_then(|code| code.parse::<u16>().ok())
+        .ok_or_else(|| "malformed HTTP status line".to_string())?;
+    let parsed = serde_json::from_str::<Value>(body)
+        .unwrap_or_else(|_| Value::String(body.to_string()));
+    Ok((status, parsed))
+}
+
 #[cfg(test)]
+mod cli_client_tests {
+    use super::{normalize_cli_route, parse_http_json_response};
+    use serde_json::json;
+
+    #[test]
+    fn normalizes_cli_routes() {
+        assert_eq!(normalize_cli_route("status"), "v1/status");
+        assert_eq!(normalize_cli_route("/library/summary"), "v1/library/summary");
+        assert_eq!(normalize_cli_route("v1/collections"), "v1/collections");
+        assert_eq!(normalize_cli_route(""), "v1/status");
+    }
+
+    #[test]
+    fn parses_http_json_response() {
+        let raw = "HTTP/1.1 200 OK\r\nContent-Length: 14\r\n\r\n{\"ok\": true}";
+        let (status, body) = parse_http_json_response(raw).expect("parses");
+        assert_eq!(status, 200);
+        assert_eq!(body, json!({ "ok": true }));
+    }
+}
+
 mod tests {
     use super::{
         decode_cursor, encode_cursor, is_authorized, list_games, percent_decode, split_target,

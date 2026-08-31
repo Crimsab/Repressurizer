@@ -1,4 +1,5 @@
 import { computeStats } from "./stats";
+import { t } from "./i18n";
 import { generateLibrarySnapshotJson } from "./automationExport";
 import { getCategoryColor } from "./categoryColors";
 import { getHltbHours, hltbModeLabel } from "./hltb";
@@ -15,7 +16,7 @@ import type { FamilyLibraryApp, HltbData, WishlistItem } from "./tauri";
 import type { GameStatus } from "../stores/statusStore";
 
 export type ExportScope = "all" | "category" | "categories" | "categories_pick" | "stats" | "snapshot";
-export type ExportFormat = "json" | "csv" | "txt" | "md";
+export type ExportFormat = "json" | "csv" | "txt" | "md" | "html";
 export type ExportPresenceFilter = "all" | "with" | "without";
 export type ExportCollectionOnlyFilter = "include" | "exclude" | "only";
 export type ExportPlayedFilter = "all" | "played" | "unplayed";
@@ -830,12 +831,94 @@ function toMarkdown(opts: ExportOptions): string {
   return lines.join("\n");
 }
 
+
+// --- HTML ---
+function escapeHtml(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+const HTML_STYLE = `
+  body { margin: 0; background: #0b0e11; color: #e6e9ee; font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 960px; margin: 0 auto; padding: 32px 20px 64px; }
+  h1 { font-size: 22px; letter-spacing: -0.01em; }
+  h1 span { color: #7eb8ff; }
+  p.meta { color: #8b94a1; font-size: 12px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin: 20px 0; }
+  .card { background: #12171c; border: 1px solid #232a31; border-radius: 12px; padding: 12px 14px; }
+  .card b { display: block; font-size: 20px; font-variant-numeric: tabular-nums; }
+  .card span { color: #8b94a1; font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; }
+  h2 { font-size: 14px; text-transform: uppercase; letter-spacing: 0.12em; color: #8b94a1; margin: 28px 0 10px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; color: #8b94a1; font-size: 10px; text-transform: uppercase; letter-spacing: 0.12em; padding: 8px 10px; border-bottom: 1px solid #232a31; }
+  td { padding: 7px 10px; border-bottom: 1px solid #1a2026; }
+  tr:hover td { background: #12171c; }
+  footer { margin-top: 40px; color: #5b6470; font-size: 11px; }
+`;
+
+function toHtml(opts: ExportOptions): string {
+  const title =
+    opts.scope === "stats"
+      ? "Library Statistics"
+      : opts.scope === "category"
+        ? "Category Export"
+        : opts.scope === "categories_pick"
+          ? "Selected Categories"
+          : opts.scope === "categories"
+            ? "Steam Library - Categories"
+            : "Steam Library";
+  const parts: string[] = [];
+  parts.push(`<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Repressurizer — ${escapeHtml(title)}</title><style>${HTML_STYLE}</style></head><body><main>`);
+  parts.push(`<h1>${escapeHtml(t("export.html.brand"))} <span>·</span> ${escapeHtml(title)}</h1><p class="meta">Generated ${escapeHtml(new Date().toISOString())}</p>`);
+
+  if (opts.scope === "stats") {
+    const stats = computeStats(opts.games, opts.collections);
+    parts.push(`<div class="cards">
+      <div class="card"><b>${stats.totalGames}</b><span>${escapeHtml(t("export.html.totalGames"))}</span></div>
+      <div class="card"><b>${stats.totalPlaytimeHours}h</b><span>${escapeHtml(t("export.html.totalPlaytime"))}</span></div>
+      <div class="card"><b>${stats.unplayedCount}</b><span>${escapeHtml(t("export.html.unplayed", { percent: stats.unplayedPercent }))}</span></div>
+      <div class="card"><b>${stats.averageHoursPerGame}h</b><span>${escapeHtml(t("export.html.avgHours"))}</span></div>
+    </div>`);
+    parts.push(`<h2>${escapeHtml(t("export.html.topPlayed"))}</h2><table><thead><tr><th>#</th><th>${escapeHtml(t("export.html.game"))}</th><th>${escapeHtml(t("export.html.hours"))}</th></tr></thead><tbody>`);
+    for (const [index, game] of stats.topPlayed.entries()) {
+      parts.push(`<tr><td>${index + 1}</td><td>${escapeHtml(game.name)}</td><td>${game.hours}h</td></tr>`);
+    }
+    parts.push("</tbody></table>");
+    parts.push(`<h2>${escapeHtml(t("export.html.distribution"))}</h2><table><thead><tr><th>${escapeHtml(t("export.html.bucket"))}</th><th>${escapeHtml(t("export.html.games"))}</th></tr></thead><tbody>`);
+    for (const bucket of stats.playtimeBuckets) {
+      parts.push(`<tr><td>${escapeHtml(bucket.label)}</td><td>${bucket.count}</td></tr>`);
+    }
+    parts.push("</tbody></table>");
+  } else {
+    const dataset = buildExportDataset(opts);
+    const renderTable = (records: ExportGameRecord[]) => {
+      parts.push(`<table><thead><tr>${dataset.fieldDefinitions.map((field) => `<th>${escapeHtml(field.label)}</th>`).join("")}</tr></thead><tbody>`);
+      for (const record of records) {
+        parts.push(`<tr>${dataset.fieldDefinitions.map((field) => `<td>${escapeHtml(field.cellValue(record))}</td>`).join("")}</tr>`);
+      }
+      parts.push("</tbody></table>");
+    };
+    if (isCategoriesStructured(opts)) {
+      for (const category of dataset.categories) {
+        parts.push(`<h2>${escapeHtml(category.name)} (${category.game_count})</h2>`);
+        renderTable(category.games);
+      }
+    } else {
+      parts.push(`<p class="meta">${dataset.games.length} games</p>`);
+      renderTable(dataset.games);
+    }
+  }
+
+  parts.push(`<footer>${escapeHtml(t("export.html.footer"))}</footer></main></body></html>`);
+  return parts.join("\n");
+}
+
 // --- Main ---
 const FORMATTERS: Record<ExportFormat, (opts: ExportOptions) => string> = {
   json: toJSON,
   csv: toCSV,
   txt: toTXT,
   md: toMarkdown,
+  html: toHtml,
 };
 
 export function generateExport(opts: ExportOptions): string {
@@ -878,6 +961,7 @@ const FORMAT_EXTENSIONS: Record<ExportFormat, string> = {
   csv: "csv",
   txt: "txt",
   md: "md",
+  html: "html",
 };
 
 /** Safe basename segment for default save dialog (ASCII, no path chars). */
@@ -924,6 +1008,7 @@ const FORMAT_FILTERS: Record<ExportFormat, { name: string; extensions: string[] 
   json: { name: "JSON", extensions: ["json"] },
   csv: { name: "CSV", extensions: ["csv"] },
   txt: { name: "Text", extensions: ["txt"] },
+  html: { name: "HTML", extensions: ["html"] },
   md: { name: "Markdown", extensions: ["md"] },
 };
 

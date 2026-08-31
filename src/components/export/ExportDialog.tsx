@@ -27,6 +27,7 @@ import {
   FileText,
   Table,
   FileJs,
+  FileHtml,
   FileMd,
   GameController,
   FolderOpen,
@@ -83,6 +84,7 @@ const FORMATS: { value: ExportFormat; label: string; icon: typeof FileText }[] =
   { value: "md", label: "Markdown", icon: FileMd },
   { value: "json", label: "JSON", icon: FileJs },
   { value: "csv", label: "CSV", icon: Table },
+  { value: "html", label: "HTML", icon: FileHtml },
 ];
 
 const FIELD_OPTIONS: { value: ExportFieldKey; label: TranslationKey }[] = [

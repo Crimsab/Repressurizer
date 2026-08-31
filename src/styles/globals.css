@@ -154,6 +154,11 @@ body {
   contain-intrinsic-size: 240px 170px;
 }
 
+.game-row {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 44px;
+}
+
 /* ── Skeleton shimmer ── */
 @keyframes shimmer {
   0% { background-position: -200% 0; }

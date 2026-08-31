@@ -530,7 +530,7 @@ function GameListRow({
       onContextMenu={(e) => onContextMenu(e, game)}
       onPointerEnter={onIntent}
       onFocus={onIntent}
-      className={`group flex items-center gap-3 rounded-lg px-3 py-2 transition-colors ${
+      className={`game-row group flex items-center gap-3 rounded-lg px-3 py-2 transition-colors ${
         isSelected
           ? "bg-repressurizer-accent/8 ring-1 ring-repressurizer-accent/40"
           : "hover:bg-repressurizer-surface-hover"

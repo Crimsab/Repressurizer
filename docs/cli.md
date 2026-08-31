@@ -22,6 +22,7 @@ repressurizer-cli automation status
 repressurizer-cli automation publish-now
 repressurizer-cli api status
 repressurizer-cli api token
+repressurizer-cli api get <route> [--port <port>]
 repressurizer-cli api serve [--port <port>]
 repressurizer-cli mcp status
 repressurizer-cli mcp config
@@ -57,6 +58,13 @@ current per-process bearer token locally. The listener starts automatically
 when API or MCP is enabled in Settings; `api serve` remains only as a legacy
 fallback for older installations. It binds only to 127.0.0.1 and CORS is
 disabled. See the [local API guide](integrations/local-api.md).
+
+`api get` is the scripting entry point for the local API: it authenticates
+with the stored bearer token and prints the JSON response of a read route.
+Routes may be written with or without the version prefix, for example
+`repressurizer-cli api get library/summary`, `api get collections`, or
+`api get v1/recommendations`. Use it in cron jobs, dashboards, and lab
+automation that should not parse the desktop UI.
 
 The MCP commands follow the user-selected profile in desktop settings.
 `mcp status` reports that profile, `mcp config` prints an MCP client fragment

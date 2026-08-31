@@ -29,7 +29,7 @@ Usage:
   repressurizer-cli automation publish-now
   repressurizer-cli api status
   repressurizer-cli api token
-  repressurizer-cli api serve [--port <port>]
+  repressurizer-cli api get <route> [--port <port>]\n  repressurizer-cli api serve [--port <port>]
   repressurizer-cli mcp status
   repressurizer-cli mcp config
   repressurizer-cli mcp doctor
@@ -301,9 +301,19 @@ fn automation_command(args: &[String]) -> Result<(), String> {
 fn api_command(args: &[String]) -> Result<(), String> {
     match args.first().map(String::as_str) {
         Some("help") | Some("--help") | Some("-h") => print_help(
-            "Repressurizer CLI local API commands\n\n  repressurizer-cli api status\n  repressurizer-cli api token\n  repressurizer-cli api serve [--port <port>]\n\nThe server binds to 127.0.0.1, requires a bearer token except /v1/health, and is disabled until enabled in Settings > Integrations.",
+            "Repressurizer CLI local API commands\n\n  repressurizer-cli api status\n  repressurizer-cli api token\n  repressurizer-cli api get <route> [--port <port>]\n  repressurizer-cli api serve [--port <port>]\n\nThe server binds to 127.0.0.1, requires a bearer token except /v1/health, and is disabled until enabled in Settings > Integrations.",
         ),
         Some("status") if args.len() == 1 => print_json(&api::status_for_cli()?),
+        Some("get") if args.len() == 2 => print_json(&api::get_for_cli(&args[1], None)),
+        Some("get") if args.len() == 4 && args[2] == "--port" => {
+            let port = args[3]
+                .parse::<u16>()
+                .map_err(|_| "--port must be a valid TCP port".to_string())?;
+            if port < 1024 {
+                return Err("--port must be between 1024 and 65535".to_string());
+            }
+            print_json(&api::get_for_cli(&args[1], Some(port)))
+        }
         Some("token") if args.len() == 1 => print_json(&api::token_for_cli()?),
         Some("serve") if args.len() == 1 => api::serve_for_cli(None),
         Some("serve") if args.len() == 3 && args[1] == "--port" => {
