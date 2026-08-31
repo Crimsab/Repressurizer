@@ -1,11 +1,14 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { createPortal } from "react-dom";
-import { Archive, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, CheckSquareOffset, DotsSixVertical, GameController, MagnifyingGlass, Plus, Trash, Warning, X } from "@phosphor-icons/react";
+import { Archive, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, Check, CheckSquareOffset, DotsSixVertical, GameController, MagnifyingGlass, Plus, Trash, Warning, X } from "@phosphor-icons/react";
 import { SteamImage } from "../games/SteamImage";
 import { SelectMenu } from "../ui/SelectMenu";
 import { useT } from "../../lib/i18n";
-import type { OwnedGame, GameDetails } from "../../lib/types";
-import type { DiaryBoardPrefs, DiaryCustomColumn, DiaryEntry, DiaryJournalEntry, DiaryPriority, DiarySection } from "../../stores/diaryStore";
+import { getHltbHours } from "../../lib/hltb";
+import type { HltbData } from "../../lib/tauri";
+import type { OwnedGame, GameDetails, HltbTimeMode } from "../../lib/types";
+import type { DiaryBoardPrefs, DiaryColumnSort, DiaryColumnSortMode, DiaryCustomColumn, DiaryEntry, DiaryJournalEntry, DiaryPriority, DiarySection } from "../../stores/diaryStore";
+import { COLUMN_SORT_MODES, DEFAULT_COLUMN_SORT_DESC } from "../../stores/diaryStore";
 import type { GameStatus } from "../../stores/statusStore";
 import {
   getDiaryStatus,
@@ -82,7 +85,7 @@ function colorWithAlpha(hex: string, alpha: number): string {
 
 const PRIORITY_EDGE: Record<DiaryPriority, string | null> = { high: "#fb7185", normal: null, low: "#64748b" };
 
-export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, kanbanGames, libraryGames, details, entries, statuses, reviews, journal, pages, board, boardPrefs, language, showArchived, forceStatus, wipLimit, hideEmptyColumns, t, onBulkStatusChange, onBulkPriorityChange, onRemoveGames, onRestoreRemovedGames, onMoveGames, onOpenGame, onSetColumnColor, onToggleColumnHidden, onAddCustomColumn, onRenameCustomColumn, onRemoveCustomColumn, onMergeCustomColumn, onRemoveEmptyCustomColumns, onMoveCustomColumn, onSetColumnOrder }: {
+export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, kanbanGames, libraryGames, details, entries, statuses, reviews, journal, pages, board, boardPrefs, language, showArchived, forceStatus, wipLimit, hideEmptyColumns, searchActive, hltbData, hltbTimeMode, t, onBulkStatusChange, onBulkPriorityChange, onRemoveGames, onRestoreRemovedGames, onMoveGames, onOpenGame, onSetColumnColor, onSetColumnSort, onSetColumnWipLimit, onToggleColumnHidden, onAddCustomColumn, onRenameCustomColumn, onRemoveCustomColumn, onMergeCustomColumn, onRemoveEmptyCustomColumns, onMoveCustomColumn, onSetColumnOrder }: {
   games: OwnedGame[];
   kanbanGames: OwnedGame[];
   libraryGames: OwnedGame[];
@@ -99,6 +102,9 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, kanbanGa
   forceStatus?: DiaryViewStatus;
   wipLimit: number;
   hideEmptyColumns: boolean;
+  searchActive: boolean;
+  hltbData: Record<number, HltbData>;
+  hltbTimeMode: HltbTimeMode;
   t: ReturnType<typeof useT>;
   onApplyStatus: (appId: number, status: DiaryViewStatus) => void;
   onSetBoardOrder: (orderedAppIds: number[]) => void;
@@ -110,6 +116,8 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, kanbanGa
   onMoveGames: (appIds: number[], column: BoardColumn, orderedAppIds: number[]) => void;
   onOpenGame: (appId: number) => void;
   onSetColumnColor: (columnKey: string, color: string | null) => void;
+  onSetColumnSort: (columnKey: string, sort: DiaryColumnSort) => void;
+  onSetColumnWipLimit: (columnKey: string, limit: number) => void;
   onToggleColumnHidden: (columnKey: string) => void;
   onAddCustomColumn: (name: string, color: string) => string | null;
   onRenameCustomColumn: (columnId: string, name: string) => void;
@@ -131,6 +139,7 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, kanbanGa
   const [mergeSourceId, setMergeSourceId] = useState<string | null>(null);
   const [addGamePopover, setAddGamePopover] = useState<{ anchor: PopoverAnchor; column: BoardColumn } | null>(null);
   const [addGameQuery, setAddGameQuery] = useState("");
+  const [addGameSelection, setAddGameSelection] = useState<Set<number>>(new Set());
   const [draggingColumnKey, setDraggingColumnKey] = useState<string | null>(null);
   const [columnDropTarget, setColumnDropTarget] = useState<{ key: string; after: boolean } | null>(null);
 
@@ -186,13 +195,28 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, kanbanGa
       if (!column) continue;
       byColumn.get(column.key)?.push(game);
     }
-    for (const list of byColumn.values()) {
-      list.sort((a, b) => (board[a.appid] ?? Number.MAX_SAFE_INTEGER) - (board[b.appid] ?? Number.MAX_SAFE_INTEGER) || (baseIndex.get(a.appid) ?? 0) - (baseIndex.get(b.appid) ?? 0));
+    for (const column of columns) {
+      const list = byColumn.get(column.key);
+      if (!list) continue;
+      const manual = (a: OwnedGame, b: OwnedGame) => (board[a.appid] ?? Number.MAX_SAFE_INTEGER) - (board[b.appid] ?? Number.MAX_SAFE_INTEGER) || (baseIndex.get(a.appid) ?? 0) - (baseIndex.get(b.appid) ?? 0);
+      const sort = boardPrefs.columnSorts[column.key];
+      if (!sort || sort.mode === "manual") {
+        list.sort(manual);
+        continue;
+      }
+      const direction = sort.desc ? -1 : 1;
+      if (sort.mode === "name") {
+        list.sort((a, b) => direction * String(a.name ?? "").localeCompare(String(b.name ?? ""), language) || manual(a, b));
+      } else {
+        const hours = (game: OwnedGame) => sort.mode === "playtime" ? game.playtime_forever : getHltbHours(hltbData[game.appid], hltbTimeMode) ?? -1;
+        list.sort((a, b) => direction * (hours(a) - hours(b)) || manual(a, b));
+      }
     }
     return byColumn;
-  }, [board, columnOfGame, columns, games]);
+  }, [board, boardPrefs.columnSorts, columnOfGame, columns, games, hltbData, hltbTimeMode, language]);
 
-  const boardColumns = useMemo(() => (hideEmptyColumns && !forceStatus ? columns.filter((column) => (grouped.get(column.key)?.length ?? 0) > 0) : columns), [columns, forceStatus, grouped, hideEmptyColumns]);
+  const filteringColumns = !forceStatus && (hideEmptyColumns || searchActive);
+  const boardColumns = useMemo(() => (filteringColumns && draggingAppId === null ? columns.filter((column) => (grouped.get(column.key)?.length ?? 0) > 0) : columns), [columns, draggingAppId, filteringColumns, grouped]);
 
   const emptyCustomColumnCount = useMemo(() => {
     const assignedColumnIds = new Set(Object.values(boardPrefs.customAssignments));
@@ -209,6 +233,15 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, kanbanGa
     }
     return counts;
   }, [games, pages]);
+
+  const toggleAddGameSelection = useCallback((appId: number) => {
+    setAddGameSelection((current) => {
+      const next = new Set(current);
+      if (next.has(appId)) next.delete(appId);
+      else next.add(appId);
+      return next;
+    });
+  }, []);
 
   const moveIds = useCallback((appIds: number[], column: BoardColumn, insertAt?: number) => {
     const currentIds = (grouped.get(column.key) ?? []).map((game) => game.appid);
@@ -494,6 +527,7 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, kanbanGa
 
   const contextMenuGame = contextMenu && contextMenu.appIds.length === 1 ? games.find((game) => game.appid === contextMenu.appIds[0]) : undefined;
   const columnMenuColumn = columnMenu ? columns.find((column) => column.key === columnMenu.columnKey) : undefined;
+  const columnMenuSort: DiaryColumnSort = (columnMenu && boardPrefs.columnSorts[columnMenu.columnKey]) || { mode: "manual", desc: false };
 
   useEffect(() => {
     const onResize = () => {
@@ -511,7 +545,7 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, kanbanGa
       if (columnsPopover && !target.closest("[data-kanban-columns-popover]") && !target.closest('[data-testid="diary-kanban-columns-button"]') && !target.closest("[data-column-color-popover]")) setColumnsPopover(null);
       if (addGamePopover && !target.closest("[data-kanban-addgame-popover]") && !target.closest("[data-kanban-addgame-button]")) setAddGamePopover(null);
       if (contextMenu && !target.closest("[data-kanban-context-menu]")) setContextMenu(null);
-      if (columnMenu && !target.closest("[data-kanban-column-menu]") && !target.closest("[data-column-color-popover]")) setColumnMenu(null);
+      if (columnMenu && !target.closest("[data-kanban-column-menu]") && !target.closest("[data-column-color-popover]") && !target.closest('[role="listbox"]') && !target.closest('[role="option"]')) setColumnMenu(null);
     };
     document.addEventListener("pointerdown", onPointerDown);
     return () => document.removeEventListener("pointerdown", onPointerDown);
@@ -616,9 +650,11 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, kanbanGa
       <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto p-4 pr-16 sm:p-6 sm:pr-20" role="list" aria-label={t("diary.kanban.board")} aria-multiselectable="true">
         {boardColumns.map((column) => {
           const columnGames = grouped.get(column.key) ?? [];
-          const overLimit = column.status === "playing" && wipLimit > 0 && columnGames.length > wipLimit;
+          const columnWip = boardPrefs.columnWipLimits[column.key] ?? (column.status === "playing" ? wipLimit : 0);
+          const overLimit = columnWip > 0 && columnGames.length > columnWip;
           const isDropTarget = dropTarget?.columnKey === column.key && draggingAppId !== null;
           const isColumnDropTarget = columnDropTarget?.key === column.key && draggingColumnKey !== null;
+          const isGhost = filteringColumns && columnGames.length === 0;
           return (
             <section
               key={column.key}
@@ -651,7 +687,7 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, kanbanGa
               }}
               tabIndex={0}
               style={{ borderColor: `${column.color}80`, backgroundColor: `${column.color}0d`, boxShadow: isColumnDropTarget ? `inset 0 0 0 2px ${colorWithAlpha(column.color, 0.78)}, 0 0 22px ${colorWithAlpha(column.color, 0.16)}` : undefined }}
-              className={`flex min-h-0 w-[min(320px,calc(100vw-48px))] shrink-0 flex-col overflow-hidden rounded-xl border transition-[background-color,border-color,box-shadow] ${isDropTarget ? "bg-repressurizer-accent/[0.08] shadow-[0_0_0_1px_rgba(16,185,129,0.35),0_0_28px_rgba(16,185,129,0.14)] ring-2 ring-inset ring-repressurizer-accent/70" : "shadow-pop-sm"}`}
+              className={`flex min-h-0 w-[min(320px,calc(100vw-48px))] shrink-0 flex-col overflow-hidden rounded-xl border transition-[background-color,border-color,box-shadow] ${isGhost ? "border-dashed opacity-60" : ""} ${isDropTarget ? "bg-repressurizer-accent/[0.08] shadow-[0_0_0_1px_rgba(16,185,129,0.35),0_0_28px_rgba(16,185,129,0.14)] ring-2 ring-inset ring-repressurizer-accent/70" : "shadow-pop-sm"}`}
             >
               <header
                 data-testid={`diary-kanban-column-header-${column.key}`}
@@ -695,6 +731,7 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, kanbanGa
                     onClick={(event) => {
                       const rect = event.currentTarget.getBoundingClientRect();
                       setAddGameQuery("");
+                      setAddGameSelection(new Set());
                       setColumnMenu(null);
                       setAddGamePopover({ anchor: { x: Math.max(8, Math.min(rect.left, window.innerWidth - 344)), y: Math.min(rect.bottom + 6, Math.max(8, window.innerHeight - 460)) }, column });
                     }}
@@ -716,7 +753,7 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, kanbanGa
                     <CheckSquareOffset size={12} />
                   </button>
                   {overLimit ? (
-                    <span data-testid="diary-kanban-wip-over" title={t("diary.kanban.wipOver")} style={{ borderColor: colorWithAlpha(column.color, 0.55), backgroundColor: colorWithAlpha(column.color, 0.14), color: column.color }} className="inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 font-mono text-[10px] tabular-nums"><Warning size={10} weight="fill" />{columnGames.length}/{wipLimit}</span>
+                    <span data-testid="diary-kanban-wip-over" title={t("diary.kanban.wipOver")} style={{ borderColor: colorWithAlpha(column.color, 0.55), backgroundColor: colorWithAlpha(column.color, 0.14), color: column.color }} className="inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 font-mono text-[10px] tabular-nums"><Warning size={10} weight="fill" />{columnGames.length}/{columnWip}</span>
                   ) : (
                     <span style={{ color: column.color, backgroundColor: colorWithAlpha(column.color, 0.12) }} className="shrink-0 rounded-full px-1.5 font-mono text-[10px] tabular-nums">{columnGames.length}</span>
                   )}
@@ -744,6 +781,7 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, kanbanGa
                       columnKey={column.key}
                       columnIndex={index}
                       onOpen={handleCardOpen}
+                      onSetPriority={(appId, priority) => onBulkPriorityChange([appId], priority)}
                       onSelect={handleCardSelect}
                       onContextMenuOpen={handleCardContextMenu}
                       onPointerDown={handleCardPointerDown}
@@ -858,6 +896,7 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, kanbanGa
             onClick={() => {
               setColumnMenu(null);
               setAddGameQuery("");
+              setAddGameSelection(new Set());
               setAddGamePopover({ anchor: { x: Math.max(8, Math.min(columnMenu.x, window.innerWidth - 344)), y: Math.min(columnMenu.y + 40, Math.max(8, window.innerHeight - 460)) }, column: columnMenuColumn });
             }}
             className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-repressurizer-text transition-colors hover:bg-repressurizer-surface-hover hover:text-white"
@@ -865,6 +904,44 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, kanbanGa
             <Plus size={12} />
             {t("diary.kanban.addGame")}
           </button>
+          <p className="px-3 pb-1 pt-2 text-[9px] font-semibold uppercase tracking-[0.14em] text-repressurizer-text-faint">{t("diary.kanban.columnSort")}</p>
+          <div className="flex items-center gap-1.5 px-3 pb-2">
+            <div className="min-w-0 flex-1">
+              <SelectMenu<DiaryColumnSortMode>
+                value={columnMenuSort.mode}
+                options={COLUMN_SORT_MODES.map((mode) => ({ value: mode, label: t(`diary.kanban.columnSort.${mode}`) }))}
+                onChange={(mode) => onSetColumnSort(columnMenuColumn.key, { mode, desc: mode === columnMenuSort.mode ? columnMenuSort.desc : DEFAULT_COLUMN_SORT_DESC[mode] })}
+                ariaLabel={t("diary.kanban.columnSort")}
+                size="sm"
+                buttonClassName="border-repressurizer-border-subtle bg-repressurizer-bg text-[11px]"
+              />
+            </div>
+            {columnMenuSort.mode !== "manual" && (
+              <button
+                type="button"
+                role="menuitem"
+                data-testid={`diary-kanban-sort-direction-${columnMenuColumn.key}`}
+                aria-label={columnMenuSort.desc ? t("diary.kanban.columnSort.ascending") : t("diary.kanban.columnSort.descending")}
+                title={columnMenuSort.desc ? t("diary.kanban.columnSort.ascending") : t("diary.kanban.columnSort.descending")}
+                onClick={() => onSetColumnSort(columnMenuColumn.key, { ...columnMenuSort, desc: !columnMenuSort.desc })}
+                className="focus-ring rounded-md border border-repressurizer-border-subtle p-1.5 text-repressurizer-text-muted transition-colors hover:bg-repressurizer-surface-hover hover:text-white"
+              >
+                {columnMenuSort.desc ? <ArrowDown size={12} weight="bold" /> : <ArrowUp size={12} weight="bold" />}
+              </button>
+            )}
+          </div>
+          <p className="px-3 pb-1 pt-2 text-[9px] font-semibold uppercase tracking-[0.14em] text-repressurizer-text-faint">{t("diary.kanban.wipLimit")}</p>
+          <div className="px-3 pb-2">
+            <input
+              type="number"
+              min={0}
+              max={20}
+              value={boardPrefs.columnWipLimits[columnMenuColumn.key] ?? (columnMenuColumn.status === "playing" ? wipLimit : 0)}
+              onChange={(event) => onSetColumnWipLimit(columnMenuColumn.key, Math.min(20, Math.max(0, Math.floor(Number(event.target.value) || 0))))}
+              aria-label={`${t("diary.kanban.wipLimit")}: ${columnMenuColumn.label}`}
+              className="w-16 rounded-md border border-repressurizer-border bg-repressurizer-bg px-2 py-1 text-[11px] text-repressurizer-text outline-none"
+            />
+          </div>
           <p className="px-3 pb-1.5 pt-2 text-[9px] font-semibold uppercase tracking-[0.14em] text-repressurizer-text-faint">{t("diary.kanban.columnColor")}</p>
           <div className="flex flex-wrap gap-1.5 px-3 pb-2">
             {BOARD_COLOR_PALETTE.map((paletteColor) => (
@@ -1009,15 +1086,15 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, kanbanGa
       )}
       {addGamePopover && createPortal(
         <>
-          <div data-kanban-addgame-popover data-testid="diary-kanban-addgame-popover" className="animate-fade-in fixed z-50 w-[min(336px,calc(100vw-16px))] overflow-hidden rounded-xl border bg-repressurizer-surface-raised shadow-pop" style={{ left: addGamePopover.anchor.x, top: addGamePopover.anchor.y, borderColor: colorWithAlpha(addGamePopover.column.color, 0.42), "--kanban-column-color": addGamePopover.column.color, "--kanban-column-soft": colorWithAlpha(addGamePopover.column.color, 0.1) } as CSSProperties}>
-            <div className="border-b border-repressurizer-border-subtle px-3 py-2.5">
+          <div data-kanban-addgame-popover data-testid="diary-kanban-addgame-popover" className="animate-fade-in fixed z-50 flex w-[min(336px,calc(100vw-16px))] flex-col overflow-hidden rounded-xl border bg-repressurizer-surface-raised shadow-pop" style={{ left: addGamePopover.anchor.x, top: addGamePopover.anchor.y, maxHeight: Math.max(220, window.innerHeight - addGamePopover.anchor.y - 12), borderColor: colorWithAlpha(addGamePopover.column.color, 0.42), "--kanban-column-color": addGamePopover.column.color, "--kanban-column-soft": colorWithAlpha(addGamePopover.column.color, 0.1) } as CSSProperties}>
+            <div className="shrink-0 border-b border-repressurizer-border-subtle px-3 py-2.5">
               <p className="truncate text-[10px] font-semibold uppercase tracking-[0.12em]"><span className="text-repressurizer-text-faint">{t("diary.kanban.addGame")}: </span><span style={{ color: addGamePopover.column.color }}>{addGamePopover.column.label}</span></p>
               <label className="group/search mt-2 flex items-center gap-2 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-bg px-2.5 py-1.5 transition-colors focus-within:border-[var(--kanban-column-color)]">
                 <MagnifyingGlass size={13} className="shrink-0 text-repressurizer-text-faint transition-colors group-focus-within/search:text-[var(--kanban-column-color)]" />
                 <input autoFocus value={addGameQuery} onChange={(event) => setAddGameQuery(event.target.value)} placeholder={t("diary.kanban.addGame.search")} aria-label={t("diary.kanban.addGame.search")} data-testid="diary-kanban-addgame-search" className="min-w-0 flex-1 bg-transparent text-xs text-repressurizer-text outline-none placeholder:text-repressurizer-text-faint" />
               </label>
             </div>
-            <div className="max-h-[min(420px,65vh)] overflow-y-auto p-1.5">
+            <div className="min-h-0 flex-1 overflow-y-auto p-1.5">
               {addGameResults.onKanban.length === 0 && addGameResults.inLibrary.length === 0 ? (
                 <p className="px-2 py-4 text-center text-[11px] text-repressurizer-text-faint">{t("diary.kanban.addGame.none")}</p>
               ) : (
@@ -1030,6 +1107,16 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, kanbanGa
                       </div>
                       {addGameResults.inLibrary.map((game) => (
                         <button key={game.appid} type="button" data-source="library" data-testid={`diary-kanban-addgame-row-${game.appid}`} onClick={() => moveIds([game.appid], addGamePopover.column)} className="group focus-ring flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-[var(--kanban-column-soft)]">
+                          <span
+                            role="checkbox"
+                            aria-checked={addGameSelection.has(game.appid)}
+                            aria-label={`${t("diary.kanban.addGame")}: ${String(game.name ?? "")}`}
+                            data-testid={`diary-kanban-addgame-select-${game.appid}`}
+                            onClick={(event) => { event.stopPropagation(); toggleAddGameSelection(game.appid); }}
+                            className={`focus-ring flex h-4 w-4 shrink-0 cursor-pointer items-center justify-center rounded border transition-colors ${addGameSelection.has(game.appid) ? "border-transparent bg-[var(--kanban-column-color)] text-white" : "border-repressurizer-border-subtle text-transparent hover:border-[var(--kanban-column-color)] hover:text-[var(--kanban-column-color)]"}`}
+                          >
+                            <Check size={10} weight="bold" />
+                          </span>
                           <span className="h-7 w-[46px] shrink-0 overflow-hidden rounded bg-repressurizer-bg"><SteamImage appId={game.appid} alt="" kind="capsule" className="h-full w-full object-cover" /></span>
                           <span className="min-w-0 flex-1 truncate text-xs text-repressurizer-text">{String(game.name ?? "")}</span>
                           <span className="shrink-0 font-mono text-[9px] tabular-nums text-repressurizer-text-faint">{formatHours(game.playtime_forever, language)}h</span>
@@ -1048,6 +1135,16 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, kanbanGa
                         const currentColumn = columnOfGame(game);
                         return (
                           <button key={game.appid} type="button" data-source="kanban" data-testid={`diary-kanban-addgame-row-${game.appid}`} onClick={() => moveIds([game.appid], addGamePopover.column)} className="group focus-ring flex w-full items-center gap-2.5 rounded-lg px-2 py-1.5 text-left transition-colors hover:bg-[var(--kanban-column-soft)]">
+                            <span
+                              role="checkbox"
+                              aria-checked={addGameSelection.has(game.appid)}
+                              aria-label={`${t("diary.kanban.addGame")}: ${String(game.name ?? "")}`}
+                              data-testid={`diary-kanban-addgame-select-${game.appid}`}
+                              onClick={(event) => { event.stopPropagation(); toggleAddGameSelection(game.appid); }}
+                              className={`focus-ring flex h-4 w-4 shrink-0 cursor-pointer items-center justify-center rounded border transition-colors ${addGameSelection.has(game.appid) ? "border-transparent bg-[var(--kanban-column-color)] text-white" : "border-repressurizer-border-subtle text-transparent hover:border-[var(--kanban-column-color)] hover:text-[var(--kanban-column-color)]"}`}
+                            >
+                              <Check size={10} weight="bold" />
+                            </span>
                             <span className="h-7 w-[46px] shrink-0 overflow-hidden rounded bg-repressurizer-bg"><SteamImage appId={game.appid} alt="" kind="capsule" className="h-full w-full object-cover" /></span>
                             <span className="min-w-0 flex-1"><span className="block truncate text-xs text-repressurizer-text">{String(game.name ?? "")}</span><span className="block truncate text-[9px] text-repressurizer-text-faint">{currentColumn?.label ?? t("diary.kanban.addGame.onKanban")}</span></span>
                             <ArrowRight data-testid={`diary-kanban-addgame-action-${game.appid}`} size={13} weight="bold" className="shrink-0 text-repressurizer-text-faint transition-[color,transform] group-hover:translate-x-0.5 group-hover:text-[var(--kanban-column-color)] group-focus-visible:text-[var(--kanban-column-color)]" aria-hidden="true" />
@@ -1059,6 +1156,20 @@ export const DiaryKanbanBoard = memo(function DiaryKanbanBoard({ games, kanbanGa
                 </div>
               )}
             </div>
+            {addGameSelection.size > 0 && (
+              <div className="flex shrink-0 items-center justify-between gap-2 border-t border-repressurizer-border-subtle px-3 py-2">
+                <span className="text-[10px] text-repressurizer-text-faint">{t("diary.kanban.selection", { count: addGameSelection.size })}</span>
+                <button
+                  type="button"
+                  data-testid="diary-kanban-addgame-add-selected"
+                  onClick={() => { moveIds([...addGameSelection], addGamePopover.column); setAddGameSelection(new Set()); }}
+                  className="focus-ring btn-press inline-flex shrink-0 items-center gap-1 rounded-md bg-[var(--kanban-column-color)] px-2.5 py-1.5 text-[11px] font-medium text-white"
+                >
+                  <Plus size={11} weight="bold" />
+                  {t("diary.kanban.addGame.addSelected", { count: addGameSelection.size })}
+                </button>
+              </div>
+            )}
           </div>
         </>,
         document.body,
@@ -1190,7 +1301,7 @@ function NewColumnRow({ t, onCreate }: { t: ReturnType<typeof useT>; onCreate: (
   );
 }
 
-const KanbanCard = memo(function KanbanCard({ game, detail, entry, rating, journalCount, sectionCount, language, dragging, selected, accentColor, t, columnKey, columnIndex, onOpen, onSelect, onContextMenuOpen, onPointerDown }: {
+const KanbanCard = memo(function KanbanCard({ game, detail, entry, rating, journalCount, sectionCount, language, dragging, selected, accentColor, t, columnKey, columnIndex, onOpen, onSetPriority, onSelect, onContextMenuOpen, onPointerDown }: {
   game: OwnedGame;
   detail: GameDetails | undefined;
   entry: DiaryEntry | undefined;
@@ -1205,6 +1316,7 @@ const KanbanCard = memo(function KanbanCard({ game, detail, entry, rating, journ
   columnKey: string;
   columnIndex: number;
   onOpen: (appId: number) => void;
+  onSetPriority: (appId: number, priority: DiaryPriority) => void;
   onSelect: (appId: number, columnKey: string, index: number, mode: "replace" | "toggle" | "range") => void;
   onContextMenuOpen: (event: ReactMouseEvent, appId: number) => void;
   onPointerDown: (appId: number, event: ReactPointerEvent) => void;
@@ -1246,6 +1358,20 @@ const KanbanCard = memo(function KanbanCard({ game, detail, entry, rating, journ
       onDoubleClick={() => onOpen(game.appid)}
       onContextMenu={(event) => onContextMenuOpen(event, game.appid)}
     >
+      <span className="absolute right-8 top-1 flex items-center gap-1 rounded-md bg-repressurizer-bg/90 px-1.5 py-1 opacity-0 shadow-pop-sm ring-1 ring-white/10 transition-opacity focus-within:opacity-100 group-hover/card:opacity-100">
+        {(["high", "normal", "low"] as DiaryPriority[]).map((priorityOption) => (
+          <button
+            key={priorityOption}
+            type="button"
+            data-testid={`diary-kanban-card-priority-${game.appid}-${priorityOption}`}
+            aria-label={`${t(`diary.priority.${priorityOption}`)}: ${game.name ?? ""}`}
+            title={t(`diary.priority.${priorityOption}`)}
+            onClick={(event) => { event.stopPropagation(); onSetPriority(game.appid, priorityOption); }}
+            className={`focus-ring h-3 w-3 rounded-full transition-transform hover:scale-125 ${priority === priorityOption ? "ring-2 ring-white/40" : "opacity-35 hover:opacity-80"}`}
+            style={{ backgroundColor: priorityOption === "high" ? "#fb7185" : priorityOption === "low" ? "#64748b" : "#e2e8f0" }}
+          />
+        ))}
+      </span>
       <button
         type="button"
         aria-label={`${t("diary.openGame")}: ${game.name ?? ""}`}

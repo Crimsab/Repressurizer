@@ -251,6 +251,10 @@ export function StatusBar({ showKanbanTip = false }: { showKanbanTip?: boolean }
     >
       <span className="shrink-0">{t("statusbar.games", { count: gameCount })}</span>
       <span className="shrink-0">{t("statusbar.categories", { count: categoryCount })}</span>
+      <span className="hidden shrink-0 items-center gap-1.5 text-repressurizer-text-muted lg:inline-flex" title={t("statusbar.palette")}>
+        <StatusBarKey>Ctrl+K</StatusBarKey>
+        <span>{t("statusbar.palette")}</span>
+      </span>
 
       {showKanbanTip && selectedCount === 0 && (
         <span

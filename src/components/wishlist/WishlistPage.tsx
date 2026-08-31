@@ -3,13 +3,15 @@ import { useGameStore } from "../../stores/gameStore";
 import { useWishlistStore } from "../../stores/wishlistStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import { fetchWishlist, fetchGameDetails, currencyToCountryCode } from "../../lib/tauri";
-import { X, BookmarkSimple, ArrowsClockwise, SortAscending, Export } from "@phosphor-icons/react";
+import { X, BookmarkSimple, ArrowsClockwise, SortAscending, Export, Bell, BellSlash } from "@phosphor-icons/react";
 import { SteamImage } from "../games/SteamImage";
 import { useT } from "../../lib/i18n";
 import { priceSnapshotForCurrency } from "../../lib/prices";
 import { scheduleOriginalReleaseDateFetch } from "../../lib/releaseDateQueue";
 import type { GameDetails } from "../../lib/types";
 import { DialogOverlay } from "../ui/DialogOverlay";
+import { SelectMenu } from "../ui/SelectMenu";
+import { ResizableDialogPanel } from "../ui/ResizableDialogPanel";
 
 interface WishlistPageProps {
   onClose: () => void;
@@ -29,7 +31,8 @@ function timeAgo(unixSecs: number, t: ReturnType<typeof useT>): string {
 
 export function WishlistPage({ onClose }: WishlistPageProps) {
   const t = useT();
-  const { steamId64, currency } = useSettingsStore();
+  const { steamId64, currency, saleNotifyEnabled, saleNotifyThreshold, saleAlertRules, setSettings } = useSettingsStore();
+  const [rulePopover, setRulePopover] = useState<{ appId: number; x: number; y: number } | null>(null);
   const details = useGameStore((s) => s.details);
   const items = useWishlistStore((s) => s.items);
   const lastFetched = useWishlistStore((s) => s.lastFetched);
@@ -164,7 +167,14 @@ export function WishlistPage({ onClose }: WishlistPageProps) {
       className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-sm pt-16 pb-8 px-4"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="flex h-full w-full max-w-3xl flex-col rounded-2xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_24px_80px_rgba(0,0,0,0.6)]">
+      <ResizableDialogPanel
+        dialogId="wishlist"
+        defaultSize={{ width: 860, height: 680 }}
+        minSize={{ width: 560, height: 420 }}
+        className="relative flex min-h-0 flex-col overflow-hidden rounded-2xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_24px_80px_rgba(0,0,0,0.6)] animate-fade-in"
+      >
+        {({ sizeControls }) => (
+        <>
         {/* Header */}
         <div className="flex items-center justify-between border-b border-repressurizer-border-subtle px-5 py-3.5">
           <div className="flex items-center gap-2.5">
@@ -208,13 +218,16 @@ export function WishlistPage({ onClose }: WishlistPageProps) {
               <ArrowsClockwise size={12} className={loading ? "animate-spin" : ""} />
               {t("wishlist.refresh")}
             </button>
-            <button
-              onClick={onClose}
-              aria-label={t("common.close")}
-              className="flex h-7 w-7 items-center justify-center rounded-lg text-repressurizer-text-muted transition-colors hover:bg-repressurizer-surface-hover hover:text-white"
-            >
-              <X size={16} weight="bold" />
-            </button>
+            <div className="flex items-center gap-1">
+              {sizeControls}
+              <button
+                onClick={onClose}
+                aria-label={t("common.close")}
+                className="flex h-7 w-7 items-center justify-center rounded-lg text-repressurizer-text-muted transition-colors hover:bg-repressurizer-surface-hover hover:text-white"
+              >
+                <X size={16} weight="bold" />
+              </button>
+            </div>
           </div>
         </div>
 
@@ -261,6 +274,29 @@ export function WishlistPage({ onClose }: WishlistPageProps) {
               />
               {t("wishlist.onSale")}
             </label>
+            <label className={`flex items-center gap-1.5 text-[11px] ${saleNotifyEnabled ? "text-repressurizer-text" : "text-repressurizer-text-faint"}`}>
+              <input
+                type="checkbox"
+                data-testid="wishlist-notify-toggle"
+                checked={saleNotifyEnabled}
+                onChange={(e) => setSettings({ saleNotifyEnabled: e.target.checked })}
+                className="h-3 w-3 accent-[var(--color-repressurizer-accent)]"
+              />
+              {t("wishlist.notify.enable")}
+            </label>
+            {saleNotifyEnabled && (
+              <select
+                data-testid="wishlist-notify-threshold"
+                value={saleNotifyThreshold}
+                onChange={(e) => setSettings({ saleNotifyThreshold: Number(e.target.value) })}
+                aria-label={t("wishlist.notify.threshold")}
+                className="rounded-md border border-repressurizer-border-subtle bg-repressurizer-bg px-1.5 py-0.5 text-[11px] text-repressurizer-text outline-none"
+              >
+                {[30, 40, 50, 60, 70, 80].map((value) => (
+                  <option key={value} value={value}>-{value}%</option>
+                ))}
+              </select>
+            )}
           </div>
         )}
 
@@ -321,6 +357,21 @@ export function WishlistPage({ onClose }: WishlistPageProps) {
 
                     {/* Added date */}
                     {d && <WishlistPrice details={d} currency={currency} />}
+                    {saleNotifyEnabled && (
+                      <button
+                        type="button"
+                        data-testid={`wishlist-notify-rule-${item.appid}`}
+                        aria-label={`${t("wishlist.notify.rule")}: ${name}`}
+                        title={t("wishlist.notify.rule")}
+                        onClick={(event) => {
+                          const rect = event.currentTarget.getBoundingClientRect();
+                          setRulePopover({ appId: item.appid, x: Math.min(rect.left, window.innerWidth - 260), y: Math.min(rect.bottom + 6, window.innerHeight - 190) });
+                        }}
+                        className={`focus-ring shrink-0 rounded-md p-1 transition-colors hover:bg-repressurizer-surface-hover ${saleAlertRules[item.appid]?.mode === "off" ? "text-repressurizer-text-faint" : saleAlertRules[item.appid] ? "text-repressurizer-accent" : "text-repressurizer-text-muted"}`}
+                      >
+                        {saleAlertRules[item.appid]?.mode === "off" ? <BellSlash size={13} /> : <Bell size={13} />}
+                      </button>
+                    )}
                     {item.date_added > 0 && (
                       <span className="shrink-0 text-[11px] text-repressurizer-text-faint">
                         {timeAgo(item.date_added, t)}
@@ -332,8 +383,91 @@ export function WishlistPage({ onClose }: WishlistPageProps) {
             </div>
           )}
         </div>
-      </div>
+      </>
+        )}
+      </ResizableDialogPanel>
+      {rulePopover && (
+        <SaleRulePopover
+          appId={rulePopover.appId}
+          x={rulePopover.x}
+          y={rulePopover.y}
+          onClose={() => setRulePopover(null)}
+        />
+      )}
     </DialogOverlay>
+  );
+}
+
+function SaleRulePopover({ appId, x, y, onClose }: { appId: number; x: number; y: number; onClose: () => void }) {
+  const t = useT();
+  const { saleAlertRules, setSettings } = useSettingsStore();
+  const rule = saleAlertRules[appId];
+  const mode = rule?.mode ?? "default";
+  const value = rule?.value ?? 0;
+  const setRule = (next: { mode: "off" | "percent" | "price"; value: number } | null) => {
+    const rules = { ...saleAlertRules };
+    if (next) rules[appId] = next;
+    else delete rules[appId];
+    setSettings({ saleAlertRules: rules });
+  };
+
+  useEffect(() => {
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest("[data-sale-rule-popover]") && !target.closest('[role="listbox"]') && !target.closest('[role="option"]')) onClose();
+    };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [onClose]);
+
+  return (
+    <div
+      data-sale-rule-popover
+      data-testid="wishlist-rule-popover"
+      className="animate-fade-in fixed z-[70] w-60 rounded-xl border border-repressurizer-border bg-repressurizer-surface-raised/95 p-3 shadow-dialog backdrop-blur-md"
+      style={{ left: x, top: y }}
+    >
+      <div className="min-w-0 flex-1">
+        <SelectMenu<"default" | "off" | "percent" | "price">
+          value={mode}
+          options={[
+            { value: "default", label: t("wishlist.notify.rule.default") },
+            { value: "off", label: t("wishlist.notify.rule.off") },
+            { value: "percent", label: t("wishlist.notify.rule.percent") },
+            { value: "price", label: t("wishlist.notify.rule.price") },
+          ]}
+          onChange={(next) => {
+            if (next === "default") setRule(null);
+            else setRule({ mode: next, value: value || (next === "percent" ? 50 : 10) });
+          }}
+          ariaLabel={t("wishlist.notify.rule")}
+          size="sm"
+          buttonClassName="border-repressurizer-border-subtle bg-repressurizer-bg text-[11px]"
+        />
+      </div>
+      {(mode === "percent" || mode === "price") && (
+        <label className="mt-2 flex items-center gap-2 text-[11px] text-repressurizer-text-muted">
+          <span className="shrink-0">{mode === "percent" ? t("wishlist.notify.rule.percent") : t("wishlist.notify.rule.price")}</span>
+          <input
+            type="number"
+            min={0}
+            max={mode === "percent" ? 90 : 1000}
+            value={value}
+            data-testid="wishlist-rule-value"
+            onChange={(event) => setRule({ mode, value: Math.max(0, Math.floor(Number(event.target.value) || 0)) })}
+            className="w-20 rounded-md border border-repressurizer-border bg-repressurizer-bg px-2 py-1 text-[11px] text-repressurizer-text outline-none"
+          />
+          {mode === "percent" ? "%" : ""}
+        </label>
+      )}
+    </div>
   );
 }
 

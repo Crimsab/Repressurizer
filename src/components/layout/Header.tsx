@@ -194,7 +194,8 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
   const [showAutoCat, setShowAutoCat] = useState(false);
   const [showStats, setShowStats] = useState(false);
   const [showAchievements, setShowAchievements] = useState(false);
-  const [showWishlist, setShowWishlist] = useState(false);
+  const [achievementsView, setAchievementsView] = useState<"manager" | "hunter">("manager");
+    const [showWishlist, setShowWishlist] = useState(false);
   const [showFriendCompare, setShowFriendCompare] = useState(false);
   const [showRecommend, setShowRecommend] = useState(false);
   const [showTimeline, setShowTimeline] = useState(false);
@@ -226,7 +227,7 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
     { key: "deck-pack", label: t("toolbar.deckPack"), Icon: Backpack, open: () => setShowDeckPack(true), loader: loadPackMyDeck, badge: 0 },
     { key: "community-packs", label: t("toolbar.communityPacks"), Icon: Package, open: () => setShowCommunityPacks(true), loader: loadCommunityRulePacks, badge: 0 },
     { key: "metadata-health", label: t("toolbar.metadataHealth"), Icon: Pulse, open: () => setShowMetadataHealth(true), loader: loadMetadataHealth, badge: 0 },
-    { key: "achievements", label: t("toolbar.achievements"), Icon: Trophy, open: () => setShowAchievements(true), loader: loadAchievementsPage, badge: 0 },
+    { key: "achievements", label: t("toolbar.achievements"), Icon: Trophy, open: () => { setAchievementsView("manager"); setShowAchievements(true); }, loader: loadAchievementsPage, badge: 0 },
     { key: "wishlist", label: t("toolbar.wishlist"), Icon: BookmarkSimple, open: () => setShowWishlist(true), loader: loadWishlistPage, badge: 0 },
     { key: "friends", label: t("toolbar.friendCompare"), Icon: UsersThree, open: () => setShowFriendCompare(true), loader: loadFriendCompareDialog, badge: 0 },
     { key: "recommend", label: t("toolbar.recommend"), Icon: GameController, open: () => setShowRecommend(true), loader: loadWhatToPlayNext, badge: 0 },
@@ -284,6 +285,49 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
     return () => {
       unlisten?.();
     };
+  }, []);
+
+  useEffect(() => {
+    const onOpenTool = (event: Event) => {
+      switch ((event as CustomEvent<string>).detail) {
+        case "settings":
+          setShowSettings(true);
+          break;
+        case "export":
+          setShowExport(true);
+          break;
+        case "stats":
+          setShowStats(true);
+          break;
+        case "hunter":
+          setAchievementsView("hunter");
+          setShowAchievements(true);
+          break;
+        case "achievements":
+          setAchievementsView("manager");
+          setShowAchievements(true);
+          break;
+        case "wishlist":
+          setShowWishlist(true);
+          break;
+        case "recommend":
+          setShowRecommend(true);
+          break;
+        case "profiles":
+          setShowProfiles(true);
+          break;
+        case "storage":
+          setShowStorage(true);
+          break;
+        case "deck-pack":
+          setShowDeckPack(true);
+          break;
+        default:
+          break;
+      }
+    };
+    window.addEventListener("repressurizer-open-tool", onOpenTool);
+    return () => window.removeEventListener("repressurizer-open-tool", onOpenTool);
   }, []);
 
   useEffect(() => {
@@ -658,7 +702,7 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
 
       {showAchievements && (
         <LazyOverlay>
-          <AchievementsPage onClose={() => setShowAchievements(false)} />
+          <AchievementsPage onClose={() => setShowAchievements(false)} initialView={achievementsView} />
         </LazyOverlay>
       )}
       {showWishlist && (

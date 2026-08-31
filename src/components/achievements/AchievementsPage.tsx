@@ -7,13 +7,16 @@ import { X, Trophy, ArrowsClockwise } from "@phosphor-icons/react";
 import { SteamImage } from "../games/SteamImage";
 import { useT } from "../../lib/i18n";
 import { DialogOverlay } from "../ui/DialogOverlay";
+import { ResizableDialogPanel } from "../ui/ResizableDialogPanel";
+import { AchievementHunterContent } from "./AchievementHunter";
 
 interface AchievementsPageProps {
   onClose: () => void;
   onOpenGame?: (game: OwnedGame) => void;
+  initialView?: "manager" | "hunter";
 }
 
-export function AchievementsPage({ onClose, onOpenGame }: AchievementsPageProps) {
+export function AchievementsPage({ onClose, onOpenGame, initialView }: AchievementsPageProps) {
   const t = useT();
   const games = useGameStore((s) => s.games);
   const details = useGameStore((s) => s.details);
@@ -26,6 +29,7 @@ export function AchievementsPage({ onClose, onOpenGame }: AchievementsPageProps)
   const stopAchievementsFetch = useBackgroundFetchStore((s) => s.stopAchievementsFetch);
 
   const [onlyIncomplete, setOnlyIncomplete] = useState(true);
+  const [view, setView] = useState<"manager" | "hunter">(initialView ?? "manager");
 
   // Games that have achievements according to details
   const achievementGames = useMemo(() => {
@@ -70,28 +74,47 @@ export function AchievementsPage({ onClose, onOpenGame }: AchievementsPageProps)
       className="fixed inset-0 z-50 flex items-start justify-center bg-black/70 backdrop-blur-sm pt-16 pb-8 px-4"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="flex h-full w-full max-w-3xl flex-col rounded-2xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_24px_80px_rgba(0,0,0,0.6)]">
+      <ResizableDialogPanel
+        dialogId="achievements"
+        defaultSize={{ width: 860, height: 680 }}
+        minSize={{ width: 560, height: 420 }}
+        className="relative flex min-h-0 flex-col overflow-hidden rounded-2xl border border-repressurizer-border bg-repressurizer-surface shadow-[0_24px_80px_rgba(0,0,0,0.6)] animate-fade-in"
+      >
+        {({ sizeControls }) => (
+        <>
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-repressurizer-border-subtle px-5 py-3.5">
-          <div className="flex items-center gap-2.5">
-            <Trophy size={18} className="text-repressurizer-accent" weight="fill" />
-            <div>
-              <h2 className="text-base font-semibold text-white leading-tight">{t("achievements.title")}</h2>
-              <p className="text-[10px] text-repressurizer-text-faint">{t("achievements.subtitle")}</p>
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-repressurizer-border-subtle px-5 py-3.5">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <Trophy size={18} className="shrink-0 text-repressurizer-accent" weight="fill" />
+            <div className="min-w-0">
+              <h2 className="truncate text-base font-semibold text-white leading-tight">{t("achievements.title")}</h2>
+              <p className="truncate text-[10px] text-repressurizer-text-faint">{t("achievements.subtitle")}</p>
             </div>
             <span className="rounded-full bg-repressurizer-bg px-2 py-0.5 text-[11px] font-mono text-repressurizer-text-faint">
               {t("achievements.loaded", { fetched: fetchedCount, total: achievementGames.length })}
             </span>
           </div>
-          <div className="flex items-center gap-2">
-            {/* Only incomplete toggle */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex shrink-0 items-center gap-0.5 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-bg p-0.5">
+              {(["manager", "hunter"] as const).map((tab) => (
+                <button
+                  key={tab}
+                  type="button"
+                  data-testid={`achievements-tab-${tab}`}
+                  onClick={() => setView(tab)}
+                  className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition-colors ${view === tab ? "bg-repressurizer-accent/15 text-repressurizer-accent" : "text-repressurizer-text-muted hover:text-repressurizer-text"}`}
+                >
+                  {t(tab === "manager" ? "achievements.tab.manager" : "achievements.tab.hunter")}
+                </button>
+              ))}
+            </div>
             <button
               onClick={() => setOnlyIncomplete(!onlyIncomplete)}
-              className={`rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                onlyIncomplete
+              aria-hidden={view !== "manager"}
+              tabIndex={view === "manager" ? 0 : -1}
+              className={`rounded-lg border px-2.5 py-1 text-[11px] font-medium transition-colors ${view !== "manager" ? "invisible" : onlyIncomplete
                   ? "border-repressurizer-accent bg-repressurizer-accent/10 text-repressurizer-accent"
-                  : "border-repressurizer-border-subtle bg-repressurizer-bg text-repressurizer-text-muted hover:text-repressurizer-text"
-              }`}
+                  : "border-repressurizer-border-subtle bg-repressurizer-bg text-repressurizer-text-muted hover:text-repressurizer-text"}`}
             >
               {t("achievements.incompleteOnly")}
             </button>
@@ -117,17 +140,23 @@ export function AchievementsPage({ onClose, onOpenGame }: AchievementsPageProps)
               </button>
             )}
 
-            <button
-              onClick={onClose}
-              aria-label={t("common.close")}
-              className="flex h-7 w-7 items-center justify-center rounded-lg text-repressurizer-text-muted transition-colors hover:bg-repressurizer-surface-hover hover:text-white"
-            >
-              <X size={16} weight="bold" />
-            </button>
+            <div className="flex items-center gap-1">
+              {sizeControls}
+              <button
+                onClick={onClose}
+                aria-label={t("common.close")}
+                className="flex h-7 w-7 items-center justify-center rounded-lg text-repressurizer-text-muted transition-colors hover:bg-repressurizer-surface-hover hover:text-white"
+              >
+                <X size={16} weight="bold" />
+              </button>
+            </div>
           </div>
         </div>
 
         {/* Body */}
+        {view === "hunter" ? (
+          <AchievementHunterContent />
+        ) : (
         <div className="flex-1 overflow-auto">
           {noDetails ? (
             <div className="flex flex-col items-center justify-center gap-3 py-20 text-repressurizer-text-faint">
@@ -205,7 +234,10 @@ export function AchievementsPage({ onClose, onOpenGame }: AchievementsPageProps)
             </div>
           )}
         </div>
-      </div>
+        )}
+        </>
+        )}
+      </ResizableDialogPanel>
     </DialogOverlay>
   );
 }

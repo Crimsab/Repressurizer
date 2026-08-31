@@ -43,6 +43,8 @@ export function makeDiaryActionSnapshot(
       customColumns: boardPrefs.customColumns.map((column) => ({ ...column })),
       columnOrder: [...boardPrefs.columnOrder],
       customAssignments: { ...boardPrefs.customAssignments },
+      columnSorts: Object.fromEntries(Object.entries(boardPrefs.columnSorts).map(([key, sort]) => [key, { ...sort }])),
+      columnWipLimits: { ...boardPrefs.columnWipLimits },
       removedAppIds: [...boardPrefs.removedAppIds],
     },
   };

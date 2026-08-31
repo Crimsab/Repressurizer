@@ -423,6 +423,11 @@ export interface CategoryChipStyleSettings {
   showRemoveButton: boolean;
 }
 
+export interface SaleAlertRule {
+  mode: "off" | "percent" | "price";
+  value: number;
+}
+
 export interface AppSettings {
   steamPath: string;
   steamId3: string;
@@ -491,6 +496,10 @@ export interface AppSettings {
   checkUpdatesOnStartup: boolean;
   updateAutoCheckIntervalHours: number;
   updateChannel: "stable" | "beta";
+  saleNotifyEnabled: boolean;
+  saleNotifyThreshold: number;
+  saleAlertRules: Record<string, SaleAlertRule>;
+  saleNotifiedSales: Record<string, number>;
   autoRefreshLibraryEnabled: boolean;
   libraryAutoRefreshIntervalMinutes: number;
   // Automation export

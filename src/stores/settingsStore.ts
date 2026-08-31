@@ -104,6 +104,10 @@ const defaults: AppSettings = {
   checkUpdatesOnStartup: true,
   updateAutoCheckIntervalHours: 12,
   updateChannel: "stable",
+  saleNotifyEnabled: false,
+  saleNotifyThreshold: 50,
+  saleAlertRules: {},
+  saleNotifiedSales: {},
   autoRefreshLibraryEnabled: false,
   libraryAutoRefreshIntervalMinutes: 30,
   automationPublishEnabled: false,
@@ -269,6 +273,26 @@ function normalizeSettings(raw: Partial<AppSettings>): AppSettings {
           8,
         ),
     updateChannel: raw.updateChannel === "beta" ? "beta" : "stable",
+    saleNotifyEnabled: raw.saleNotifyEnabled === true,
+    saleNotifyThreshold: clampInteger(raw.saleNotifyThreshold, defaults.saleNotifyThreshold, 10, 90),
+    saleAlertRules: Object.fromEntries(
+      Object.entries(raw.saleAlertRules && typeof raw.saleAlertRules === "object" ? raw.saleAlertRules : {})
+        .filter(([key, rule]) => {
+          if (!/^\d+$/.test(key) || !rule || typeof rule !== "object") return false;
+          const candidate = rule as { mode?: unknown; value?: unknown };
+          return (candidate.mode === "off" || candidate.mode === "percent" || candidate.mode === "price") && typeof candidate.value === "number";
+        })
+        .map(([key, rule]) => {
+          const candidate = rule as { mode: "off" | "percent" | "price"; value: number };
+          return [key, { mode: candidate.mode, value: Math.max(0, Math.floor(candidate.value)) }];
+        })
+        .slice(0, 5000),
+    ),
+    saleNotifiedSales: Object.fromEntries(
+      Object.entries(raw.saleNotifiedSales && typeof raw.saleNotifiedSales === "object" ? raw.saleNotifiedSales : {})
+        .filter(([, value]) => typeof value === "number")
+        .slice(0, 5000),
+    ),
     automationPublishPayload: normalizeAutomationPublishPayload(raw.automationPublishPayload),
     mcpPermissionMode: raw.mcpPermissionMode === "manageLibrary" || raw.mcpPermissionMode === "full"
       ? raw.mcpPermissionMode

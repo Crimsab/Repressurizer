@@ -79,6 +79,8 @@ import { DiaryFinishPrompt } from "./components/diary/DiaryFinishPrompt";
 import { StatusBar } from "./components/layout/StatusBar";
 import { FilterBar } from "./components/layout/FilterBar";
 import { ToastContainer } from "./components/ui/Toast";
+import { CommandPalette } from "./components/layout/CommandPalette";
+import { checkWishlistSales } from "./lib/wishlistSales";
 import { DialogOverlay } from "./components/ui/DialogOverlay";
 import { UpdateChangelogDialog } from "./components/ui/UpdateChangelogDialog";
 import {
@@ -837,6 +839,16 @@ function AppContent() {
   };
   installUpdateRef.current = installUpdate;
 
+  useEffect(() => {
+    const run = () => void checkWishlistSales();
+    const initial = window.setTimeout(run, 20000);
+    const timer = window.setInterval(run, 6 * 60 * 60 * 1000);
+    return () => {
+      window.clearTimeout(initial);
+      window.clearInterval(timer);
+    };
+  }, []);
+
   // Load cached data from Rust file cache on startup
   useEffect(() => {
     if (!interactiveStartupReady) return;
@@ -1140,6 +1152,7 @@ export default function App() {
     <ErrorBoundary>
       <AppContent />
       <ToastContainer />
+      <CommandPalette />
     </ErrorBoundary>
   );
 }
