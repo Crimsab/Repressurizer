@@ -1030,6 +1030,7 @@ mod cli_client_tests {
     }
 }
 
+#[cfg(test)]
 mod tests {
     use super::{
         decode_cursor, encode_cursor, is_authorized, list_games, percent_decode, split_target,
