@@ -15,6 +15,7 @@ mod app_data;
 mod native_crash;
 mod runtime_cache;
 mod updater;
+mod portable_update;
 #[cfg(test)]
 use app_data::validate_app_data_key;
 pub(crate) use app_data::{
@@ -181,10 +182,40 @@ fn set_webview_memory_target(window: &tauri::WebviewWindow, low: bool) {
     }
 }
 
+fn disable_browser_accelerator_keys(window: &tauri::WebviewWindow) {
+    #[cfg(target_os = "windows")]
+    {
+        if let Err(error) = window.with_webview(|webview| {
+            use webview2_com::Microsoft::Web::WebView2::Win32::ICoreWebView2Settings3;
+            use windows_core::Interface;
+
+            let result = unsafe {
+                webview
+                    .controller()
+                    .CoreWebView2()
+                    .and_then(|core| core.Settings())
+                    .and_then(|settings| settings.cast::<ICoreWebView2Settings3>())
+                    .and_then(|settings| settings.SetAreBrowserAcceleratorKeysEnabled(false))
+            };
+
+            if let Err(error) = result {
+                log::debug!("Failed to disable WebView2 browser accelerator keys: {}", error);
+            }
+        }) {
+            log::debug!("Failed to access webview for accelerator keys: {}", error);
+        }
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = window;
+    }
+}
+
 fn show_main_window(app: &tauri::AppHandle) {
     match ensure_main_window(app) {
         Ok(window) => {
             set_webview_memory_target(&window, false);
+            disable_browser_accelerator_keys(&window);
             let _ = window.show();
             let _ = window.unminimize();
             let _ = window.set_focus();
@@ -873,6 +904,7 @@ pub fn run() {
         .manage(integration_runtime::IntegrationRuntime::new())
         .setup(|app| {
             configure_windows_app_identity();
+            portable_update::cleanup_stale_update_files();
             if !app_channel::claim_cross_channel_instance() {
                 app.handle().exit(0);
                 return Ok(());
@@ -1201,6 +1233,9 @@ pub fn run() {
             delete_diary_backup,
             local_integration_status,
             hltb::fetch_hltb,
+            portable_update::portable_update_check,
+            portable_update::portable_update_download,
+            portable_update::portable_update_apply,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Repressurizer");

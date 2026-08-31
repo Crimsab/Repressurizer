@@ -1122,15 +1122,15 @@ test("diary backup restore previews a selective file diff", async ({ page }, tes
   await expect(preview).toHaveCount(0);
 });
 
-test("portable builds explain manual updates without offering in-place installation", async ({ page }, testInfo) => {
+test("portable builds offer the portable self-update flow", async ({ page }, testInfo) => {
   await page.goto("/?updater-kind=windows-portable");
   await page.getByRole("button", { name: "Settings" }).click();
   const settingsDialog = page.getByRole("dialog", { name: "Settings" });
   await settingsDialog.getByRole("button", { name: "About", exact: true }).click();
 
-  await expect(settingsDialog.getByText("Portable builds do not update in place.", { exact: false })).toBeVisible();
-  await expect(settingsDialog.getByRole("button", { name: "Open GitHub Releases" })).toBeVisible();
-  await expect(settingsDialog.getByRole("button", { name: "Check for updates" })).toHaveCount(0);
+  await expect(settingsDialog.getByRole("button", { name: "Check for updates" })).toBeVisible();
+  await expect(settingsDialog.getByText("Portable builds do not update in place.", { exact: false })).toHaveCount(0);
+  await expect(settingsDialog.getByRole("button", { name: "Open GitHub Releases" })).toHaveCount(0);
   await expect(settingsDialog.getByText("Automatically check for updates")).toHaveCount(0);
   await expectNoHorizontalOverflow(page);
 

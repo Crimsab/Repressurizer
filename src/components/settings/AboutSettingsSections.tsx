@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-shell";
 import type { Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
@@ -25,6 +26,12 @@ import { ChangelogPanel } from "./data/SettingsDataPanels";
 
 const UPDATE_CHECK_INTERVAL_OPTIONS = [6, 12, 24, 72, 168] as const;
 
+interface PortableUpdateInfo {
+  version: string;
+  url: string;
+  sha256: string;
+}
+
 interface AboutSettingsSectionsProps {
   isSectionVisible: (id: string) => boolean;
   onReset: () => void;
@@ -39,6 +46,8 @@ export function AboutSettingsSections({
   const [checkingUpdates, setCheckingUpdates] = useState(false);
   const [installingUpdate, setInstallingUpdate] = useState(false);
   const [availableUpdate, setAvailableUpdate] = useState<Update | null>(null);
+  const [portableUpdate, setPortableUpdate] = useState<PortableUpdateInfo | null>(null);
+  const [installingPortable, setInstallingPortable] = useState(false);
   const [startupContext, setStartupContext] = useState<StartupContext | null>(null);
   const [updateMessage, setUpdateMessage] = useState<{
     text: string;
@@ -76,13 +85,28 @@ export function AboutSettingsSections({
   const updaterCanInstall = startupContext === null
     ? true
     : startupContext.updaterCanInstall && Boolean(startupContext.updaterTarget);
+  const isPortable = startupContext?.updaterKind === "windows-portable";
   const updateChannel: UpdateChannel = settings.updateChannel ?? "stable";
 
   const handleCheckUpdates = async () => {
     setCheckingUpdates(true);
     setAvailableUpdate(null);
+    setPortableUpdate(null);
     setUpdateMessage(null);
     try {
+      if (isPortable) {
+        const info = await invoke<PortableUpdateInfo | null>("portable_update_check", {
+          currentVersion: __APP_VERSION__,
+        });
+        setPortableUpdate(info);
+        setUpdateMessage({
+          text: info
+            ? t("settings.updates.available", { version: info.version })
+            : t("settings.updates.current"),
+          tone: "success",
+        });
+        return;
+      }
       if (!startupContext?.updaterTarget) {
         throw new Error(t("settings.updates.targetUnavailable"));
       }
@@ -120,6 +144,29 @@ export function AboutSettingsSections({
     }
   };
 
+  const handlePortableInstall = async () => {
+    if (!portableUpdate) return;
+    setInstallingPortable(true);
+    setUpdateMessage(null);
+    try {
+      await invoke("portable_update_download", {
+        url: portableUpdate.url,
+        expectedSha256: portableUpdate.sha256,
+      });
+      setUpdateMessage({
+        text: t("settings.updates.portable.downloading"),
+        tone: "success",
+      });
+      await invoke("portable_update_apply");
+    } catch (error) {
+      setUpdateMessage({
+        text: t("settings.updates.installFailed", { error: String(error) }),
+        tone: "error",
+      });
+      setInstallingPortable(false);
+    }
+  };
+
   return (
     <>
       {isSectionVisible("updates") && (
@@ -137,10 +184,10 @@ export function AboutSettingsSections({
               </span>
             )}
           </p>
-          {updaterCanInstall ? (
+          {updaterCanInstall || isPortable ? (
             <button
               onClick={handleCheckUpdates}
-              disabled={checkingUpdates || installingUpdate}
+              disabled={checkingUpdates || installingUpdate || installingPortable}
               className="btn-press mt-3 flex w-full items-start gap-3 rounded-lg border border-repressurizer-border-subtle bg-repressurizer-surface/50 px-3 py-2.5 text-left transition-colors hover:border-repressurizer-border disabled:opacity-50"
             >
               <CloudArrowDown
@@ -195,6 +242,17 @@ export function AboutSettingsSections({
               {installingUpdate
                 ? t("settings.updates.installing")
                 : t("settings.updates.install", { version: availableUpdate.version })}
+            </button>
+          )}
+          {isPortable && portableUpdate && (
+            <button
+              onClick={handlePortableInstall}
+              disabled={installingPortable}
+              className="btn-press mt-3 w-full rounded-lg bg-repressurizer-accent px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-repressurizer-accent-hover disabled:opacity-50"
+            >
+              {installingPortable
+                ? t("settings.updates.portable.downloading")
+                : t("settings.updates.portable.install", { version: portableUpdate.version })}
             </button>
           )}
           {updateMessage && (
