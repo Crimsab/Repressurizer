@@ -1,4 +1,6 @@
 const RELEASE_HIGHLIGHTS: Record<string, string> = {
+  "0.8.5":
+    "This update adds a Ctrl+K command palette with categorized views, tools and games, an Achievement Hunter tab inside the Achievements dialog, Kanban hover priority quick actions with per-column WIP limits, per-game wishlist sale alerts, a standalone HTML library export, a CLI local API client, portable self-update with staged replace, and unified resizable dialog chrome.",
   "0.8.4":
     "This update makes Kanban columns easier to reorder: column drag works again in the desktop app, the columns popover shows a live board order and always fits on screen, Ctrl+A toggles a column selection, and a new view option hides empty columns.",
   "0.8.3":
