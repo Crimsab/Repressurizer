@@ -122,7 +122,7 @@ pub struct ProxyTestResult {
 struct HttpPolicyState {
     settings: ProxySettings,
     counters: HashMap<&'static str, u64>,
-    clients: HashMap<(HttpProxyScope, String, String), reqwest::Client>,
+    clients: HashMap<(HttpProxyScope, String, [u8; 32]), reqwest::Client>,
 }
 
 static HTTP_POLICY: OnceLock<Mutex<HttpPolicyState>> = OnceLock::new();
@@ -223,11 +223,8 @@ fn pooled_client(
 ) -> Result<reqwest::Client, String> {
     let profile = choose_proxy_profile_in_state(state, scope)?;
     let profile_data = serde_json::to_vec(&profile).map_err(|error| error.to_string())?;
-    let key = (
-        scope,
-        user_agent.unwrap_or_default().to_string(),
-        format!("{:x}", Sha256::digest(profile_data)),
-    );
+    let fingerprint: [u8; 32] = Sha256::digest(profile_data).into();
+    let key = (scope, user_agent.unwrap_or_default().to_string(), fingerprint);
     if let Some(client) = state.clients.get(&key) {
         return Ok(client.clone());
     }
@@ -398,9 +395,42 @@ mod pool_tests {
         }
         assert_eq!(state.clients.len(), 2);
         assert_eq!(state.counters.get("steamStore"), Some(&4));
-        assert!(state
-            .clients
-            .keys()
-            .all(|(_, _, fingerprint)| !fingerprint.contains("test-password")));
+        // A credential change must select a different pool even for the same proxy.
+        state.settings.profiles[0].password = "changed-password".into();
+        pooled_client(&mut state, HttpProxyScope::SteamStore, None).unwrap();
+        assert_eq!(state.clients.len(), 3);
+        for _ in 0..3 {
+            pooled_client(&mut state, HttpProxyScope::SteamStore, None).unwrap();
+        }
+        assert_eq!(state.clients.len(), 3);
+    }
+
+    #[tokio::test]
+    async fn direct_pool_key_uses_raw_sha256_bytes() {
+        let mut state = HttpPolicyState::default();
+        pooled_client(&mut state, HttpProxyScope::SteamStore, None).unwrap();
+        // SHA-256 of the serialized absent proxy profile: `null`.
+        let expected: [u8; 32] = [
+            0x74, 0x23, 0x4e, 0x98, 0xaf, 0xe7, 0x49, 0x8f, 0xb5, 0xda, 0xf1, 0xf3, 0x6a, 0xc2,
+            0xd7, 0x8a, 0xcc, 0x33, 0x94, 0x64, 0xf9, 0x50, 0x70, 0x3b, 0x8c, 0x01, 0x98, 0x92,
+            0xf9, 0x82, 0xb9, 0x0b,
+        ];
+        let key = (HttpProxyScope::SteamStore, String::new(), expected);
+        assert!(state.clients.contains_key(&key));
+    }
+
+    #[tokio::test]
+    async fn pools_do_not_mix_request_scopes() {
+        let mut state = HttpPolicyState::default();
+        for scope in [
+            HttpProxyScope::SteamApi,
+            HttpProxyScope::SteamStore,
+            HttpProxyScope::Hltb,
+            HttpProxyScope::Automation,
+        ] {
+            pooled_client(&mut state, scope, Some("test-agent")).unwrap();
+            pooled_client(&mut state, scope, Some("test-agent")).unwrap();
+        }
+        assert_eq!(state.clients.len(), 4);
     }
 }
