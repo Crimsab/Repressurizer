@@ -224,7 +224,11 @@ fn pooled_client(
     let profile = choose_proxy_profile_in_state(state, scope)?;
     let profile_data = serde_json::to_vec(&profile).map_err(|error| error.to_string())?;
     let fingerprint: [u8; 32] = Sha256::digest(profile_data).into();
-    let key = (scope, user_agent.unwrap_or_default().to_string(), fingerprint);
+    let key = (
+        scope,
+        user_agent.unwrap_or_default().to_string(),
+        fingerprint,
+    );
     if let Some(client) = state.clients.get(&key) {
         return Ok(client.clone());
     }
