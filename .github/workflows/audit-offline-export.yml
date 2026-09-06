@@ -1,0 +1,36 @@
+name: Export audit test workspace
+on:
+  push:
+    branches: [fix/performance-audit-2026-09-06]
+    paths: ['.github/workflows/audit-offline-export.yml']
+permissions:
+  contents: read
+jobs:
+  export:
+    if: github.repository == 'Crimsab/Repressurizer' && github.ref == 'refs/heads/fix/performance-audit-2026-09-06'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version-file: .bun-version
+      - run: bun install --frozen-lockfile
+      - name: Package source and isolated test tools
+        run: |
+          set -eu
+          mkdir /tmp/audit-workspace
+          git archive HEAD | gzip > /tmp/audit-workspace/source.tar.gz
+          tar --exclude='*.woff' --exclude='*.woff2' --exclude='*.ttf' --exclude='*.otf' --exclude='*.eot' -czf /tmp/audit-workspace/node-deps.tar.gz node_modules
+          gzip -c "$(command -v bun)" > /tmp/audit-workspace/bun.gz
+          git rev-parse HEAD > /tmp/audit-workspace/commit.txt
+          cd /tmp/audit-workspace
+          sha256sum source.tar.gz node-deps.tar.gz bun.gz > SHA256SUMS
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: audit-offline-test-workspace
+          path: /tmp/audit-workspace/
+          compression-level: 0
+          retention-days: 2
