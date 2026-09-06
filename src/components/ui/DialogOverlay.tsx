@@ -72,7 +72,7 @@ export function DialogOverlay({
     if (event.key === "Escape") {
       // SelectMenu is portalled to document.body so it can escape dialog overflow.
       // Let the open menu consume the first Escape before closing the dialog.
-      if (document.querySelector('[role="listbox"]')) return;
+      if (document.querySelector('[data-select-menu-popover="true"]')) return;
       event.preventDefault();
       onClose();
       return;

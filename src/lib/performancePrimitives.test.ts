@@ -123,3 +123,12 @@ describe("shared request pool", () => {
     expect(await two).toBe(2);
   });
 });
+
+describe("durable flush errors", () => {
+  it("surfaces a failed background write until a newer snapshot repairs it", async () => {
+    await enqueuePersistence("test-durable-error", () => "old", async () => { throw Error("disk unavailable"); }).catch(() => {});
+    await expect(flushPersistence("test-durable-error")).rejects.toThrow("disk unavailable");
+    await enqueuePersistence("test-durable-error", () => "new", async () => {});
+    await expect(flushPersistence("test-durable-error")).resolves.toBeUndefined();
+  });
+});

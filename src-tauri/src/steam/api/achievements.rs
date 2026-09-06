@@ -1,7 +1,7 @@
 use serde::Deserialize;
 use std::collections::HashMap;
 
-use crate::http_policy::{client_builder_for_scope, HttpProxyScope};
+use crate::http_policy::{client_for_scope, HttpProxyScope};
 
 use super::types::{AchievementInfo, AchievementSummary};
 use super::utils::request_error;
@@ -55,9 +55,7 @@ pub async fn fetch_achievements(
     steam_id64: String,
     app_id: u64,
 ) -> Result<AchievementSummary, String> {
-    let client = client_builder_for_scope(HttpProxyScope::SteamApi)?
-        .build()
-        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+    let client = client_for_scope(HttpProxyScope::SteamApi, None)?;
 
     // Fetch player achievements
     let player_resp = client
@@ -162,9 +160,7 @@ pub async fn fetch_achievements_summary(
     steam_id64: String,
     app_id: u64,
 ) -> Result<(u32, u32), String> {
-    let client = client_builder_for_scope(HttpProxyScope::SteamApi)?
-        .build()
-        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+    let client = client_for_scope(HttpProxyScope::SteamApi, None)?;
 
     let resp = client
         .get("https://api.steampowered.com/ISteamUserStats/GetPlayerAchievements/v1/")

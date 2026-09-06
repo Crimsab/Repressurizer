@@ -2567,5 +2567,6 @@
   "achievements.tab.hunter": "Av",
   "palette.actions": "Hızlı eylemler",
   "palette.tools": "Araçlar",
-  "common.retry": "Yeniden dene"
+  "common.retry": "Yeniden dene",
+  "games.libraryLabel": "Oyun kütüphanesi"
 }

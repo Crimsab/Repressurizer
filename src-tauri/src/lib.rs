@@ -12,6 +12,7 @@ pub mod mcp;
 pub mod steam;
 
 mod app_data;
+mod io_task;
 mod native_crash;
 mod portable_update;
 mod runtime_cache;
@@ -463,13 +464,20 @@ fn preserve_newer_automation_status(incoming: &mut serde_json::Value, current: &
 
 // Generic app data persistence — any store can save/load by key
 #[tauri::command]
-fn load_app_data(_app: tauri::AppHandle, key: String) -> Result<Option<String>, String> {
-    let path = app_data_file_path(&key)?;
-    read_optional_text_file(&path, "app data file")
+async fn load_app_data(_app: tauri::AppHandle, key: String) -> Result<Option<String>, String> {
+    io_task::run(move || {
+        let path = app_data_file_path(&key)?;
+        read_optional_text_file(&path, "app data file")
+    })
+    .await
 }
 
 #[tauri::command]
-fn save_app_data(app: tauri::AppHandle, key: String, data: String) -> Result<(), String> {
+async fn save_app_data(app: tauri::AppHandle, key: String, data: String) -> Result<(), String> {
+    io_task::run(move || save_app_data_blocking(app, key, data)).await
+}
+
+fn save_app_data_blocking(app: tauri::AppHandle, key: String, data: String) -> Result<(), String> {
     let path = app_data_file_path(&key)?;
     if key == "settings.json" {
         // Release the settings lock before reconciling the runtime. The
@@ -492,6 +500,7 @@ fn save_app_data(app: tauri::AppHandle, key: String, data: String) -> Result<(),
             write_text_file_atomic(&path, &merged, "app data file", true)
         };
         if result.is_ok() {
+            automation::notify_settings_changed();
             if let Some(runtime) = app.try_state::<integration_runtime::IntegrationRuntime>() {
                 if let Err(error) = runtime.sync_from_settings() {
                     log::error!("Failed to reconcile local integration runtime: {error}");

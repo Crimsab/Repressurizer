@@ -453,6 +453,8 @@ export const useGameStore = create<GameState>((set, get) => ({
         }
         if (changed) persistDetailsCache(cleaned);
         set({ details: cleaned });
+        // A migration is complete only after its replacement snapshot is written.
+        if (changed) await flushPersistence("details_cache.json");
       }
     } catch {
       // cache miss or parse error — start fresh

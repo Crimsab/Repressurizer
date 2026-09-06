@@ -2567,5 +2567,6 @@
   "achievements.tab.hunter": "狩猎",
   "palette.actions": "快捷操作",
   "palette.tools": "工具",
-  "common.retry": "重试"
+  "common.retry": "重试",
+  "games.libraryLabel": "游戏库"
 }

@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-use crate::http_policy::{client_builder_for_scope, HttpProxyScope};
+use crate::http_policy::{client_for_scope, HttpProxyScope};
 
 use super::types::SteamReviewSummary;
 
@@ -29,10 +29,10 @@ pub async fn fetch_steam_review_summary(app_id: u64) -> Result<SteamReviewSummar
         app_id
     );
 
-    let client = client_builder_for_scope(HttpProxyScope::SteamStore)?
-        .user_agent(format!("Repressurizer/{}", env!("CARGO_PKG_VERSION")))
-        .build()
-        .map_err(|e| e.to_string())?;
+    let client = client_for_scope(
+        HttpProxyScope::SteamStore,
+        Some(&format!("Repressurizer/{}", env!("CARGO_PKG_VERSION"))),
+    )?;
     let response = client
         .get(&url)
         .send()

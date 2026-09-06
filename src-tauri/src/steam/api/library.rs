@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-use crate::http_policy::{client_builder_for_scope, HttpProxyScope};
+use crate::http_policy::{client_for_scope, HttpProxyScope};
 
 use super::types::{OwnedGame, SteamAppListItem};
 use super::utils::request_error;
@@ -33,9 +33,7 @@ pub(super) struct SteamAppListInner {
 }
 
 pub async fn fetch_library(api_key: String, steam_id64: String) -> Result<Vec<OwnedGame>, String> {
-    let client = client_builder_for_scope(HttpProxyScope::SteamApi)?
-        .build()
-        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+    let client = client_for_scope(HttpProxyScope::SteamApi, None)?;
     let response = client
         .get("https://api.steampowered.com/IPlayerService/GetOwnedGames/v1/")
         .query(&[
@@ -69,10 +67,7 @@ pub async fn fetch_steam_app_list(api_key: String) -> Result<Vec<SteamAppListIte
         return Err("Steam Web API key is required to refresh the Steam app index.".to_string());
     }
 
-    let client = client_builder_for_scope(HttpProxyScope::SteamApi)?
-        .user_agent("Repressurizer/0.1")
-        .build()
-        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+    let client = client_for_scope(HttpProxyScope::SteamApi, Some("Repressurizer/0.1"))?;
 
     let mut apps = Vec::new();
     let mut last_appid = 0u64;

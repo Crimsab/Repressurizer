@@ -125,63 +125,87 @@ fn diagnostics_payload(steam_path: &str, steam_id3: &str, steam_id64: &str) -> s
 }
 
 #[tauri::command]
-pub(crate) fn load_details_cache(_app: tauri::AppHandle) -> Option<String> {
-    load_named_cache("details_cache.json")
+pub(crate) async fn load_details_cache(_app: tauri::AppHandle) -> Option<String> {
+    crate::io_task::run(|| Ok(load_named_cache("details_cache.json")))
+        .await
+        .ok()
+        .flatten()
 }
 
 #[tauri::command]
-pub(crate) fn save_details_cache(_app: tauri::AppHandle, data: String) -> Result<(), String> {
-    save_named_cache("details_cache.json", data)
+pub(crate) async fn save_details_cache(_app: tauri::AppHandle, data: String) -> Result<(), String> {
+    crate::io_task::run(move || save_named_cache("details_cache.json", data)).await
 }
 
 #[tauri::command]
-pub(crate) fn load_hltb_cache(_app: tauri::AppHandle) -> Option<String> {
-    load_named_cache("hltb_cache.json")
+pub(crate) async fn load_hltb_cache(_app: tauri::AppHandle) -> Option<String> {
+    crate::io_task::run(|| Ok(load_named_cache("hltb_cache.json")))
+        .await
+        .ok()
+        .flatten()
 }
 
 #[tauri::command]
-pub(crate) fn save_hltb_cache(_app: tauri::AppHandle, data: String) -> Result<(), String> {
-    save_named_cache("hltb_cache.json", data)
+pub(crate) async fn save_hltb_cache(_app: tauri::AppHandle, data: String) -> Result<(), String> {
+    crate::io_task::run(move || save_named_cache("hltb_cache.json", data)).await
 }
 
 #[tauri::command]
-pub(crate) fn load_failed_cache(_app: tauri::AppHandle) -> Option<String> {
-    load_named_cache("failed_games.json")
+pub(crate) async fn load_failed_cache(_app: tauri::AppHandle) -> Option<String> {
+    crate::io_task::run(|| Ok(load_named_cache("failed_games.json")))
+        .await
+        .ok()
+        .flatten()
 }
 
 #[tauri::command]
-pub(crate) fn save_failed_cache(_app: tauri::AppHandle, data: String) -> Result<(), String> {
-    save_named_cache("failed_games.json", data)
+pub(crate) async fn save_failed_cache(_app: tauri::AppHandle, data: String) -> Result<(), String> {
+    crate::io_task::run(move || save_named_cache("failed_games.json", data)).await
 }
 
 #[tauri::command]
-pub(crate) fn load_achievements_cache(_app: tauri::AppHandle) -> Option<String> {
-    load_named_cache("achievements.json")
+pub(crate) async fn load_achievements_cache(_app: tauri::AppHandle) -> Option<String> {
+    crate::io_task::run(|| Ok(load_named_cache("achievements.json")))
+        .await
+        .ok()
+        .flatten()
 }
 
 #[tauri::command]
-pub(crate) fn save_achievements_cache(_app: tauri::AppHandle, data: String) -> Result<(), String> {
-    save_named_cache("achievements.json", data)
+pub(crate) async fn save_achievements_cache(
+    _app: tauri::AppHandle,
+    data: String,
+) -> Result<(), String> {
+    crate::io_task::run(move || save_named_cache("achievements.json", data)).await
 }
 
 #[tauri::command]
-pub(crate) fn load_friends_cache(_app: tauri::AppHandle) -> Option<String> {
-    load_named_cache("friends.json")
+pub(crate) async fn load_friends_cache(_app: tauri::AppHandle) -> Option<String> {
+    crate::io_task::run(|| Ok(load_named_cache("friends.json")))
+        .await
+        .ok()
+        .flatten()
 }
 
 #[tauri::command]
-pub(crate) fn save_friends_cache(_app: tauri::AppHandle, data: String) -> Result<(), String> {
-    save_named_cache("friends.json", data)
+pub(crate) async fn save_friends_cache(_app: tauri::AppHandle, data: String) -> Result<(), String> {
+    crate::io_task::run(move || save_named_cache("friends.json", data)).await
 }
 
 #[tauri::command]
-pub(crate) fn load_wishlist_cache(_app: tauri::AppHandle) -> Option<String> {
-    load_named_cache("wishlist.json")
+pub(crate) async fn load_wishlist_cache(_app: tauri::AppHandle) -> Option<String> {
+    crate::io_task::run(|| Ok(load_named_cache("wishlist.json")))
+        .await
+        .ok()
+        .flatten()
 }
 
 #[tauri::command]
-pub(crate) fn save_wishlist_cache(_app: tauri::AppHandle, data: String) -> Result<(), String> {
-    save_named_cache("wishlist.json", data)
+pub(crate) async fn save_wishlist_cache(
+    _app: tauri::AppHandle,
+    data: String,
+) -> Result<(), String> {
+    crate::io_task::run(move || save_named_cache("wishlist.json", data)).await
 }
 
 #[tauri::command]

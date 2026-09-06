@@ -1,6 +1,6 @@
 type Waiter = { resolve: () => void; reject: (error: unknown) => void };
 type Write = { serialize: () => string; write: (data: string) => Promise<unknown>; waiters: Waiter[] };
-type Queue = { pending?: Write; running?: Promise<void>; timer?: ReturnType<typeof setTimeout> };
+type Queue = { pending?: Write; running?: Promise<void>; timer?: ReturnType<typeof setTimeout>; failed?: { error: unknown } };
 const queues = new Map<string, Queue>();
 
 function drain(queue: Queue): Promise<void> {
@@ -13,8 +13,10 @@ function drain(queue: Queue): Promise<void> {
       queue.pending = undefined;
       try {
         await job.write(job.serialize());
+        queue.failed = undefined;
         job.waiters.forEach(({ resolve }) => resolve());
       } catch (error) {
+        queue.failed = { error };
         job.waiters.forEach(({ reject }) => reject(error));
       }
     }
@@ -46,5 +48,7 @@ export async function flushPersistence(key?: string): Promise<void> {
   const selected = key === undefined ? [...queues.values()] : [queues.get(key)].filter((q): q is Queue => !!q);
   await Promise.all(selected.map(async (queue) => {
     do { await drain(queue); } while (queue.pending || queue.running);
+    if (queue.failed) throw queue.failed.error;
   }));
+  if (key === undefined && [...queues.values()].some((queue) => queue.pending || queue.running || queue.timer)) await flushPersistence();
 }

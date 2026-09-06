@@ -2567,5 +2567,6 @@
   "achievements.tab.hunter": "Caza",
   "palette.actions": "Acciones rápidas",
   "palette.tools": "Herramientas",
-  "common.retry": "Reintentar"
+  "common.retry": "Reintentar",
+  "games.libraryLabel": "Biblioteca de juegos"
 }

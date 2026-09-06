@@ -423,7 +423,7 @@ export function GameGrid() {
   return (
     <>
       {viewMode === "list" ? (
-        <div ref={virtual.containerRef} style={virtual.style} role="listbox" aria-multiselectable="true" aria-label="Game library" className="space-y-0.5" onClick={handleBackgroundClick}>
+        <div ref={virtual.containerRef} style={virtual.style} role="listbox" aria-multiselectable="true" aria-label={t("games.libraryLabel")} className="space-y-0.5" onClick={handleBackgroundClick}>
           {visibleGames.map((game) => (
             <GameListRow
               key={game.appid}
@@ -442,7 +442,7 @@ export function GameGrid() {
           style={virtual.style}
           role="listbox"
           aria-multiselectable="true"
-          aria-label="Game library"
+          aria-label={t("games.libraryLabel")}
           className="game-grid grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3"
           onClick={handleBackgroundClick}
         >

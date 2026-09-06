@@ -210,7 +210,7 @@ pub(crate) fn write_text_file_atomic(
     description: &str,
     sync_to_disk: bool,
 ) -> Result<(), String> {
-    write_text_file_atomic_validated(path, data, description, sync_to_disk, |_| Ok(()))
+    write_text_file_atomic_impl(path, data, description, sync_to_disk, |_| Ok(()), false)
 }
 
 pub(crate) fn write_text_file_atomic_validated<F>(
@@ -219,6 +219,20 @@ pub(crate) fn write_text_file_atomic_validated<F>(
     description: &str,
     sync_to_disk: bool,
     validate: F,
+) -> Result<(), String>
+where
+    F: Fn(&str) -> Result<(), String>,
+{
+    write_text_file_atomic_impl(path, data, description, sync_to_disk, validate, true)
+}
+
+fn write_text_file_atomic_impl<F>(
+    path: &Path,
+    data: &str,
+    description: &str,
+    sync_to_disk: bool,
+    validate: F,
+    verify_after_write: bool,
 ) -> Result<(), String>
 where
     F: Fn(&str) -> Result<(), String>,
@@ -266,16 +280,18 @@ where
         }
         drop(file);
 
-        let written = std::fs::read_to_string(&temporary_path).map_err(|error| {
-            format!(
-                "Failed to verify temporary {} {}: {}",
-                description,
-                temporary_path.display(),
-                error
-            )
-        })?;
-        validate(&written)
-            .map_err(|error| format!("Temporary {description} failed validation: {error}"))?;
+        if verify_after_write {
+            let written = std::fs::read_to_string(&temporary_path).map_err(|error| {
+                format!(
+                    "Failed to verify temporary {} {}: {}",
+                    description,
+                    temporary_path.display(),
+                    error
+                )
+            })?;
+            validate(&written)
+                .map_err(|error| format!("Temporary {description} failed validation: {error}"))?;
+        }
 
         replace_file(&temporary_path, path).map_err(|error| {
             format!(
@@ -328,7 +344,10 @@ where
         .map_err(|_| "Settings file lock poisoned".to_string())?;
     let mut settings = read_settings_json_unlocked()?;
     update(&mut settings)?;
-    write_settings_json_unlocked(&settings)
+    write_settings_json_unlocked(&settings)?;
+    drop(_guard);
+    crate::automation::notify_settings_changed();
+    Ok(())
 }
 
 /// Serialize integration mutations across processes, not only across threads

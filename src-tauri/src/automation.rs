@@ -16,7 +16,12 @@ use snapshot::build_snapshot;
 
 const SNAPSHOT_SCHEMA_VERSION: &str = "repressurizer.library-snapshot.v1";
 const STARTUP_DELAY: Duration = Duration::from_secs(10);
-const POLL_DELAY: Duration = Duration::from_secs(60);
+const RETRY_DELAY: Duration = Duration::from_secs(60);
+static SETTINGS_CHANGED: tokio::sync::Notify = tokio::sync::Notify::const_new();
+
+pub(crate) fn notify_settings_changed() {
+    SETTINGS_CHANGED.notify_one();
+}
 static AUTOMATION_PUBLISH_RUNNING: AtomicBool = AtomicBool::new(false);
 
 struct AutomationPublishGuard;
@@ -177,12 +182,66 @@ pub fn start_worker(_app: tauri::AppHandle) {
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(STARTUP_DELAY).await;
         loop {
+            let settings = crate::io_task::run(|| {
+                read_settings_value().and_then(|value| parse_settings(&value))
+            })
+            .await;
+            let delay = if AUTOMATION_PUBLISH_RUNNING.load(Ordering::Acquire) {
+                Some(RETRY_DELAY)
+            } else {
+                match settings {
+                    Ok(ref settings) => next_publish_delay(settings, Utc::now()),
+                    Err(_) => None,
+                }
+            };
+            let Some(delay) = delay else {
+                // No polling while disabled or not configured. All supported
+                // settings writers notify this task after a successful commit.
+                SETTINGS_CHANGED.notified().await;
+                continue;
+            };
+            if !delay.is_zero() {
+                tokio::select! {
+                    _ = tokio::time::sleep(delay) => {},
+                    _ = SETTINGS_CHANGED.notified() => continue,
+                }
+            }
             if let Err(error) = publish_once(false).await {
                 log::warn!("Automation export worker failed: {}", error);
+                tokio::select! {
+                    _ = tokio::time::sleep(RETRY_DELAY) => {},
+                    _ = SETTINGS_CHANGED.notified() => {},
+                }
             }
-            tokio::time::sleep(POLL_DELAY).await;
         }
     });
+}
+
+fn next_publish_delay(
+    settings: &AutomationSettings,
+    now: chrono::DateTime<Utc>,
+) -> Option<Duration> {
+    if !settings.setup_complete
+        || !settings.automation_publish_enabled
+        || settings.automation_publish_url.trim().is_empty()
+    {
+        return None;
+    }
+    let base = [
+        parse_timestamp(&settings.automation_publish_last_published_at),
+        parse_timestamp(&settings.automation_publish_last_attempted_at),
+    ]
+    .into_iter()
+    .flatten()
+    .max();
+    let Some(base) = base else {
+        return Some(Duration::ZERO);
+    };
+    let hours = settings.automation_publish_interval_hours.clamp(1, 8_760) as i64;
+    (base + chrono::Duration::hours(hours) - now)
+        .to_std()
+        .ok()
+        .or(Some(Duration::ZERO))
 }
 
 pub fn trigger_publish_now() {
@@ -381,13 +440,7 @@ async fn post_json(url: &str, body: &str, bearer_token: Option<&str>) -> Result<
 }
 
 fn publish_due(settings: &AutomationSettings) -> bool {
-    let base = parse_timestamp(&settings.automation_publish_last_published_at)
-        .or_else(|| parse_timestamp(&settings.automation_publish_last_attempted_at));
-    let Some(base) = base else {
-        return true;
-    };
-    let interval_hours = settings.automation_publish_interval_hours.max(1) as i64;
-    Utc::now() - base >= chrono::Duration::hours(interval_hours)
+    next_publish_delay(settings, Utc::now()).is_some_and(|delay| delay.is_zero())
 }
 
 fn parse_timestamp(value: &str) -> Option<chrono::DateTime<Utc>> {
@@ -669,5 +722,33 @@ mod tests {
         assert_eq!(settings["theme"], "light");
         assert_eq!(settings["automationPublishLastStatus"], "success");
         assert_eq!(settings["automationPublishLastChecksum"], "checksum");
+    }
+}
+
+#[cfg(test)]
+mod scheduling_tests {
+    use super::*;
+    #[test]
+    fn disabled_workers_have_no_poll_deadline() {
+        assert_eq!(
+            next_publish_delay(&AutomationSettings::default(), Utc::now()),
+            None
+        );
+    }
+    #[test]
+    fn a_recent_failed_or_unchanged_attempt_prevents_an_immediate_retry_loop() {
+        let now = Utc::now();
+        let settings = AutomationSettings {
+            setup_complete: true,
+            automation_publish_enabled: true,
+            automation_publish_url: "https://example.test".into(),
+            automation_publish_interval_hours: 1,
+            automation_publish_last_published_at: (now - chrono::Duration::days(2)).to_rfc3339(),
+            automation_publish_last_attempted_at: now.to_rfc3339(),
+            ..Default::default()
+        };
+        let delay = next_publish_delay(&settings, now).unwrap();
+        assert!(delay > Duration::from_secs(3_590));
+        assert!(delay <= Duration::from_secs(3_600));
     }
 }

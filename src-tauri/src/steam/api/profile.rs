@@ -1,15 +1,13 @@
 use serde::Deserialize;
 use std::collections::HashMap;
 
-use crate::http_policy::{client_builder_for_scope, HttpProxyScope};
+use crate::http_policy::{client_for_scope, HttpProxyScope};
 
 use super::types::{FriendSummary, PlayerSummary};
 use super::utils::request_error;
 
 pub async fn resolve_vanity_url(api_key: String, vanity_url: String) -> Result<String, String> {
-    let client = client_builder_for_scope(HttpProxyScope::SteamApi)?
-        .build()
-        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+    let client = client_for_scope(HttpProxyScope::SteamApi, None)?;
     let text = client
         .get("https://api.steampowered.com/ISteamUser/ResolveVanityURL/v1/")
         .query(&[
@@ -47,9 +45,7 @@ pub async fn fetch_player_summary(
     api_key: String,
     steam_id64: String,
 ) -> Result<PlayerSummary, String> {
-    let client = client_builder_for_scope(HttpProxyScope::SteamApi)?
-        .build()
-        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+    let client = client_for_scope(HttpProxyScope::SteamApi, None)?;
     let text = client
         .get("https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/")
         .query(&[("key", api_key.as_str()), ("steamids", steam_id64.as_str())])
@@ -98,9 +94,7 @@ pub async fn fetch_friend_list(
     api_key: String,
     steam_id64: String,
 ) -> Result<Vec<FriendSummary>, String> {
-    let client = client_builder_for_scope(HttpProxyScope::SteamApi)?
-        .build()
-        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+    let client = client_for_scope(HttpProxyScope::SteamApi, None)?;
     let text = client
         .get("https://api.steampowered.com/ISteamUser/GetFriendList/v1/")
         .query(&[

@@ -2,7 +2,7 @@ use chrono::Datelike;
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
 
-use crate::http_policy::{client_builder_for_scope, HttpProxyScope};
+use crate::http_policy::{client_for_scope, HttpProxyScope};
 
 use super::types::{GameDetails, GamePriceOverview, PlatformSupport, StoreReleaseDateResult};
 
@@ -119,10 +119,7 @@ pub async fn fetch_game_details(
     app_id: u64,
     country_code: Option<String>,
 ) -> Result<GameDetails, String> {
-    let client = client_builder_for_scope(HttpProxyScope::SteamStore)?
-        .user_agent(STEAM_STORE_USER_AGENT)
-        .build()
-        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+    let client = client_for_scope(HttpProxyScope::SteamStore, Some(STEAM_STORE_USER_AGENT))?;
 
     let requested_cc = country_code.unwrap_or_default().trim().to_ascii_lowercase();
     let mut attempts: Vec<Option<&str>> = Vec::new();
@@ -147,12 +144,21 @@ pub async fn fetch_game_details(
         match fetch_game_details_with_country(&client, app_id, cc).await {
             Ok(details) => return Ok(details),
             Err(error) => {
+                if !regional_fallback_allowed(&error) {
+                    return Err(error);
+                }
                 last_error = error;
             }
         }
     }
 
     Err(last_error)
+}
+
+fn regional_fallback_allowed(error: &str) -> bool {
+    error.starts_with("Store API returned failure for app ")
+        || error == "App not found in response"
+        || error == "No data in response"
 }
 
 pub async fn fetch_store_release_date(app_id: u64) -> Result<StoreReleaseDateResult, String> {
@@ -178,14 +184,8 @@ pub async fn fetch_store_release_dates(
         }
     }
 
-    let api_client = client_builder_for_scope(HttpProxyScope::SteamApi)?
-        .user_agent(STEAM_STORE_USER_AGENT)
-        .build()
-        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
-    let store_client = client_builder_for_scope(HttpProxyScope::SteamStore)?
-        .user_agent(STEAM_STORE_USER_AGENT)
-        .build()
-        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+    let api_client = client_for_scope(HttpProxyScope::SteamApi, Some(STEAM_STORE_USER_AGENT))?;
+    let store_client = client_for_scope(HttpProxyScope::SteamStore, Some(STEAM_STORE_USER_AGENT))?;
 
     let mut by_app_id = HashMap::new();
     let mut first_error: Option<String> = None;
@@ -338,10 +338,7 @@ pub async fn fetch_game_price_overviews(
         return Ok(Vec::new());
     }
 
-    let client = client_builder_for_scope(HttpProxyScope::SteamStore)?
-        .user_agent(STEAM_STORE_USER_AGENT)
-        .build()
-        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+    let client = client_for_scope(HttpProxyScope::SteamStore, Some(STEAM_STORE_USER_AGENT))?;
 
     let requested_cc = country_code.unwrap_or_default().trim().to_ascii_lowercase();
     let attempts = price_country_attempts(&requested_cc);
@@ -530,6 +527,20 @@ async fn fetch_game_details_with_country(
         .await
         .map_err(|e| format!("HTTP request failed: {}", e))?;
 
+    let status = response.status();
+    if !status.is_success() {
+        let retry_after = response
+            .headers()
+            .get(reqwest::header::RETRY_AFTER)
+            .and_then(|value| value.to_str().ok())
+            .unwrap_or("unknown");
+        return Err(format!(
+            "Steam Store returned HTTP {} for app {}; Retry-After: {}",
+            status.as_u16(),
+            app_id,
+            retry_after
+        ));
+    }
     let text = response
         .text()
         .await
@@ -711,4 +722,24 @@ fn parse_supported_languages(raw: &str) -> Vec<String> {
             }
         })
         .collect()
+}
+
+#[cfg(test)]
+mod fallback_policy_tests {
+    use super::regional_fallback_allowed;
+    #[test]
+    fn only_regional_unavailability_uses_another_country() {
+        assert!(regional_fallback_allowed(
+            "Store API returned failure for app 10"
+        ));
+        assert!(regional_fallback_allowed("App not found in response"));
+        for error in [
+            "Steam Store returned HTTP 429 for app 10",
+            "Steam Store returned HTTP 503 for app 10",
+            "HTTP request failed: timed out",
+            "Failed to parse store response",
+        ] {
+            assert!(!regional_fallback_allowed(error));
+        }
+    }
 }

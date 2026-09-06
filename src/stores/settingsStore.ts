@@ -1,4 +1,4 @@
-import { enqueuePersistence } from "../lib/persistenceQueue";
+import { enqueuePersistence, flushPersistence } from "../lib/persistenceQueue";
 import { invalidateRuntime } from "../lib/runtimeGeneration";
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
@@ -322,7 +322,7 @@ function syncHttpPolicy(proxySettings: AppSettings["proxySettings"]) {
   // Browser previews and documentation builds do not expose the Tauri bridge.
   // Skipping the native-only command there keeps the console actionable while
   // Tauri and the E2E bridge continue to receive the policy normally.
-  if (typeof window !== "undefined" && !("__TAURI_INTERNALS__" in window)) return;
+  if (typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) return;
   try {
     invoke("configure_http_policy", { settings: proxySettings }).catch((error) => {
       lastHttpPolicy = "";
@@ -399,16 +399,20 @@ function darkenHex(hex: string, amount: number): string {
   return rgbToHex(r * (1 - amount), g * (1 - amount), b * (1 - amount));
 }
 
+let settingsRevision = 0;
 const initialSettings = loadFromStorage();
 
 export const useSettingsStore = create<SettingsState>((set) => ({
   ...initialSettings,
   hydrateFromDisk: async () => {
+    const revision = settingsRevision;
     try {
+      await flushPersistence("settings.json");
       const raw = await invoke<string | null>("load_app_data", { key: "settings.json" });
       if (!raw) return;
       const parsed = JSON.parse(raw) as Partial<AppSettings>;
       set((state) => {
+        if (settingsRevision !== revision) return state;
         const next = normalizeSettings({ ...state, ...parsed });
         if (next.steamId64 !== state.steamId64 || next.steamId3 !== state.steamId3 || next.steamPath !== state.steamPath) invalidateRuntime();
         try { localStorage.setItem("repressurizer-settings", JSON.stringify(next)); } catch {}
@@ -424,10 +428,12 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       if (Object.entries(settings).every(([key, value]) => Object.is(state[key as keyof AppSettings], value))) return state;
       const next = normalizeSettings({ ...state, ...settings });
       if (next.steamId64 !== state.steamId64 || next.steamId3 !== state.steamId3 || next.steamPath !== state.steamPath) invalidateRuntime();
+      settingsRevision += 1;
       saveToStorage(next);
       return next;
     }),
   reset: () => {
+    settingsRevision += 1;
     invalidateRuntime();
     saveToStorage(defaults);
     set(defaults);
