@@ -53,7 +53,7 @@ the affected keys per locale.
 Run `bun run i18n:status` to print the current table, or `bun run i18n:status:write` to refresh this generated block.
 
 <!-- localization-status:start -->
-Canonical locale: `en`. Total canonical keys: 2568.
+Canonical locale: `en`. Total canonical keys: 2569.
 
 | Locale | Key coverage | Translated coverage | English fallback | Missing | Extra | Placeholder issues |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |

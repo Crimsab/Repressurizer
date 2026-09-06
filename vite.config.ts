@@ -33,7 +33,7 @@ export default defineConfig({
           if (!id.includes("node_modules")) return undefined;
           if (id.includes("@tauri-apps")) return "vendor-tauri";
           if (id.includes("@phosphor-icons")) return "vendor-icons";
-          if (id.includes("react") || id.includes("scheduler")) return "vendor-react";
+          if (/node_modules\/(react|react-dom|scheduler)\//.test(id.replaceAll("\\", "/"))) return "vendor-react";
           if (id.includes("zustand")) return "vendor-state";
           if (id.includes("html-to-image")) return "vendor-export";
           return "vendor";

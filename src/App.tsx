@@ -1,3 +1,8 @@
+import { captureCollectionOperation, canReplaceCollections, isCurrentProfile } from "./lib/collectionOperations";
+import { scopedListener } from "./lib/asyncListener";
+import { isEditingText } from "./lib/keyboardTarget";
+import { flushPersistence } from "./lib/persistenceQueue";
+import { runtimeGeneration } from "./lib/runtimeGeneration";
 import { Component, lazy, Suspense, useEffect, useRef, useState } from "react";
 import type { ReactNode, ErrorInfo } from "react";
 import type { Update } from "@tauri-apps/plugin-updater";
@@ -72,7 +77,7 @@ import { useT } from "./lib/i18n";
 import { Header } from "./components/layout/Header";
 import { Sidebar } from "./components/layout/sidebar/Sidebar";
 import { GameGrid } from "./components/games/GameGrid";
-import { DiaryPage } from "./components/diary/DiaryPage";
+const DiaryPage = lazy(() => import("./components/diary/DiaryPage").then((module) => ({ default: module.DiaryPage })));
 import { useDiaryStore } from "./stores/diaryStore";
 import { createDiaryBackup, deleteDiaryBackup, listDiaryBackups } from "./lib/tauri";
 import { DiaryFinishPrompt } from "./components/diary/DiaryFinishPrompt";
@@ -178,7 +183,7 @@ function ErrorScreen({ error, onReset }: { error: string; onReset: () => void })
           className="btn-press inline-flex items-center gap-2 rounded-lg bg-repressurizer-surface border border-repressurizer-border px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-repressurizer-surface-hover focus-ring"
         >
           <ArrowCounterClockwise size={16} weight="bold" />
-          {t("app.error.resetSetup")}
+          {t("common.retry")}
         </button>
       </div>
     </div>
@@ -257,6 +262,19 @@ function AppContent() {
   const reloadLibraryRef = useRef<(notify?: boolean, startupBackup?: boolean) => Promise<void>>(async () => {});
   const publishAutomationRef = useRef<(notify?: boolean, force?: boolean) => Promise<void>>(async () => {});
   const libraryRefreshRunningRef = useRef(false);
+  const criticalCacheRef = useRef<{ generation: number; ready: Promise<void> } | null>(null);
+  const ensureCriticalCaches = () => {
+    const generation = runtimeGeneration();
+    if (criticalCacheRef.current?.generation !== generation) {
+      const ready = Promise.all([
+        hydrateDetailsCache(), hydrateHltbCache(), hydrateFailedCache(),
+        hydrateHltbIgnored(), hydrateSteamRatings(), hydrateAppNames(),
+        hydrateSteamAppIndex(), hydrateStatuses(), hydrateTags(), hydrateReviews(),
+      ]).then(() => {});
+      criticalCacheRef.current = { generation, ready };
+    }
+    return criticalCacheRef.current!.ready;
+  };
   const libraryResumeRefreshStateRef = useRef<LibraryResumeRefreshState>({
     hiddenAt: null,
     lastRequestedAt: 0,
@@ -566,10 +584,13 @@ function AppContent() {
     const currentSettings = useSettingsStore.getState();
     if (!currentSettings.setupComplete || libraryRefreshRunningRef.current) return;
 
+    const operation = captureCollectionOperation();
     libraryRefreshRunningRef.current = true;
     setReloading(true);
     setReloadError("");
     try {
+      await ensureCriticalCaches();
+      if (!isCurrentProfile(operation)) return;
       if (!useLibraryInboxStore.getState().hydrated) {
         await useLibraryInboxStore.getState().hydrate();
       }
@@ -582,15 +603,18 @@ function AppContent() {
         useAppNameOverrideStore.getState().hydrate(),
         useAppIdImportStore.getState().hydrate(),
       ]);
+      if (!isCurrentProfile(operation)) return;
+      const replaceCollections = canReplaceCollections(operation);
+      const sourceCollections = replaceCollections ? collections : useCategoryStore.getState().collections;
       useProviderHealthStore.getState().record("steam-library", "success");
       const familyGames = useFamilyStore.getState().sharedGamesAsOwned();
       const cachedDetails = useGameStore.getState().details;
       const appIndex = useSteamAppIndexStore.getState().data;
-      const resolvedCollections = reconcileLinkedAppIdImports(
-        collections,
+      const resolvedCollections = replaceCollections ? reconcileLinkedAppIdImports(
+        sourceCollections,
         games.map((game) => game.appid),
         useAppIdImportStore.getState().batches,
-      );
+      ) : sourceCollections;
       const mergedGames = mergeCollectionOnlyGames(
         [...games, ...familyGames],
         resolvedCollections,
@@ -603,7 +627,7 @@ function AppContent() {
           ? mergedGames.filter((game) => !previousGameIds.has(game.appid)).length
           : 0;
       console.log("Reloaded:", mergedGames.length, "games,", resolvedCollections.length, "collections");
-      await appLog.info("Steam library refreshed", {
+      void appLog.info("Steam library refreshed", {
         games: mergedGames.length,
         collections: collections.length,
         newGames: newGameCount,
@@ -611,9 +635,11 @@ function AppContent() {
       setGames(mergedGames);
       setInstalledAppIds(installedAppIds);
       usePlayHistoryStore.getState().observeLibrary(mergedGames);
-      setCollections(collections);
-      if (resolvedCollections !== collections) {
-        useCategoryStore.getState().applyImportedCollections(resolvedCollections, "import");
+      if (replaceCollections) {
+        setCollections(collections);
+        if (resolvedCollections !== collections) {
+          useCategoryStore.getState().applyImportedCollections(resolvedCollections, "import");
+        }
       }
       const familyState = useFamilyStore.getState();
       useLibraryInboxStore.getState().observe({
@@ -632,6 +658,7 @@ function AppContent() {
       });
       useLibraryInboxStore.getState().observeProviderHealth(useProviderHealthStore.getState().providers);
       useSteamAppIndexStore.getState().ensureFresh(currentSettings.apiKey).then(() => {
+        if (!isCurrentProfile(operation)) return;
         const current = Object.values(useGameStore.getState().games);
         if (current.length > 0) useGameStore.getState().setGames(current);
       }).catch(() => {});
@@ -659,9 +686,10 @@ function AppContent() {
         await sendWorkflowNotification(message, true);
       }
     } catch (e) {
+      if (!isCurrentProfile(operation)) return;
       useProviderHealthStore.getState().recordError("steam-library", e);
       useLibraryInboxStore.getState().observeProviderHealth(useProviderHealthStore.getState().providers);
-      await appLog.error("Steam library refresh failed", { error: String(e) });
+      void appLog.error("Steam library refresh failed", { error: String(e) });
       setReloadError(String(e));
       toast.getState().error(`Failed to load library: ${e}`);
       await sendWorkflowNotification(`Failed to load library: ${e}`, notify, true);
@@ -687,21 +715,9 @@ function AppContent() {
       .catch(() => {});
   }, [interactiveStartupReady, settings.steamPersonaName, settings.apiKey, settings.steamId64]);
 
-  useEffect(() => {
-    let unlistenClose: (() => void) | undefined;
-    listen("repressurizer-close-requested", () => setShowCloseChoice(true))
-      .then((fn) => {
-        unlistenClose = fn;
-      })
-      .catch(() => {});
-    return () => {
-      unlistenClose?.();
-    };
-  }, []);
+  useEffect(() => scopedListener("repressurizer-close-requested", () => setShowCloseChoice(true)), []);
 
   useEffect(() => {
-    let unlistenShown: (() => void) | undefined;
-    let unlistenHidden: (() => void) | undefined;
     const handleHidden = () => {
       libraryResumeRefreshStateRef.current = markLibraryWindowHidden(
         libraryResumeRefreshStateRef.current,
@@ -714,16 +730,8 @@ function AppContent() {
         requestUpdateCheckAfterResume();
       }
     };
-    listen("repressurizer-window-shown", handleShown)
-      .then((fn) => {
-        unlistenShown = fn;
-      })
-      .catch(() => {});
-    listen("repressurizer-window-hidden", handleHidden)
-      .then((fn) => {
-        unlistenHidden = fn;
-      })
-      .catch(() => {});
+    const unlistenShown = scopedListener("repressurizer-window-shown", handleShown);
+    const unlistenHidden = scopedListener("repressurizer-window-hidden", handleHidden);
 
     const handleVisibilityChange = () => {
       if (document.visibilityState === "hidden") handleHidden();
@@ -829,6 +837,7 @@ function AppContent() {
     installingUpdateRef.current = true;
     setInstallingUpdate(true);
     try {
+      await flushPersistence();
       await update.downloadAndInstall();
       await relaunch();
     } catch (e) {
@@ -852,22 +861,13 @@ function AppContent() {
   // Load cached data from Rust file cache on startup
   useEffect(() => {
     if (!interactiveStartupReady) return;
-    hydrateDetailsCache();
-    hydrateHltbCache();
-    hydrateFailedCache();
+    void ensureCriticalCaches();
     hydrateFriends();
     hydrateWishlist();
     hydrateAchievements();
-    hydrateStatuses();
     hydrateNotes();
-    hydrateTags();
-    hydrateReviews();
-    hydrateHltbIgnored();
     hydrateFamily();
     hydratePlayHistory();
-    hydrateSteamAppIndex();
-    hydrateSteamRatings();
-    hydrateAppNames();
     hydrateProviderHealth();
     hydrateEntityJournal();
     hydrateLibraryInbox();
@@ -896,12 +896,12 @@ function AppContent() {
   useEffect(() => {
     if (!interactiveStartupReady) return;
     let previousReference = useCategoryStore.getState().collections;
-    let previous = structuredClone(previousReference);
+    let previous = previousReference;
     return useCategoryStore.subscribe((state) => {
       if (state.collections === previousReference) return;
       const before = previous;
       previousReference = state.collections;
-      previous = structuredClone(state.collections);
+      previous = state.collections;
       // The first Steam load establishes a baseline. Treating [] -> library as
       // a change made every launch claim that every collection/game was added.
       if (before.length === 0 && state._lastChangeOrigin === "steam") return;
@@ -938,20 +938,20 @@ function AppContent() {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement).tagName === "INPUT") return;
+      if (e.defaultPrevented || e.isComposing || isEditingText(e.target)) return;
       const store = useCategoryStore.getState();
-      if (e.ctrlKey && e.key === "z" && !e.shiftKey) {
+      if ((e.ctrlKey || e.metaKey) && e.key === "z" && !e.shiftKey) {
         e.preventDefault();
         store.undo();
       } else if (
-        (e.ctrlKey && e.key === "y") ||
-        (e.ctrlKey && e.shiftKey && e.key === "Z")
+        ((e.ctrlKey || e.metaKey) && e.key === "y") ||
+        ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "Z")
       ) {
         e.preventDefault();
         store.redo();
       }
       // Ctrl+F to focus search
-      if (e.ctrlKey && e.key === "f") {
+      if ((e.ctrlKey || e.metaKey) && e.key === "f") {
         e.preventDefault();
         const input = document.querySelector<HTMLInputElement>("[data-search-input]");
         input?.focus();
@@ -976,7 +976,7 @@ function AppContent() {
     );
   }
   if (reloading && gameCount === 0) return <LoadingScreen />;
-  if (reloadError) return <ErrorScreen error={reloadError} onReset={() => settings.reset()} />;
+  if (reloadError && gameCount === 0) return <ErrorScreen error={reloadError} onReset={() => { void reloadLibraryRef.current(true); }} />;
 
   return (
     <>
@@ -987,17 +987,23 @@ function AppContent() {
             void reloadLibraryRef.current(true).catch(() => {});
           }}
         />
+        {reloadError && gameCount > 0 && (
+          <div role="status" className="flex items-center gap-3 border-b border-repressurizer-border px-4 py-2 text-sm">
+            <span className="min-w-0 flex-1 truncate" title={reloadError}>{t("app.error.loadFailed")}: {reloadError}</span>
+            <button type="button" className="shrink-0" onClick={() => { void reloadLibraryRef.current(true); }}>{t("common.retry")}</button>
+          </div>
+        )}
         <div className="flex flex-1 overflow-hidden">
           <div className="hidden md:flex">
             <Sidebar />
           </div>
           <main className="flex flex-1 flex-col overflow-hidden">
             {activeCategory === "diary" && settings.showDiary ? (
-              <DiaryPage onKanbanVisibilityChange={setShowKanbanFooterTip} />
+              <Suspense fallback={<LoadingScreen />}><DiaryPage onKanbanVisibilityChange={setShowKanbanFooterTip} /></Suspense>
             ) : (
               <>
                 {settings.showFilterBar !== false && <FilterBar />}
-                <div className="flex-1 overflow-auto p-4">
+                <div data-library-scroll className="flex-1 overflow-auto p-4">
                   <GameGrid />
                 </div>
               </>

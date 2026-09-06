@@ -1,3 +1,6 @@
+import { memo, useDeferredValue } from "react";
+import { categoriesForGame } from "../../lib/collectionIndex";
+import { useVirtualLibrary } from "./useVirtualLibrary";
 import { lazy, Suspense, useMemo, useState, useCallback, useEffect, useRef } from "react";
 import { useGameStore } from "../../stores/gameStore";
 import { useCategoryStore } from "../../stores/categoryStore";
@@ -80,7 +83,9 @@ export function GameGrid() {
   const failedGames = useFailedGamesStore((s) => s.fails);
   const savedAdvancedFilters = useAdvancedFilterStore((s) => s.filters);
   const activeAdvancedFilterId = useAdvancedFilterStore((s) => s.activeFilterId);
-  const { activeCategory, collections } = useCategoryStore();
+  const activeCategory = useCategoryStore((s) => s.activeCategory);
+  const collections = useCategoryStore((s) => s.collections);
+  const deferredQuery = useDeferredValue(searchQuery);
   const lastClickedId = useRef<number | null>(null);
 
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
@@ -172,8 +177,8 @@ export function GameGrid() {
       gameList = gameList.filter((g) => installedAppIdSet.has(g.appid) === wantInstalled);
     }
 
-    if (searchQuery.trim()) {
-      const filter = parseSearchQuery(searchQuery);
+    if (deferredQuery.trim()) {
+      const filter = parseSearchQuery(deferredQuery);
       gameList = gameList.filter((g) =>
         matchesFilter(g, details[g.appid], statuses, allGameTags, reviews, filter, {
           hltbData,
@@ -296,11 +301,14 @@ export function GameGrid() {
       playing: 0, completed: 1, beaten: 2, abandoned: 3, none: 4,
     };
 
+    const releaseKeys = sortBy === "releaseDate" ? new Map(gameList.map((game) => [game.appid, releaseDateSortValue(bestAvailableReleaseDate(details[game.appid]))])) : null;
+    const priceKeys = sortBy === "price" ? new Map(gameList.map((game) => [game.appid, priceSortValue(details[game.appid], currency)])) : null;
+    const compareNames = new Intl.Collator().compare;
     gameList.sort((a, b) => {
       let cmp = 0;
       switch (sortBy) {
         case "name":
-          cmp = a.name.localeCompare(b.name);
+          cmp = compareNames(a.name, b.name);
           break;
         case "playtime":
           cmp = a.playtime_forever - b.playtime_forever;
@@ -344,10 +352,10 @@ export function GameGrid() {
           break;
         }
         case "releaseDate":
-          cmp = releaseDateSortValue(bestAvailableReleaseDate(details[a.appid])) - releaseDateSortValue(bestAvailableReleaseDate(details[b.appid]));
+          cmp = releaseKeys!.get(a.appid)! - releaseKeys!.get(b.appid)!;
           break;
         case "price":
-          cmp = priceSortValue(details[a.appid], currency) - priceSortValue(details[b.appid], currency);
+          cmp = priceKeys!.get(a.appid)! - priceKeys!.get(b.appid)!;
           break;
         case "userRating":
           cmp = (reviews[a.appid]?.rating ?? -1) - (reviews[b.appid]?.rating ?? -1);
@@ -363,17 +371,22 @@ export function GameGrid() {
     });
 
     return gameList;
-  }, [games, activeCategory, collections, familyApps, searchQuery, sortBy, sortAsc, filters, activeAdvancedFilter, statuses, allGameTags, hltbData, hltbTimeMode, achievementSummaries, details, reviews, steamRatings, hideCollectionOnlyGames, currency, duplicateAppIds, delistedAppIds, installedLibraryReady, installedAppIdSet]);
+  }, [games, activeCategory, collections, familyApps, deferredQuery, sortBy, sortAsc, filters, activeAdvancedFilter, statuses, allGameTags, hltbData, hltbTimeMode, achievementSummaries, details, reviews, steamRatings, hideCollectionOnlyGames, currency, duplicateAppIds, delistedAppIds, installedLibraryReady, installedAppIdSet]);
 
   const orderedIds = useMemo(() => filteredGames.map((g) => g.appid), [filteredGames]);
 
-  const handleShiftClick = useCallback((appId: number) => {
+  const handleSelectionClick = useCallback((appId: number, shift: boolean) => {
     const last = lastClickedId.current;
-    if (last !== null && last !== appId) {
+    if (shift && last !== null && orderedIds.includes(last)) {
       rangeSelectGames(last, appId, orderedIds);
+      return true;
     }
     lastClickedId.current = appId;
+    return false;
   }, [orderedIds, rangeSelectGames]);
+  const resetKey = useMemo(() => ({}), [activeCategory, deferredQuery, sortBy, sortAsc, filters, activeAdvancedFilter]);
+  const virtual = useVirtualLibrary(filteredGames.length, viewMode, resetKey);
+  const visibleGames = filteredGames.slice(virtual.start, virtual.end);
 
   if (loading) {
     return (
@@ -410,32 +423,37 @@ export function GameGrid() {
   return (
     <>
       {viewMode === "list" ? (
-        <div className="space-y-0.5" onClick={handleBackgroundClick}>
-          {filteredGames.map((game) => (
+        <div ref={virtual.containerRef} style={virtual.style} role="listbox" aria-multiselectable="true" aria-label="Game library" className="space-y-0.5" onClick={handleBackgroundClick}>
+          {visibleGames.map((game) => (
             <GameListRow
               key={game.appid}
               game={game}
               onContextMenu={handleContextMenu}
               onDoubleClick={handleDoubleClick}
               onIntent={preloadGameDetailPage}
-              onShiftClick={handleShiftClick}
+              onSelectionClick={handleSelectionClick}
               isPossibleDuplicate={duplicateAppIds.has(game.appid)}
             />
           ))}
         </div>
       ) : (
         <div
+          ref={virtual.containerRef}
+          style={virtual.style}
+          role="listbox"
+          aria-multiselectable="true"
+          aria-label="Game library"
           className="game-grid grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3"
           onClick={handleBackgroundClick}
         >
-          {filteredGames.map((game) => (
+          {visibleGames.map((game) => (
             <GameCard
               key={game.appid}
               game={game}
               onContextMenu={handleContextMenu}
               onDoubleClick={handleDoubleClick}
               onIntent={preloadGameDetailPage}
-              onShiftClick={handleShiftClick}
+              onSelectionClick={handleSelectionClick}
               isPossibleDuplicate={duplicateAppIds.has(game.appid)}
             />
           ))}
@@ -466,42 +484,37 @@ export function GameGrid() {
   );
 }
 
-function GameListRow({
+const GameListRow = memo(function GameListRow({
   game,
   onContextMenu,
   onDoubleClick,
   onIntent,
-  onShiftClick,
+  onSelectionClick,
   isPossibleDuplicate,
 }: {
   game: OwnedGame;
   onContextMenu: (e: React.MouseEvent, game: OwnedGame) => void;
   onDoubleClick: (game: OwnedGame) => void;
   onIntent?: () => void;
-  onShiftClick?: (appId: number) => void;
+  onSelectionClick?: (appId: number, shift: boolean) => boolean;
   isPossibleDuplicate?: boolean;
 }) {
   const toggleGameSelection = useGameStore((s) => s.toggleGameSelection);
   const clearSelection = useGameStore((s) => s.clearSelection);
   const isSelected = useGameStore((s) => !!s.selectedGameIds[game.appid]);
-  const collections = useCategoryStore((s) => s.collections);
+  const categories = useCategoryStore((s) => categoriesForGame(s.collections, game.appid));
   const t = useT();
   const status = useStatusStore((s) => s.statuses[game.appid] ?? "none");
   const statusMeta = STATUS_META[status];
   const isFamilyShared = useFamilyStore((s) => s.isFamilyShared(game.appid));
 
-  const categories = useMemo(
-    () => collections.filter((c) => c.added.includes(game.appid) && !c.is_dynamic),
-    [collections, game.appid]
-  );
 
   const hours = (game.playtime_forever / 60).toFixed(1);
 
-  const handleClick = (e: React.MouseEvent) => {
+  const handleClick = (e: React.MouseEvent | React.KeyboardEvent) => {
     e.stopPropagation();
-    if (e.shiftKey && onShiftClick) {
-      onShiftClick(game.appid);
-    } else if (e.ctrlKey || e.metaKey) {
+    if (onSelectionClick?.(game.appid, e.shiftKey)) return;
+    if (e.ctrlKey || e.metaKey) {
       toggleGameSelection(game.appid);
     } else {
       const store = useGameStore.getState();
@@ -517,6 +530,14 @@ function GameListRow({
 
   return (
     <div
+      role="option"
+      aria-selected={isSelected}
+      tabIndex={0}
+      onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) return;
+        if (event.key === "Enter") { event.preventDefault(); onDoubleClick(game); }
+        if (event.key === " ") { event.preventDefault(); handleClick(event); }
+      }}
       draggable
       onDragStart={(e) => {
         e.dataTransfer.setData("text/plain", String(game.appid));
@@ -583,4 +604,4 @@ function GameListRow({
       </div>
     </div>
   );
-}
+});

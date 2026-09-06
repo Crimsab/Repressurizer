@@ -2566,5 +2566,6 @@
   "achievements.tab.manager": "Verwaltung",
   "achievements.tab.hunter": "Jagd",
   "palette.actions": "Schnellaktionen",
-  "palette.tools": "Werkzeuge"
+  "palette.tools": "Werkzeuge",
+  "common.retry": "Erneut versuchen"
 }

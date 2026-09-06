@@ -1,3 +1,4 @@
+import { enqueuePersistence, flushPersistence } from "../lib/persistenceQueue";
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
 import type {
@@ -25,7 +26,8 @@ export {
 };
 
 function persistDetailsCache(details: Record<number, GameDetails>) {
-  invoke("save_details_cache", { data: JSON.stringify(details) }).catch(() => {});
+  void enqueuePersistence("details_cache.json", () => JSON.stringify(details),
+    (data) => invoke("save_details_cache", { data }), 300).catch(() => {});
 }
 
 function normalizeDetailsForCache(details: GameDetails): GameDetails {
@@ -256,12 +258,13 @@ export const useGameStore = create<GameState>((set, get) => ({
       const nameStore = useAppNameOverrideStore.getState();
       nameStore.mergeNames(games);
       for (const g of games) {
-        map[g.appid] = {
-          ...g,
-          name: displayNameFromDetails(g, state.details[g.appid], appIndex, nameStore.resolveName),
-        };
+        const incoming = { ...g, name: displayNameFromDetails(g, state.details[g.appid], appIndex, nameStore.resolveName) };
+        const previous = state.games[g.appid];
+        map[g.appid] = previous && Object.keys(incoming).every((key) =>
+          previous[key as keyof OwnedGame] === incoming[key as keyof OwnedGame]) && Object.keys(previous).length === Object.keys(incoming).length ? previous : incoming;
       }
-      return { games: map, loading: false, error: null };
+      const unchanged = Object.keys(map).length === Object.keys(state.games).length && Object.keys(map).every((id) => map[Number(id)] === state.games[Number(id)]);
+      return { games: unchanged ? state.games : map, loading: false, error: null };
     }),
 
   mergeGames: (games) =>
@@ -328,19 +331,12 @@ export const useGameStore = create<GameState>((set, get) => ({
     set((state) => {
       const cleanDetails = markDetailsCacheFresh(details, state.details[appId]);
       const next = { ...state.details, [appId]: cleanDetails };
-      const games = { ...state.games };
+      let games = state.games;
       const game = games[appId];
       useAppNameOverrideStore.getState().mergeNames([{ appid: cleanDetails.app_id, name: cleanDetails.name }]);
       if (game && (game.is_collection_only || isPlaceholderGameName(appId, game.name))) {
-        games[appId] = {
-          ...game,
-          name: displayNameFromDetails(
-            game,
-            cleanDetails,
-            useSteamAppIndexStore.getState().data,
-            useAppNameOverrideStore.getState().resolveName
-          ),
-        };
+        const name = displayNameFromDetails(game, cleanDetails, useSteamAppIndexStore.getState().data, useAppNameOverrideStore.getState().resolveName);
+        if (name !== game.name) games = { ...games, [appId]: { ...game, name } };
       }
       persistDetailsCache(next);
       return { details: next, games };
@@ -349,7 +345,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   setBulkDetails: (details) =>
     set((state) => {
       const next = { ...state.details };
-      const games = { ...state.games };
+      let games = state.games;
       const nameEntries: Array<{ appid: number; name: string | null }> = [];
       for (const rawDetails of details) {
         const d = markDetailsCacheFresh(rawDetails, next[rawDetails.app_id]);
@@ -357,6 +353,9 @@ export const useGameStore = create<GameState>((set, get) => ({
         nameEntries.push({ appid: d.app_id, name: d.name });
         const game = games[d.app_id];
         if (game && (game.is_collection_only || isPlaceholderGameName(d.app_id, game.name))) {
+          const name = displayNameFromDetails(game, d, useSteamAppIndexStore.getState().data, useAppNameOverrideStore.getState().resolveName);
+          if (name === game.name) continue;
+          if (games === state.games) games = { ...games };
           games[d.app_id] = {
             ...game,
             name: displayNameFromDetails(
@@ -427,12 +426,13 @@ export const useGameStore = create<GameState>((set, get) => ({
     }),
 
   clearDetailsCache: () => {
-    invoke("save_details_cache", { data: "{}" }).catch(() => {});
+    void enqueuePersistence("details_cache.json", () => "{}", (data) => invoke("save_details_cache", { data })).catch(() => {});
     set({ details: {} });
   },
 
   hydrateDetailsCache: async () => {
     try {
+      await flushPersistence("details_cache.json");
       const raw = await invoke<string | null>("load_details_cache");
       if (raw) {
         const parsed: Record<number, GameDetails> = JSON.parse(raw);

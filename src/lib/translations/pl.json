@@ -2566,5 +2566,6 @@
   "achievements.tab.manager": "Zarządzanie",
   "achievements.tab.hunter": "Łowy",
   "palette.actions": "Szybkie akcje",
-  "palette.tools": "Narzędzia"
+  "palette.tools": "Narzędzia",
+  "common.retry": "Spróbuj ponownie"
 }

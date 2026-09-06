@@ -1,6 +1,9 @@
+import { useMemo } from "react";
+import { useShallow } from "zustand/react/shallow";
+import { scopedListener } from "../../lib/asyncListener";
+import { captureCollectionOperation, isCurrentProfile, acceptSavedCollections, type CollectionOperation } from "../../lib/collectionOperations";
 import { lazy, Suspense, useState, useEffect, useRef } from "react";
 import type { ButtonHTMLAttributes, ReactNode } from "react";
-import { listen } from "@tauri-apps/api/event";
 import { useGameStore } from "../../stores/gameStore";
 import type { SortBy } from "../../stores/gameStore";
 import { useCategoryStore } from "../../stores/categoryStore";
@@ -93,7 +96,7 @@ const StoragePlanner = lazy(loadStoragePlanner);
 const PackMyDeck = lazy(loadPackMyDeck);
 const CommunityRulePacks = lazy(loadCommunityRulePacks);
 const MetadataHealthCenter = lazy(loadMetadataHealth);
-const preload = (loader: () => Promise<unknown>) => { void loader(); };
+const preload = (loader: () => Promise<unknown>) => { void loader().catch(() => {}); };
 
 function LazyOverlay({ children }: { children: ReactNode }) {
   return (
@@ -179,13 +182,16 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
   const setActiveCategory = useCategoryStore((s) => s.setActiveCategory);
   const savedCollections = useCategoryStore((s) => s._saved);
   const dirty = useCategoryStore((s) => s.dirty);
-  const setCollections = useCategoryStore((s) => s.setCollections);
   const undo = useCategoryStore((s) => s.undo);
   const redo = useCategoryStore((s) => s.redo);
   const discardChanges = useCategoryStore((s) => s.discardChanges);
   const historyLen = useCategoryStore((s) => s._history.length);
   const futureLen = useCategoryStore((s) => s._future.length);
-  const { steamPath, steamId3, toolbarToolOrder, toolbarPinnedToolIds, toolbarHiddenToolIds, toolbarVisibleCount, setSettings } = useSettingsStore();
+  const { steamPath, steamId3, toolbarToolOrder, toolbarPinnedToolIds, toolbarHiddenToolIds, toolbarVisibleCount, setSettings } = useSettingsStore(useShallow((s) => ({
+    steamPath: s.steamPath, steamId3: s.steamId3, toolbarToolOrder: s.toolbarToolOrder,
+    toolbarPinnedToolIds: s.toolbarPinnedToolIds, toolbarHiddenToolIds: s.toolbarHiddenToolIds,
+    toolbarVisibleCount: s.toolbarVisibleCount, setSettings: s.setSettings,
+  })));
 
   const [showSettings, setShowSettings] = useState(false);
   const [showExport, setShowExport] = useState(false);
@@ -211,6 +217,8 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
   const [toolbarContextKey, setToolbarContextKey] = useState<ToolbarToolId | null>(null);
   const [showSavePreview, setShowSavePreview] = useState(false);
   const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
+  const saveOperationRef = useRef<CollectionOperation | null>(null);
   const [steamRunningForSave, setSteamRunningForSave] = useState<boolean | null>(null);
   const moreToolsRef = useRef<HTMLDivElement>(null);
 
@@ -275,17 +283,7 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
     };
   }, [showMoreTools, toolbarContextKey]);
 
-  useEffect(() => {
-    let unlisten: (() => void) | undefined;
-    listen("repressurizer-open-settings-requested", () => setShowSettings(true))
-      .then((fn) => {
-        unlisten = fn;
-      })
-      .catch(() => {});
-    return () => {
-      unlisten?.();
-    };
-  }, []);
+  useEffect(() => scopedListener("repressurizer-open-settings-requested", () => setShowSettings(true)), []);
 
   useEffect(() => {
     const onOpenTool = (event: Event) => {
@@ -350,10 +348,17 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
     };
   }, [showSavePreview]);
 
-  const savePreview = buildSavePreview(savedCollections, collections, games, details);
+  const savePreview = useMemo(() => showSavePreview ? buildSavePreview(savedCollections, collections, games, details) : null,
+    [showSavePreview, savedCollections, collections, games, details]);
 
   const writeResolvedCollections = async (resolvedCollections: typeof collections) => {
+    const operation = saveOperationRef.current;
+    if (!operation) throw new Error("Save context is missing. Open the save preview again.");
     if (await isSteamRunning()) throw new Error(t("savePreview.steamRunning.desc"));
+    const current = useCategoryStore.getState();
+    if (!isCurrentProfile(operation) || current._saved !== operation.saved || current.collections !== operation.collections) {
+      throw new Error("The library changed during save preparation. Review the current changes and retry.");
+    }
     await saveCollections(steamPath, steamId3, resolvedCollections);
     try {
       const shortcutUpdates = await saveShortcuts(steamPath, steamId3, resolvedCollections);
@@ -361,19 +366,27 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
     } catch (shortcutError) {
       toast.getState().warning(`Collections saved, but shortcuts.vdf update failed: ${String(shortcutError)}`);
     }
-    setCollections(resolvedCollections, pendingConflict ? "sync" : "manual");
-    useLibraryInboxStore.getState().recordCollectionsBaseline(resolvedCollections);
+    const accepted = acceptSavedCollections(operation, resolvedCollections, pendingConflict ? "sync" : "manual");
+    if (accepted) useLibraryInboxStore.getState().recordCollectionsBaseline(resolvedCollections);
     setShowSavePreview(false);
     setPendingConflict(null);
     toast.getState().success(t("toast.saveSuccess"));
   };
 
   const handleSave = async () => {
+    if (savingRef.current) return;
+    savingRef.current = true;
+    const operation = captureCollectionOperation();
+    saveOperationRef.current = operation;
     setSaving(true);
     try {
       if (await isSteamRunning()) throw new Error(t("savePreview.steamRunning.desc"));
       const currentSteamCollections = await loadCollections(steamPath, steamId3);
-      const analysis = analyzeThreeWayCollectionMerge({ base: savedCollections, steam: currentSteamCollections, proposed: collections });
+      const current = useCategoryStore.getState();
+      if (!isCurrentProfile(operation) || current.collections !== operation.collections || current._saved !== operation.saved) {
+        throw new Error("The library changed during save preparation. Review the current changes and retry.");
+      }
+      const analysis = analyzeThreeWayCollectionMerge({ base: operation.saved, steam: currentSteamCollections, proposed: operation.collections });
       if (analysis.steamChanged) {
         setPendingConflict(analysis);
         setShowSavePreview(false);
@@ -383,6 +396,7 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
     } catch (e) {
       toast.getState().error(t("toast.saveFailed", { error: String(e) }));
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };
@@ -790,15 +804,17 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
             analysis={pendingConflict}
             onCancel={() => setPendingConflict(null)}
             onConfirm={async (resolvedCollections) => {
+              if (savingRef.current) return;
+              savingRef.current = true;
               setSaving(true);
               try { await writeResolvedCollections(resolvedCollections); }
               catch (error) { toast.getState().error(t("toast.saveFailed", { error: String(error) })); throw error; }
-              finally { setSaving(false); }
+              finally { savingRef.current = false; setSaving(false); }
             }}
           />
         </LazyOverlay>
       )}
-      {showSavePreview && (
+      {showSavePreview && savePreview && (
         <SavePreviewDialog
           preview={savePreview}
           saving={saving}

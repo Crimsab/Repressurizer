@@ -2566,5 +2566,6 @@
   "achievements.tab.manager": "Yönetici",
   "achievements.tab.hunter": "Av",
   "palette.actions": "Hızlı eylemler",
-  "palette.tools": "Araçlar"
+  "palette.tools": "Araçlar",
+  "common.retry": "Yeniden dene"
 }

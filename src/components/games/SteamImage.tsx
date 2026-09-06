@@ -21,6 +21,8 @@ interface SteamImageProps {
 }
 
 const detailsRequests = new Set<number>();
+const detailsFailures = new Map<number, number>();
+const FAILURE_RETRY_MS = 60_000;
 
 function uniqueUrls(urls: Array<string | null | undefined>): string[] {
   return [...new Set(urls.filter((url): url is string => Boolean(url)))];
@@ -61,14 +63,17 @@ export function SteamImage({
   }, [appId, kind, urls[0]]);
 
   const fetchDetailsIfNeeded = () => {
-    if (details || detailsRequests.has(appId)) return;
+    if (details || detailsRequests.has(appId) || Date.now() - (detailsFailures.get(appId) ?? 0) < FAILURE_RETRY_MS) return;
     detailsRequests.add(appId);
     fetchGameDetails(appId, currencyToCountryCode(currency))
       .then((result) => {
         setDetails(appId, result);
         scheduleOriginalReleaseDateFetch(appId, result.name);
       })
-      .catch(() => {})
+      .catch(() => {
+        if (detailsFailures.size >= 1000) detailsFailures.delete(detailsFailures.keys().next().value!);
+        detailsFailures.set(appId, Date.now());
+      })
       .finally(() => detailsRequests.delete(appId));
   };
 
@@ -86,6 +91,7 @@ export function SteamImage({
       src={src}
       alt={alt}
       loading={loading}
+      decoding="async"
       draggable={draggable}
       className={className}
       onError={() => {

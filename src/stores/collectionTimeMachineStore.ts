@@ -1,3 +1,4 @@
+import { enqueuePersistence } from "../lib/persistenceQueue";
 import { create } from "zustand";
 import { loadAppData, saveAppData } from "../lib/tauri";
 import {
@@ -47,7 +48,8 @@ function stateData(state: CollectionTimeMachineState): PersistedTimeMachine {
 }
 
 function persist(data: PersistedTimeMachine) {
-  void saveAppData(STORAGE_KEY, JSON.stringify(data)).catch(() => {});
+  void enqueuePersistence(`snapshot:${STORAGE_KEY}`, () => JSON.stringify(data),
+    (serialized) => saveAppData(STORAGE_KEY, serialized), 300).catch(() => {});
 }
 
 function prune(data: PersistedTimeMachine, now = Date.now()): PersistedTimeMachine {

@@ -1,0 +1,50 @@
+type Waiter = { resolve: () => void; reject: (error: unknown) => void };
+type Write = { serialize: () => string; write: (data: string) => Promise<unknown>; waiters: Waiter[] };
+type Queue = { pending?: Write; running?: Promise<void>; timer?: ReturnType<typeof setTimeout> };
+const queues = new Map<string, Queue>();
+
+function drain(queue: Queue): Promise<void> {
+  if (queue.timer) { clearTimeout(queue.timer); queue.timer = undefined; }
+  if (queue.running) return queue.running;
+  // Install the running promise before invoking user code, including synchronous mocks.
+  queue.running = Promise.resolve().then(async () => {
+    while (queue.pending) {
+      const job = queue.pending;
+      queue.pending = undefined;
+      try {
+        await job.write(job.serialize());
+        job.waiters.forEach(({ resolve }) => resolve());
+      } catch (error) {
+        job.waiters.forEach(({ reject }) => reject(error));
+      }
+    }
+  }).finally(() => {
+    queue.running = undefined;
+    if (queue.pending) void drain(queue);
+  });
+  return queue.running;
+}
+
+/** Serializes writes per file and coalesces only snapshots not yet being written. */
+export function enqueuePersistence(key: string, serialize: () => string,
+  write: (data: string) => Promise<unknown>, delayMs = 0): Promise<void> {
+  let queue = queues.get(key);
+  if (!queue) { queue = {}; queues.set(key, queue); }
+  const target = queue;
+  const done = new Promise<void>((resolve, reject) => {
+    const waiters = target.pending?.waiters ?? [];
+    waiters.push({ resolve, reject });
+    target.pending = { serialize, write, waiters };
+  });
+  if (!target.running && !target.timer) {
+    if (delayMs > 0) target.timer = setTimeout(() => { void drain(target); }, delayMs);
+    else void drain(target);
+  }
+  return done;
+}
+export async function flushPersistence(key?: string): Promise<void> {
+  const selected = key === undefined ? [...queues.values()] : [queues.get(key)].filter((q): q is Queue => !!q);
+  await Promise.all(selected.map(async (queue) => {
+    do { await drain(queue); } while (queue.pending || queue.running);
+  }));
+}

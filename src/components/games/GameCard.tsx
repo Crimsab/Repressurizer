@@ -1,4 +1,5 @@
-import { useMemo, useRef } from "react";
+import { memo } from "react";
+import { categoriesForGame } from "../../lib/collectionIndex";
 import { useCategoryStore } from "../../stores/categoryStore";
 import { useGameStore } from "../../stores/gameStore";
 import { useStatusStore, STATUS_META } from "../../stores/statusStore";
@@ -17,47 +18,32 @@ interface GameCardProps {
   onContextMenu: (e: React.MouseEvent, game: OwnedGame) => void;
   onDoubleClick: (game: OwnedGame) => void;
   onIntent?: () => void;
-  onShiftClick?: (appId: number) => void;
+  onSelectionClick?: (appId: number, shift: boolean) => boolean;
   isPossibleDuplicate?: boolean;
 }
 
-export function GameCard({ game, onContextMenu, onDoubleClick, onIntent, onShiftClick, isPossibleDuplicate }: GameCardProps) {
+export const GameCard = memo(function GameCard({ game, onContextMenu, onDoubleClick, onIntent, onSelectionClick, isPossibleDuplicate }: GameCardProps) {
   const isSelected = useGameStore((s) => !!s.selectedGameIds[game.appid]);
   const toggleGameSelection = useGameStore((s) => s.toggleGameSelection);
   const clearSelection = useGameStore((s) => s.clearSelection);
-  const collections = useCategoryStore((s) => s.collections);
+  const categories = useCategoryStore((s) => categoriesForGame(s.collections, game.appid));
   const categoryColors = useSettingsStore((s) => s.categoryColors ?? {});
   const categoryChipStyle = useSettingsStore((s) => s.categoryChipStyle);
   const removeGameFromCategory = useCategoryStore((s) => s.removeGameFromCategory);
   const status = useStatusStore((s) => s.statuses[game.appid] ?? "none");
   const statusMeta = STATUS_META[status];
   const isFamilyShared = useFamilyStore((s) => s.isFamilyShared(game.appid));
-  const lastClickTime = useRef(0);
   const t = useT();
 
-  const categories = useMemo(
-    () => collections.filter((c) => c.added.includes(game.appid) && !c.is_dynamic),
-    [collections, game.appid]
-  );
 
   const gameTags = useTagsStore((s) => s.tags[game.appid]) ?? [];
   const hours = (game.playtime_forever / 60).toFixed(1);
   const allCatNames = categories.map((c) => c.name).join(", ");
 
-  const handleClick = (e: React.MouseEvent) => {
-    const now = Date.now();
-    if (now - lastClickTime.current < 300) {
-      lastClickTime.current = 0;
-      onDoubleClick(game);
-      return;
-    }
-    lastClickTime.current = now;
-
+  const handleClick = (e: React.MouseEvent | React.KeyboardEvent) => {
     const isCtrl = e.ctrlKey || e.metaKey;
-    const isShift = e.shiftKey;
-    if (isShift && onShiftClick) {
-      onShiftClick(game.appid);
-    } else if (isCtrl) {
+    if (onSelectionClick?.(game.appid, e.shiftKey)) return;
+    if (isCtrl) {
       toggleGameSelection(game.appid);
     } else {
       const store = useGameStore.getState();
@@ -73,9 +59,17 @@ export function GameCard({ game, onContextMenu, onDoubleClick, onIntent, onShift
 
   return (
     <div
+      role="option"
+      aria-selected={isSelected}
+      tabIndex={0}
+      onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) return;
+        if (event.key === "Enter") { event.preventDefault(); onDoubleClick(game); }
+        if (event.key === " ") { event.preventDefault(); handleClick(event); }
+      }}
+      onDoubleClick={(event) => { if (!event.ctrlKey && !event.metaKey && !event.shiftKey) onDoubleClick(game); }}
       draggable
       onDragStart={(e) => {
-        lastClickTime.current = 0;
         e.dataTransfer.setData("text/plain", String(game.appid));
         if (!isSelected) {
           clearSelection();
@@ -88,7 +82,7 @@ export function GameCard({ game, onContextMenu, onDoubleClick, onIntent, onShift
       onFocus={onIntent}
       className={`game-card group cursor-pointer overflow-hidden rounded-xl ${
         isSelected
-          ? "border-2 border-repressurizer-accent"
+          ? "border border-repressurizer-accent ring-1 ring-inset ring-repressurizer-accent"
           : "border border-repressurizer-border hover:border-repressurizer-text-faint"
       }`}
     >
@@ -185,4 +179,4 @@ export function GameCard({ game, onContextMenu, onDoubleClick, onIntent, onShift
       </div>
     </div>
   );
-}
+});

@@ -1,3 +1,5 @@
+import { enqueuePersistence, flushPersistence } from "./persistenceQueue";
+import { steamDetailsRequest } from "./requestPool";
 import { invoke } from "@tauri-apps/api/core";
 import type {
   SteamInfo,
@@ -222,7 +224,8 @@ export async function fetchGameDetails(
   appId: number,
   countryCode?: string
 ): Promise<GameDetails> {
-  return invoke<GameDetails>("fetch_game_details", { appId, countryCode: countryCode ?? null });
+  return steamDetailsRequest(`${appId}:${countryCode ?? ""}`, () =>
+    invoke<GameDetails>("fetch_game_details", { appId, countryCode: countryCode ?? null }));
 }
 
 export async function fetchStoreReleaseDate(
@@ -535,51 +538,57 @@ export async function runNameCategorizer(
 }
 
 export async function loadDetailsCache(): Promise<string | null> {
+  await flushPersistence("details_cache.json");
   return invoke<string | null>("load_details_cache");
 }
 
 export async function saveDetailsCache(data: string): Promise<void> {
-  return invoke<void>("save_details_cache", { data });
+  return enqueuePersistence("details_cache.json", () => data, (latest) => invoke<void>("save_details_cache", { data: latest }));
 }
 
 export async function loadHltbCache(): Promise<string | null> {
+  await flushPersistence("hltb_cache.json");
   return invoke<string | null>("load_hltb_cache");
 }
 
 export async function saveHltbCache(data: string): Promise<void> {
-  return invoke<void>("save_hltb_cache", { data });
+  return enqueuePersistence("hltb_cache.json", () => data, (latest) => invoke<void>("save_hltb_cache", { data: latest }));
 }
 
 export async function loadFailedCache(): Promise<string | null> {
+  await flushPersistence("failed_games.json");
   return invoke<string | null>("load_failed_cache");
 }
 
 export async function saveFailedCache(data: string): Promise<void> {
-  return invoke<void>("save_failed_cache", { data });
+  return enqueuePersistence("failed_games.json", () => data, (latest) => invoke<void>("save_failed_cache", { data: latest }));
 }
 
 export async function loadAchievementsCache(): Promise<string | null> {
+  await flushPersistence("achievements.json");
   return invoke<string | null>("load_achievements_cache");
 }
 
 export async function saveAchievementsCache(data: string): Promise<void> {
-  return invoke<void>("save_achievements_cache", { data });
+  return enqueuePersistence("achievements.json", () => data, (latest) => invoke<void>("save_achievements_cache", { data: latest }));
 }
 
 export async function loadFriendsCache(): Promise<string | null> {
+  await flushPersistence("friends.json");
   return invoke<string | null>("load_friends_cache");
 }
 
 export async function saveFriendsCache(data: string): Promise<void> {
-  return invoke<void>("save_friends_cache", { data });
+  return enqueuePersistence("friends.json", () => data, (latest) => invoke<void>("save_friends_cache", { data: latest }));
 }
 
 export async function loadWishlistCache(): Promise<string | null> {
+  await flushPersistence("wishlist.json");
   return invoke<string | null>("load_wishlist_cache");
 }
 
 export async function saveWishlistCache(data: string): Promise<void> {
-  return invoke<void>("save_wishlist_cache", { data });
+  return enqueuePersistence("wishlist.json", () => data, (latest) => invoke<void>("save_wishlist_cache", { data: latest }));
 }
 
 export interface CacheInfo {
@@ -657,11 +666,12 @@ export async function runScoreCategorizer(
 // --- Generic app data persistence ---
 
 export async function loadAppData(key: string): Promise<string | null> {
+  await flushPersistence(key);
   return invoke<string | null>("load_app_data", { key });
 }
 
 export async function saveAppData(key: string, data: string): Promise<void> {
-  return invoke<void>("save_app_data", { key, data });
+  return enqueuePersistence(key, () => data, (latest) => invoke<void>("save_app_data", { key, data: latest }));
 }
 
 export interface DiaryBackupInfo {
@@ -676,10 +686,12 @@ export async function listDiaryBackups(): Promise<DiaryBackupInfo[]> {
 }
 
 export async function createDiaryBackup(description: string): Promise<string> {
+  await flushPersistence();
   return invoke<string>("create_diary_backup", { description });
 }
 
 export async function restoreDiaryBackup(name: string): Promise<void> {
+  await flushPersistence();
   return invoke<void>("restore_diary_backup", { name });
 }
 
@@ -688,6 +700,7 @@ export async function readDiaryBackupFile(name: string, key: string): Promise<st
 }
 
 export async function restoreDiaryBackupFiles(name: string, keys: string[]): Promise<string[]> {
+  await flushPersistence();
   return invoke<string[]>("restore_diary_backup_files", { name, keys });
 }
 
@@ -700,6 +713,7 @@ export async function hideMainWindow(): Promise<void> {
 }
 
 export async function quitApp(): Promise<void> {
+  await flushPersistence();
   return invoke<void>("quit_app");
 }
 
