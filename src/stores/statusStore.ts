@@ -1,5 +1,6 @@
 import { create } from "zustand";
-import { invoke } from "@tauri-apps/api/core";
+import { saveAppData, loadAppData } from "../lib/tauri";
+import { runtimeGeneration } from "../lib/runtimeGeneration";
 
 export type GameStatus = "none" | "playing" | "beaten" | "completed" | "abandoned";
 
@@ -26,7 +27,7 @@ function saveStatuses(statuses: Record<number, GameStatus>) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(statuses));
   } catch {}
-  invoke("save_app_data", { key: "statuses.json", data: JSON.stringify(statuses) }).catch(() => {});
+  saveAppData("statuses.json", JSON.stringify(statuses)).catch(() => {});
 }
 
 function applyStatus(statuses: Record<number, GameStatus>, appId: number, status: GameStatus) {
@@ -96,8 +97,11 @@ export const useStatusStore = create<StatusState>((set, get) => ({
   getStatus: (appId) => get().statuses[appId] ?? "none",
 
   hydrate: async () => {
+    const generation = runtimeGeneration();
+    const before = get().statuses;
     try {
-      const raw = await invoke<string | null>("load_app_data", { key: "statuses.json" });
+      const raw = await loadAppData("statuses.json");
+      if (generation !== runtimeGeneration() || get().statuses !== before) return;
       if (raw) {
         const parsed: Record<number, GameStatus> = JSON.parse(raw);
         const local = get().statuses;

@@ -30,6 +30,12 @@ function drain(queue: Queue): Promise<void> {
 /** Serializes writes per file and coalesces only snapshots not yet being written. */
 export function enqueuePersistence(key: string, serialize: () => string,
   write: (data: string) => Promise<unknown>, delayMs = 0): Promise<void> {
+  if (transaction) {
+    // Staged calls resolve after the transaction has synchronously accepted the
+    // data. Durable completion remains observable through flushPersistence().
+    transaction.push(() => { void enqueuePersistence(key, serialize, write, delayMs).catch(() => {}); });
+    return Promise.resolve();
+  }
   let queue = queues.get(key);
   if (!queue) { queue = {}; queues.set(key, queue); }
   const target = queue;
@@ -51,4 +57,22 @@ export async function flushPersistence(key?: string): Promise<void> {
     if (queue.failed) throw queue.failed.error;
   }));
   if (key === undefined && [...queues.values()].some((queue) => queue.pending || queue.running || queue.timer)) await flushPersistence();
+}
+
+let transaction: Array<() => void> | null = null;
+/** Stage writes until a synchronous multi-store change has completed. */
+export function withPersistenceTransaction<T>(operation: () => T): T {
+  if (transaction) return operation();
+  const staged: Array<() => void> = [];
+  transaction = staged;
+  try {
+    const result = operation();
+    transaction = null;
+    for (const commit of staged) commit();
+    return result;
+  } catch (error) {
+    transaction = null;
+    // A rejected transaction has no disk changes to flush.
+    throw error;
+  }
 }

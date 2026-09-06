@@ -1,5 +1,6 @@
 import { create } from "zustand";
-import { invoke } from "@tauri-apps/api/core";
+import { saveAppData, loadAppData } from "../lib/tauri";
+import { runtimeGeneration } from "../lib/runtimeGeneration";
 import { useGameStore } from "./gameStore";
 import { HLTB_MAX_FAILS } from "../lib/fetchGuards";
 
@@ -58,7 +59,7 @@ function saveIgnored(fails: Record<number, number>) {
   try {
     localStorage.setItem(STORAGE_KEY, data);
   } catch {}
-  invoke("save_app_data", { key: "hltb_ignored.json", data }).catch(() => {});
+  saveAppData("hltb_ignored.json", data).catch(() => {});
 }
 
 /** After this many confirmed "not found" results, auto-ignore the game */
@@ -106,8 +107,11 @@ export const useHltbIgnoredStore = create<HltbIgnoredState>((set, get) => ({
       .map(([id]) => Number(id)),
 
   hydrate: async () => {
+    const generation = runtimeGeneration();
+    const before = get().fails;
     try {
-      const raw = await invoke<string | null>("load_app_data", { key: "hltb_ignored.json" });
+      const raw = await loadAppData("hltb_ignored.json");
+      if (generation !== runtimeGeneration() || get().fails !== before) return;
       if (raw) {
         const parsed = parseHltbIgnored(raw);
         const local = get().fails;

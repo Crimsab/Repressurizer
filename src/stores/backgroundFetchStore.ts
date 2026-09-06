@@ -1,3 +1,4 @@
+import { onRuntimeInvalidated, runtimeGeneration } from "../lib/runtimeGeneration";
 import { create } from "zustand";
 import { fetchGameDetails, fetchGamePriceOverviews, fetchHltb, fetchAchievementsSummary, fetchSteamReviewSummary, fetchStoreReleaseDates, currencyToCountryCode } from "../lib/tauri";
 import { detailsCacheNeedsRefresh, isDetailsCacheCurrent, useGameStore } from "./gameStore";
@@ -498,6 +499,12 @@ function onDetailsSuccess() {
 async function _runDetailsLoop(missingIds: number[], run: RunToken) {
   const isCurrent = () => _detailsRun.isCurrent(run);
   const buffer: GameDetails[] = [];
+  const generation = runtimeGeneration();
+  const flushBuffer = () => {
+    if (generation === runtimeGeneration() && buffer.length) useGameStore.getState().setBulkDetails(buffer.splice(0));
+  };
+  run.signal.addEventListener("abort", flushBuffer, { once: true });
+  try {
   const retryQueue: number[] = [];
   const successfulDetailIds = new Set<number>();
   let fetched = 0;
@@ -689,6 +696,10 @@ async function _runDetailsLoop(missingIds: number[], run: RunToken) {
     .map((appId) => ({ appId, name: useGameStore.getState().games[appId]?.name ?? `#${appId}` }));
   if (releaseDateItems.length > 0) _getState().startStoreReleaseDateFetch(releaseDateItems);
   drainPendingDetails();
+  } finally {
+    run.signal.removeEventListener("abort", flushBuffer);
+    flushBuffer();
+  }
 }
 
 async function _runStoreReleaseDateLoop(items: Array<{ appId: number; name: string }>, run: RunToken) {
@@ -998,3 +1009,9 @@ async function waitRatingsCooldown(totalMs: number, run: RunToken): Promise<bool
   _setState({ ratingsCoolingDown: false, ratingsCooldownSecs: 0 });
   return true;
 }
+
+onRuntimeInvalidated(() => {
+  const state = useBackgroundFetchStore.getState();
+  state.stopDetailsFetch(); state.stopHltbFetch(); state.stopAchievementsFetch();
+  state.stopRatingsFetch(); state.stopStoreReleaseDateFetch();
+});

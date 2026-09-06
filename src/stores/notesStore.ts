@@ -1,5 +1,6 @@
 import { create } from "zustand";
-import { invoke } from "@tauri-apps/api/core";
+import { saveAppData, loadAppData } from "../lib/tauri";
+import { runtimeGeneration } from "../lib/runtimeGeneration";
 
 const STORAGE_KEY = "repressurizer-game-notes";
 
@@ -16,7 +17,7 @@ function saveNotes(notes: Record<number, string>) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(notes));
   } catch {}
-  invoke("save_app_data", { key: "notes.json", data: JSON.stringify(notes) }).catch(() => {});
+  saveAppData("notes.json", JSON.stringify(notes)).catch(() => {});
 }
 
 interface NotesState {
@@ -46,8 +47,11 @@ export const useNotesStore = create<NotesState>((set, get) => ({
   restoreAll: (notes) => { const next = structuredClone(notes); saveNotes(next); set({ notes: next }); },
 
   hydrate: async () => {
+    const generation = runtimeGeneration();
+    const before = get().notes;
     try {
-      const raw = await invoke<string | null>("load_app_data", { key: "notes.json" });
+      const raw = await loadAppData("notes.json");
+      if (generation !== runtimeGeneration() || get().notes !== before) return;
       if (raw) {
         const parsed: Record<number, string> = JSON.parse(raw);
         const local = get().notes;
