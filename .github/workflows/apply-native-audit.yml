@@ -1,0 +1,151 @@
+name: Apply and validate native audit
+on:
+  push:
+    branches: [fix/performance-audit-2026-09-06]
+    paths: ['.audit-native/**', '.github/workflows/apply-native-audit.yml']
+permissions:
+  contents: read
+concurrency:
+  group: native-audit-materialization
+  cancel-in-progress: false
+jobs:
+  apply:
+    if: github.repository == 'Crimsab/Repressurizer' && github.ref == 'refs/heads/fix/performance-audit-2026-09-06'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    outputs:
+      commit: ${{ steps.commit.outputs.commit }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30
+        with:
+          toolchain: 1.94.0
+          components: rustfmt
+      - name: Verify and apply source patch
+        run: |
+          set -eu
+          git merge-base --is-ancestor d93b742bdc96841c1b2daf4fdc3d03cbf23826a1 HEAD
+          python - <<'PY'
+          import base64, gzip, hashlib, pathlib, subprocess
+          text = ''.join(pathlib.Path(f'.audit-native/part-{i}.b64').read_text() for i in range(2))
+          payload = base64.b64decode(text, validate=True)
+          assert hashlib.sha256(payload).hexdigest() == 'a461c38dae9f3cb3e4850ee26fa9a34839f1323273b67dd2229e1c693393879e'
+          patch = gzip.decompress(payload)
+          subprocess.run(['git', 'apply', '--check', '-'], input=patch, check=True)
+          subprocess.run(['git', 'apply', '-'], input=patch, check=True)
+          PY
+          cargo fmt --manifest-path src-tauri/Cargo.toml --all
+          git diff --check
+      - name: Commit on the isolated audit branch
+        id: commit
+        run: |
+          set -eu
+          rm -rf .audit-native
+          rm .github/workflows/apply-native-audit.yml .github/workflows/audit-offline-export.yml
+          git add src src-tauri tests docs .audit-native .github/workflows/apply-native-audit.yml .github/workflows/audit-offline-export.yml
+          git diff --cached --stat
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'fix: bound native I/O and HTTP parsing, pool clients and sleep idle workers'
+          git push origin HEAD:refs/heads/fix/performance-audit-2026-09-06
+          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  web:
+    needs: apply
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ needs.apply.outputs.commit }}
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version-file: .bun-version
+      - run: bun install --frozen-lockfile
+      - name: Typecheck
+        run: bun run check
+      - name: Unit tests
+        if: always()
+        run: bun run test:unit
+      - name: Build frontend
+        if: always()
+        run: bun run build
+      - name: Install browser
+        if: always()
+        run: bunx playwright install --with-deps chromium
+      - name: Browser tests
+        if: always()
+        run: bun run test:e2e
+      - name: Evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: native-audit-browser-evidence
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  native:
+    needs: apply
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    env:
+      TAURI_CONFIG: '{"bundle":{"externalBin":[]}}'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ needs.apply.outputs.commit }}
+          persist-credentials: false
+      - name: Linux native dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+      - uses: dtolnay/rust-toolchain@4be7066ada62dd38de10e7b70166bc74ed198c30
+        with:
+          toolchain: 1.94.0
+          components: clippy,rustfmt
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: |
+            ~/.cargo/git
+            ~/.cargo/registry
+            src-tauri/target
+          key: ${{ runner.os }}-native-audit-${{ hashFiles('src-tauri/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-rust-
+      - name: Check
+        run: cargo check --manifest-path src-tauri/Cargo.toml
+      - name: Formatting
+        if: always()
+        run: cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
+      - name: Clippy
+        if: always()
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
+      - name: Native tests
+        if: always()
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+      - name: Integration tests
+        if: always()
+        run: cargo test --manifest-path packages/rust/Cargo.toml
+      - name: Exact source evidence
+        if: always() && runner.os == 'Linux'
+        run: |
+          mkdir -p /tmp/native-audit-source
+          git archive HEAD | gzip > /tmp/native-audit-source/source.tar.gz
+          git rev-parse HEAD > /tmp/native-audit-source/commit.txt
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always() && runner.os == 'Linux'
+        with:
+          name: native-audit-exact-source
+          path: /tmp/native-audit-source/
+          retention-days: 2
