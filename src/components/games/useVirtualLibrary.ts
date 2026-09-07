@@ -43,6 +43,6 @@ export function useVirtualLibrary(count: number, mode: "grid" | "list", resetKey
   const estimatedHeight = mode === "list" ? 36 : ((metrics.width - (columns - 1) * 12) / columns) * 21.5 / 46 + 100;
   const stride = (metrics.rowHeight || Math.max(36, estimatedHeight)) + gap;
   const window = virtualWindow(count, columns, stride, metrics.scrollTop, metrics.height);
-  return { containerRef, start: virtual ? window.start : 0, end: virtual ? window.end : count,
+  return { containerRef, isVirtual: virtual, start: virtual ? window.start : 0, end: virtual ? window.end : count,
     style: virtual ? { paddingTop: window.paddingTop, paddingBottom: window.paddingBottom } : undefined };
 }
