@@ -61,6 +61,59 @@ function pushHistory(state: CategoryState): Partial<CategoryState> {
   };
 }
 
+// Use one monotonic value for both fields. Date.now() alone can collide during
+// bulk actions; imported collections can already contain the next candidate.
+let lastCollectionSequence = 0;
+
+function createStaticCollection(
+  collections: SteamCollection[],
+  name: string,
+  added: number[],
+): SteamCollection {
+  const existingIds = new Set(collections.map((collection) => collection.id));
+  const existingKeys = new Set(collections.map((collection) => collection.key));
+  let sequence = Math.max(Date.now(), lastCollectionSequence + 1);
+  while (
+    existingIds.has(`uc-new-${sequence}`) ||
+    existingKeys.has(`user-collections.uc-new-${sequence}`)
+  ) sequence += 1;
+  lastCollectionSequence = sequence;
+  const id = `uc-new-${sequence}`;
+  return {
+    id,
+    key: `user-collections.${id}`,
+    name,
+    added,
+    removed: [],
+    timestamp: Math.floor(Date.now() / 1000),
+    is_deleted: false,
+    is_dynamic: false,
+  };
+}
+
+function validAppIds(appIds: number[]): number[] {
+  // The backend accepts u64 IDs, including shortcuts. Do not impose a u32
+  // limit, but reject numbers JavaScript cannot represent exactly.
+  return [...new Set(appIds.filter((id) => Number.isSafeInteger(id) && id > 0))];
+}
+
+function reconcileSelection(
+  state: CategoryState,
+  collections: SteamCollection[],
+): Pick<CategoryState, "activeCategory" | "selectedCategoryKeys"> {
+  const keys = new Set(collections.map((collection) => collection.key));
+  const active = state.activeCategory;
+  const wasCollection = active !== null && (
+    active.startsWith("user-collections.") ||
+    state.collections.some((collection) => collection.key === active)
+  );
+  return {
+    // Built-in views such as All and Diary are not collection keys.
+    activeCategory: wasCollection && !keys.has(active!) ? "all" : active,
+    selectedCategoryKeys: state.selectedCategoryKeys.filter((key) => keys.has(key)),
+  };
+}
+
 export const useCategoryStore = create<CategoryState>((set, get) => ({
   collections: [],
   activeCategory: "all",
@@ -73,8 +126,9 @@ export const useCategoryStore = create<CategoryState>((set, get) => ({
   _lastChangeOrigin: "steam",
 
   setCollections: (collections, origin = "steam") =>
-    set({
-      collections,
+    set((state) => ({
+      ...reconcileSelection(state, collections),
+      collections: structuredClone(collections),
       dirty: false,
       loading: false,
       _history: [],
@@ -82,12 +136,12 @@ export const useCategoryStore = create<CategoryState>((set, get) => ({
       _saved: structuredClone(collections),
       selectedCategoryKeys: [],
       _lastChangeOrigin: origin,
-    }),
+    })),
 
   applyImportedCollections: (collections, origin = "import") =>
     set((state) => ({
       ...pushHistory(state),
-      collections,
+      collections: structuredClone(collections),
       activeCategory: "all",
       selectedCategoryKeys: [],
       _lastChangeOrigin: origin,
@@ -98,248 +152,180 @@ export const useCategoryStore = create<CategoryState>((set, get) => ({
 
   toggleCategorySelection: (key) =>
     set((state) => {
-      const i = state.selectedCategoryKeys.indexOf(key);
-      if (i === -1) {
-        return { selectedCategoryKeys: [...state.selectedCategoryKeys, key] };
-      }
+      if (!state.collections.some((collection) => collection.key === key)) return state;
       return {
-        selectedCategoryKeys: state.selectedCategoryKeys.filter((k) => k !== key),
+        selectedCategoryKeys: state.selectedCategoryKeys.includes(key)
+          ? state.selectedCategoryKeys.filter((selected) => selected !== key)
+          : [...state.selectedCategoryKeys, key],
       };
     }),
 
   clearCategorySelection: () => set({ selectedCategoryKeys: [] }),
 
-  setSelectedCategoryKeys: (keys) => set({ selectedCategoryKeys: keys }),
+  setSelectedCategoryKeys: (keys) =>
+    set((state) => {
+      const existing = new Set(state.collections.map((collection) => collection.key));
+      return { selectedCategoryKeys: [...new Set(keys)].filter((key) => existing.has(key)) };
+    }),
 
-  addCategory: (name) =>
-    set((state) => ({
-      ...pushHistory(state),
-      collections: [
-        ...state.collections,
-        {
-          id: `uc-new-${Date.now()}`,
-          key: `user-collections.uc-new-${Date.now()}`,
-          name,
-          added: [],
-          removed: [],
-          timestamp: Math.floor(Date.now() / 1000),
-          is_deleted: false,
-          is_dynamic: false,
-        },
-      ],
-    })),
+  addCategory: (name) => get().addCategoryWithGames(name, []),
 
   addCategoryWithGames: (name, appIds) =>
     set((state) => {
       const trimmed = name.trim();
       if (!trimmed) return state;
-      const ts = Date.now();
-      const added = [...new Set(appIds.filter((id) => Number.isFinite(id)).map((id) => Math.trunc(id)))].sort((a, b) => a - b);
+      const added = validAppIds(appIds).sort((a, b) => a - b);
       return {
         ...pushHistory(state),
         collections: [
           ...state.collections,
-          {
-            id: `uc-new-${ts}`,
-            key: `user-collections.uc-new-${ts}`,
-            name: trimmed,
-            added,
-            removed: [],
-            timestamp: Math.floor(Date.now() / 1000),
-            is_deleted: false,
-            is_dynamic: false,
-          },
+          createStaticCollection(state.collections, trimmed, added),
         ],
       };
     }),
 
-  removeCategory: (key) =>
-    set((state) => ({
-      ...pushHistory(state),
-      collections: state.collections.filter((c) => c.key !== key),
-      activeCategory:
-        state.activeCategory === key ? "all" : state.activeCategory,
-      selectedCategoryKeys: state.selectedCategoryKeys.filter((k) => k !== key),
-    })),
+  removeCategory: (key) => get().removeCategories([key]),
 
   removeCategories: (keys) =>
     set((state) => {
       const requestedKeys = new Set(keys);
       const removableKeys = new Set(
         state.collections
-          .filter((c) => requestedKeys.has(c.key) && !c.is_dynamic)
-          .map((c) => c.key)
+          .filter((collection) => requestedKeys.has(collection.key) && !collection.is_dynamic)
+          .map((collection) => collection.key),
       );
       if (removableKeys.size === 0) return state;
+      const collections = state.collections.filter((collection) => !removableKeys.has(collection.key));
       return {
         ...pushHistory(state),
-        collections: state.collections.filter((c) => !removableKeys.has(c.key)),
-        activeCategory:
-          state.activeCategory && removableKeys.has(state.activeCategory)
-            ? "all"
-            : state.activeCategory,
-        selectedCategoryKeys: state.selectedCategoryKeys.filter(
-          (k) => !removableKeys.has(k)
-        ),
+        ...reconcileSelection(state, collections),
+        collections,
       };
     }),
 
   renameCategory: (key, newName) =>
-    set((state) => ({
-      ...pushHistory(state),
-      collections: state.collections.map((c) =>
-        c.key === key ? { ...c, name: newName } : c
-      ),
-    })),
+    set((state) => {
+      const trimmed = newName.trim();
+      const target = state.collections.find((collection) => collection.key === key);
+      if (!target || target.is_dynamic || !trimmed || target.name === trimmed) return state;
+      return {
+        ...pushHistory(state),
+        collections: state.collections.map((collection) =>
+          collection === target ? { ...collection, name: trimmed } : collection,
+        ),
+      };
+    }),
 
-  addGameToCategory: (key, appId) =>
-    set((state) => ({
-      ...pushHistory(state),
-      collections: state.collections.map((c) =>
-        c.key === key && !c.added.includes(appId)
-          ? { ...c, added: [...c.added, appId] }
-          : c
-      ),
-    })),
+  addGameToCategory: (key, appId) => get().addGamesToCategory(key, [appId]),
 
-  removeGameFromCategory: (key, appId) =>
-    set((state) => ({
-      ...pushHistory(state),
-      collections: state.collections.map((c) =>
-        c.key === key
-          ? { ...c, added: c.added.filter((id) => id !== appId) }
-          : c
-      ),
-    })),
+  removeGameFromCategory: (key, appId) => get().removeGamesFromCategory(key, [appId]),
 
   addGamesToCategory: (key, appIds) =>
-    set((state) => ({
-      ...pushHistory(state),
-      collections: state.collections.map((c) => {
-        if (c.key !== key) return c;
-        const existing = new Set(c.added);
-        const newIds = appIds.filter((id) => !existing.has(id));
-        return { ...c, added: [...c.added, ...newIds] };
-      }),
-    })),
+    set((state) => {
+      const target = state.collections.find((collection) => collection.key === key);
+      if (!target || target.is_dynamic) return state;
+      const existing = new Set(target.added);
+      const newIds = validAppIds(appIds).filter((id) => !existing.has(id));
+      if (newIds.length === 0) return state;
+      return {
+        ...pushHistory(state),
+        collections: state.collections.map((collection) =>
+          collection === target ? { ...collection, added: [...collection.added, ...newIds] } : collection,
+        ),
+      };
+    }),
 
   removeGamesFromCategory: (key, appIds) =>
-    set((state) => ({
-      ...pushHistory(state),
-      collections: state.collections.map((c) =>
-        c.key === key
-          ? { ...c, added: c.added.filter((id) => !appIds.includes(id)) }
-          : c
-      ),
-    })),
+    set((state) => {
+      const target = state.collections.find((collection) => collection.key === key);
+      if (!target || target.is_dynamic) return state;
+      const removed = new Set(appIds);
+      const added = target.added.filter((id) => !removed.has(id));
+      if (added.length === target.added.length) return state;
+      return {
+        ...pushHistory(state),
+        collections: state.collections.map((collection) =>
+          collection === target ? { ...collection, added } : collection,
+        ),
+      };
+    }),
 
   mergeCategories: (sourceKey, targetKey) =>
     set((state) => {
-      const source = state.collections.find((c) => c.key === sourceKey);
-      if (!source) return state;
+      if (sourceKey === targetKey) return state;
+      const source = state.collections.find((collection) => collection.key === sourceKey);
+      const target = state.collections.find((collection) => collection.key === targetKey);
+      if (!source || !target || source.is_dynamic || target.is_dynamic) return state;
+      const added = [...new Set([...target.added, ...source.added])];
       return {
         ...pushHistory(state),
         collections: state.collections
-          .map((c) => {
-            if (c.key === targetKey) {
-              const existing = new Set(c.added);
-              const newIds = source.added.filter((id) => !existing.has(id));
-              return { ...c, added: [...c.added, ...newIds] };
-            }
-            return c;
-          })
-          .filter((c) => c.key !== sourceKey),
-        selectedCategoryKeys: state.selectedCategoryKeys.filter(
-          (k) => k !== sourceKey
-        ),
+          .filter((collection) => collection.key !== sourceKey)
+          .map((collection) => collection === target ? { ...collection, added } : collection),
+        activeCategory: state.activeCategory === sourceKey ? targetKey : state.activeCategory,
+        selectedCategoryKeys: state.selectedCategoryKeys.filter((key) => key !== sourceKey),
       };
     }),
 
   mergeCategoriesIntoTarget: (selectedKeys, targetKey) =>
     set((state) => {
-      const target = state.collections.find((c) => c.key === targetKey);
-      if (!target) return state;
-      const sources = selectedKeys.filter((k) => k !== targetKey);
+      const target = state.collections.find((collection) => collection.key === targetKey);
+      if (!target || target.is_dynamic) return state;
+      const byKey = new Map(state.collections.map((collection) => [collection.key, collection]));
+      const sources = [...new Set(selectedKeys)]
+        .filter((key) => key !== targetKey)
+        .map((key) => byKey.get(key))
+        .filter((collection): collection is SteamCollection => !!collection && !collection.is_dynamic);
+      if (sources.length === 0) return state;
       const union = new Set(target.added);
-      for (const k of sources) {
-        const c = state.collections.find((x) => x.key === k);
-        if (c) for (const id of c.added) union.add(id);
-      }
-      const removeKeys = new Set(sources);
-      let activeCategory = state.activeCategory;
-      if (activeCategory && removeKeys.has(activeCategory)) {
-        activeCategory = targetKey;
-      }
+      for (const source of sources) for (const id of source.added) union.add(id);
+      const removeKeys = new Set(sources.map((collection) => collection.key));
       return {
         ...pushHistory(state),
         collections: state.collections
-          .filter((c) => !removeKeys.has(c.key))
-          .map((c) =>
-            c.key === targetKey ? { ...c, added: [...union] } : c
-          ),
+          .filter((collection) => !removeKeys.has(collection.key))
+          .map((collection) => collection === target ? { ...collection, added: [...union] } : collection),
         selectedCategoryKeys: [],
-        activeCategory,
+        activeCategory: state.activeCategory && removeKeys.has(state.activeCategory)
+          ? targetKey : state.activeCategory,
       };
     }),
 
   mergeSelectedIntoNewCategory: (selectedKeys, newName) =>
     set((state) => {
       const trimmed = newName.trim();
-      if (!trimmed || selectedKeys.length === 0) return state;
+      if (!trimmed) return state;
+      const byKey = new Map(state.collections.map((collection) => [collection.key, collection]));
+      const sources = [...new Set(selectedKeys)]
+        .map((key) => byKey.get(key))
+        .filter((collection): collection is SteamCollection => !!collection && !collection.is_dynamic);
+      if (sources.length === 0) return state;
       const union = new Set<number>();
-      for (const k of selectedKeys) {
-        const c = state.collections.find((x) => x.key === k);
-        if (c) for (const id of c.added) union.add(id);
-      }
-      const removeKeys = new Set(selectedKeys);
-      const ts = Date.now();
-      const newKey = `user-collections.uc-new-${ts}`;
-      const newCol = {
-        id: `uc-new-${ts}`,
-        key: newKey,
-        name: trimmed,
-        added: [...union],
-        removed: [] as number[],
-        timestamp: Math.floor(Date.now() / 1000),
-        is_deleted: false,
-        is_dynamic: false,
-      };
-      let activeCategory = state.activeCategory;
-      if (activeCategory && removeKeys.has(activeCategory)) {
-        activeCategory = newKey;
-      }
+      for (const source of sources) for (const id of source.added) union.add(id);
+      const removeKeys = new Set(sources.map((collection) => collection.key));
+      const newCollection = createStaticCollection(state.collections, trimmed, [...union]);
       return {
         ...pushHistory(state),
         collections: [
-          ...state.collections.filter((c) => !removeKeys.has(c.key)),
-          newCol,
+          ...state.collections.filter((collection) => !removeKeys.has(collection.key)),
+          newCollection,
         ],
         selectedCategoryKeys: [],
-        activeCategory,
+        activeCategory: state.activeCategory && removeKeys.has(state.activeCategory)
+          ? newCollection.key : state.activeCategory,
       };
     }),
 
   duplicateCategory: (sourceKey, newName) =>
     set((state) => {
-      const source = state.collections.find((c) => c.key === sourceKey);
+      const source = state.collections.find((collection) => collection.key === sourceKey);
       const trimmed = newName.trim();
       if (!source || !trimmed) return state;
-      const ts = Date.now();
-      const newKey = `user-collections.uc-new-${ts}`;
       return {
         ...pushHistory(state),
         collections: [
           ...state.collections,
-          {
-            id: `uc-new-${ts}`,
-            key: newKey,
-            name: trimmed,
-            added: [...source.added],
-            removed: [],
-            timestamp: Math.floor(Date.now() / 1000),
-            is_deleted: false,
-            is_dynamic: false,
-          },
+          createStaticCollection(state.collections, trimmed, [...new Set(source.added)]),
         ],
       };
     }),
@@ -359,6 +345,7 @@ export const useCategoryStore = create<CategoryState>((set, get) => ({
       if (state._history.length === 0) return state;
       const prev = state._history[state._history.length - 1];
       return {
+        ...reconcileSelection(state, prev),
         collections: prev,
         _history: state._history.slice(0, -1),
         _future: [state.collections, ...state._future],
@@ -372,8 +359,9 @@ export const useCategoryStore = create<CategoryState>((set, get) => ({
       if (state._future.length === 0) return state;
       const next = state._future[0];
       return {
+        ...reconcileSelection(state, next),
         collections: next,
-        _history: [...state._history, state.collections],
+        _history: [...state._history, state.collections].slice(-50),
         _future: state._future.slice(1),
         dirty: JSON.stringify(next) !== JSON.stringify(state._saved),
         _lastChangeOrigin: "manual",
@@ -382,6 +370,7 @@ export const useCategoryStore = create<CategoryState>((set, get) => ({
 
   discardChanges: () =>
     set((state) => ({
+      ...reconcileSelection(state, state._saved),
       collections: structuredClone(state._saved),
       dirty: false,
       _history: [],
@@ -394,7 +383,7 @@ export const useCategoryStore = create<CategoryState>((set, get) => ({
 
   getGamesInCategory: (key) => {
     const collection = get().collections.find((c) => c.key === key);
-    return collection?.added ?? [];
+    return collection ? [...collection.added] : [];
   },
 
   getCategoriesForGame: (appId) => {
