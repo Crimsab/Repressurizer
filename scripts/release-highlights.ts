@@ -1,4 +1,6 @@
 const RELEASE_HIGHLIGHTS: Record<string, string> = {
+  "0.8.6":
+    "This update fixes library scrolling and concurrent edits, preserves profile history and recovers interrupted collection writes. Steam Store country selection now applies regional pricing and availability, with searchable countries and bundled flags. Steam tags, Deck metadata, travel notes, and documentation are also improved.",
   "0.8.5":
     "This update adds a Ctrl+K command palette with categorized views, tools and games, an Achievement Hunter tab inside the Achievements dialog, Kanban hover priority quick actions with per-column WIP limits, per-game wishlist sale alerts, a standalone HTML library export, a CLI local API client, portable self-update with staged replace, and unified resizable dialog chrome.",
   "0.8.4":
