@@ -192,9 +192,13 @@ pub(super) fn write_leveldb_catalog(
     source: &LevelDbCatalog,
     catalog_json: &str,
 ) -> Result<(), String> {
-    let mut db = open_leveldb(&source.path)?;
     let encoded = encode_leveldb_catalog(catalog_json, source.encoding);
-    db.put(&source.key, &encoded)
+    write_leveldb_raw(source, &encoded)
+}
+
+pub(super) fn write_leveldb_raw(source: &LevelDbCatalog, raw: &[u8]) -> Result<(), String> {
+    let mut db = open_leveldb(&source.path)?;
+    db.put(&source.key, raw)
         .map_err(|e| format!("Failed to write Steam LevelDB catalog: {}", e))?;
     db.flush()
         .map_err(|e| format!("Failed to flush Steam LevelDB catalog: {}", e))?;

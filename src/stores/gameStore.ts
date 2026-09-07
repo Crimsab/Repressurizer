@@ -196,7 +196,6 @@ interface GameState {
   installedAppIds: number[];
   installedLibraryReady: boolean;
   details: Record<number, GameDetails>;
-  loading: boolean;
   error: string | null;
   searchQuery: string;
   sortBy: SortBy;
@@ -215,7 +214,6 @@ interface GameState {
   setBulkStoreReleaseDates: (dates: StoreReleaseDateResult[]) => void;
   clearDetailsCache: () => void;
   hydrateDetailsCache: () => Promise<void>;
-  setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   setSearchQuery: (query: string) => void;
   setSortBy: (sort: SortBy) => void;
@@ -242,7 +240,6 @@ export const useGameStore = create<GameState>((set, get) => ({
   installedAppIds: [],
   installedLibraryReady: false,
   details: {},
-  loading: false,
   error: null,
   searchQuery: "",
   sortBy: "name",
@@ -264,7 +261,7 @@ export const useGameStore = create<GameState>((set, get) => ({
           previous[key as keyof OwnedGame] === incoming[key as keyof OwnedGame]) && Object.keys(previous).length === Object.keys(incoming).length ? previous : incoming;
       }
       const unchanged = Object.keys(map).length === Object.keys(state.games).length && Object.keys(map).every((id) => map[Number(id)] === state.games[Number(id)]);
-      return { games: unchanged ? state.games : map, loading: false, error: null };
+      return { games: unchanged ? state.games : map, error: null };
     }),
 
   mergeGames: (games) =>
@@ -461,8 +458,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     }
   },
 
-  setLoading: (loading) => set({ loading }),
-  setError: (error) => set({ error, loading: false }),
+  setError: (error) => set({ error }),
   setSearchQuery: (searchQuery) => set({ searchQuery }),
   setSortBy: (sortBy) => set({ sortBy }),
   toggleSortAsc: () => set((state) => ({ sortAsc: !state.sortAsc })),

@@ -37,7 +37,7 @@ export function prepareProfileApplication(
       const template = current[section];
       if (!isRecord(incoming) || !isRecord(template)) throw new Error(`Invalid ${section} profile section`);
       const safe = Object.fromEntries(Object.entries(incoming).filter(([key]) => Object.hasOwn(template, key)));
-      if (!matchesKnownShape(safe, template)) throw new Error(`Invalid ${section} profile field type`);
+      if (section !== "history" && !matchesKnownShape(safe, template)) throw new Error(`Invalid ${section} profile field type`);
       if (section === "diary") {
         if (safe.entries) {
           for (const entry of Object.values(safe.entries as object)) {

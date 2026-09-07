@@ -13,7 +13,7 @@ async function setup(options: { files?: Map<string, string>; persisted?: Map<str
   const rename = vi.fn(async (from: string, to: string) => { files.set(to, files.get(from)!); files.delete(from); });
   vi.doMock("@tauri-apps/plugin-fs", () => ({ readDir, writeTextFile, rename,
     readTextFile: vi.fn(async (path: string) => files.get(path)!), remove: vi.fn(async (path: string) => { files.delete(path); }) }));
-  vi.doMock("./profileRuntime", () => ({ captureProfileSections: () => sections, applyProfileSections: apply }));
+  vi.doMock("./profileRuntime", () => ({ captureProfileSections: () => sections, applyProfileSections: apply, ensureProfileHistoryReady: vi.fn(async () => {}) }));
   vi.doMock("../lib/tauri", () => ({
     loadAppData: vi.fn(async (key: string) => persisted.get(key) ?? null),
     saveAppData: vi.fn(async (key: string, data: string) => { persisted.set(key, data); }),

@@ -1,3 +1,5 @@
+import { parseCollectionSnapshot, parseCollectionTimelineEvent } from "../lib/collectionTimeMachine";
+import { parseEntityJournalEntry } from "../lib/entityJournal";
 import type { StoreApi } from "zustand";
 import { prepareProfileApplication } from "../lib/profileApplication";
 import { withPersistenceTransaction } from "../lib/persistenceQueue";
@@ -7,7 +9,7 @@ import type { AppSettings, SteamCollection } from "../lib/types";
 import { useAutoCategorizeStore } from "./autoCategorizeStore";
 import { useCategoryStore } from "./categoryStore";
 import { useCollectionTimeMachineStore } from "./collectionTimeMachineStore";
-import { useConflictResolverStore } from "./conflictResolverStore";
+import { parseRecentConflictDecision, useConflictResolverStore } from "./conflictResolverStore";
 import { useDiaryStore, type DiaryProfileData } from "./diaryStore";
 import { useEntityJournalStore } from "./entityJournalStore";
 import { useNotesStore } from "./notesStore";
@@ -30,9 +32,35 @@ export function captureProfileSections(includeHistory: boolean): RepressurizerPr
   };
 }
 
+export async function ensureProfileHistoryReady(): Promise<void> {
+  await Promise.all([
+    useCollectionTimeMachineStore.getState().hydrate(),
+    useConflictResolverStore.getState().hydrate(),
+    useEntityJournalStore.getState().hydrate(),
+  ]);
+  if (!useCollectionTimeMachineStore.getState().hydrated || !useConflictResolverStore.getState().hydrated || !useEntityJournalStore.getState().hydrated) {
+    throw new Error("Profile history could not be loaded. Retry before importing or exporting history.");
+  }
+}
+
+function validateHistory(history: unknown): void {
+  const value = history as Record<string, unknown[]>;
+  const snapshots = (value.collectionSnapshots ?? []).map(parseCollectionSnapshot);
+  if (snapshots.some((snapshot) => !snapshot)) throw new Error("Invalid collection history snapshot");
+  const ids = new Set([...useCollectionTimeMachineStore.getState().snapshots.map((snapshot) => snapshot.id), ...snapshots.map((snapshot) => snapshot!.id)]);
+  if ((value.collectionEvents ?? []).some((event) => !parseCollectionTimelineEvent(event, ids))) throw new Error("Invalid collection history event");
+  if ((value.recentConflictDecisions ?? []).some((decision) => !parseRecentConflictDecision(decision))) throw new Error("Invalid conflict history decision");
+  if ((value.entityJournal ?? []).some((entry) => !parseEntityJournalEntry(entry))) throw new Error("Invalid entity journal entry");
+}
+
 export function applyProfileSections(document: RepressurizerProfileDocument, selected: ReadonlySet<ProfileSectionKey>, origin: "import" | "sync" = "import") {
   const sections = prepareProfileApplication(document, selected, captureProfileSections(true));
   if (Object.keys(sections).length === 0) return;
+  if (!useEntityJournalStore.getState().hydrated ||
+      ((sections.history || sections.collections) && (!useCollectionTimeMachineStore.getState().hydrated || !useConflictResolverStore.getState().hydrated))) {
+    throw new Error("Load profile history before applying a profile");
+  }
+  if (sections.history) validateHistory(sections.history);
   const undo = [captureStore(useDiaryStore), captureStore(useAutoCategorizeStore), captureStore(useCategoryStore),
     captureStore(useCollectionTimeMachineStore), captureStore(useConflictResolverStore), captureStore(useEntityJournalStore),
     captureStore(useNotesStore), captureStore(useReviewStore), captureStore(useSessionPlannerStore),
@@ -84,5 +112,10 @@ function applyPreparedSections(sections: RepressurizerProfileDocument["sections"
     ...useCategoryStore.getState().collections.filter((collection) => collection.is_dynamic),
     ...(sections.collections as SteamCollection[]).filter((collection) => !collection.is_dynamic),
   ], origin);
-  if (selected.has("history") && sections.history) { const history = sections.history as { collectionSnapshots?: unknown[] }; for (const snapshot of history.collectionSnapshots ?? []) useCollectionTimeMachineStore.getState().addImportedSnapshot(snapshot as Parameters<ReturnType<typeof useCollectionTimeMachineStore.getState>["addImportedSnapshot"]>[0]); }
+  if (selected.has("history") && sections.history) {
+    const history = sections.history as Record<string, unknown[]>;
+    useCollectionTimeMachineStore.getState().importHistory(history.collectionSnapshots ?? [], history.collectionEvents ?? []);
+    useConflictResolverStore.getState().importDecisions(history.recentConflictDecisions ?? []);
+    useEntityJournalStore.getState().importEntries(history.entityJournal ?? []);
+  }
 }

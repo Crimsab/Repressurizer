@@ -16,6 +16,12 @@ Allowed sections are `diary`, `kanban`, `autocat`, `planner`, `preferences`,
 migration baseline; newer versions are rejected with a distinct error so an
 older app never silently discards fields.
 
+The optional `history` section restores collection snapshots and events,
+recent conflict decisions, and entity journal entries. Imports merge records by
+identity and respect local retention limits; importing the same history twice
+does not duplicate it. Imported journal entries remain audit records: they do
+not replay edits or replace the receiving installation's device identity.
+
 ## Folder Sync Envelope v1
 
 The sync envelope contains `schemaVersion`, `deviceId`, monotonic per-device

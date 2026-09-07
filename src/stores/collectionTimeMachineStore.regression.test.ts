@@ -68,6 +68,9 @@ describe("Time Machine persistence and hydration", () => {
   it("still loads existing history when there are no intervening edits", async () => {
     const x = await setup();
     x.record();
+    // Persistence is deferred until the initial disk read completes so a
+    // pre-hydration edit cannot overwrite an older history file.
+    await x.store.getState().hydrate();
     await x.flushPersistence();
     x.store.setState({ events: [], snapshots: [], hydrated: false });
     await x.store.getState().hydrate();

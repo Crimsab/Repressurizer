@@ -17,7 +17,7 @@ import { matchesSavedAdvancedFilter, useAdvancedFilterStore } from "../../stores
 import { GameCard } from "./GameCard";
 import type { OwnedGame } from "../../lib/types";
 import { useT, type TranslationKey } from "../../lib/i18n";
-import { Spinner, MagnifyingGlass, FolderOpen, Clock, UsersThree } from "@phosphor-icons/react";
+import { MagnifyingGlass, FolderOpen, Clock, UsersThree } from "@phosphor-icons/react";
 import { extractReleaseYear, parseSearchQuery, matchesFilter } from "../../lib/search";
 import { possibleDuplicateAppIds } from "../../lib/gameIdentity";
 import { scoreForRating } from "../../lib/steamRatings";
@@ -63,7 +63,6 @@ export function GameGrid() {
   const sortBy = useGameStore((s) => s.sortBy);
   const sortAsc = useGameStore((s) => s.sortAsc);
   const viewMode = useGameStore((s) => s.viewMode);
-  const loading = useGameStore((s) => s.loading);
   const clearSelection = useGameStore((s) => s.clearSelection);
   const rangeSelectGames = useGameStore((s) => s.rangeSelectGames);
   const filters = useGameStore((s) => s.filters);
@@ -388,17 +387,6 @@ export function GameGrid() {
   const virtual = useVirtualLibrary(filteredGames.length, viewMode, resetKey);
   const visibleGames = filteredGames.slice(virtual.start, virtual.end);
 
-  if (loading) {
-    return (
-      <div className="flex h-full items-center justify-center">
-        <div className="text-center animate-fade-in">
-          <Spinner size={28} className="mx-auto mb-3 text-repressurizer-accent animate-spin" />
-          <p className="text-sm text-repressurizer-text-muted">{t("games.loading")}</p>
-        </div>
-      </div>
-    );
-  }
-
   if (filteredGames.length === 0) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -552,13 +540,13 @@ const GameListRow = memo(function GameListRow({
       onContextMenu={(e) => onContextMenu(e, game)}
       onPointerEnter={onIntent}
       onFocus={onIntent}
-      className={`game-row group flex items-center gap-3 rounded-lg px-3 py-2 transition-colors ${
+      className={`game-row group flex h-9 items-center gap-3 rounded-lg px-3 py-2 transition-colors ${
         isSelected
           ? "bg-repressurizer-accent/8 ring-1 ring-repressurizer-accent/40"
           : "hover:bg-repressurizer-surface-hover"
       }`}
     >
-      <span className="flex-1 truncate text-sm text-white">{String(game.name ?? "")}</span>
+      <span className="min-w-24 flex-1 truncate text-sm text-white">{String(game.name ?? "")}</span>
       {(isPossibleDuplicate || game.is_collection_only) && (
         <span className="shrink-0 rounded-md border border-repressurizer-border-subtle px-1.5 py-0.5 font-mono text-[10px] text-repressurizer-text-faint">
           #{game.appid}
@@ -580,23 +568,23 @@ const GameListRow = memo(function GameListRow({
           {t("games.family")}
         </span>
       )}
-      <span className="inline-flex items-center gap-1 font-mono text-xs text-repressurizer-text-faint tabular-nums">
+      <span className="inline-flex shrink-0 items-center gap-1 font-mono text-xs text-repressurizer-text-faint tabular-nums">
         <Clock size={11} />
         {hours}h
       </span>
-      <div className="flex gap-1">
+      <div className="flex min-w-0 max-w-[40%] gap-1 overflow-hidden">
         {categories.slice(0, 3).map((cat) => (
           <span
             key={cat.key}
             title={String(cat.name ?? "")}
-            className="rounded-md bg-repressurizer-accent/10 px-1.5 py-0.5 text-[10px] text-repressurizer-accent/70"
+            className="min-w-0 truncate rounded-md bg-repressurizer-accent/10 px-1.5 py-0.5 text-[10px] text-repressurizer-accent/70"
           >
             {String(cat.name ?? "")}
           </span>
         ))}
         {categories.length > 3 && (
           <span
-            className="text-[10px] text-repressurizer-text-faint font-mono"
+            className="shrink-0 text-[10px] text-repressurizer-text-faint font-mono"
             title={categories.map((c) => c.name).join(", ")}
           >
             +{categories.length - 3}

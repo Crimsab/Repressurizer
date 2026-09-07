@@ -23,6 +23,58 @@ export interface EntityJournalEntry {
   checksum: string;
 }
 
+const JOURNAL_ENTITY_TYPES: JournalEntityType[] = [
+  "collection",
+  "diary-entry",
+  "autocat-rule",
+  "planner-preset",
+  "tonight-queue",
+  "preference",
+  "profile",
+];
+const JOURNAL_OPERATIONS: JournalOperation[] = ["create", "update", "delete"];
+
+/** Validate an entry before it is allowed into the durable journal. */
+export function parseEntityJournalEntry(value: unknown): EntityJournalEntry | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const entry = value as Partial<EntityJournalEntry>;
+  const { id, deviceId, sequence, entityType, entityId, operation, changedAt, baseChecksum, checksum } = entry;
+  if (typeof id !== "string" || !id || id.length > 512 ||
+      typeof deviceId !== "string" || !deviceId || deviceId.length > 256 ||
+      typeof sequence !== "number" || !Number.isSafeInteger(sequence) || sequence < 1 || sequence >= Number.MAX_SAFE_INTEGER - 1 ||
+      !JOURNAL_ENTITY_TYPES.includes(entityType as JournalEntityType) ||
+      typeof entityId !== "string" || !entityId || entityId.length > 2048 ||
+      !JOURNAL_OPERATIONS.includes(operation as JournalOperation) ||
+      typeof changedAt !== "number" || !Number.isFinite(changedAt) ||
+      (baseChecksum !== null && typeof baseChecksum !== "string") ||
+      typeof checksum !== "string" || !checksum) return null;
+  return {
+    id,
+    deviceId,
+    sequence,
+    entityType: entityType as JournalEntityType,
+    entityId,
+    operation: operation as JournalOperation,
+    changedAt,
+    baseChecksum: baseChecksum ?? null,
+    checksum,
+  };
+}
+
+/**
+ * Move a locally-created entry onto the durable device sequence discovered
+ * during hydration. The value is intentionally not replayed: the journal is
+ * an audit trail and does not contain enough data to safely reapply commands.
+ */
+export function rebaseJournalEntry(entry: EntityJournalEntry, deviceId: string, sequence: number): EntityJournalEntry {
+  return {
+    ...entry,
+    deviceId,
+    sequence,
+    id: stableEventId([deviceId, sequence, entry.entityType, entry.entityId, entry.operation, entry.checksum]),
+  };
+}
+
 function normalizeJson(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(normalizeJson);
   if (value && typeof value === "object") {

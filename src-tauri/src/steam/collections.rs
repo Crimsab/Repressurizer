@@ -9,10 +9,12 @@ use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
 
 mod leveldb;
+#[cfg(test)]
+use leveldb::open_leveldb;
 use leveldb::{
-    encode_leveldb_catalog, get_collections_path, get_leveldb_backup_name,
-    leveldb_backup_for_json_backup, open_leveldb, read_json_catalog, read_leveldb_catalog,
-    write_leveldb_catalog,
+    decode_leveldb_catalog, encode_leveldb_catalog, get_collections_path, get_leveldb_backup_name,
+    leveldb_backup_for_json_backup, parse_catalog, read_json_catalog, read_leveldb_catalog,
+    write_leveldb_catalog, write_leveldb_raw,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -380,15 +382,126 @@ fn deterministic_id(input: &str) -> String {
         .collect()
 }
 
+fn read_existing_json(path: &Path) -> Result<Option<String>, String> {
+    match fs::read_to_string(path) {
+        Ok(content) => Ok(Some(content)),
+        Err(error) if error.kind() == ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(format!(
+            "Failed to read the existing Steam collection catalog {}: {}",
+            path.display(),
+            error
+        )),
+    }
+}
+
+fn restore_json_catalog(path: &Path, original: Option<&str>) -> Result<(), String> {
+    match original {
+        Some(content) => crate::app_data::write_text_file_atomic(
+            path,
+            content,
+            "Steam collection catalog recovery",
+            true,
+        ),
+        None => match fs::remove_file(path) {
+            Ok(()) => Ok(()),
+            Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
+            Err(error) => Err(format!(
+                "Failed to remove the newly written Steam collection catalog {}: {}",
+                path.display(),
+                error
+            )),
+        },
+    }
+}
+
+fn validate_leveldb_backup(
+    raw: &[u8],
+    expected_catalog: &[serde_json::Value],
+    backup_filename: &str,
+) -> Result<(), String> {
+    let (_, catalog_json) = decode_leveldb_catalog(raw)
+        .map_err(|error| format!("Steam LevelDB backup {backup_filename} is invalid: {error}"))?;
+    let catalog = parse_catalog(&catalog_json)
+        .map_err(|error| format!("Steam LevelDB backup {backup_filename} is invalid: {error}"))?;
+    if catalog != expected_catalog {
+        return Err(format!(
+            "Steam LevelDB backup {backup_filename} does not match its JSON backup"
+        ));
+    }
+    Ok(())
+}
+
+/// Write the JSON catalog and its optional LevelDB mirror as one recoverable
+/// operation. The callbacks keep the storage writes and recovery paths
+/// independent from the concrete filesystem implementation.
+#[allow(clippy::too_many_arguments)]
+fn persist_catalog_pair_with<WriteJson, WriteLevelDb, RestoreJson, RestoreLevelDb>(
+    operation: &str,
+    output: &str,
+    original_json: Option<&str>,
+    original_leveldb: Option<&[u8]>,
+    write_json: WriteJson,
+    write_leveldb: WriteLevelDb,
+    restore_json: RestoreJson,
+    restore_leveldb: RestoreLevelDb,
+) -> Result<(), String>
+where
+    WriteJson: FnOnce(&str) -> Result<(), String>,
+    WriteLevelDb: FnOnce(&str) -> Result<(), String>,
+    RestoreJson: FnOnce(Option<&str>) -> Result<(), String>,
+    RestoreLevelDb: FnOnce(&[u8]) -> Result<(), String>,
+{
+    if let Err(json_error) = write_json(output) {
+        // A directory flush can fail after the atomic replacement succeeded.
+        return Err(match restore_json(original_json) {
+            Ok(()) => format!("{operation}: {json_error}. The original JSON catalog was restored."),
+            Err(error) => format!("{operation}: {json_error}. JSON recovery failed: {error}."),
+        });
+    }
+
+    let Some(original_leveldb) = original_leveldb else {
+        return Ok(());
+    };
+
+    if let Err(leveldb_error) = write_leveldb(output) {
+        let json_recovery = restore_json(original_json);
+        let leveldb_recovery = restore_leveldb(original_leveldb);
+
+        let mut message = format!("{operation}: {leveldb_error}");
+        let mut recovery_failed = false;
+
+        if let Err(error) = json_recovery {
+            recovery_failed = true;
+            message.push_str(&format!(" JSON recovery failed: {error}."));
+        }
+        if let Err(error) = leveldb_recovery {
+            recovery_failed = true;
+            message.push_str(&format!(" LevelDB recovery failed: {error}."));
+        }
+        if !recovery_failed {
+            message.push_str(" The original JSON and LevelDB catalogs were restored.");
+        }
+
+        return Err(message);
+    }
+
+    Ok(())
+}
+
 #[tauri::command]
 pub fn load_collections(
     steam_path: String,
     steam_id3: String,
 ) -> Result<Vec<SteamCollection>, String> {
     let path = get_collections_path(&steam_path, &steam_id3);
-    let catalog = match read_leveldb_catalog(&steam_path, &steam_id3).ok().flatten() {
-        Some(leveldb) => leveldb.catalog,
-        None => read_json_catalog(&path)?,
+    let catalog = match read_leveldb_catalog(&steam_path, &steam_id3) {
+        Ok(Some(leveldb)) => leveldb.catalog,
+        Ok(None) => read_json_catalog(&path)?,
+        Err(error) => {
+            return Err(format!(
+                "Could not read Steam's local collection database; the JSON fallback was skipped because it may be stale: {error}"
+            ));
+        }
     };
 
     parse_collections_from_catalog(&catalog)
@@ -430,6 +543,7 @@ pub(crate) fn save_collections_unlocked(
         Some(source) => source.catalog.clone(),
         None => read_json_catalog(&path)?,
     };
+    let original_json = read_existing_json(&path)?;
 
     let old_data = extract_collection_data(&old_catalog);
     let new_data: Vec<(String, std::collections::HashSet<u64>)> = collections
@@ -491,23 +605,35 @@ pub(crate) fn save_collections_unlocked(
     let output =
         serde_json::to_string(&catalog).map_err(|e| format!("Failed to serialize: {}", e))?;
 
-    crate::app_data::write_text_file_atomic_validated(
-        &path,
+    let leveldb_source = leveldb.as_ref();
+    persist_catalog_pair_with(
+        "Failed to save Steam collections",
         &output,
-        "Steam collection catalog",
-        true,
+        original_json.as_deref(),
+        leveldb_source.map(|source| source.raw_value.as_slice()),
         |candidate| {
-            serde_json::from_str::<Vec<serde_json::Value>>(candidate)
-                .map(|_| ())
-                .map_err(|error| error.to_string())
+            crate::app_data::write_text_file_atomic_validated(
+                &path,
+                candidate,
+                "Steam collection catalog",
+                true,
+                |value| {
+                    serde_json::from_str::<Vec<serde_json::Value>>(value)
+                        .map(|_| ())
+                        .map_err(|error| error.to_string())
+                },
+            )
         },
-    )?;
-
-    if let Some(leveldb) = &leveldb {
-        write_leveldb_catalog(leveldb, &output)?;
-    }
-
-    Ok(())
+        |candidate| match leveldb_source {
+            Some(source) => write_leveldb_catalog(source, candidate),
+            None => Ok(()),
+        },
+        |original| restore_json_catalog(&path, original),
+        |raw| match leveldb_source {
+            Some(source) => write_leveldb_raw(source, raw),
+            None => Ok(()),
+        },
+    )
 }
 
 #[tauri::command]
@@ -590,8 +716,36 @@ pub fn restore_backup(
         return Err(format!("Backup file not found: {}", backup_filename));
     }
 
-    // Backup current before restoring
+    let restored_json = fs::read_to_string(&backup_path)
+        .map_err(|e| format!("Failed to read restored backup: {}", e))?;
+    let restored_catalog = serde_json::from_str::<Vec<serde_json::Value>>(&restored_json)
+        .map_err(|e| format!("Failed to parse restored backup: {}", e))?;
+
     let leveldb = read_leveldb_catalog(&steam_path, &steam_id3)?;
+    let original_json = read_existing_json(&collections_path)?;
+    let restored_leveldb_raw = if let Some(leveldb) = &leveldb {
+        let raw = match leveldb_backup_for_json_backup(&backup_filename) {
+            Some(name) => match fs::read(dir.join(&name)) {
+                Ok(raw) => raw,
+                Err(error) if error.kind() == ErrorKind::NotFound => {
+                    encode_leveldb_catalog(&restored_json, leveldb.encoding)
+                }
+                Err(error) => {
+                    return Err(format!(
+                        "Failed to read Steam LevelDB backup {}: {}",
+                        name, error
+                    ));
+                }
+            },
+            None => encode_leveldb_catalog(&restored_json, leveldb.encoding),
+        };
+        validate_leveldb_backup(&raw, &restored_catalog, &backup_filename)?;
+        Some(raw)
+    } else {
+        None
+    };
+
+    // Backup current before restoring
     let current_catalog = match &leveldb {
         Some(source) => source.catalog.clone(),
         None => read_json_catalog(&collections_path)?,
@@ -606,23 +760,35 @@ pub fn restore_backup(
         "pre-restore",
     )?;
 
-    fs::copy(&backup_path, &collections_path)
-        .map_err(|e| format!("Failed to restore backup: {}", e))?;
-
-    if let Some(leveldb) = &leveldb {
-        let restored_json = fs::read_to_string(&backup_path)
-            .map_err(|e| format!("Failed to read restored backup: {}", e))?;
-        let raw = leveldb_backup_for_json_backup(&backup_filename)
-            .and_then(|name| fs::read(dir.join(name)).ok())
-            .unwrap_or_else(|| encode_leveldb_catalog(&restored_json, leveldb.encoding));
-        let mut db = open_leveldb(&leveldb.path)?;
-        db.put(&leveldb.key, &raw)
-            .map_err(|e| format!("Failed to restore Steam LevelDB backup: {}", e))?;
-        db.flush()
-            .map_err(|e| format!("Failed to flush restored Steam LevelDB backup: {}", e))?;
-    }
-
-    Ok(())
+    let leveldb_source = leveldb.as_ref();
+    persist_catalog_pair_with(
+        "Failed to restore Steam collections",
+        &restored_json,
+        original_json.as_deref(),
+        leveldb_source.map(|source| source.raw_value.as_slice()),
+        |candidate| {
+            crate::app_data::write_text_file_atomic_validated(
+                &collections_path,
+                candidate,
+                "Steam collection catalog",
+                true,
+                |value| {
+                    serde_json::from_str::<Vec<serde_json::Value>>(value)
+                        .map(|_| ())
+                        .map_err(|error| error.to_string())
+                },
+            )
+        },
+        |_candidate| match (leveldb_source, restored_leveldb_raw.as_deref()) {
+            (Some(source), Some(raw)) => write_leveldb_raw(source, raw),
+            _ => Ok(()),
+        },
+        |original| restore_json_catalog(&collections_path, original),
+        |raw| match leveldb_source {
+            Some(source) => write_leveldb_raw(source, raw),
+            None => Ok(()),
+        },
+    )
 }
 
 #[tauri::command]

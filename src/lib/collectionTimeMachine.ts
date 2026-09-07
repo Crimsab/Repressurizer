@@ -51,6 +51,37 @@ export interface CollectionTimelineEvent {
   diff: Omit<CollectionSnapshotDiff, "changes">;
 }
 
+const COLLECTION_ORIGINS: CollectionChangeOrigin[] = ["manual", "autocat", "import", "restore", "sync", "steam"];
+
+/** Validate an imported timeline event and keep only its durable fields. */
+export function parseCollectionTimelineEvent(value: unknown, snapshotIds?: ReadonlySet<string>): CollectionTimelineEvent | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const event = value as Partial<CollectionTimelineEvent>;
+  const diff = event.diff as Partial<Omit<CollectionSnapshotDiff, "changes">> | undefined;
+  const { id, occurredAt, steamAccountId, steamLibraryPath, deviceId, origin, beforeSnapshotId, afterSnapshotId } = event;
+  const summaryKeys: Array<keyof Omit<CollectionSnapshotDiff, "changes">> = [
+    "created", "deleted", "renamed", "colors", "reordered", "gamesAdded", "gamesRemoved",
+  ];
+  if (typeof id !== "string" || !id || id.length > 512 ||
+      typeof occurredAt !== "number" || !Number.isFinite(occurredAt) || typeof steamAccountId !== "string" ||
+      typeof steamLibraryPath !== "string" || typeof deviceId !== "string" ||
+      !COLLECTION_ORIGINS.includes(origin as CollectionChangeOrigin) ||
+      typeof beforeSnapshotId !== "string" || typeof afterSnapshotId !== "string" ||
+      !diff || typeof diff !== "object" || summaryKeys.some((key) => !Number.isSafeInteger(diff[key]) || (diff[key] as number) < 0) ||
+      (snapshotIds && (!snapshotIds.has(beforeSnapshotId) || !snapshotIds.has(afterSnapshotId)))) return null;
+  return {
+    id,
+    occurredAt,
+    steamAccountId,
+    steamLibraryPath,
+    deviceId,
+    origin: origin as CollectionChangeOrigin,
+    beforeSnapshotId,
+    afterSnapshotId,
+    diff: Object.fromEntries(summaryKeys.map((key) => [key, diff[key]])) as Omit<CollectionSnapshotDiff, "changes">,
+  };
+}
+
 function collectionBaseIdentity(collection: SteamCollection): string {
   if (collection.key) return `key:${collection.key}`;
   if (collection.id) return `id:${collection.id}`;
