@@ -27,10 +27,41 @@ interface ConflictResolverState extends PersistedConflictResolver {
   setDefaultPolicy: (policy: PersistedConflictResolver["defaultPolicy"]) => void;
   setKindPolicy: (kind: CollectionConflictKind, policy: "ask" | "steam" | "repressurizer") => void;
   recordDecisions: (mergeId: string, decisions: Array<Omit<RecentConflictDecision, "id" | "decidedAt" | "mergeId">>) => void;
+  importDecisions: (decisions: unknown[]) => number;
 }
 
-function persist(state: Pick<ConflictResolverState, "defaultPolicy" | "kindPolicies" | "recentDecisions">) {
-  void saveAppData(STORAGE_KEY, JSON.stringify({ version: SCHEMA_VERSION, ...state })).catch(() => {});
+type ConflictMutation =
+  | { kind: "default"; policy: PersistedConflictResolver["defaultPolicy"] }
+  | { kind: "policy"; conflictKind: CollectionConflictKind; policy: "ask" | "steam" | "repressurizer" }
+  | { kind: "decisions"; entries: RecentConflictDecision[] };
+
+let hydration: Promise<void> | null = null;
+const pending: ConflictMutation[] = [];
+
+function persist(state: PersistedConflictResolver) {
+  return saveAppData(STORAGE_KEY, JSON.stringify({ version: SCHEMA_VERSION,
+    defaultPolicy: state.defaultPolicy, kindPolicies: state.kindPolicies, recentDecisions: state.recentDecisions })).catch(() => {});
+}
+
+const conflictKinds: CollectionConflictKind[] = ["name", "color", "deletion", "creation", "membership", "order", "metadata"];
+const conflictChoices: ConflictResolutionChoice[] = ["steam", "repressurizer", "merge", "manual"];
+
+export function parseRecentConflictDecision(value: unknown): RecentConflictDecision | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const decision = value as Partial<RecentConflictDecision>;
+  const { id, decidedAt, mergeId, identity, kind, choice } = decision;
+  if (typeof id !== "string" || !id || id.length > 512 ||
+      typeof decidedAt !== "number" || !Number.isFinite(decidedAt) || typeof mergeId !== "string" || !mergeId ||
+      typeof identity !== "string" || !identity || !conflictKinds.includes(kind as CollectionConflictKind) ||
+      !conflictChoices.includes(choice as ConflictResolutionChoice)) return null;
+  return {
+    id,
+    decidedAt,
+    mergeId,
+    identity,
+    kind: kind as CollectionConflictKind,
+    choice: choice as ConflictResolutionChoice,
+  };
 }
 
 function parse(raw: string | null): PersistedConflictResolver | null {
@@ -42,33 +73,78 @@ function parse(raw: string | null): PersistedConflictResolver | null {
       version: SCHEMA_VERSION,
       defaultPolicy: ["ask", "steam", "repressurizer"].includes(value.defaultPolicy ?? "") ? value.defaultPolicy! : "ask",
       kindPolicies: value.kindPolicies ?? {},
-      recentDecisions: Array.isArray(value.recentDecisions) ? value.recentDecisions.slice(0, 200) : [],
+      recentDecisions: Array.isArray(value.recentDecisions)
+        ? value.recentDecisions.map(parseRecentConflictDecision).filter((item): item is RecentConflictDecision => Boolean(item)).slice(0, 200)
+        : [],
     };
   } catch { return null; }
 }
 
-export const useConflictResolverStore = create<ConflictResolverState>((set) => ({
-  version: SCHEMA_VERSION,
-  defaultPolicy: "ask",
-  kindPolicies: {},
-  recentDecisions: [],
-  hydrated: false,
-  hydrate: async () => {
-    const loaded = parse(await loadAppData(STORAGE_KEY).catch(() => null));
-    set(loaded ? { ...loaded, hydrated: true } : { hydrated: true });
+function applyMutations(base: PersistedConflictResolver, operations: ConflictMutation[]): PersistedConflictResolver {
+  let defaultPolicy = base.defaultPolicy;
+  let kindPolicies = { ...base.kindPolicies };
+  const decisions = new Map(base.recentDecisions.map((decision) => [decision.id, decision]));
+  for (const operation of operations) {
+    if (operation.kind === "default") defaultPolicy = operation.policy;
+    else if (operation.kind === "policy") {
+      if (operation.policy === "ask") delete kindPolicies[operation.conflictKind];
+      else kindPolicies[operation.conflictKind] = operation.policy;
+    } else {
+      for (const decision of operation.entries) decisions.set(decision.id, decision);
+    }
+  }
+  return {
+    version: SCHEMA_VERSION,
+    defaultPolicy,
+    kindPolicies,
+    recentDecisions: [...decisions.values()].sort((left, right) => right.decidedAt - left.decidedAt).slice(0, 200),
+  };
+}
+
+function commit(operation: ConflictMutation): void {
+  const store = useConflictResolverStore.getState();
+  const next = applyMutations(store, [operation]);
+  if (store.hydrated) void persist(next);
+  else pending.push(operation);
+  useConflictResolverStore.setState(next);
+  if (!store.hydrated) void useConflictResolverStore.getState().hydrate();
+}
+
+export const useConflictResolverStore = create<ConflictResolverState>((set, get) => ({
+  version: SCHEMA_VERSION, defaultPolicy: "ask", kindPolicies: {}, recentDecisions: [], hydrated: false,
+  hydrate: () => {
+    if (hydration) return hydration;
+    if (get().hydrated) return Promise.resolve();
+    hydration = (async () => {
+      let raw: string | null;
+      try { raw = await loadAppData(STORAGE_KEY); } catch { return; }
+      const loaded = parse(raw);
+      if (raw !== null && !loaded) return;
+      const next = applyMutations(loaded ?? { version: SCHEMA_VERSION, defaultPolicy: "ask", kindPolicies: {}, recentDecisions: [] }, pending);
+      const write = pending.length ? persist(next) : Promise.resolve();
+      pending.length = 0;
+      set({ ...next, hydrated: true });
+      await write;
+    })().finally(() => { hydration = null; });
+    return hydration;
   },
-  setDefaultPolicy: (defaultPolicy) => set((state) => { const next = { ...state, defaultPolicy }; persist(next); return { defaultPolicy }; }),
-  setKindPolicy: (kind, policy) => set((state) => {
-    const kindPolicies = { ...state.kindPolicies };
-    if (policy === "ask") delete kindPolicies[kind]; else kindPolicies[kind] = policy;
-    persist({ ...state, kindPolicies });
-    return { kindPolicies };
-  }),
-  recordDecisions: (mergeId, decisions) => set((state) => {
+  setDefaultPolicy: (policy) => commit({ kind: "default", policy }),
+  setKindPolicy: (kind, policy) => commit({ kind: "policy", conflictKind: kind, policy }),
+  recordDecisions: (mergeId, decisions) => {
     const decidedAt = Date.now();
     const entries = decisions.map((decision, index) => ({ ...decision, mergeId, decidedAt, id: `${mergeId}:${index}:${decision.identity}:${decision.kind}` }));
-    const recentDecisions = [...entries, ...state.recentDecisions].slice(0, 200);
-    persist({ ...state, recentDecisions });
-    return { recentDecisions };
-  }),
+    commit({ kind: "decisions", entries });
+  },
+  importDecisions: (incoming) => {
+    const known = new Set(get().recentDecisions.map((decision) => decision.id));
+    const entries: RecentConflictDecision[] = [];
+    for (const value of incoming) {
+      const entry = parseRecentConflictDecision(value);
+      if (!entry || known.has(entry.id)) continue;
+      known.add(entry.id);
+      entries.push(entry);
+    }
+    if (entries.length) commit({ kind: "decisions", entries });
+    return entries.length;
+  },
 }));

@@ -8,7 +8,6 @@ interface CategoryState {
   /** Multi-select in sidebar (Ctrl/Cmd+click); user collection keys only. */
   selectedCategoryKeys: string[];
   dirty: boolean;
-  loading: boolean;
 
   // History for undo/redo
   _history: SteamCollection[][];
@@ -38,7 +37,6 @@ interface CategoryState {
   mergeSelectedIntoNewCategory: (selectedKeys: string[], newName: string) => void;
   duplicateCategory: (sourceKey: string, newName: string) => void;
   markClean: () => void;
-  setLoading: (loading: boolean) => void;
 
   undo: () => void;
   redo: () => void;
@@ -119,7 +117,6 @@ export const useCategoryStore = create<CategoryState>((set, get) => ({
   activeCategory: "all",
   selectedCategoryKeys: [],
   dirty: false,
-  loading: false,
   _history: [],
   _future: [],
   _saved: [],
@@ -130,7 +127,6 @@ export const useCategoryStore = create<CategoryState>((set, get) => ({
       ...reconcileSelection(state, collections),
       collections: structuredClone(collections),
       dirty: false,
-      loading: false,
       _history: [],
       _future: [],
       _saved: structuredClone(collections),
@@ -337,8 +333,6 @@ export const useCategoryStore = create<CategoryState>((set, get) => ({
       _history: [],
       _future: [],
     })),
-
-  setLoading: (loading) => set({ loading }),
 
   undo: () =>
     set((state) => {

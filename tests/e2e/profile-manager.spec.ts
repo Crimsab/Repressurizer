@@ -73,6 +73,7 @@ test("profiles export without secrets and selectively import after backup", asyn
   await dialog
     .getByRole("button", { name: "Create backups and import selected" })
     .click();
+  await expect(page.getByText("Selected profile sections imported.")).toBeVisible();
   const state = await page.evaluate(async () => {
     const { useSettingsStore } = await import("/src/stores/settingsStore.ts");
     const { useProfileStore } = await import("/src/stores/profileStore.ts");

@@ -15,10 +15,14 @@ export function buildSidebarLibraryStats(
   nowSeconds = Math.floor(Date.now() / 1000)
 ): SidebarLibraryStats {
   const gameValues = Object.values(games);
+  const hiddenIds = new Set(
+    collections.find((collection) => collection.id === "hidden")?.added ?? []
+  );
+  const visibleGameValues = gameValues.filter((game) => !hiddenIds.has(game.appid));
   const categorizedIds = new Set(collections.flatMap((collection) => collection.added));
   const thirtyDaysAgo = nowSeconds - 30 * 24 * 60 * 60;
   const oneDayAgo = nowSeconds - 24 * 60 * 60;
-  const nowPlayingGame = gameValues.reduce<OwnedGame | null>((best, game) => {
+  const nowPlayingGame = visibleGameValues.reduce<OwnedGame | null>((best, game) => {
     if (game.rtime_last_played <= oneDayAgo) return best;
     if (!best || game.rtime_last_played > best.rtime_last_played) return game;
     return best;
@@ -27,8 +31,8 @@ export function buildSidebarLibraryStats(
   return {
     gameCount: gameValues.length,
     uncategorizedCount: gameValues.filter((game) => !categorizedIds.has(game.appid)).length,
-    backlogCount: gameValues.filter((game) => game.playtime_forever === 0).length,
-    recentlyPlayedCount: gameValues.filter(
+    backlogCount: visibleGameValues.filter((game) => game.playtime_forever === 0).length,
+    recentlyPlayedCount: visibleGameValues.filter(
       (game) => game.rtime_last_played > thirtyDaysAgo
     ).length,
     nowPlayingGame,

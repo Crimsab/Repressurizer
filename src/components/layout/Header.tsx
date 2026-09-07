@@ -69,7 +69,7 @@ const loadStatsPage = () => import("../stats/StatsPage").then((m) => ({ default:
 const loadAchievementsPage = () => import("../achievements/AchievementsPage").then((m) => ({ default: m.AchievementsPage }));
 const loadWishlistPage = () => import("../wishlist/WishlistPage").then((m) => ({ default: m.WishlistPage }));
 const loadFriendCompareDialog = () => import("../friends/FriendCompareDialog").then((m) => ({ default: m.FriendCompareDialog }));
-const loadWhatToPlayNext = () => import("../recommend/SessionPlanner").then((m) => ({ default: m.SessionPlanner }));
+const loadSessionPlanner = () => import("../recommend/SessionPlanner").then((m) => ({ default: m.SessionPlanner }));
 const loadPlayHistoryTimeline = () => import("../timeline/PlayHistoryTimeline").then((m) => ({ default: m.PlayHistoryTimeline }));
 const loadLibraryChangesInbox = () => import("../inbox/LibraryChangesInbox").then((m) => ({ default: m.LibraryChangesInbox }));
 const loadCollectionTimeMachine = () => import("../collections/CollectionTimeMachine").then((m) => ({ default: m.CollectionTimeMachine }));
@@ -86,7 +86,7 @@ const StatsPage = lazy(loadStatsPage);
 const AchievementsPage = lazy(loadAchievementsPage);
 const WishlistPage = lazy(loadWishlistPage);
 const FriendCompareDialog = lazy(loadFriendCompareDialog);
-const WhatToPlayNext = lazy(loadWhatToPlayNext);
+const SessionPlanner = lazy(loadSessionPlanner);
 const PlayHistoryTimeline = lazy(loadPlayHistoryTimeline);
 const LibraryChangesInbox = lazy(loadLibraryChangesInbox);
 const CollectionTimeMachine = lazy(loadCollectionTimeMachine);
@@ -238,7 +238,7 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
     { key: "achievements", label: t("toolbar.achievements"), Icon: Trophy, open: () => { setAchievementsView("manager"); setShowAchievements(true); }, loader: loadAchievementsPage, badge: 0 },
     { key: "wishlist", label: t("toolbar.wishlist"), Icon: BookmarkSimple, open: () => setShowWishlist(true), loader: loadWishlistPage, badge: 0 },
     { key: "friends", label: t("toolbar.friendCompare"), Icon: UsersThree, open: () => setShowFriendCompare(true), loader: loadFriendCompareDialog, badge: 0 },
-    { key: "recommend", label: t("toolbar.recommend"), Icon: GameController, open: () => setShowRecommend(true), loader: loadWhatToPlayNext, badge: 0 },
+    { key: "recommend", label: t("toolbar.recommend"), Icon: GameController, open: () => setShowRecommend(true), loader: loadSessionPlanner, badge: 0 },
     { key: "timeline", label: t("toolbar.timeline"), Icon: CalendarBlank, open: () => setShowTimeline(true), loader: loadPlayHistoryTimeline, badge: 0 },
     { key: "stats", label: t("toolbar.stats"), Icon: ChartBar, open: () => setShowStats(true), loader: loadStatsPage, badge: 0 },
     { key: "export", label: t("toolbar.export"), Icon: Export, open: () => openExportDialog(), loader: loadExportDialog, badge: 0 },
@@ -751,7 +751,7 @@ export function Header({ refreshingLibrary, onRefreshLibrary }: HeaderProps) {
       )}
       {showRecommend && (
         <LazyOverlay>
-          <WhatToPlayNext onClose={() => setShowRecommend(false)} />
+          <SessionPlanner onClose={() => setShowRecommend(false)} />
         </LazyOverlay>
       )}
       {showTimeline && (

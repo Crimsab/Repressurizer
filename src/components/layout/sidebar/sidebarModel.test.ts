@@ -43,9 +43,27 @@ describe("buildSidebarLibraryStats", () => {
       gameCount: 3,
       uncategorizedCount: 0,
       backlogCount: 1,
-      recentlyPlayedCount: 2,
+      recentlyPlayedCount: 1,
       nowPlayingGame: games[1],
       hiddenCount: 2,
+    });
+  });
+
+  it("excludes hidden games from smart-list counts and now playing", () => {
+    const now = 2_000_000;
+    const games = {
+      1: game(1, 0, now - 100),
+      2: game(2, 0, now - 50),
+      3: game(3, 60, now - 40 * 24 * 60 * 60),
+    };
+    const collections = [collection("hidden", [2])];
+
+    expect(buildSidebarLibraryStats(games, collections, now)).toMatchObject({
+      gameCount: 3,
+      backlogCount: 1,
+      recentlyPlayedCount: 1,
+      nowPlayingGame: games[1],
+      hiddenCount: 1,
     });
   });
 });

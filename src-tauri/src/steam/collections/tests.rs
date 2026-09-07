@@ -1,5 +1,6 @@
 use super::leveldb::{decode_leveldb_catalog, get_leveldb_key};
 use super::*;
+use std::cell::RefCell;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 fn temp_steam_dir(name: &str) -> PathBuf {
@@ -87,6 +88,100 @@ fn leveldb_catalog_encoding_round_trips_utf8_and_utf16() {
         let (_, decoded) = decode_leveldb_catalog(&raw).unwrap();
         assert_eq!(decoded, json);
     }
+}
+
+#[test]
+fn leveldb_backup_must_match_json_catalog_before_restore() {
+    let raw = encode_leveldb_catalog(
+        &serde_json::to_string(&sample_catalog("Different", vec![9])).unwrap(),
+        CatalogEncoding::Utf8,
+    );
+    let expected = sample_catalog("Expected", vec![1]);
+
+    let error = validate_leveldb_backup(&raw, &expected, "backup.json")
+        .expect_err("a mismatched LevelDB sidecar must be rejected");
+    assert!(error.contains("does not match its JSON backup"));
+}
+
+#[test]
+fn corrupt_leveldb_does_not_silently_fall_back_to_json() {
+    let steam_path = temp_steam_dir("corrupt-leveldb");
+    let steam_id3 = "11223";
+    write_json_catalog(
+        &steam_path,
+        steam_id3,
+        &sample_catalog("Stale JSON", vec![1]),
+    );
+
+    let db_path = steam_path
+        .join("config")
+        .join("htmlcache")
+        .join("Local Storage")
+        .join("leveldb");
+    fs::create_dir_all(&db_path).unwrap();
+    fs::write(db_path.join("CURRENT"), b"not a valid LevelDB manifest").unwrap();
+
+    let error = load_collections(
+        steam_path.to_string_lossy().to_string(),
+        steam_id3.to_string(),
+    )
+    .expect_err("a corrupt LevelDB must not be hidden by the JSON fallback");
+    assert!(error.contains("JSON fallback was skipped"));
+    assert!(error.contains("LevelDB"));
+
+    let _ = fs::remove_dir_all(steam_path);
+}
+
+#[test]
+fn paired_catalog_write_restores_both_archives_after_leveldb_failure() {
+    let state = RefCell::new((Some("old-json".to_string()), b"old-leveldb".to_vec()));
+    let original_leveldb = state.borrow().1.clone();
+
+    let error = persist_catalog_pair_with(
+        "Failed to save Steam collections",
+        "new-json",
+        Some("old-json"),
+        Some(original_leveldb.as_slice()),
+        |candidate| {
+            state.borrow_mut().0 = Some(candidate.to_string());
+            Ok(())
+        },
+        |_| Err("injected LevelDB write failure".to_string()),
+        |original| {
+            state.borrow_mut().0 = original.map(ToString::to_string);
+            Ok(())
+        },
+        |raw| {
+            state.borrow_mut().1 = raw.to_vec();
+            Ok(())
+        },
+    )
+    .expect_err("the injected LevelDB failure must be returned");
+
+    assert!(error.contains("injected LevelDB write failure"));
+    assert!(error.contains("original JSON and LevelDB catalogs were restored"));
+    let (json, leveldb) = state.into_inner();
+    assert_eq!(json.as_deref(), Some("old-json"));
+    assert_eq!(leveldb, b"old-leveldb");
+}
+
+#[test]
+fn paired_catalog_write_reports_each_recovery_failure() {
+    let original_leveldb = b"old-leveldb".to_vec();
+    let error = persist_catalog_pair_with(
+        "Failed to save Steam collections",
+        "new-json",
+        Some("old-json"),
+        Some(original_leveldb.as_slice()),
+        |_| Ok(()),
+        |_| Err("injected LevelDB write failure".to_string()),
+        |_| Err("injected JSON recovery failure".to_string()),
+        |_| Err("injected LevelDB recovery failure".to_string()),
+    )
+    .expect_err("the injected write failure must be returned");
+
+    assert!(error.contains("JSON recovery failed: injected JSON recovery failure"));
+    assert!(error.contains("LevelDB recovery failed: injected LevelDB recovery failure"));
 }
 
 #[test]
@@ -337,4 +432,28 @@ fn stale_leveldb_directory_does_not_block_json_backup_or_save() {
     assert_eq!(backups.len(), 2);
 
     let _ = fs::remove_dir_all(steam_path);
+}
+
+#[test]
+fn paired_catalog_write_recovers_json_when_flush_fails_after_replacement() {
+    let json = RefCell::new(Some("original".to_string()));
+    let error = persist_catalog_pair_with(
+        "Save failed",
+        "new",
+        Some("original"),
+        Some(b"old-leveldb"),
+        |value| {
+            *json.borrow_mut() = Some(value.to_string());
+            Err("directory flush failed".to_string())
+        },
+        |_| panic!("LevelDB must not change after a JSON error"),
+        |original| {
+            *json.borrow_mut() = original.map(ToString::to_string);
+            Ok(())
+        },
+        |_| panic!("LevelDB was not changed"),
+    )
+    .unwrap_err();
+    assert!(error.contains("original JSON catalog was restored"));
+    assert_eq!(json.into_inner().as_deref(), Some("original"));
 }

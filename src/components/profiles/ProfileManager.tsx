@@ -28,6 +28,7 @@ import { useProfileStore } from "../../stores/profileStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import {
   applyProfileSections,
+  ensureProfileHistoryReady,
   captureProfileSections,
 } from "../../stores/profileRuntime";
 import { useToastStore } from "../../stores/toastStore";
@@ -147,6 +148,9 @@ export function ProfileManager({ onClose }: { onClose: () => void }) {
     );
   };
   const exportProfile = async () => {
+    await profileStore.hydrate();
+    await ensureProfileHistoryReady();
+    if (!useProfileStore.getState().hydrated) throw new Error("Saved profiles could not be loaded. Please retry.");
     const id = `profile-${Date.now().toString(36)}`;
     const document = currentDocument(name, id, account, selected);
     profileStore.upsert(document);
@@ -187,6 +191,9 @@ export function ProfileManager({ onClose }: { onClose: () => void }) {
     if (!incoming || importing) return;
     setImporting(true);
     try {
+      await profileStore.hydrate();
+      await ensureProfileHistoryReady();
+      if (!useProfileStore.getState().hydrated) throw new Error("Saved profiles could not be loaded. Please retry.");
       const backup = currentDocument(
         "Pre-import backup",
         `backup-${Date.now().toString(36)}`,
@@ -284,7 +291,7 @@ export function ProfileManager({ onClose }: { onClose: () => void }) {
                   {t("profiles.secretNotice")}
                 </p>
                 <button
-                  onClick={() => void exportProfile()}
+                  onClick={() => void exportProfile().catch((error) => toast.getState().error(String(error)))}
                   disabled={!selected.size}
                   className="mt-3 inline-flex items-center gap-1 rounded-lg bg-repressurizer-accent px-3 py-2 text-xs font-medium text-white disabled:opacity-40"
                 >

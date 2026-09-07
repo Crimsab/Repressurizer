@@ -7,7 +7,7 @@ import { createProfileSyncEnvelope, mergeProfileDocuments, parseProfileSyncEnvel
 import { createRepressurizerProfile, parseRepressurizerProfile, type RepressurizerProfileDocument } from "../lib/repressurizerProfile";
 import { loadAppData, saveAppData } from "../lib/tauri";
 import { useEntityJournalStore } from "./entityJournalStore";
-import { captureProfileSections, applyProfileSections } from "./profileRuntime";
+import { captureProfileSections, applyProfileSections, ensureProfileHistoryReady } from "./profileRuntime";
 import { useSettingsStore } from "./settingsStore";
 
 const STORAGE_KEY = "profile-sync.json";
@@ -134,7 +134,11 @@ export const useProfileSyncStore = create<ProfileSyncState>((set, get) => ({
     };
     set({ syncing: true, lastError: null });
     try {
+      await ensureProfileHistoryReady();
+      await useEntityJournalStore.getState().hydrate();
+      validateContext();
       const journal = useEntityJournalStore.getState();
+      if (!journal.hydrated) throw new Error("Entity journal could not be loaded. Retry sync.");
       const allEnvelopes = await readRemoteEnvelopes(state.folder);
       validateContext();
       // Read the working state after remote I/O, not before it.
