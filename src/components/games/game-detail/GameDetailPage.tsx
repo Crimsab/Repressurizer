@@ -9,7 +9,6 @@ import { useAchievementsStore } from "../../../stores/achievementsStore";
 import {
   fetchGameDetails,
   fetchAchievements,
-  currencyToCountryCode,
   listSamBackups,
   loadSamAchievementSchema,
   openSamBackupDir,
@@ -61,6 +60,7 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
     apiKey,
     steamId64,
     currency,
+    storeCountryCode,
     showDetailHltb,
     showDetailMetacritic,
     showDetailPrice,
@@ -138,8 +138,8 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
       setAchievements(cachedAchievements);
     }
 
-    const cachedDetailsForCurrency = detailsWithPriceForCurrency(cachedDetails, currency);
-    if (cachedDetails && detailsPriceMatchesCurrency(cachedDetails, currency) && cachedDetailsForCurrency) {
+    const cachedDetailsForCurrency = detailsWithPriceForCurrency(cachedDetails, currency, storeCountryCode);
+    if (cachedDetails && detailsPriceMatchesCurrency(cachedDetails, currency, storeCountryCode) && cachedDetailsForCurrency) {
       setDetails(cachedDetailsForCurrency);
       if (cachedDetailsForCurrency.price_currency !== cachedDetails.price_currency) {
         useGameStore.getState().setDetails(game.appid, cachedDetailsForCurrency);
@@ -149,9 +149,9 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
         cancelled = true;
       };
     } else {
-      setDetails(cachedDetails ?? null);
+      setDetails(cachedDetails ? { ...cachedDetails, price_initial: null, price_final: null, price_currency: null, is_free: false } : null);
       setLoadingDetails(!cachedDetails);
-      fetchGameDetails(game.appid, currencyToCountryCode(currency))
+      fetchGameDetails(game.appid, storeCountryCode)
         .then((d) => {
           if (cancelled) return;
           setDetails(d);
@@ -167,7 +167,7 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
     return () => {
       cancelled = true;
     };
-  }, [currency, game.appid]);
+  }, [currency, storeCountryCode, game.appid]);
 
   const loadAchievementData = useCallback(
     async (force = false, detailsOverride?: GameDetails | null) => {
@@ -289,8 +289,8 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
   const handleRefreshDetails = async () => {
     setRefreshingDetails(true);
     try {
-      const next = await fetchGameDetails(game.appid, currencyToCountryCode(currency));
-      setDetails(next);
+      const next = await fetchGameDetails(game.appid, storeCountryCode);
+      if (useSettingsStore.getState().storeCountryCode === storeCountryCode) setDetails(next);
       useGameStore.getState().setDetails(game.appid, next);
       scheduleOriginalReleaseDateFetch(game.appid, next.name);
       if (tab === "achievements") {

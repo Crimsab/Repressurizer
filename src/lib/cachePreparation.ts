@@ -35,7 +35,8 @@ export function buildCachePreparationPlan(mode: LibraryRefreshCacheMode): CacheP
   const detailIds = gameIds.filter((id) => {
     if ((failedDetails[id] ?? 0) >= MAX_FAIL_RUNS) return false;
     const detail = details[id];
-    return detailsCacheNeedsRefresh(detail, settings.detailsCacheMaxAgeDays) || detailsPriceNeedsCurrencyRefresh(detail, settings.currency);
+    return detailsCacheNeedsRefresh(detail, settings.detailsCacheMaxAgeDays)
+      || detailsPriceNeedsCurrencyRefresh(detail, settings.currency, settings.storeCountryCode);
   });
 
   const hltbItems = gameIds

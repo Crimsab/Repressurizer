@@ -2568,5 +2568,21 @@
   "palette.actions": "Schnellaktionen",
   "palette.tools": "Werkzeuge",
   "common.retry": "Erneut versuchen",
-  "games.libraryLabel": "Spielebibliothek"
+  "games.libraryLabel": "Spielebibliothek",
+  "settings.storeCountry": "Steam-Shop-Land",
+  "settings.storeCountry.desc": "Preise und Verfügbarkeit gelten für dieses Land. Das Land deines Steam-Kontos wird nicht geändert.",
+  "settings.storeCurrency": "Shop-Währung: {currency}",
+  "settings.storeCountry.search": "Länder suchen",
+  "settings.ggDeals.unsupportedRegion": "GG.deals-Preise für dieses Shop-Land sind in Repressurizer nicht verfügbar.",
+  "deck.travelDetails": "Reisedetails",
+  "deck.travelDetails.desc": "Trage ein, was du für jedes Spiel geprüft hast. Unbekannte Werte bleiben unbekannt; diese Notizen bleiben lokal in Repressurizer.",
+  "deck.travelGame": "Spiel",
+  "deck.travelOffline": "Funktioniert offline",
+  "deck.travelFirstLaunch": "Erster Start benötigt Internet",
+  "deck.travelLauncher": "Benötigt einen externen Launcher",
+  "deck.travelSize": "Geschätzte Größe (GB)",
+  "deck.travelReset": "Lokale Details löschen",
+  "deck.travelYes": "Ja",
+  "deck.travelNo": "Nein",
+  "deck.travelSaved": "Lokal gespeichert. Erstelle das Paket neu, um Änderungen anzuwenden."
 }

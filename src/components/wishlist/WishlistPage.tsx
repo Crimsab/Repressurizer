@@ -2,11 +2,11 @@ import { useState, useMemo, useEffect, useRef } from "react";
 import { useGameStore } from "../../stores/gameStore";
 import { useWishlistStore } from "../../stores/wishlistStore";
 import { useSettingsStore } from "../../stores/settingsStore";
-import { fetchWishlist, fetchGameDetails, currencyToCountryCode } from "../../lib/tauri";
+import { fetchWishlist, fetchGameDetails } from "../../lib/tauri";
 import { X, BookmarkSimple, ArrowsClockwise, SortAscending, Export, Bell, BellSlash } from "@phosphor-icons/react";
 import { SteamImage } from "../games/SteamImage";
 import { useT } from "../../lib/i18n";
-import { priceSnapshotForCurrency } from "../../lib/prices";
+import { priceSnapshotForCurrency, detailsPriceNeedsCurrencyRefresh } from "../../lib/prices";
 import { scheduleOriginalReleaseDateFetch } from "../../lib/releaseDateQueue";
 import type { GameDetails } from "../../lib/types";
 import { DialogOverlay } from "../ui/DialogOverlay";
@@ -31,7 +31,7 @@ function timeAgo(unixSecs: number, t: ReturnType<typeof useT>): string {
 
 export function WishlistPage({ onClose }: WishlistPageProps) {
   const t = useT();
-  const { steamId64, currency, saleNotifyEnabled, saleNotifyThreshold, saleAlertRules, setSettings } = useSettingsStore();
+  const { steamId64, currency, storeCountryCode, saleNotifyEnabled, saleNotifyThreshold, saleAlertRules, setSettings } = useSettingsStore();
   const [rulePopover, setRulePopover] = useState<{ appId: number; x: number; y: number } | null>(null);
   const details = useGameStore((s) => s.details);
   const items = useWishlistStore((s) => s.items);
@@ -43,28 +43,28 @@ export function WishlistPage({ onClose }: WishlistPageProps) {
   const [sortBy, setSortBy] = useState<SortMode>("priority");
   const [search, setSearch] = useState("");
   const [onSaleOnly, setOnSaleOnly] = useState(false);
-  const fetchingRef = useRef(new Set<number>());
+  const fetchingRef = useRef(new Set<string>());
 
   // Fetch details for wishlist items not in cache
   useEffect(() => {
     if (items.length === 0) return;
     const missing = items
       .map((i) => i.appid)
-      .filter((id) => !details[id] && !fetchingRef.current.has(id));
+      .filter((id) => (!details[id] || detailsPriceNeedsCurrencyRefresh(details[id], currency, storeCountryCode)) && !fetchingRef.current.has(`${id}:${storeCountryCode}`));
     if (missing.length === 0) return;
 
     const setDetails = useGameStore.getState().setDetails;
     for (const appid of missing) {
-      fetchingRef.current.add(appid);
-      fetchGameDetails(appid, currencyToCountryCode(currency))
+      const requestKey = `${appid}:${storeCountryCode}`;
+      fetchingRef.current.add(requestKey);
+      fetchGameDetails(appid, storeCountryCode)
         .then((d) => {
           setDetails(appid, d);
           scheduleOriginalReleaseDateFetch(appid, d.name);
         })
-        .catch(() => {})
-        .finally(() => fetchingRef.current.delete(appid));
+        .catch(() => {});
     }
-  }, [items, details]);
+  }, [items, details, currency, storeCountryCode]);
 
   const handleExportJson = () => {
     const rows = sortedItems.map((item, idx) => ({
@@ -102,6 +102,7 @@ export function WishlistPage({ onClose }: WishlistPageProps) {
   };
 
   const handleRefresh = async () => {
+    fetchingRef.current.clear();
     if (!steamId64) {
       setError(t("wishlist.setSteamId"));
       return;
@@ -130,7 +131,7 @@ export function WishlistPage({ onClose }: WishlistPageProps) {
     }
     if (onSaleOnly) {
       list = list.filter((item) => {
-        const price = priceSnapshotForCurrency(details[item.appid], currency);
+        const price = priceSnapshotForCurrency(details[item.appid], currency, storeCountryCode);
         return price?.price_initial != null && price.price_final != null && price.price_initial > price.price_final;
       });
     }
@@ -138,13 +139,13 @@ export function WishlistPage({ onClose }: WishlistPageProps) {
       if (sortBy === "priority") return a.priority - b.priority;
       if (sortBy === "date") return b.date_added - a.date_added;
       if (sortBy === "price") {
-        const pa = priceSnapshotForCurrency(details[a.appid], currency)?.price_final ?? Number.POSITIVE_INFINITY;
-        const pb = priceSnapshotForCurrency(details[b.appid], currency)?.price_final ?? Number.POSITIVE_INFINITY;
+        const pa = priceSnapshotForCurrency(details[a.appid], currency, storeCountryCode)?.price_final ?? Number.POSITIVE_INFINITY;
+        const pb = priceSnapshotForCurrency(details[b.appid], currency, storeCountryCode)?.price_final ?? Number.POSITIVE_INFINITY;
         return pa - pb;
       }
       if (sortBy === "discount") {
         const discount = (appid: number) => {
-          const price = priceSnapshotForCurrency(details[appid], currency);
+          const price = priceSnapshotForCurrency(details[appid], currency, storeCountryCode);
           if (!price?.price_initial || price.price_final == null || price.price_initial <= price.price_final) return 0;
           return (price.price_initial - price.price_final) / price.price_initial;
         };
@@ -158,7 +159,7 @@ export function WishlistPage({ onClose }: WishlistPageProps) {
       return 0;
     });
     return list;
-  }, [items, sortBy, search, details, onSaleOnly, currency]);
+  }, [items, sortBy, search, details, onSaleOnly, currency, storeCountryCode]);
 
   return (
     <DialogOverlay
@@ -356,7 +357,7 @@ export function WishlistPage({ onClose }: WishlistPageProps) {
                     </div>
 
                     {/* Added date */}
-                    {d && <WishlistPrice details={d} currency={currency} />}
+                    {d && <WishlistPrice details={d} currency={currency} storeCountryCode={storeCountryCode} />}
                     {saleNotifyEnabled && (
                       <button
                         type="button"
@@ -471,9 +472,9 @@ function SaleRulePopover({ appId, x, y, onClose }: { appId: number; x: number; y
   );
 }
 
-function WishlistPrice({ details, currency }: { details: GameDetails; currency: string }) {
+function WishlistPrice({ details, currency, storeCountryCode }: { details: GameDetails; currency: string; storeCountryCode: string }) {
   const t = useT();
-  const price = priceSnapshotForCurrency(details, currency);
+  const price = priceSnapshotForCurrency(details, currency, storeCountryCode);
   if (!price) return null;
   if (price.is_free) {
     return <span className="shrink-0 text-[11px] font-mono text-repressurizer-text-muted">{t("detail.freeToPlay")}</span>;

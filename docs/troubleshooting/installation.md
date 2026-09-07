@@ -28,6 +28,6 @@ Do not bypass Gatekeeper for a copy downloaded from a mirror or reposting site.
 
 - Extract the portable ZIP before running the executable.
 - Confirm that WebView2 Runtime is installed and current.
-- Try the stable MSI if a preview build fails.
+- Try the stable MSI if a numbered beta build fails.
 - Export or run CLI diagnostics when available.
 - Check the issue tracker for the current release before opening a duplicate report.

@@ -42,9 +42,10 @@ function releaseDateSortValue(date: string | null | undefined): number {
 
 function priceSortValue(
   detail: ReturnType<typeof useGameStore.getState>["details"][number] | undefined,
-  currency: string
+  currency: string,
+  storeCountryCode: string
 ): number {
-  const price = priceSnapshotForCurrency(detail, currency);
+  const price = priceSnapshotForCurrency(detail, currency, storeCountryCode);
   if (!price) return -1;
   if (price.is_free) return 0;
   return price.price_final ?? price.price_initial ?? -1;
@@ -78,6 +79,7 @@ export function GameGrid() {
   const familyApps = useFamilyStore((s) => s.apps);
   const hideCollectionOnlyGames = useSettingsStore((s) => s.hideCollectionOnlyGames);
   const currency = useSettingsStore((s) => s.currency);
+  const storeCountryCode = useSettingsStore((s) => s.storeCountryCode);
   const hltbTimeMode = useSettingsStore((s) => s.hltbTimeMode);
   const failedGames = useFailedGamesStore((s) => s.fails);
   const savedAdvancedFilters = useAdvancedFilterStore((s) => s.filters);
@@ -301,7 +303,7 @@ export function GameGrid() {
     };
 
     const releaseKeys = sortBy === "releaseDate" ? new Map(gameList.map((game) => [game.appid, releaseDateSortValue(bestAvailableReleaseDate(details[game.appid]))])) : null;
-    const priceKeys = sortBy === "price" ? new Map(gameList.map((game) => [game.appid, priceSortValue(details[game.appid], currency)])) : null;
+    const priceKeys = sortBy === "price" ? new Map(gameList.map((game) => [game.appid, priceSortValue(details[game.appid], currency, storeCountryCode)])) : null;
     const compareNames = new Intl.Collator().compare;
     gameList.sort((a, b) => {
       let cmp = 0;
@@ -370,7 +372,7 @@ export function GameGrid() {
     });
 
     return gameList;
-  }, [games, activeCategory, collections, familyApps, deferredQuery, sortBy, sortAsc, filters, activeAdvancedFilter, statuses, allGameTags, hltbData, hltbTimeMode, achievementSummaries, details, reviews, steamRatings, hideCollectionOnlyGames, currency, duplicateAppIds, delistedAppIds, installedLibraryReady, installedAppIdSet]);
+  }, [games, activeCategory, collections, familyApps, deferredQuery, sortBy, sortAsc, filters, activeAdvancedFilter, statuses, allGameTags, hltbData, hltbTimeMode, achievementSummaries, details, reviews, steamRatings, hideCollectionOnlyGames, currency, storeCountryCode, duplicateAppIds, delistedAppIds, installedLibraryReady, installedAppIdSet]);
 
   const orderedIds = useMemo(() => filteredGames.map((g) => g.appid), [filteredGames]);
 

@@ -100,7 +100,7 @@ describe("backgroundFetchStore details fetch", () => {
         rtime_last_played: 0,
       },
     ]);
-    useGameStore.getState().setDetails(1, gameDetails(1));
+    useGameStore.getState().setDetails(1, { ...gameDetails(1), price_country_code: "IT" });
 
     useBackgroundFetchStore.getState().startDetailsFetch([1]);
     expect(detailCalls).toEqual([]);

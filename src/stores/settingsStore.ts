@@ -22,19 +22,28 @@ import {
   DEFAULT_TOOLBAR_ORDER,
   normalizeToolbarIds,
 } from "../lib/toolbarTools";
+import {
+  DEFAULT_STORE_COUNTRY_CODE,
+  currencyForStoreCountry,
+  normalizeStoreCountryCode,
+  storeCountryCodeForCurrency,
+} from "../lib/steamRegions";
 
-interface SettingsState extends AppSettings {
+interface SettingsState extends Omit<AppSettings, "storeCountryCode"> {
+  storeCountryCode: string;
   hydrateFromDisk: () => Promise<void>;
   setSettings: (settings: Partial<AppSettings>) => void;
   reset: () => void;
 }
+
+type NormalizedAppSettings = Omit<AppSettings, "storeCountryCode"> & { storeCountryCode: string };
 
 function detectSystemLanguage(): string {
   if (typeof navigator === "undefined") return "en";
   return navigator.languages?.[0] ?? navigator.language ?? "en";
 }
 
-const defaults: AppSettings = {
+const defaults: NormalizedAppSettings = {
   steamPath: "",
   steamId3: "",
   steamId64: "",
@@ -96,6 +105,7 @@ const defaults: AppSettings = {
   steamToolsMaxConcurrentIdleApps: 8,
   steamToolsMinPlaytimeMinutes: 180,
   currency: "EUR",
+  storeCountryCode: DEFAULT_STORE_COUNTRY_CODE,
   onboardingComplete: false,
   categoryColors: {},
   minimizeToTray: false,
@@ -209,7 +219,7 @@ function normalizeLibraryRefreshCacheMode(raw: Partial<AppSettings>): LibraryRef
   return defaults.libraryRefreshCacheMode;
 }
 
-function loadFromStorage(): AppSettings {
+function loadFromStorage(): NormalizedAppSettings {
   try {
     const raw = localStorage.getItem("repressurizer-settings");
     if (raw) return normalizeSettings(JSON.parse(raw));
@@ -217,7 +227,9 @@ function loadFromStorage(): AppSettings {
   return defaults;
 }
 
-function normalizeSettings(raw: Partial<AppSettings>): AppSettings {
+function normalizeSettings(raw: Partial<AppSettings>): NormalizedAppSettings {
+  const storeCountryCode = normalizeStoreCountryCode(raw.storeCountryCode, raw.currency);
+  const currency = currencyForStoreCountry(storeCountryCode);
   const proxySettings = raw.proxySettings ?? defaults.proxySettings;
   const proxyMode = PROXY_MODES.includes(proxySettings.mode as ProxyRotationMode)
     ? proxySettings.mode as ProxyRotationMode
@@ -237,6 +249,8 @@ function normalizeSettings(raw: Partial<AppSettings>): AppSettings {
   return {
     ...defaults,
     ...raw,
+    currency,
+    storeCountryCode,
     diaryRatingEmojis: Array.from({ length: 10 }, (_, index) => {
       const value = raw.diaryRatingEmojis?.[index];
       return typeof value === "string" && value.trim() ? Array.from(value.trim()).slice(0, 4).join("") : defaults.diaryRatingEmojis[index];
@@ -413,7 +427,13 @@ export const useSettingsStore = create<SettingsState>((set) => ({
       const parsed = JSON.parse(raw) as Partial<AppSettings>;
       set((state) => {
         if (settingsRevision !== revision) return state;
-        const next = normalizeSettings({ ...state, ...parsed });
+        const source = { ...state, ...parsed } as Partial<AppSettings>;
+        // Settings written before regional pricing stored only a currency.
+        // Prefer its deterministic legacy market when no country was saved.
+        if (!Object.hasOwn(parsed, "storeCountryCode") && Object.hasOwn(parsed, "currency")) {
+          source.storeCountryCode = storeCountryCodeForCurrency(parsed.currency);
+        }
+        const next = normalizeSettings(source);
         if (next.steamId64 !== state.steamId64 || next.steamId3 !== state.steamId3 || next.steamPath !== state.steamPath) invalidateRuntime();
         try { localStorage.setItem("repressurizer-settings", JSON.stringify(next)); } catch {}
         syncHttpPolicy(next.proxySettings);
@@ -426,7 +446,12 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   setSettings: (settings) =>
     set((state) => {
       if (Object.entries(settings).every(([key, value]) => Object.is(state[key as keyof AppSettings], value))) return state;
-      const next = normalizeSettings({ ...state, ...settings });
+      const source = { ...state, ...settings } as Partial<AppSettings>;
+      // Keep callers that still set `currency` working during migration.
+      if (!Object.hasOwn(settings, "storeCountryCode") && Object.hasOwn(settings, "currency")) {
+        source.storeCountryCode = storeCountryCodeForCurrency(settings.currency);
+      }
+      const next = normalizeSettings(source);
       if (next.steamId64 !== state.steamId64 || next.steamId3 !== state.steamId3 || next.steamPath !== state.steamPath) invalidateRuntime();
       settingsRevision += 1;
       saveToStorage(next);

@@ -1,4 +1,4 @@
-# Updates and previews
+# Updates
 
 ## Stable channel
 
@@ -40,13 +40,13 @@ your collections before moving between prerelease and stable versions.
 Portable Windows ZIPs and Linux system packages keep using manual downloads;
 the channel selector is shown only where in-place updates are supported.
 
-## Developer preview channel
+## No rolling development channel
 
-The Windows `preview` prerelease is continuously replaced by an MSI build from the newest commit on `main`. It has a separate version number and updater manifest, so it does not replace the stable release record. Linux preview artifacts are not currently published.
-
-Preview is a separately installed developer build, not the versioned beta
-channel. It is useful for testing the newest commit and can change frequently.
-Use it with backups enabled.
+Repressurizer does not publish a release for every commit on `main`. The
+release page contains versioned stable releases and, when offered, numbered
+beta releases. Use a numbered beta only after opting into the beta channel and
+keep a backup before changing channels. Local development builds are for
+contributors and are not a supported download or recovery path.
 
 ## Verify a download
 

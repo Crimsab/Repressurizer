@@ -1,6 +1,6 @@
 # Portable profile and rule-pack formats
 
-Repressurizer 0.8 defines three local JSON formats. They are data exchange
+The current Repressurizer release defines three local JSON formats. They are data exchange
 formats, not executable extension APIs. Unknown schema versions are rejected
 before any local state changes.
 
@@ -53,4 +53,3 @@ The runtime adds stricter semantic checks after schema validation:
 
 Pack installation creates or updates AutoCat presets only. It never writes
 Steam collections automatically.
-

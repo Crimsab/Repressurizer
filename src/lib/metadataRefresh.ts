@@ -72,6 +72,7 @@ export function buildMetadataRefreshPlan({
   ignoredDetailFails,
   ignoredHltbFails,
   currency,
+  storeCountryCode,
   detailsMaxAgeDays,
   options,
 }: {
@@ -84,6 +85,7 @@ export function buildMetadataRefreshPlan({
   ignoredDetailFails: Record<number, number>;
   ignoredHltbFails: Record<number, number>;
   currency: string;
+  storeCountryCode?: string;
   detailsMaxAgeDays: number;
   options: MetadataRefreshOptions;
 }): MetadataRefreshPlan {
@@ -98,7 +100,8 @@ export function buildMetadataRefreshPlan({
         if ((ignoredDetailFails[id] ?? 0) >= MAX_FAIL_RUNS) return false;
         if (options.forceDetails) return true;
         const detail = details[id];
-        return detailsCacheNeedsRefresh(detail, detailsMaxAgeDays) || detailsPriceNeedsCurrencyRefresh(detail, currency);
+        return detailsCacheNeedsRefresh(detail, detailsMaxAgeDays)
+          || detailsPriceNeedsCurrencyRefresh(detail, currency, storeCountryCode);
       })
     : [];
 

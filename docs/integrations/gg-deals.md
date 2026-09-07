@@ -27,7 +27,14 @@ Price data and links are provided by GG.deals. Repressurizer keeps the official-
 - Requests have a 12-second timeout and a one-megabyte response limit.
 - Failures stay inside the panel and do not block Steam library loading or game details.
 
-Changing the GG.deals key clears the price cache. The selected Repressurizer currency chooses the closest supported GG.deals region.
+Changing the GG.deals key clears the price cache. The selected Steam Store
+country is used only when that exact GG.deals region is supported. Otherwise,
+the panel reports that the selected country is unsupported; it does not fall
+back to US prices. Supported mappings currently cover Australia, Brazil, Canada,
+Italy, Poland, Russia, Switzerland, the United Kingdom, and the United States.
+GG.deals has its own region catalog, so its response currency and coverage can
+differ from the Steam Store snapshot. A response is always labelled as
+GG.deals data and is never used as a Steam Store price.
 
 ## Terms and privacy
 

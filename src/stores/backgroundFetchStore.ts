@@ -1,6 +1,6 @@
 import { onRuntimeInvalidated, runtimeGeneration } from "../lib/runtimeGeneration";
 import { create } from "zustand";
-import { fetchGameDetails, fetchGamePriceOverviews, fetchHltb, fetchAchievementsSummary, fetchSteamReviewSummary, fetchStoreReleaseDates, currencyToCountryCode } from "../lib/tauri";
+import { fetchGameDetails, fetchGamePriceOverviews, fetchHltb, fetchAchievementsSummary, fetchSteamReviewSummary, fetchStoreReleaseDates } from "../lib/tauri";
 import { detailsCacheNeedsRefresh, isDetailsCacheCurrent, useGameStore } from "./gameStore";
 import { useHltbStore } from "./hltbStore";
 import { useAchievementsStore } from "./achievementsStore";
@@ -234,11 +234,12 @@ export const useBackgroundFetchStore = create<BackgroundFetchState>((set, get) =
       const details = useGameStore.getState().details;
       const settings = useSettingsStore.getState();
       const currency = settings.currency ?? "EUR";
+      const storeCountryCode = settings.storeCountryCode ?? "IT";
       const ids = missingIds.filter((id) => {
         if (isIgnored(id)) return false;
         if (options?.force) return true;
         const detail = details[id];
-        return detailsCacheNeedsRefresh(detail, settings.detailsCacheMaxAgeDays) || detailsPriceNeedsCurrencyRefresh(detail, currency);
+        return detailsCacheNeedsRefresh(detail, settings.detailsCacheMaxAgeDays) || detailsPriceNeedsCurrencyRefresh(detail, currency, storeCountryCode);
       });
       if (ids.length === 0) {
         console.log(`[Details] All ${missingIds.length} requested games are already cached or ignored`);
@@ -509,13 +510,15 @@ async function _runDetailsLoop(missingIds: number[], run: RunToken) {
   const successfulDetailIds = new Set<number>();
   let fetched = 0;
   let succeeded = 0;
-  const currency = useSettingsStore.getState().currency ?? "EUR";
-  const cc = currencyToCountryCode(currency);
+  const settings = useSettingsStore.getState();
+  const currency = settings.currency ?? "EUR";
+  const storeCountryCode = settings.storeCountryCode ?? "IT";
+  const cc = storeCountryCode.toLowerCase();
   const currentDetails = useGameStore.getState().details;
   const failedGamesStore = useFailedGamesStore.getState();
   const priceOnlyIds = missingIds.filter((id) => {
     const detail = currentDetails[id];
-    return isDetailsCacheCurrent(detail) && detailsPriceNeedsCurrencyRefresh(detail, currency);
+    return isDetailsCacheCurrent(detail) && detailsPriceNeedsCurrencyRefresh(detail, currency, storeCountryCode);
   });
   const priceOnlyIdSet = new Set(priceOnlyIds);
   const fullDetailIds = missingIds.filter((id) => !priceOnlyIdSet.has(id));

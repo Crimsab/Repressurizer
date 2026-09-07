@@ -12,6 +12,11 @@ languages, platforms, developers, publishers, Diary fields, custom conditions, a
 saved presets imported from Depressurizer profiles. Achievement summaries are
 available in the Diary timeline, but are not currently an AutoCat filter source.
 
+Steam tags come from the bounded Store enrichment request. Run **Prepare cache**
+or refresh Steam details before a tag rule; cached-only mode uses only tags that
+are already present. Missing tags are treated as missing metadata, not as an
+empty tag set that proves a game has no tags.
+
 ## Safe workflow
 
 1. Prepare the metadata sources used by the rule.

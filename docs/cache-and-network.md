@@ -7,7 +7,9 @@ Repressurizer keeps local cache data so library browsing and AutoCat rules do no
 Repressurizer can contact these sources:
 
 - Steam Web API for owned games, playtime, achievements, player summaries, wishlist, friends, and Steam Family data.
-- Steam Store endpoints for game details, genres, categories, release dates, platforms, Metacritic, artwork, review summaries, and regional prices.
+- Steam Store endpoints and bounded Store enrichment for game details, genres,
+  categories, release dates, platforms, Metacritic, artwork, review summaries,
+  popular user-defined tags, Steam Deck compatibility, and regional prices.
 - HowLongToBeat for story length matches.
 - GG.deals for opt-in current deals and historical lows on an open game detail page.
 - Automation export targets when background publishing is enabled.
@@ -36,15 +38,36 @@ Cached-only mode may leave some games uncategorized. That is expected when the r
 
 ## Regional Prices And Currency
 
-Steam prices are regional. Repressurizer stores price snapshots by currency/country where possible.
+Steam prices belong to a Store country, not only to a currency. In **Settings →
+Currency and region**, choose the country whose storefront should be queried.
+Repressurizer derives the display currency from that country and sends the
+country code to the Steam Store request. This includes regions that share a
+currency, such as different USD storefronts; selecting USD alone no longer
+silently chooses the United States.
 
-When you change the default currency:
+Each price snapshot is keyed by the selected country and the currency returned
+by Steam. A cached price from Italy therefore cannot satisfy a request for the
+United States, even when both responses use EUR or USD. Existing currency-only
+cache entries are treated as legacy data and are refreshed once a country is
+selected.
 
-- If a matching cached price snapshot exists, the app can reuse it without a new request.
-- If the selected currency is missing, the app refreshes price data for that region.
-- Free games and games with unavailable regional pricing may cache explicit empty price snapshots.
+When you change the Store country:
 
-The Steam Store does not expose one universal "all regional prices for every app" response suitable for normal app use. Repressurizer therefore fetches the selected region and keeps snapshots as they are discovered.
+- A matching country/currency snapshot is reused without a new request.
+- Missing or stale snapshots are fetched for that country during detail refresh
+  or cache preparation.
+- Free games and games without regional pricing may cache an explicit empty
+  snapshot for that country.
+- Steam can return a currency different from the region's usual currency; the
+  response is displayed and stored with the currency Steam returned.
+
+The Steam Store does not expose one universal "all regional prices for every app"
+response suitable for normal app use. Repressurizer fetches the selected
+country and keeps snapshots as they are discovered. This feature covers the
+Steam **Store** market only; it does not query Steam Community Market listings,
+inventory items, or resale prices.
+
+![Store country and currency settings](assets/screenshots/store-region.png)
 
 ## Optional GG.deals Prices
 
@@ -106,7 +129,10 @@ The Installation filter and the optional Installed export field use a local-only
 
 If details or prices look stale, run Prepare cache or use the relevant refresh button in the game details panel.
 
-If a price appears in the wrong currency, check the default currency setting and refresh prices for that game or prepare cache again. Existing snapshots are preserved so switching back to a previously fetched currency should not require a full recache.
+If a price appears to use the wrong country or currency, check the Store
+country setting and the country code shown in the game details. Refresh that
+game or prepare cache again. Existing snapshots are preserved, so switching
+back to a previously fetched country should not require a full recache.
 
 If AutoCat creates fewer categories than expected, check whether the selected rule needs metadata that is missing, ignored, or intentionally running cached-only.
 

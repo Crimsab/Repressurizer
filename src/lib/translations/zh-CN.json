@@ -2568,5 +2568,21 @@
   "palette.actions": "快捷操作",
   "palette.tools": "工具",
   "common.retry": "重试",
-  "games.libraryLabel": "游戏库"
+  "games.libraryLabel": "游戏库",
+  "settings.storeCountry": "Steam 商店国家/地区",
+  "settings.storeCountry.desc": "价格和可用性以此国家/地区为准。这不会更改你的 Steam 账户地区。",
+  "settings.storeCurrency": "商店货币：{currency}",
+  "settings.storeCountry.search": "搜索国家/地区",
+  "settings.ggDeals.unsupportedRegion": "Repressurizer 暂不提供此商店地区的 GG.deals 价格。",
+  "deck.travelDetails": "旅行信息",
+  "deck.travelDetails.desc": "记录你为每个游戏验证的信息。未知值仍保持未知；这些备注仅保存在本地 Repressurizer 中。",
+  "deck.travelGame": "游戏",
+  "deck.travelOffline": "支持离线运行",
+  "deck.travelFirstLaunch": "首次启动需要联网",
+  "deck.travelLauncher": "需要外部启动器",
+  "deck.travelSize": "估计大小（GB）",
+  "deck.travelReset": "清除本地信息",
+  "deck.travelYes": "是",
+  "deck.travelNo": "否",
+  "deck.travelSaved": "已保存到本地。重新生成游戏包以应用更改。"
 }

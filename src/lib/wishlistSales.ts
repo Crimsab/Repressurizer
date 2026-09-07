@@ -7,8 +7,8 @@ import { useWishlistStore } from "../stores/wishlistStore";
 
 export function wishlistPriceSnapshot(appId: number) {
   const state = useGameStore.getState();
-  const currency = useSettingsStore.getState().currency;
-  return priceSnapshotForCurrency(state.details[appId], currency);
+  const settings = useSettingsStore.getState();
+  return priceSnapshotForCurrency(state.details[appId], settings.currency, settings.storeCountryCode);
 }
 
 export function wishlistDiscountPercent(appId: number): number {

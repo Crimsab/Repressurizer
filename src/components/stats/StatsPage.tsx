@@ -48,9 +48,10 @@ export function StatsPage({ onClose }: StatsPageProps) {
   const collections = useCategoryStore((s) => s.collections);
   const statuses = useStatusStore((s) => s.statuses);
   const currency = useSettingsStore((s) => s.currency) ?? "EUR";
+  const storeCountryCode = useSettingsStore((s) => s.storeCountryCode);
   const achievementSummaries = useAchievementsStore((s) => s.summaries);
 
-  const stats = useMemo(() => computeStats(games, collections, details, currency), [games, collections, details, currency]);
+  const stats = useMemo(() => computeStats(games, collections, details, currency, storeCountryCode), [games, collections, details, currency, storeCountryCode]);
 
   // Achievement global stats
   const achievementStats = useMemo(() => {

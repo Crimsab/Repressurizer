@@ -1,3 +1,5 @@
+import { useMemo, useState } from "react";
+import { STORE_REGIONS } from "../../lib/steamRegions";
 import { Eye, Heart } from "@phosphor-icons/react";
 import { useT } from "../../lib/i18n";
 import { useCategoryStore } from "../../stores/categoryStore";
@@ -15,6 +17,17 @@ export function CoreSettingsSection({
   section,
 }: CoreSettingsSectionsProps) {
   const settings = useSettingsStore();
+  const [countrySearch, setCountrySearch] = useState("");
+  const countryOptions = useMemo(() => {
+    const names = new Intl.DisplayNames([settings.language || "en"], { type: "region" });
+    const query = countrySearch.trim().toLocaleLowerCase();
+    return STORE_REGIONS.map((region) => ({
+      value: region.countryCode,
+      label: `${names.of(region.countryCode) ?? region.name} · ${region.currency}`,
+      description: region.group?.startsWith("usd_") ? region.group.replace("usd_", "USD · ").toUpperCase() : undefined,
+    })).filter((option) => option.value === settings.storeCountryCode || `${option.label} ${option.value} ${option.description ?? ""}`.toLocaleLowerCase().includes(query))
+      .sort((a, b) => a.label.localeCompare(b.label, settings.language));
+  }, [settings.language, settings.storeCountryCode, countrySearch]);
   const t = useT();
   const categoryCount = useCategoryStore((state) => state.collections.length);
   const dynamicCount = useCategoryStore(
@@ -91,35 +104,34 @@ export function CoreSettingsSection({
       {section === "currency" && (
         <div className="space-y-3">
           <h3 className="text-[11px] font-medium uppercase tracking-wider text-repressurizer-text-faint">
-            {t("settings.currency")}
+            {t("settings.storeCountry")}
           </h3>
-          <div className="space-y-2 rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-repressurizer-text">
-                  {t("settings.defaultCurrency")}
-                </p>
-                <p className="mt-0.5 text-xs text-repressurizer-text-faint">
-                  {t("settings.currency.desc")}
-                </p>
-              </div>
+          <div className="rounded-xl border border-repressurizer-border-subtle bg-repressurizer-bg px-4 py-4">
+            <p className="max-w-xl text-xs leading-relaxed text-repressurizer-text-muted">
+              {t("settings.storeCountry.desc")}
+            </p>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <input
+                aria-label={t("settings.storeCountry.search")}
+                placeholder={t("settings.storeCountry.search")}
+                value={countrySearch}
+                onChange={(event) => setCountrySearch(event.target.value)}
+                className="min-w-0 rounded-lg border border-repressurizer-border bg-repressurizer-surface px-3 py-2 text-xs text-repressurizer-text"
+              />
               <SelectMenu
-                ariaLabel={t("settings.defaultCurrency")}
-                value={settings.currency ?? "EUR"}
-                onChange={(currency) => settings.setSettings({ currency })}
+                ariaLabel={t("settings.storeCountry")}
+                value={settings.storeCountryCode}
+                onChange={(storeCountryCode) => { settings.setSettings({ storeCountryCode }); setCountrySearch(""); }}
                 align="right"
                 size="sm"
-                className="w-[132px] shrink-0"
+                className="min-w-0"
                 buttonClassName="bg-repressurizer-surface"
-                options={[
-                  { value: "EUR", label: "EUR (€)" },
-                  { value: "USD", label: "USD ($)" },
-                  { value: "GBP", label: "GBP (£)" },
-                  { value: "JPY", label: "JPY (¥)" },
-                  { value: "CAD", label: "CAD (C$)" },
-                ]}
+                options={countryOptions}
               />
             </div>
+            <p className="mt-3 text-xs font-medium text-repressurizer-text">
+              {t("settings.storeCurrency", { currency: settings.currency })}
+            </p>
           </div>
         </div>
       )}

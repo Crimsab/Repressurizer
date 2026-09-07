@@ -97,6 +97,8 @@ function markDetailsCacheFresh(details: GameDetails, previous?: GameDetails): Ga
   const fetchedAt = Date.now();
   return {
     ...mergeDetailsPriceCache(normalizeDetailsForCache(details), previous, fetchedAt),
+    tags: details.tags?.length ? details.tags : previous?.tags ?? [],
+    deck_status: details.deck_status ?? previous?.deck_status,
     cache_schema: DETAILS_CACHE_SCHEMA_VERSION,
     fetched_at: fetchedAt,
   };
