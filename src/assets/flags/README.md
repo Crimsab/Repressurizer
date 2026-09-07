@@ -1,0 +1,1 @@
+Country flag artwork from flag-icons v7.5.0 (https://github.com/lipis/flag-icons), by Panayiotis Lipiridis. MIT license; see LICENSE. Only the Steam Store country flags used by Repressurizer are included.

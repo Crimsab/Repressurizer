@@ -1,9 +1,10 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { STORE_REGIONS } from "../../lib/steamRegions";
 import { Eye, Heart } from "@phosphor-icons/react";
 import { useT } from "../../lib/i18n";
 import { useCategoryStore } from "../../stores/categoryStore";
 import { useSettingsStore } from "../../stores/settingsStore";
+import { CountryFlag } from "../ui/CountryFlag";
 import { SelectMenu } from "../ui/SelectMenu";
 import { ToggleRow } from "./SettingsControls";
 
@@ -17,17 +18,16 @@ export function CoreSettingsSection({
   section,
 }: CoreSettingsSectionsProps) {
   const settings = useSettingsStore();
-  const [countrySearch, setCountrySearch] = useState("");
   const countryOptions = useMemo(() => {
     const names = new Intl.DisplayNames([settings.language || "en"], { type: "region" });
-    const query = countrySearch.trim().toLocaleLowerCase();
     return STORE_REGIONS.map((region) => ({
       value: region.countryCode,
+      icon: <CountryFlag countryCode={region.countryCode} />,
       label: `${names.of(region.countryCode) ?? region.name} · ${region.currency}`,
       description: region.group?.startsWith("usd_") ? region.group.replace("usd_", "USD · ").toUpperCase() : undefined,
-    })).filter((option) => option.value === settings.storeCountryCode || `${option.label} ${option.value} ${option.description ?? ""}`.toLocaleLowerCase().includes(query))
+    }))
       .sort((a, b) => a.label.localeCompare(b.label, settings.language));
-  }, [settings.language, settings.storeCountryCode, countrySearch]);
+  }, [settings.language]);
   const t = useT();
   const categoryCount = useCategoryStore((state) => state.collections.length);
   const dynamicCount = useCategoryStore(
@@ -110,22 +110,17 @@ export function CoreSettingsSection({
             <p className="max-w-xl text-xs leading-relaxed text-repressurizer-text-muted">
               {t("settings.storeCountry.desc")}
             </p>
-            <div className="mt-3 grid gap-2 sm:grid-cols-2">
-              <input
-                aria-label={t("settings.storeCountry.search")}
-                placeholder={t("settings.storeCountry.search")}
-                value={countrySearch}
-                onChange={(event) => setCountrySearch(event.target.value)}
-                className="min-w-0 rounded-lg border border-repressurizer-border bg-repressurizer-surface px-3 py-2 text-xs text-repressurizer-text"
-              />
+            <div className="mt-3">
               <SelectMenu
                 ariaLabel={t("settings.storeCountry")}
                 value={settings.storeCountryCode}
-                onChange={(storeCountryCode) => { settings.setSettings({ storeCountryCode }); setCountrySearch(""); }}
+                onChange={(storeCountryCode) => settings.setSettings({ storeCountryCode })}
                 align="right"
                 size="sm"
                 className="min-w-0"
                 buttonClassName="bg-repressurizer-surface"
+                searchLabel={t("settings.storeCountry.search")}
+                emptyLabel={t("common.noResults")}
                 options={countryOptions}
               />
             </div>
