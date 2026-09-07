@@ -29,7 +29,13 @@ interface PersistedSync {
   lastEnvelopeChecksum: string | null;
 }
 
-interface PendingSync { merge: ProfileSyncMerge; remoteDevice: string; generation: number; localChecksum: string; }
+interface PendingSync {
+  merge: ProfileSyncMerge;
+  remoteDevice: string;
+  generation: number;
+  localChecksum: string;
+  account: string | null;
+}
 interface ProfileSyncState extends PersistedSync {
   hydrated: boolean;
   syncing: boolean;
@@ -88,8 +94,28 @@ async function atomicWrite(folder: string, envelope: ProfileSyncEnvelope, valida
   if (!verified || verified.checksum !== envelope.checksum) throw new Error("Temporary sync file failed verification");
   try { validate(); } catch (error) { await remove(temporaryPath).catch(() => {}); throw error; }
   await rename(temporaryPath, finalPath);
-  const entries = await readDir(folder);
-  await Promise.all(entries.filter((entry) => entry.isFile && entry.name.startsWith(`${FILE_PREFIX}${envelope.deviceId}-`) && entry.name.endsWith(".json") && entry.name !== filename).map((entry) => remove(joinPath(folder, entry.name)).catch(() => {})));
+  // The final rename is the commit point. Retention cleanup is best effort so
+  // a failed directory read cannot make a committed envelope look unwritten.
+  try {
+    const entries = await readDir(folder);
+    await Promise.all(entries.filter((entry) => entry.isFile && entry.name.startsWith(`${FILE_PREFIX}${envelope.deviceId}-`) && entry.name.endsWith(".json") && entry.name !== filename).map((entry) => remove(joinPath(folder, entry.name)).catch(() => {})));
+  } catch { /* Keep the committed snapshot; a later sync can retry cleanup. */ }
+}
+
+interface SyncAttempt {
+  state: PersistedSync;
+  generation: number;
+  account: string | null;
+}
+
+function syncContextChanged(attempt: SyncAttempt, current: ProfileSyncState): boolean {
+  return runtimeGeneration() !== attempt.generation || current.folder !== attempt.state.folder || current.paused ||
+    current.nextSequence !== attempt.state.nextSequence || useSettingsStore.getState().steamId64 !== attempt.account;
+}
+
+function syncIdentityChanged(attempt: SyncAttempt, current: ProfileSyncState): boolean {
+  return runtimeGeneration() !== attempt.generation || current.folder !== attempt.state.folder ||
+    useSettingsStore.getState().steamId64 !== attempt.account;
 }
 
 export const useProfileSyncStore = create<ProfileSyncState>((set, get) => ({
@@ -130,24 +156,47 @@ export const useProfileSyncStore = create<ProfileSyncState>((set, get) => ({
       let aggregate = state.workingCopy ?? local; let source: string | null = null;
       for (const remote of remoteEnvelopes) {
         const remoteMerge = mergeProfileDocuments(state.workingCopy, aggregate, remote.profile);
-        if (remoteMerge.conflicts.length) { set({ pending: { merge: mergeProfileDocuments(state.workingCopy, local, remote.profile), remoteDevice: remote.deviceId, generation, localChecksum }, syncing: false, lastSourceDevice: remote.deviceId }); return "conflicts"; }
+        if (remoteMerge.conflicts.length) {
+          set({ pending: { merge: mergeProfileDocuments(state.workingCopy, local, remote.profile), remoteDevice: remote.deviceId, generation, localChecksum, account }, syncing: false, lastSourceDevice: remote.deviceId });
+          return "conflicts";
+        }
         aggregate = remoteMerge.merged; source = remote.deviceId;
       }
       const merge = mergeProfileDocuments(state.workingCopy, local, aggregate);
-      if (merge.conflicts.length) { set({ pending: { merge, remoteDevice: source ?? "shared-folder", generation, localChecksum }, syncing: false, lastSourceDevice: source }); return "conflicts"; }
+      if (merge.conflicts.length) {
+        set({ pending: { merge, remoteDevice: source ?? "shared-folder", generation, localChecksum, account }, syncing: false, lastSourceDevice: source });
+        return "conflicts";
+      }
       prepareProfileApplication(merge.merged, ALL_SYNC_SECTIONS, captureProfileSections(true));
       for (const change of profileEntityChanges(state.workingCopy, local)) journal.append(change);
       const updatedJournal = useEntityJournalStore.getState();
       const envelope = createProfileSyncEnvelope({ deviceId: updatedJournal.deviceId, sequence: state.nextSequence, previousChecksum: state.lastEnvelopeChecksum, profile: merge.merged, journal: updatedJournal.entries });
       await atomicWrite(state.folder, envelope, validateUnchanged);
-      validateContext();
-      // A change during rename must not be replaced. The committed envelope is
-      // still the new baseline; a later sync will merge the preserved draft.
-      if (canonicalJson(currentProfile(journal.deviceId).sections) === localChecksum) {
-        applyProfileSections(merge.merged, ALL_SYNC_SECTIONS, "sync");
-      }
-      const next = { ...get(), syncing: false, pending: null, nextSequence: state.nextSequence + 1, lastSyncAt: Date.now(), lastSourceDevice: source, lastChangedItems: merge.changedItems, lastError: null, workingCopy: merge.merged, lastEnvelopeChecksum: envelope.checksum };
-      set(next); persist(next); return "synced";
+      // Rename is the commit point. Record it even if the runtime changed while
+      // the file was being finalized; only apply the profile in the original
+      // account/folder context, and never use that profile as a new context's
+      // merge base.
+      const attempt: SyncAttempt = { state, generation, account };
+      const current = get();
+      const contextChanged = syncContextChanged(attempt, current);
+      const identityChanged = syncIdentityChanged(attempt, current);
+      const next = {
+        ...current,
+        syncing: false,
+        pending: null,
+        nextSequence: Math.max(current.nextSequence, state.nextSequence + 1),
+        lastSyncAt: Date.now(),
+        lastSourceDevice: identityChanged ? null : source,
+        lastChangedItems: identityChanged ? 0 : merge.changedItems,
+        lastError: contextChanged ? "Sync context changed. Local changes were preserved; run sync again." : null,
+        workingCopy: identityChanged ? null : merge.merged,
+        lastEnvelopeChecksum: envelope.checksum,
+      };
+      const canApply = !contextChanged && canonicalJson(currentProfile(journal.deviceId).sections) === localChecksum;
+      set(next); persist(next);
+      if (canApply) applyProfileSections(merge.merged, ALL_SYNC_SECTIONS, "sync");
+      if (contextChanged) throw new Error("Sync context changed. Local changes were preserved; run sync again.");
+      return "synced";
     } catch (error) { const message = error instanceof Error ? error.message : String(error); const next = { ...get(), syncing: false, lastError: message }; set(next); persist(next); throw error; }
   },
   resolvePending: async (choices) => {
@@ -158,6 +207,7 @@ export const useProfileSyncStore = create<ProfileSyncState>((set, get) => ({
     const validate = () => {
       if (state.folder !== get().folder || get().paused || get().nextSequence !== state.nextSequence ||
           runtimeGeneration() !== pending.generation ||
+          useSettingsStore.getState().steamId64 !== pending.account ||
           canonicalJson(currentProfile(journal.deviceId).sections) !== pending.localChecksum) {
         throw new Error("Profile changed since the conflict was shown. Run sync again before resolving.");
       }
@@ -170,17 +220,29 @@ export const useProfileSyncStore = create<ProfileSyncState>((set, get) => ({
       const envelope = createProfileSyncEnvelope({ deviceId: journal.deviceId, sequence: state.nextSequence,
         previousChecksum: state.lastEnvelopeChecksum, profile: resolved, journal: journal.entries });
       await atomicWrite(state.folder, envelope, validate);
-      // Never overwrite a change made while the final rename was pending.
-      if (runtimeGeneration() !== pending.generation || get().folder !== state.folder) {
-        throw new Error("Sync context changed after the file was written; local changes were preserved.");
-      }
-      if (canonicalJson(currentProfile(journal.deviceId).sections) === pending.localChecksum) {
-        applyProfileSections(resolved, ALL_SYNC_SECTIONS, "sync");
-      }
-      const next = { ...get(), syncing: false, pending: null, nextSequence: state.nextSequence + 1,
-        lastSyncAt: Date.now(), lastSourceDevice: pending.remoteDevice, lastChangedItems: pending.merge.changedItems,
-        lastError: null, workingCopy: resolved, lastEnvelopeChecksum: envelope.checksum };
+      // Preserve the committed sequence/checksum even when the context changed
+      // during the final rename. The resolved profile is a safe merge base only
+      // for the account and folder that produced it.
+      const attempt: SyncAttempt = { state, generation: pending.generation, account: pending.account };
+      const current = get();
+      const contextChanged = syncContextChanged(attempt, current);
+      const identityChanged = syncIdentityChanged(attempt, current);
+      const next = {
+        ...current,
+        syncing: false,
+        pending: null,
+        nextSequence: Math.max(current.nextSequence, state.nextSequence + 1),
+        lastSyncAt: Date.now(),
+        lastSourceDevice: identityChanged ? null : pending.remoteDevice,
+        lastChangedItems: identityChanged ? 0 : pending.merge.changedItems,
+        lastError: contextChanged ? "Sync context changed. Local changes were preserved; run sync again." : null,
+        workingCopy: identityChanged ? null : resolved,
+        lastEnvelopeChecksum: envelope.checksum,
+      };
+      const canApply = !contextChanged && canonicalJson(currentProfile(journal.deviceId).sections) === pending.localChecksum;
       set(next); persist(next);
+      if (canApply) applyProfileSections(resolved, ALL_SYNC_SECTIONS, "sync");
+      if (contextChanged) throw new Error("Sync context changed. Local changes were preserved; run sync again.");
     } catch (error) {
       set({ syncing: false, lastError: error instanceof Error ? error.message : String(error) });
       throw error;
