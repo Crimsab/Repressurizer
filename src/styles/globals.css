@@ -159,6 +159,18 @@ body {
   contain-intrinsic-size: auto 44px;
 }
 
+/* The virtual window already limits mounted items. Its overscan rows must
+   retain their real height so placeholders cannot change the scroll range. */
+[data-virtual-library] {
+  overflow-anchor: none;
+}
+
+[data-virtual-library] > .game-card,
+[data-virtual-library] > .game-row {
+  content-visibility: visible;
+  contain-intrinsic-size: none;
+}
+
 /* ── Skeleton shimmer ── */
 @keyframes shimmer {
   0% { background-position: -200% 0; }
