@@ -1,4 +1,5 @@
 import {
+  type ReactNode,
   useCallback,
   useEffect,
   useId,
@@ -7,13 +8,14 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-import { CaretDown, Check } from "@phosphor-icons/react";
+import { CaretDown, Check, MagnifyingGlass } from "@phosphor-icons/react";
 
 export interface SelectMenuOption<T extends string> {
   value: T;
   label: string;
   description?: string;
   disabled?: boolean;
+  icon?: ReactNode;
 }
 
 interface SelectMenuProps<T extends string> {
@@ -31,6 +33,8 @@ interface SelectMenuProps<T extends string> {
   buttonClassName?: string;
   menuClassName?: string;
   testId?: string;
+  searchLabel?: string;
+  emptyLabel?: string;
 }
 
 interface MenuPosition {
@@ -59,10 +63,19 @@ export function SelectMenu<T extends string>({
   buttonClassName,
   menuClassName,
   testId,
+  searchLabel,
+  emptyLabel,
 }: SelectMenuProps<T>) {
   const menuId = useId();
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const searchRef = useRef<HTMLInputElement | null>(null);
+  const [query, setQuery] = useState("");
+  const filteredOptions = useMemo(() => {
+    const normalize = (text: string) => text.normalize("NFD").replace(/\p{M}/gu, "").toLocaleLowerCase();
+    const needle = normalize(query.trim());
+    return !searchLabel || !needle ? options : options.filter((option) => normalize(`${option.label} ${option.value} ${option.description ?? ""}`).includes(needle));
+  }, [options, query, searchLabel]);
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState<MenuPosition | null>(null);
   const selected = useMemo(
@@ -83,10 +96,10 @@ export function SelectMenu<T extends string>({
     const rect = button.getBoundingClientRect();
     const gutter = 8;
     const gap = 6;
-    const preferredMaxHeight = 240;
+    const preferredMaxHeight = searchLabel ? 336 : 240;
     const estimatedHeight = Math.min(
       preferredMaxHeight,
-      Math.max(44, options.length * 34 + 8),
+      Math.max(44, options.length * 34 + 8 + (searchLabel ? 48 : 0)),
     );
     const triggerWidth = rect.width;
     const menuWidth = Math.max(triggerWidth, 156);
@@ -120,10 +133,11 @@ export function SelectMenu<T extends string>({
             top: rect.bottom + gap,
           },
     );
-  }, [align, options.length]);
+  }, [align, options.length, searchLabel]);
 
   const focusSelectedOption = useCallback(() => {
     requestAnimationFrame(() => {
+      if (searchLabel) { searchRef.current?.focus({ preventScroll: true }); return; }
       const optionButtons = Array.from(
         menuRef.current?.querySelectorAll<HTMLButtonElement>(
           '[role="option"]:not(:disabled)',
@@ -134,10 +148,10 @@ export function SelectMenu<T extends string>({
       );
       (selectedOption ?? optionButtons[0])?.focus({ preventScroll: true });
     });
-  }, []);
+  }, [searchLabel]);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) { setQuery(""); return; }
 
     updatePosition();
     focusSelectedOption();
@@ -181,7 +195,6 @@ export function SelectMenu<T extends string>({
           <div
             ref={menuRef}
             id={menuId}
-            role="listbox"
             data-select-menu-popover="true"
             onKeyDown={(event) => {
               const optionButtons = Array.from(
@@ -189,7 +202,26 @@ export function SelectMenu<T extends string>({
                   '[role="option"]:not(:disabled)',
                 ) ?? [],
               );
+              if (event.key === "Escape") {
+                event.preventDefault();
+                event.stopPropagation();
+                setOpen(false);
+                buttonRef.current?.focus();
+                return;
+              }
+              if (event.key === "Tab" && searchLabel) {
+                setOpen(false);
+                buttonRef.current?.focus();
+                return;
+              }
               if (!optionButtons.length) return;
+              if (event.target === searchRef.current) {
+                if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+                  event.preventDefault();
+                  optionButtons[event.key === "ArrowDown" ? 0 : optionButtons.length - 1]?.focus();
+                }
+                return;
+              }
 
               const currentIndex = Math.max(
                 0,
@@ -200,6 +232,7 @@ export function SelectMenu<T extends string>({
               const focusOption = (index: number) => {
                 event.preventDefault();
                 optionButtons[index]?.focus({ preventScroll: true });
+                optionButtons[index]?.scrollIntoView({ block: "nearest" });
               };
 
               if (event.key === "ArrowDown")
@@ -211,12 +244,6 @@ export function SelectMenu<T extends string>({
                 );
               if (event.key === "Home") focusOption(0);
               if (event.key === "End") focusOption(optionButtons.length - 1);
-              if (event.key === "Escape") {
-                event.preventDefault();
-                event.stopPropagation();
-                setOpen(false);
-                buttonRef.current?.focus();
-              }
             }}
             style={{
               position: "fixed",
@@ -228,11 +255,31 @@ export function SelectMenu<T extends string>({
               bottom: position.bottom,
             }}
             className={cn(
-              "animate-fade-in-stable overflow-auto rounded-xl border border-repressurizer-border bg-repressurizer-surface-raised py-1 shadow-pop",
+              "animate-fade-in-stable flex flex-col overflow-hidden rounded-xl border border-repressurizer-border bg-repressurizer-surface-raised shadow-pop",
               menuClassName,
             )}
           >
-            {options.map((option) => {
+            {searchLabel && (
+              <div className="shrink-0 border-b border-repressurizer-border-subtle px-2 py-2">
+                <div className="flex items-center gap-2 rounded-lg border border-repressurizer-border bg-repressurizer-bg px-2.5 focus-within:border-repressurizer-accent/60">
+                  <MagnifyingGlass size={14} aria-hidden="true" className="shrink-0 text-repressurizer-text-faint" />
+                  <input
+                    ref={searchRef}
+                    autoFocus
+                    type="search"
+                    aria-label={searchLabel}
+                    aria-controls={`${menuId}-options`}
+                    placeholder={searchLabel}
+                    value={query}
+                    onChange={(event) => setQuery(event.target.value)}
+                    autoComplete="off"
+                    className="h-9 min-w-0 flex-1 bg-transparent text-xs text-repressurizer-text outline-none"
+                  />
+                </div>
+              </div>
+            )}
+            <div id={`${menuId}-options`} role="listbox" aria-label={ariaLabel ?? label} className="min-h-0 overflow-y-auto overscroll-contain py-1">
+            {filteredOptions.map((option) => {
               const active = option.value === value;
               return (
                 <button
@@ -260,6 +307,7 @@ export function SelectMenu<T extends string>({
                       className="absolute inset-y-1 left-0 w-0.5 rounded-full bg-repressurizer-accent"
                     />
                   )}
+                  {option.icon && <span aria-hidden="true" className="mt-0.5 flex shrink-0 items-center">{option.icon}</span>}
                   <span className="min-w-0 flex-1">
                     <span className="block truncate leading-none">
                       {option.label}
@@ -280,6 +328,8 @@ export function SelectMenu<T extends string>({
                 </button>
               );
             })}
+            </div>
+            {filteredOptions.length === 0 && emptyLabel && <p role="status" className="px-3 py-4 text-xs text-repressurizer-text-faint">{emptyLabel}</p>}
           </div>,
           buttonRef.current?.closest('[role="dialog"]') ?? document.body,
         )
@@ -302,7 +352,7 @@ export function SelectMenu<T extends string>({
         type="button"
         aria-label={accessibleLabel}
         aria-haspopup="listbox"
-        aria-controls={open ? menuId : undefined}
+        aria-controls={open ? `${menuId}-options` : undefined}
         aria-expanded={open}
         disabled={disabled}
         data-testid={testId}
@@ -322,6 +372,7 @@ export function SelectMenu<T extends string>({
           buttonClassName,
         )}
       >
+        {selected?.icon && <span aria-hidden="true" className="flex shrink-0 items-center">{selected.icon}</span>}
         <span className="min-w-0 flex-1 truncate leading-none">
           {selectedLabel}
         </span>
