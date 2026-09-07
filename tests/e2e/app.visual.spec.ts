@@ -1086,16 +1086,21 @@ test("diary backups can be created, listed, and deleted", async ({ page }) => {
   await page.getByTestId("diary-backup-button").click();
   const dialog = page.getByRole("dialog", { name: "Diary backups" });
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByText("No diary backups yet.")).toBeVisible();
-
   await dialog.getByLabel("Backup description (optional)").fill("Before kanban rework");
   await page.getByTestId("diary-backup-create").click();
   await expect(page.getByTestId("diary-backup-list")).toContainText("Before kanban rework");
   await expect(page.getByTestId("diary-backup-list")).toContainText("7 files");
 
   page.once("dialog", (confirmation) => confirmation.accept());
-  await page.getByTestId("diary-backup-list").getByRole("button", { name: /^Delete: diary-backup-/ }).click();
-  await expect(dialog.getByText("No diary backups yet.")).toBeVisible();
+  const manualBackup = page.getByTestId("diary-backup-item").filter({ hasText: "Before kanban rework" });
+  await expect(manualBackup).toHaveCount(1);
+  await manualBackup.getByRole("button", { name: /^Delete: diary-backup-/ }).click();
+  await expect(manualBackup).toHaveCount(0);
+  // The startup auto-backup is separate and must not be deleted by this action.
+  await expect.poll(() => page.evaluate(() =>
+    (window as any).__TAURI_INTERNALS__.invoke("list_diary_backups")
+      .then((backups: Array<{ description: string }>) => backups.some((backup) => backup.description === "Before kanban rework"))
+  )).toBe(false);
 });
 
 test("diary backup restore previews a selective file diff", async ({ page }, testInfo) => {
@@ -1105,7 +1110,7 @@ test("diary backup restore previews a selective file diff", async ({ page }, tes
   const dialog = page.getByRole("dialog", { name: "Diary backups" });
   await dialog.getByLabel("Backup description (optional)").fill("Selective restore preview");
   await page.getByTestId("diary-backup-create").click();
-  const restoreButton = page.getByTestId("diary-backup-list").getByRole("button", { name: /^Restore: diary-backup-/ });
+  const restoreButton = page.getByTestId("diary-backup-item").filter({ hasText: "Selective restore preview" }).getByRole("button", { name: /^Restore: diary-backup-/ });
   await restoreButton.click();
   const preview = page.getByTestId("diary-backup-restore-preview");
   await expect(preview).toBeVisible();

@@ -1,5 +1,6 @@
 import { create } from "zustand";
-import { invoke } from "@tauri-apps/api/core";
+import { saveAppData, loadAppData } from "../lib/tauri";
+import { runtimeGeneration } from "../lib/runtimeGeneration";
 
 const STORAGE_KEY = "repressurizer-game-tags";
 
@@ -16,7 +17,7 @@ function saveTags(tags: Record<number, string[]>) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(tags));
   } catch {}
-  invoke("save_app_data", { key: "tags.json", data: JSON.stringify(tags) }).catch(() => {});
+  saveAppData("tags.json", JSON.stringify(tags)).catch(() => {});
 }
 
 interface TagsState {
@@ -74,8 +75,11 @@ export const useTagsStore = create<TagsState>((set, get) => ({
   restoreAll: (tags) => { const next = structuredClone(tags); saveTags(next); set({ tags: next }); },
 
   hydrate: async () => {
+    const generation = runtimeGeneration();
+    const before = get().tags;
     try {
-      const raw = await invoke<string | null>("load_app_data", { key: "tags.json" });
+      const raw = await loadAppData("tags.json");
+      if (generation !== runtimeGeneration() || get().tags !== before) return;
       if (raw) {
         const parsed: Record<number, string[]> = JSON.parse(raw);
         const local = get().tags;

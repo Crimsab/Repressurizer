@@ -1,3 +1,5 @@
+import { enqueuePersistence, flushPersistence } from "../lib/persistenceQueue";
+import { invalidateRuntime } from "../lib/runtimeGeneration";
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
 import type {
@@ -312,13 +314,18 @@ function normalizeSettings(raw: Partial<AppSettings>): AppSettings {
   };
 }
 
+let lastHttpPolicy = "";
 function syncHttpPolicy(proxySettings: AppSettings["proxySettings"]) {
+  const serialized = JSON.stringify(proxySettings);
+  if (serialized === lastHttpPolicy) return;
+  lastHttpPolicy = serialized;
   // Browser previews and documentation builds do not expose the Tauri bridge.
   // Skipping the native-only command there keeps the console actionable while
   // Tauri and the E2E bridge continue to receive the policy normally.
-  if (typeof window !== "undefined" && !("__TAURI_INTERNALS__" in window)) return;
+  if (typeof window === "undefined" || !("__TAURI_INTERNALS__" in window)) return;
   try {
     invoke("configure_http_policy", { settings: proxySettings }).catch((error) => {
+      lastHttpPolicy = "";
       console.warn("[Settings] Failed to configure HTTP policy:", error);
     });
   } catch (error) {
@@ -327,11 +334,10 @@ function syncHttpPolicy(proxySettings: AppSettings["proxySettings"]) {
 }
 
 function saveToStorage(state: AppSettings) {
-  try {
-    localStorage.setItem("repressurizer-settings", JSON.stringify(state));
-  } catch {}
-  // Also persist to Tauri FS
-  invoke("save_app_data", { key: "settings.json", data: JSON.stringify(state) }).catch(() => {});
+  const data = JSON.stringify(state);
+  try { localStorage.setItem("repressurizer-settings", data); } catch {}
+  void enqueuePersistence("settings.json", () => data,
+    (data) => invoke("save_app_data", { key: "settings.json", data })).catch(() => {});
   syncHttpPolicy(state.proxySettings);
 }
 
@@ -393,18 +399,24 @@ function darkenHex(hex: string, amount: number): string {
   return rgbToHex(r * (1 - amount), g * (1 - amount), b * (1 - amount));
 }
 
+let settingsRevision = 0;
 const initialSettings = loadFromStorage();
 
 export const useSettingsStore = create<SettingsState>((set) => ({
   ...initialSettings,
   hydrateFromDisk: async () => {
+    const revision = settingsRevision;
     try {
+      await flushPersistence("settings.json");
       const raw = await invoke<string | null>("load_app_data", { key: "settings.json" });
       if (!raw) return;
       const parsed = JSON.parse(raw) as Partial<AppSettings>;
       set((state) => {
+        if (settingsRevision !== revision) return state;
         const next = normalizeSettings({ ...state, ...parsed });
-        saveToStorage(next);
+        if (next.steamId64 !== state.steamId64 || next.steamId3 !== state.steamId3 || next.steamPath !== state.steamPath) invalidateRuntime();
+        try { localStorage.setItem("repressurizer-settings", JSON.stringify(next)); } catch {}
+        syncHttpPolicy(next.proxySettings);
         return next;
       });
     } catch {
@@ -413,11 +425,16 @@ export const useSettingsStore = create<SettingsState>((set) => ({
   },
   setSettings: (settings) =>
     set((state) => {
+      if (Object.entries(settings).every(([key, value]) => Object.is(state[key as keyof AppSettings], value))) return state;
       const next = normalizeSettings({ ...state, ...settings });
+      if (next.steamId64 !== state.steamId64 || next.steamId3 !== state.steamId3 || next.steamPath !== state.steamPath) invalidateRuntime();
+      settingsRevision += 1;
       saveToStorage(next);
       return next;
     }),
   reset: () => {
+    settingsRevision += 1;
+    invalidateRuntime();
     saveToStorage(defaults);
     set(defaults);
   },

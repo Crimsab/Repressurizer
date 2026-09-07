@@ -182,6 +182,7 @@ export function SelectMenu<T extends string>({
             ref={menuRef}
             id={menuId}
             role="listbox"
+            data-select-menu-popover="true"
             onKeyDown={(event) => {
               const optionButtons = Array.from(
                 menuRef.current?.querySelectorAll<HTMLButtonElement>(

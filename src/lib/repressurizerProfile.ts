@@ -1,3 +1,4 @@
+import { isRecord, isBoundedProfileData, validateProfileSectionShape } from "./profileValidation";
 import { canonicalJson, entityChecksum } from "./entityJournal";
 
 export const REPRESSURIZER_PROFILE_SCHEMA = 1 as const;
@@ -41,13 +42,8 @@ function itemCount(value: unknown): number {
 }
 
 function validSections(sections: RepressurizerProfileDocument["sections"]): boolean {
-  for (const [key, value] of Object.entries(sections)) {
-    if (!SECTION_KEYS.includes(key as ProfileSectionKey)) return false;
-    if (key === "collections") {
-      if (!Array.isArray(value) || value.some((collection) => !collection || typeof collection !== "object" || typeof (collection as { key?: unknown }).key !== "string" || typeof (collection as { name?: unknown }).name !== "string" || !Array.isArray((collection as { added?: unknown }).added))) return false;
-    } else if (!value || typeof value !== "object") return false;
-  }
-  return true;
+  return isRecord(sections) && Object.entries(sections).every(([key, value]) =>
+    SECTION_KEYS.includes(key as ProfileSectionKey) && validateProfileSectionShape(key, value));
 }
 
 export function createRepressurizerProfile(input: {
@@ -77,14 +73,21 @@ export function verifyRepressurizerProfile(document: RepressurizerProfileDocumen
 }
 
 export function parseRepressurizerProfile(value: unknown): { document: RepressurizerProfileDocument | null; error: "invalid" | "newer-schema" | "checksum" | null } {
-  if (!value || typeof value !== "object") return { document: null, error: "invalid" };
+  if (!isRecord(value) || !isBoundedProfileData(value)) return { document: null, error: "invalid" };
   const raw = value as { manifest?: Partial<RepressurizerProfileManifest>; sections?: unknown };
   const schema = Number(raw.manifest?.schemaVersion ?? 0);
   if (schema > REPRESSURIZER_PROFILE_SCHEMA) return { document: null, error: "newer-schema" };
   if (schema !== REPRESSURIZER_PROFILE_SCHEMA || !raw.sections || typeof raw.sections !== "object" || !raw.manifest) return { document: null, error: "invalid" };
+  if (!isRecord(raw.manifest) || typeof raw.manifest.profileId !== "string" || !raw.manifest.profileId ||
+      typeof raw.manifest.name !== "string" || typeof raw.manifest.deviceId !== "string" || !raw.manifest.deviceId ||
+      typeof raw.manifest.exportedAt !== "number" || !Number.isFinite(raw.manifest.exportedAt) ||
+      (raw.manifest.steamAccountId !== null && typeof raw.manifest.steamAccountId !== "string") ||
+      typeof raw.manifest.checksum !== "string") return { document: null, error: "invalid" };
   const includedSections = Array.isArray(raw.manifest.includedSections) ? raw.manifest.includedSections.filter((key): key is ProfileSectionKey => SECTION_KEYS.includes(key as ProfileSectionKey)) : [];
   const document = { manifest: { ...raw.manifest, schemaVersion: REPRESSURIZER_PROFILE_SCHEMA, includedSections } as RepressurizerProfileManifest, sections: raw.sections as RepressurizerProfileDocument["sections"] };
-  if (!validSections(document.sections)) return { document: null, error: "invalid" };
+  if (!validSections(document.sections) || new Set(includedSections).size !== includedSections.length ||
+      includedSections.length !== Object.keys(document.sections).length ||
+      includedSections.some((key) => !Object.hasOwn(document.sections, key))) return { document: null, error: "invalid" };
   if (!verifyRepressurizerProfile(document)) return { document: null, error: "checksum" };
   return { document, error: null };
 }

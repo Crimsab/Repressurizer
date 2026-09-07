@@ -1,5 +1,6 @@
 import { create } from "zustand";
-import { invoke } from "@tauri-apps/api/core";
+import { saveAppData, loadAppData } from "../lib/tauri";
+import { runtimeGeneration } from "../lib/runtimeGeneration";
 
 const STORAGE_KEY = "repressurizer-game-reviews";
 
@@ -22,7 +23,7 @@ function saveReviews(reviews: Record<number, GameReview>) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(reviews));
   } catch {}
   // Also persist to Tauri file cache
-  invoke("save_app_data", { key: "reviews.json", data: JSON.stringify(reviews) }).catch(() => {});
+  saveAppData("reviews.json", JSON.stringify(reviews)).catch(() => {});
 }
 
 interface ReviewState {
@@ -59,8 +60,11 @@ export const useReviewStore = create<ReviewState>((set, get) => ({
   restoreAll: (reviews) => { const next = structuredClone(reviews); saveReviews(next); set({ reviews: next }); },
 
   hydrate: async () => {
+    const generation = runtimeGeneration();
+    const before = get().reviews;
     try {
-      const raw = await invoke<string | null>("load_app_data", { key: "reviews.json" });
+      const raw = await loadAppData("reviews.json");
+      if (generation !== runtimeGeneration() || get().reviews !== before) return;
       if (raw) {
         const parsed: Record<number, GameReview> = JSON.parse(raw);
         // Merge: Tauri cache wins if it has more entries

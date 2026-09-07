@@ -2566,5 +2566,7 @@
   "achievements.tab.manager": "Gestión",
   "achievements.tab.hunter": "Caza",
   "palette.actions": "Acciones rápidas",
-  "palette.tools": "Herramientas"
+  "palette.tools": "Herramientas",
+  "common.retry": "Reintentar",
+  "games.libraryLabel": "Biblioteca de juegos"
 }

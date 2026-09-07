@@ -1,5 +1,7 @@
+import { enqueuePersistence } from "../lib/persistenceQueue";
+import { invoke } from "@tauri-apps/api/core";
 import { create } from "zustand";
-import { loadAppData, saveAppData } from "../lib/tauri";
+import { loadAppData } from "../lib/tauri";
 import {
   createCollectionSnapshot,
   createTimelineEvent,
@@ -47,7 +49,8 @@ function stateData(state: CollectionTimeMachineState): PersistedTimeMachine {
 }
 
 function persist(data: PersistedTimeMachine) {
-  void saveAppData(STORAGE_KEY, JSON.stringify(data)).catch(() => {});
+  void enqueuePersistence(STORAGE_KEY, () => JSON.stringify(data),
+    (serialized) => invoke<void>("save_app_data", { key: STORAGE_KEY, data: serialized }), 300).catch(() => {});
 }
 
 function prune(data: PersistedTimeMachine, now = Date.now()): PersistedTimeMachine {
@@ -100,8 +103,10 @@ export const useCollectionTimeMachineStore = create<CollectionTimeMachineState>(
   hydrated: false,
 
   hydrate: async () => {
+    const before = get();
     const loaded = parsed(await loadAppData(STORAGE_KEY).catch(() => null));
-    set(loaded ? { ...loaded, hydrated: true } : { hydrated: true });
+    // Edits made while the disk read was pending remain the current history.
+    set(loaded && get() === before ? { ...loaded, hydrated: true } : { hydrated: true });
   },
 
   recordTransition: ({ before, after, origin, steamAccountId, steamLibraryPath, deviceId, occurredAt }) => {

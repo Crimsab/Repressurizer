@@ -1,7 +1,7 @@
 use serde::{de, Deserialize, Deserializer};
 use std::collections::HashMap;
 
-use crate::http_policy::{client_builder_for_scope, HttpProxyScope};
+use crate::http_policy::{client_for_scope, HttpProxyScope};
 
 use super::types::{FamilyLibraryApp, FamilyLibraryResult, WishlistItem};
 use super::utils::{request_error, steam_api_url};
@@ -182,10 +182,7 @@ where
 }
 
 pub async fn fetch_wishlist(steam_id64: String) -> Result<Vec<WishlistItem>, String> {
-    let client = client_builder_for_scope(HttpProxyScope::SteamApi)?
-        .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-        .build()
-        .map_err(|e| e.to_string())?;
+    let client = client_for_scope(HttpProxyScope::SteamApi, Some("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"))?;
 
     // Try the Steam Web API endpoint (works for public wishlists, no key needed)
     let url = format!(
@@ -260,10 +257,7 @@ pub async fn fetch_family_library(
     steam_id64: Option<String>,
     include_non_games: Option<bool>,
 ) -> Result<FamilyLibraryResult, String> {
-    let client = client_builder_for_scope(HttpProxyScope::SteamApi)?
-        .user_agent("Repressurizer/0.1")
-        .build()
-        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+    let client = client_for_scope(HttpProxyScope::SteamApi, Some("Repressurizer/0.1"))?;
 
     fetch_family_library_from_base(
         &client,

@@ -14,11 +14,11 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Read, Write};
-use std::net::{SocketAddr, TcpListener, TcpStream};
+use std::net::{Shutdown, SocketAddr, TcpListener, TcpStream};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use subtle::ConstantTimeEq;
 use uuid::Uuid;
 
@@ -36,6 +36,7 @@ pub(crate) struct EmbeddedApiServer {
     address: SocketAddr,
     token: String,
     stop: Arc<AtomicBool>,
+    active_connection: Arc<Mutex<Option<TcpStream>>>,
     join: Option<JoinHandle<()>>,
 }
 
@@ -49,19 +50,28 @@ impl EmbeddedApiServer {
     }
 
     pub(crate) fn stop(mut self) {
+        self.stop_worker();
+    }
+
+    fn stop_worker(&mut self) {
+        let Some(join) = self.join.take() else {
+            return;
+        };
         self.stop.store(true, Ordering::Release);
-        if let Some(join) = self.join.take() {
-            let _ = join.join();
+        if let Ok(mut active) = self.active_connection.lock() {
+            if let Some(stream) = active.take() {
+                let _ = stream.shutdown(Shutdown::Both);
+            }
         }
+        // A wake-up connection releases a blocking accept without periodic polling.
+        let _ = TcpStream::connect_timeout(&self.address, Duration::from_millis(250));
+        let _ = join.join();
     }
 }
 
 impl Drop for EmbeddedApiServer {
     fn drop(&mut self) {
-        self.stop.store(true, Ordering::Release);
-        if let Some(join) = self.join.take() {
-            let _ = join.join();
-        }
+        self.stop_worker();
     }
 }
 
@@ -72,12 +82,14 @@ pub(crate) fn start_embedded() -> Result<EmbeddedApiServer, String> {
         .local_addr()
         .map_err(|error| format!("failed to resolve embedded local API address: {error}"))?;
     listener
-        .set_nonblocking(true)
+        .set_nonblocking(false)
         .map_err(|error| format!("failed to configure embedded local API listener: {error}"))?;
 
     let token = generate_token();
     let stop = Arc::new(AtomicBool::new(false));
     let thread_stop = Arc::clone(&stop);
+    let active_connection: Arc<Mutex<Option<TcpStream>>> = Arc::new(Mutex::new(None));
+    let thread_active = Arc::clone(&active_connection);
     let expected_host = format!("127.0.0.1:{}", address.port());
     let thread_name = format!("repressurizer-local-api-{}", address.port());
     let thread_token = token.clone();
@@ -98,6 +110,15 @@ pub(crate) fn start_embedded() -> Result<EmbeddedApiServer, String> {
             while !thread_stop.load(Ordering::Acquire) {
                 match listener.accept() {
                     Ok((mut stream, _peer)) => {
+                        {
+                            let Ok(mut active) = thread_active.lock() else {
+                                break;
+                            };
+                            if thread_stop.load(Ordering::Acquire) {
+                                break;
+                            }
+                            *active = stream.try_clone().ok();
+                        }
                         if let Err(error) = handle_connection(
                             &mut stream,
                             &thread_token,
@@ -110,10 +131,11 @@ pub(crate) fn start_embedded() -> Result<EmbeddedApiServer, String> {
                                 error_response(400, "invalid_request", error),
                             );
                         }
+                        if let Ok(mut active) = thread_active.lock() {
+                            active.take();
+                        }
                     }
-                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
-                        thread::sleep(Duration::from_millis(25));
-                    }
+                    Err(error) if error.kind() == std::io::ErrorKind::Interrupted => {}
                     Err(error) => {
                         log::error!("Embedded local integration listener failed: {error}");
                         break;
@@ -127,6 +149,7 @@ pub(crate) fn start_embedded() -> Result<EmbeddedApiServer, String> {
         address,
         token,
         stop,
+        active_connection,
         join: Some(join),
     })
 }
@@ -291,6 +314,9 @@ fn handle_connection(
     stream
         .set_read_timeout(Some(Duration::from_secs(5)))
         .map_err(|error| format!("failed to set API read timeout: {error}"))?;
+    stream
+        .set_write_timeout(Some(Duration::from_secs(5)))
+        .map_err(|error| format!("failed to set API write timeout: {error}"))?;
     let request = read_request(stream)?;
     let response = if request
         .headers
@@ -309,12 +335,49 @@ fn handle_connection(
     write_response(stream, response)
 }
 
+struct DeadlineReader {
+    stream: TcpStream,
+    deadline: Instant,
+}
+
+impl Read for DeadlineReader {
+    fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+        let remaining = self
+            .deadline
+            .checked_duration_since(Instant::now())
+            .filter(|remaining| !remaining.is_zero())
+            .ok_or_else(|| {
+                std::io::Error::new(std::io::ErrorKind::TimedOut, "API request deadline expired")
+            })?;
+        self.stream.set_read_timeout(Some(remaining))?;
+        self.stream.read(buffer)
+    }
+}
+
+fn read_header_line(reader: &mut impl BufRead, remaining: &mut usize) -> Result<String, String> {
+    let mut line = Vec::new();
+    (&mut *reader)
+        .take((*remaining as u64) + 1)
+        .read_until(b'\n', &mut line)
+        .map_err(|error| format!("failed to read HTTP headers: {error}"))?;
+    if line.len() > *remaining {
+        return Err("HTTP headers exceed the 16 KiB limit".into());
+    }
+    if !line.ends_with(b"\n") {
+        return Err("Incomplete HTTP headers".into());
+    }
+    *remaining -= line.len();
+    String::from_utf8(line).map_err(|_| "HTTP headers must be UTF-8".into())
+}
+
 fn read_request(stream: &TcpStream) -> Result<ApiRequest, String> {
-    let mut reader = BufReader::new(stream.try_clone().map_err(|error| error.to_string())?);
-    let mut request_line = String::new();
-    reader
-        .read_line(&mut request_line)
-        .map_err(|error| format!("failed to read HTTP request line: {error}"))?;
+    let source = DeadlineReader {
+        stream: stream.try_clone().map_err(|error| error.to_string())?,
+        deadline: Instant::now() + Duration::from_secs(5),
+    };
+    let mut reader = BufReader::new(source);
+    let mut remaining = MAX_HEADER_BYTES;
+    let request_line = read_header_line(&mut reader, &mut remaining)?;
     let mut parts = request_line.split_whitespace();
     let method = parts
         .next()
@@ -322,28 +385,31 @@ fn read_request(stream: &TcpStream) -> Result<ApiRequest, String> {
         .to_ascii_uppercase();
     let target = parts.next().ok_or("missing HTTP target")?.to_string();
     let version = parts.next().ok_or("missing HTTP version")?;
-    if version != "HTTP/1.1" && version != "HTTP/1.0" {
-        return Err("unsupported HTTP version".to_string());
+    if !matches!(version, "HTTP/1.1" | "HTTP/1.0") || parts.next().is_some() {
+        return Err("unsupported HTTP request line".to_string());
     }
-
     let mut headers = HashMap::new();
-    let mut header_bytes = request_line.len();
     loop {
-        let mut line = String::new();
-        reader
-            .read_line(&mut line)
-            .map_err(|error| format!("failed to read HTTP headers: {error}"))?;
-        header_bytes = header_bytes.saturating_add(line.len());
-        if header_bytes > MAX_HEADER_BYTES {
-            return Err("HTTP headers exceed the 16 KiB limit".to_string());
-        }
+        let line = read_header_line(&mut reader, &mut remaining)?;
         if line == "\r\n" || line == "\n" {
             break;
         }
         let (name, value) = line.split_once(':').ok_or("malformed HTTP header")?;
-        headers.insert(name.trim().to_ascii_lowercase(), value.trim().to_string());
+        if name.is_empty()
+            || !name
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+        {
+            return Err("invalid HTTP header name".into());
+        }
+        let name = name.to_ascii_lowercase();
+        if headers.insert(name, value.trim().to_string()).is_some() {
+            return Err("Duplicate HTTP headers are not supported".into());
+        }
     }
-
+    if headers.contains_key("transfer-encoding") {
+        return Err("Transfer-Encoding is not supported; use Content-Length".into());
+    }
     let length = headers
         .get("content-length")
         .map(|value| {
@@ -354,7 +420,7 @@ fn read_request(stream: &TcpStream) -> Result<ApiRequest, String> {
         .transpose()?
         .unwrap_or(0);
     if length > MAX_BODY_BYTES {
-        return Err("HTTP request body exceeds the 128 KiB limit".to_string());
+        return Err("HTTP request body exceeds the 128 KiB limit".into());
     }
     let mut body = vec![0; length];
     reader
@@ -1152,5 +1218,85 @@ mod tests {
             items[0].get("appId").and_then(|value| value.as_u64()),
             Some(1)
         );
+    }
+}
+
+#[cfg(test)]
+mod transport_regression_tests {
+    use super::*;
+    use std::io::Cursor;
+
+    #[test]
+    fn bounds_a_line_without_waiting_for_a_newline() {
+        let mut reader = Cursor::new(vec![b'x'; MAX_HEADER_BYTES * 4]);
+        let mut remaining = MAX_HEADER_BYTES;
+        assert!(read_header_line(&mut reader, &mut remaining).is_err());
+        assert_eq!(reader.position(), (MAX_HEADER_BYTES + 1) as u64);
+    }
+
+    #[test]
+    fn charges_all_lines_to_one_header_budget() {
+        let mut reader = Cursor::new(b"a\n12345\n".to_vec());
+        let mut remaining = 6;
+        assert_eq!(
+            read_header_line(&mut reader, &mut remaining).unwrap(),
+            "a\n"
+        );
+        assert_eq!(remaining, 4);
+        assert!(read_header_line(&mut reader, &mut remaining).is_err());
+        assert_eq!(reader.position(), 7);
+    }
+
+    #[test]
+    fn rejects_incomplete_and_non_utf8_header_lines() {
+        for data in [b"missing newline".to_vec(), vec![0xff, b'\n'], Vec::new()] {
+            let mut remaining = MAX_HEADER_BYTES;
+            assert!(read_header_line(&mut Cursor::new(data), &mut remaining).is_err());
+        }
+    }
+
+    fn parse_wire(data: &[u8]) -> Result<ApiRequest, String> {
+        let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let mut client = TcpStream::connect(listener.local_addr().unwrap()).unwrap();
+        let (server, _) = listener.accept().unwrap();
+        client.write_all(data).unwrap();
+        client.shutdown(Shutdown::Write).unwrap();
+        read_request(&server)
+    }
+
+    #[test]
+    fn parses_bounded_http_with_body_and_rejects_ambiguous_framing() {
+        let parsed =
+            parse_wire(b"POST /mcp HTTP/1.1\r\nHost: 127.0.0.1\r\nContent-Length: 2\r\n\r\n{}")
+                .unwrap();
+        assert_eq!(parsed.body, b"{}");
+        for data in [
+            "GET / HTTP/1.1 trailing\r\n\r\n",
+            "POST / HTTP/1.1\r\nContent-Length: 2\r\nContent-Length: 2\r\n\r\n{}",
+            "POST / HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\n",
+            "POST / HTTP/1.1\r\nContent-Length: 131073\r\n\r\n",
+            "POST / HTTP/1.1\r\nContent-Length: 5\r\n\r\n{}",
+            "GET / HTTP/1.1\r\nBad Name: x\r\n\r\n",
+        ] {
+            assert!(parse_wire(data.as_bytes()).is_err(), "accepted {data:?}");
+        }
+    }
+
+    #[test]
+    fn stop_interrupts_a_client_stalled_before_its_first_header() {
+        let server = start_embedded().unwrap();
+        let _client = TcpStream::connect(server.address()).unwrap();
+        std::thread::sleep(Duration::from_millis(30));
+        let start = Instant::now();
+        server.stop();
+        assert!(start.elapsed() < Duration::from_secs(2));
+    }
+
+    #[test]
+    fn idle_listener_can_be_stopped_without_a_polling_timer() {
+        let server = start_embedded().unwrap();
+        let start = Instant::now();
+        server.stop();
+        assert!(start.elapsed() < Duration::from_secs(2));
     }
 }

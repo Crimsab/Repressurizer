@@ -39,7 +39,9 @@ test("Session Planner builds an explainable queue and previews collection conver
     dialog.getByRole("button", { name: "Device profile" }),
   ).toHaveAttribute("aria-expanded", "true");
   await page.waitForTimeout(250);
-  await expect(page.getByRole("listbox")).toBeVisible();
+  const popupId = await dialog.getByRole("button", { name: "Device profile" }).getAttribute("aria-controls");
+  expect(popupId).toBeTruthy();
+  await expect(page.locator(`[id="${popupId}"][role="listbox"]`)).toBeVisible();
   await capture(page, testInfo, "session-planner-device-dropdown");
   await page.keyboard.press("Escape");
   await capture(page, testInfo, "session-planner-results");

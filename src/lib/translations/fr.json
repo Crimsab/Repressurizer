@@ -2566,5 +2566,7 @@
   "achievements.tab.manager": "Gestion",
   "achievements.tab.hunter": "Chasse",
   "palette.actions": "Actions rapides",
-  "palette.tools": "Outils"
+  "palette.tools": "Outils",
+  "common.retry": "Réessayer",
+  "games.libraryLabel": "Bibliothèque de jeux"
 }

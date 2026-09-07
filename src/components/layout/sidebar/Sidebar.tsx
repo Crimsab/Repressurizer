@@ -91,27 +91,38 @@ export function Sidebar() {
   const categoryColors = useSettingsStore((s) => s.categoryColors ?? {});
   const setSettings = useSettingsStore((s) => s.setSettings);
 
-  const dragRef = useRef<{ startX: number; startWidth: number } | null>(null);
-
-  const handleResizeMouseDown = (e: React.MouseEvent) => {
-    e.preventDefault();
-    dragRef.current = { startX: e.clientX, startWidth: sidebarWidth };
-
-    const onMouseMove = (ev: MouseEvent) => {
-      if (!dragRef.current) return;
-      const delta = ev.clientX - dragRef.current.startX;
-      const next = Math.min(400, Math.max(160, dragRef.current.startWidth + delta));
-      setSettings({ sidebarWidth: next });
+  const [dragWidth, setDragWidth] = useState<number | null>(null);
+  const dragCleanup = useRef<(() => void) | null>(null);
+  useEffect(() => () => dragCleanup.current?.(), []);
+  const handleResizeMouseDown = (event: React.MouseEvent) => {
+    event.preventDefault();
+    dragCleanup.current?.();
+    const startX = event.clientX;
+    const startWidth = sidebarWidth;
+    let next = startWidth;
+    let frame = 0;
+    document.body.classList.add("resizing");
+    const move = (pointer: MouseEvent) => {
+      next = Math.min(400, Math.max(160, startWidth + pointer.clientX - startX));
+      if (!frame) frame = requestAnimationFrame(() => { frame = 0; setDragWidth(next); });
     };
-
-    const onMouseUp = () => {
-      dragRef.current = null;
-      window.removeEventListener("mousemove", onMouseMove);
-      window.removeEventListener("mouseup", onMouseUp);
+    const cleanup = () => {
+      window.removeEventListener("mousemove", move);
+      window.removeEventListener("mouseup", finish);
+      window.removeEventListener("blur", finish);
+      if (frame) cancelAnimationFrame(frame);
+      document.body.classList.remove("resizing");
+      dragCleanup.current = null;
     };
-
-    window.addEventListener("mousemove", onMouseMove);
-    window.addEventListener("mouseup", onMouseUp);
+    const finish = () => {
+      cleanup();
+      setDragWidth(null);
+      if (next !== startWidth) setSettings({ sidebarWidth: next });
+    };
+    dragCleanup.current = cleanup;
+    window.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", finish);
+    window.addEventListener("blur", finish);
   };
 
   const t = useT();
@@ -235,7 +246,7 @@ export function Sidebar() {
   return (
     <aside
       className="relative flex flex-col border-r border-repressurizer-border-subtle bg-repressurizer-surface/50 shrink-0"
-      style={{ width: sidebarWidth }}
+      style={{ width: dragWidth ?? sidebarWidth }}
     >
       {/* Resize handle */}
       <div
