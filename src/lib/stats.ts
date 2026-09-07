@@ -48,7 +48,8 @@ export function computeStats(
   games: Record<number, OwnedGame>,
   collections: SteamCollection[],
   details: Record<number, GameDetails> = {},
-  currency = "EUR"
+  currency = "EUR",
+  countryCode?: string,
 ): LibraryStats {
   const list = Object.values(games);
   const totalGames = list.length;
@@ -89,7 +90,7 @@ export function computeStats(
   let freeGamesCount = 0;
   let pricedGamesCount = 0;
   for (const d of detailsList) {
-    const price = priceSnapshotForCurrency(d, currency);
+    const price = priceSnapshotForCurrency(d, currency, countryCode);
     if (price?.is_free) {
       freeGamesCount++;
     } else if (price && isPlausibleSteamPrice(price.price_initial)) {
@@ -163,7 +164,7 @@ export function computeStats(
   const costPerHourList: { name: string; costPerHour: number; hours: number; price: number }[] = [];
   for (const g of list) {
     const d = details[g.appid];
-    const price = priceSnapshotForCurrency(d, currency);
+    const price = priceSnapshotForCurrency(d, currency, countryCode);
     if (!price || price.is_free || !isPlausibleSteamPrice(price.price_initial)) continue;
     const hours = g.playtime_forever / 60;
     if (hours < 1) continue;
@@ -183,12 +184,12 @@ export function computeStats(
   const shameWall = list
     .filter((g) => {
       if (g.playtime_forever > 0) return false;
-      const price = priceSnapshotForCurrency(details[g.appid], currency);
+      const price = priceSnapshotForCurrency(details[g.appid], currency, countryCode);
       return !!price && !price.is_free && isPlausibleSteamPrice(price.price_initial) && price.price_initial > 0;
     })
     .map((g) => ({
       name: String(g.name ?? ""),
-      price: priceSnapshotForCurrency(details[g.appid], currency)!.price_initial!,
+      price: priceSnapshotForCurrency(details[g.appid], currency, countryCode)!.price_initial!,
     }))
     .sort((a, b) => b.price - a.price)
     .slice(0, 10);

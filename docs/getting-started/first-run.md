@@ -14,6 +14,9 @@ Repressurizer detects local Steam data and combines it with available API and ca
 
 ## Prepare metadata
 
-Use cache preparation when you want richer filters, AutoCat sources, prices, reviews, achievements, HLTB times, or Steam Family data ready before browsing.
+Use cache preparation when you want richer filters, AutoCat sources, Steam tags,
+Deck compatibility, prices, reviews, achievements, HLTB times, or Steam Family
+data ready before browsing. Store tags and Deck status use bounded page
+enrichment; if Steam does not expose a value, the app keeps it unknown.
 
 Large libraries should start with conservative request settings. Repressurizer caches successful responses and can run AutoCat in cached-only mode. See [Cache and network behavior](../cache-and-network.md).

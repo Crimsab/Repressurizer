@@ -7,9 +7,6 @@ The desktop app, TypeScript integration package, and Rust integration crate have
 - Stable: version `X.Y.Z`, tag `vX.Y.Z`, normal GitHub Release.
 - Beta: version `X.Y.Z-beta.N`, tag `vX.Y.Z-beta.N` where `N` starts at 1,
   GitHub prerelease.
-- Developer preview: rolling `0.0.0-N` build and moving `preview` tag;
-  it is separate from both user-selectable channels.
-
 The tag workflow rejects other desktop prerelease names. The release workflow
 derives the channel from the version, marks beta releases as prereleases, and
 never marks them as GitHub's latest release.
@@ -74,6 +71,10 @@ different output directory. Do not package the result of a direct
 `cargo xwin build`: without the production protocol feature it opens the Vite
 development URL (`localhost:5173`) instead of the bundled interface.
 
+This command is for local verification. Keep its artifacts outside the public
+repository and do not create a GitHub Release or rolling tag for a test build;
+public desktop downloads use the versioned stable/beta workflow above.
+
 ## Rollback and channel recovery
 
 - Do not move or delete a published version tag.
@@ -87,10 +88,6 @@ development URL (`localhost:5173`) instead of the bundled interface.
   release artifacts.
 - Returning an installed beta to stable is a user-selected, confirmed updater
   downgrade; automatic checks never silently switch channels.
-
-## Preview
-
-Every commit on `main` starts the Preview workflow. It replaces the rolling Windows MSI `preview` prerelease and produces a preview-specific updater manifest. The numeric-only prerelease identifier is required by WiX; the displayed release name remains `Preview.N`. Linux uses stable releases until the preview workflow gains matching Linux artifacts.
 
 ## Integration packages
 

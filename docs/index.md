@@ -21,7 +21,7 @@ Repressurizer is a Windows, Linux, and macOS desktop app for collections, metada
 
 <div class="rp-hero__media" markdown>
 
-![Repressurizer library dashboard](assets/dashboard.png)
+![Repressurizer library dashboard](assets/screenshots/library.png)
 
 </div>
 
@@ -55,6 +55,20 @@ Repressurizer is a Windows, Linux, and macOS desktop app for collections, metada
 
     [Integration overview](integrations/index.md)
 
+-   :material-map-marker-radius:{ .lg .middle } **Use a Store region**
+
+    Choose a Steam Store country and keep price snapshots separated by country
+    and returned currency.
+
+    [Regional prices](cache-and-network.md#regional-prices-and-currency)
+
+-   :material-timeline-check:{ .lg .middle } **Review and recover**
+
+    Inspect the Changes Inbox, compare collection history, resolve conflicts,
+    and restore a verified snapshot.
+
+    [Planning and maintenance](user-guide/planning-and-maintenance.md)
+
 </div>
 
 ## What Repressurizer changes
@@ -74,3 +88,6 @@ Metadata preparation and automation publishing are separate network operations. 
 - [Set up Steam Family detection](steam-family.md)
 - [Troubleshoot missing or incomplete metadata](troubleshooting/metadata.md)
 - [Use the Repressurizer CLI](cli.md)
+
+![Store region settings](assets/screenshots/store-region.png)
+![Metadata Health Center](assets/screenshots/metadata-health.png)

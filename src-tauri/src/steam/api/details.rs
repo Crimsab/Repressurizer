@@ -1,6 +1,8 @@
 use chrono::Datelike;
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
+use std::sync::{Mutex, OnceLock};
+use std::time::{Duration, Instant};
 
 use crate::http_policy::{client_for_scope, HttpProxyScope};
 
@@ -16,8 +18,12 @@ const STORE_BROWSE_GET_ITEMS_URL: &str =
 const STORE_RELEASE_MONTHS: [&str; 12] = [
     "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ];
-const MAX_PLAUSIBLE_STEAM_PRICE_CENTS: u64 = 500_000;
+// Keep minor units exactly representable across the Tauri/JavaScript boundary.
+const MAX_PLAUSIBLE_STEAM_PRICE_CENTS: u64 = 9_007_199_254_740_991;
 const STORE_PRICE_BATCH_SIZE: usize = 250;
+const STORE_ENRICHMENT_TIMEOUT: Duration = Duration::from_secs(5);
+const STORE_ENRICHMENT_CACHE_TTL: Duration = Duration::from_secs(60 * 60);
+const STORE_ENRICHMENT_CACHE_CAPACITY: usize = 512;
 
 #[derive(Debug, Deserialize)]
 pub(super) struct StoreAppResponse {
@@ -50,12 +56,20 @@ pub(super) struct StoreBrowseItem {
     pub(super) appid: Option<u64>,
     #[serde(default)]
     pub(super) release: Option<StoreBrowseRelease>,
+    #[serde(default)]
+    pub(super) platforms: Option<StoreBrowsePlatforms>,
 }
 
 #[derive(Debug, Deserialize)]
 pub(super) struct StoreBrowseRelease {
     #[serde(default)]
     pub(super) original_release_date: Option<u64>,
+}
+
+#[derive(Debug, Deserialize)]
+pub(super) struct StoreBrowsePlatforms {
+    #[serde(default)]
+    pub(super) steam_deck_compat_category: Option<u64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -69,6 +83,7 @@ pub(super) struct StoreAppData {
     publishers: Option<Vec<String>>,
     supported_languages: Option<String>,
     platforms: Option<StorePlatforms>,
+    controller_support: Option<String>,
     pub(super) header_image: Option<String>,
     pub(super) capsule_image: Option<String>,
     price_overview: Option<StorePriceOverview>,
@@ -108,6 +123,21 @@ fn plausible_price(price: Option<u64>) -> Option<u64> {
     price.filter(|value| *value <= MAX_PLAUSIBLE_STEAM_PRICE_CENTS)
 }
 
+#[derive(Debug, Clone, Default)]
+struct StorePageMetadata {
+    tags: Vec<String>,
+    deck_status: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+struct CachedStorePageMetadata {
+    metadata: StorePageMetadata,
+    fetched_at: Instant,
+}
+
+static STORE_ENRICHMENT_CACHE: OnceLock<Mutex<HashMap<u64, CachedStorePageMetadata>>> =
+    OnceLock::new();
+
 #[derive(Debug, Deserialize)]
 struct StorePlatforms {
     windows: Option<bool>,
@@ -122,37 +152,24 @@ pub async fn fetch_game_details(
     let client = client_for_scope(HttpProxyScope::SteamStore, Some(STEAM_STORE_USER_AGENT))?;
 
     let requested_cc = country_code.unwrap_or_default().trim().to_ascii_lowercase();
-    let mut attempts: Vec<Option<&str>> = Vec::new();
-    if !requested_cc.is_empty() {
-        attempts.push(Some(requested_cc.as_str()));
-        if is_euro_country_code(&requested_cc) {
-            for fallback in ["it", "fr", "es", "nl", "at", "be", "ie", "pt", "fi"] {
-                if fallback != requested_cc {
-                    attempts.push(Some(fallback));
-                }
-            }
+    let requested = (!requested_cc.is_empty()).then_some(requested_cc.as_str());
+    match fetch_game_details_with_country(&client, app_id, requested).await {
+        Ok(details) => Ok(details),
+        Err(error) if requested.is_some() && regional_fallback_allowed(&error) => {
+            // A product can be hidden in one country while its public metadata
+            // remains available globally. Retrying without `cc` is safe only
+            // after removing every regional price field from the result.
+            let mut details = fetch_game_details_with_country(&client, app_id, None)
+                .await
+                .map_err(|_| error.clone())?;
+            details.price_initial = None;
+            details.price_final = None;
+            details.price_currency = None;
+            details.price_country_code = None;
+            Ok(details)
         }
-    } else {
-        attempts.push(None);
+        Err(error) => Err(error),
     }
-    if requested_cc != "us" {
-        attempts.push(Some("us"));
-    }
-
-    let mut last_error = String::new();
-    for cc in attempts {
-        match fetch_game_details_with_country(&client, app_id, cc).await {
-            Ok(details) => return Ok(details),
-            Err(error) => {
-                if !regional_fallback_allowed(&error) {
-                    return Err(error);
-                }
-                last_error = error;
-            }
-        }
-    }
-
-    Err(last_error)
 }
 
 fn regional_fallback_allowed(error: &str) -> bool {
@@ -368,24 +385,16 @@ pub async fn fetch_game_price_overviews(
 }
 
 fn price_country_attempts(requested_cc: &str) -> Vec<Option<String>> {
-    let mut attempts = Vec::new();
     if requested_cc.is_empty() {
-        attempts.push(None);
-        return attempts;
+        vec![None]
+    } else {
+        // A price response is market-specific. Never substitute another
+        // country when the requested market has no listing.
+        vec![Some(requested_cc.to_string())]
     }
-
-    attempts.push(Some(requested_cc.to_string()));
-    if is_euro_country_code(requested_cc) {
-        for fallback in ["it", "fr", "es", "nl", "at", "be", "ie", "pt", "fi"] {
-            if fallback != requested_cc {
-                attempts.push(Some(fallback.to_string()));
-            }
-        }
-    }
-
-    attempts
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 pub(super) fn is_euro_country_code(country_code: &str) -> bool {
     matches!(
         country_code,
@@ -546,7 +555,23 @@ async fn fetch_game_details_with_country(
         .await
         .map_err(|e| format!("Failed to read response: {}", e))?;
 
-    parse_game_details_response(app_id, &text, country_code)
+    let mut details = parse_game_details_response(app_id, &text, country_code)?;
+
+    // Tags and Deck compatibility are published outside the appdetails
+    // payload. Enrich opportunistically so a slow or blocked endpoint never
+    // prevents basic metadata from loading. Both lightweight requests share a
+    // bounded timeout and a one-hour in-memory cache.
+    if let Ok(Ok(page_metadata)) = tokio::time::timeout(
+        STORE_ENRICHMENT_TIMEOUT,
+        fetch_store_enrichment(client, app_id, country_code),
+    )
+    .await
+    {
+        details.tags = page_metadata.tags;
+        details.deck_status = page_metadata.deck_status;
+    }
+
+    Ok(details)
 }
 
 pub(super) fn parse_game_details_response(
@@ -622,15 +647,222 @@ pub(super) fn parse_game_details_response(
             .and_then(|p| p.currency.clone()),
         price_country_code: country_code.map(|cc| cc.to_ascii_uppercase()),
         is_free: data.is_free.unwrap_or(false),
-        full_controller_support: Some(full_controller_support),
-        // Valve publishes Deck ratings in Steam clients and the storefront, but does not
-        // document them in this Store API response. Keep unsupported metadata unknown.
+        full_controller_support: Some(
+            full_controller_support
+                || data
+                    .controller_support
+                    .as_deref()
+                    .is_some_and(|support| support.eq_ignore_ascii_case("full")),
+        ),
+        // These values are not part of the public appdetails/store page
+        // contract. Keep them unknown instead of guessing from DRM or system
+        // requirements (which have different meanings).
         deck_status: None,
         external_launcher: None,
         offline_support: None,
         first_launch_online: None,
         estimated_install_bytes: None,
     })
+}
+
+async fn fetch_store_enrichment(
+    client: &reqwest::Client,
+    app_id: u64,
+    country_code: Option<&str>,
+) -> Result<StorePageMetadata, String> {
+    if let Some(metadata) = cached_store_enrichment(app_id) {
+        return Ok(metadata);
+    }
+
+    // apphover is a small storefront fragment containing the popular tags;
+    // StoreBrowse carries the official Deck compatibility category. Fetch both
+    // concurrently so metadata enrichment does not add serial latency.
+    let (tags_result, deck_result) = tokio::join!(
+        fetch_store_hover_tags(client, app_id),
+        fetch_store_browse_deck_status(client, app_id, country_code),
+    );
+    if tags_result.is_err() && deck_result.is_err() {
+        return Err(format!(
+            "Steam optional metadata unavailable for app {}",
+            app_id
+        ));
+    }
+    let metadata = StorePageMetadata {
+        tags: tags_result.unwrap_or_default(),
+        deck_status: deck_result.unwrap_or(None),
+    };
+    cache_store_enrichment(app_id, metadata.clone());
+    Ok(metadata)
+}
+
+fn cached_store_enrichment(app_id: u64) -> Option<StorePageMetadata> {
+    let cache = STORE_ENRICHMENT_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    let mut cache = cache.lock().ok()?;
+    let entry = cache.get(&app_id)?;
+    if entry.fetched_at.elapsed() <= STORE_ENRICHMENT_CACHE_TTL {
+        return Some(entry.metadata.clone());
+    }
+    cache.remove(&app_id);
+    None
+}
+
+fn cache_store_enrichment(app_id: u64, metadata: StorePageMetadata) {
+    let cache = STORE_ENRICHMENT_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    let Ok(mut cache) = cache.lock() else {
+        return;
+    };
+    if cache.len() >= STORE_ENRICHMENT_CACHE_CAPACITY && !cache.contains_key(&app_id) {
+        if let Some(oldest_app_id) = cache
+            .iter()
+            .min_by_key(|(_, entry)| entry.fetched_at)
+            .map(|(key, _)| *key)
+        {
+            cache.remove(&oldest_app_id);
+        }
+    }
+    cache.insert(
+        app_id,
+        CachedStorePageMetadata {
+            metadata,
+            fetched_at: Instant::now(),
+        },
+    );
+}
+
+async fn fetch_store_hover_tags(
+    client: &reqwest::Client,
+    app_id: u64,
+) -> Result<Vec<String>, String> {
+    let response = client
+        .get(format!("https://store.steampowered.com/apphover/{app_id}"))
+        .query(&[("l", "english")])
+        .send()
+        .await
+        .map_err(|error| format!("Steam apphover request failed: {error}"))?;
+    let status = response.status();
+    let fragment = response
+        .text()
+        .await
+        .map_err(|error| format!("Failed to read Steam apphover response: {error}"))?;
+    if !status.is_success() {
+        return Err(format!(
+            "Steam apphover returned HTTP {} for app {}",
+            status.as_u16(),
+            app_id
+        ));
+    }
+    Ok(parse_store_page_tags(&fragment))
+}
+
+async fn fetch_store_browse_deck_status(
+    client: &reqwest::Client,
+    app_id: u64,
+    country_code: Option<&str>,
+) -> Result<Option<String>, String> {
+    let input_json = serde_json::json!({
+        "ids": [{ "appid": app_id }],
+        "context": {
+            "language": "english",
+            "country_code": country_code.unwrap_or("US").to_ascii_uppercase()
+        },
+        "data_request": {
+            "include_platforms": true
+        }
+    })
+    .to_string();
+    let response = client
+        .get(STORE_BROWSE_GET_ITEMS_URL)
+        .query(&[("input_json", input_json)])
+        .send()
+        .await
+        .map_err(|error| format!("Steam StoreBrowse request failed: {error}"))?;
+    let status = response.status();
+    let text = response
+        .text()
+        .await
+        .map_err(|error| format!("Failed to read StoreBrowse response: {error}"))?;
+    if !status.is_success() {
+        return Err(format!(
+            "StoreBrowse returned HTTP {} for app {}",
+            status.as_u16(),
+            app_id
+        ));
+    }
+
+    let parsed: StoreBrowseGetItemsResponse = serde_json::from_str(&text)
+        .map_err(|error| format!("Failed to parse StoreBrowse response: {error}"))?;
+    let item = parsed
+        .response
+        .store_items
+        .into_iter()
+        .find(|item| item.appid.or(item.id) == Some(app_id));
+    let category = item
+        .and_then(|item| item.platforms)
+        .and_then(|platforms| platforms.steam_deck_compat_category);
+    Ok(category.and_then(deck_status_from_category))
+}
+
+fn deck_status_from_category(category: u64) -> Option<String> {
+    Some(
+        match category {
+            3 => "verified",
+            2 => "playable",
+            1 => "unsupported",
+            0 => "unknown",
+            _ => return None,
+        }
+        .to_string(),
+    )
+}
+
+fn parse_store_page_tags(page: &str) -> Vec<String> {
+    let mut tags = Vec::new();
+    let mut search_from = 0;
+    let marker = "class=\"app_tag\"";
+
+    while let Some(relative_start) = page[search_from..].find(marker) {
+        let marker_start = search_from + relative_start;
+        let Some(content_offset) = page[marker_start..].find('>') else {
+            break;
+        };
+        let content_start = marker_start + content_offset + 1;
+        let end_anchor = page[content_start..].find("</a>");
+        let end_div = page[content_start..].find("</div>");
+        let Some((relative_end, closing_len)) = (match (end_anchor, end_div) {
+            (Some(anchor), Some(div)) if anchor < div => Some((anchor, 4)),
+            (Some(anchor), None) => Some((anchor, 4)),
+            (None, Some(div)) => Some((div, 6)),
+            (Some(_), Some(div)) => Some((div, 6)),
+            (None, None) => None,
+        }) else {
+            break;
+        };
+        let content_end = content_start + relative_end;
+        if let Some(tag) = clean_store_page_text(&page[content_start..content_end]) {
+            if !tags.iter().any(|existing| existing == &tag) {
+                tags.push(tag);
+            }
+        }
+        search_from = content_end + closing_len;
+    }
+
+    tags
+}
+
+fn clean_store_page_text(raw: &str) -> Option<String> {
+    let mut text = String::new();
+    let mut in_tag = false;
+    for ch in decode_minimal_html(raw).chars() {
+        match ch {
+            '<' => in_tag = true,
+            '>' => in_tag = false,
+            _ if !in_tag => text.push(ch),
+            _ => {}
+        }
+    }
+
+    let cleaned = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    (!cleaned.is_empty()).then_some(cleaned)
 }
 
 pub(super) fn parse_store_page_release_date(page: &str) -> Option<String> {

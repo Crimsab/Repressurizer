@@ -484,6 +484,8 @@ export interface AppSettings {
   steamToolsMinPlaytimeMinutes: number;
   // Currency
   currency: string;
+  /** Optional on legacy serialized settings; normalized runtime settings fill the ISO Store country. */
+  storeCountryCode?: string;
   // Onboarding
   onboardingComplete: boolean;
   categoryColors: Record<string, string>;

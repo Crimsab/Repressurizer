@@ -107,7 +107,7 @@ export function diffProfileSections(local: Partial<Record<ProfileSectionKey, unk
 }
 
 export function sanitizeProfileSettings(settings: Record<string, unknown>): Record<string, unknown> {
-  const allowed = new Set(["showDynamicCategories", "pinFavorites", "accentColor", "recentAccentColors", "sidebarWidth", "theme", "language", "categoryChipStyle", "showSmartLists", "showEmptyLists", "showNowPlaying", "showDiary", "diaryFinishedPrompts", "diaryRatingEmojis", "showFilterBar", "hideCollectionOnlyGames", "showDetailHltb", "showDetailMetacritic", "showDetailPrice", "detailsCacheMaxAgeDays", "hltbTimeMode", "currency", "categoryColors", "desktopNotifications", "updateChannel", "includeSteamFamilyNonGames"]);
+  const allowed = new Set(["showDynamicCategories", "pinFavorites", "accentColor", "recentAccentColors", "sidebarWidth", "theme", "language", "categoryChipStyle", "showSmartLists", "showEmptyLists", "showNowPlaying", "showDiary", "diaryFinishedPrompts", "diaryRatingEmojis", "showFilterBar", "hideCollectionOnlyGames", "showDetailHltb", "showDetailMetacritic", "showDetailPrice", "detailsCacheMaxAgeDays", "hltbTimeMode", "currency", "storeCountryCode", "categoryColors", "desktopNotifications", "updateChannel", "includeSteamFamilyNonGames"]);
   return Object.fromEntries(Object.entries(settings).filter(([key]) => allowed.has(key)).map(([key, value]) => [key, structuredClone(value)]));
 }
 

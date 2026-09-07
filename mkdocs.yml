@@ -117,7 +117,7 @@ nav:
       - Install: getting-started/installation.md
       - First run: getting-started/first-run.md
       - First safe save: getting-started/safe-first-save.md
-      - Updates and previews: getting-started/updates.md
+      - Updates: getting-started/updates.md
   - User guide:
       - user-guide/index.md
       - Collections: user-guide/collections.md

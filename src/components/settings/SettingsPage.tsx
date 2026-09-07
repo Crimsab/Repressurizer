@@ -311,7 +311,7 @@ export function SettingsPage({ onClose }: SettingsPageProps) {
       {
         id: "currency",
         tab: "general" as const,
-        label: t("settings.currency"),
+        label: t("settings.storeCountry"),
         keywords: [t("settings.defaultCurrency"), "currency price prices regional region country eur usd gbp cc store"],
       },
       {

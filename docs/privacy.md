@@ -9,7 +9,10 @@ It does not run a hosted backend for your Steam library, collections, playtime, 
 Depending on which features you use, Repressurizer may contact:
 
 - Steam Web API for owned games, achievements, wishlist, friends, and player summaries.
-- Steam Store API for game metadata, regional price data, release dates, genres, platforms, and artwork.
+- Steam Store API and bounded Store enrichment for game metadata, popular
+  user-defined tags, Deck compatibility, regional price data, release dates,
+  genres, platforms, and artwork. The selected Store country is sent with the
+  request so prices are not inferred from currency alone.
 - Steam Family endpoints for shared library data.
 - HowLongToBeat for playtime estimates.
 - GG.deals for opt-in deal and historical-low data when a game detail page is opened.
@@ -25,7 +28,9 @@ Local app data may include:
 - Steam Web API key.
 - Optional Steam Store `webapi_token`.
 - Optional GG.deals API key.
+- Selected Steam Store country.
 - Cached Steam metadata.
+- User-provided Pack My Deck travel metadata.
 - Cached HLTB results.
 - Cached GG.deals price responses without API credentials.
 - Local notes, ratings, tags, statuses, and ignored-fetch state.
@@ -61,4 +66,8 @@ Before sharing diagnostics publicly, quickly check that they do not include:
 
 Repressurizer sends requests directly from your machine to the upstream services listed above. It does not proxy your data through a Repressurizer server.
 
-Some metadata features can fail if Steam, HLTB, GG.deals, or GitHub rate-limit, change endpoints, block a region, or return incomplete responses. GG.deals pricing is disabled by default, cached for 24 hours, and requested only from an open game detail page.
+Some metadata features can fail if Steam, HLTB, GG.deals, or GitHub rate-limit,
+change endpoints, block a region, or return incomplete responses. Store
+enrichment is bounded and leaves unsupported Deck or tag fields unknown. GG.deals
+pricing is disabled by default, cached for 24 hours, and requested only from an
+open game detail page.

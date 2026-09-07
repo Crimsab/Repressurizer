@@ -1,4 +1,8 @@
 import type { GgDealsPrice } from "./types";
+import {
+  isSupportedStoreCountryCode,
+  storeCountryCodeForCurrency,
+} from "./steamRegions";
 
 export const GG_DEALS_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 export const GG_DEALS_REQUEST_INTERVAL_MS = 2_000;
@@ -15,6 +19,12 @@ const GG_DEALS_REGION_BY_CURRENCY: Record<string, string> = {
   RUB: "ru",
 };
 
+// GG.deals has its own region catalog and does not cover every Steam Store
+// country (for example, JPY is not available in the old currency mapping).
+// Keep this allowlist conservative until GG.deals exposes a machine-readable
+// catalog; unsupported markets are surfaced instead of silently using US.
+export const GG_DEALS_SUPPORTED_REGIONS = new Set(Object.values(GG_DEALS_REGION_BY_CURRENCY));
+
 export interface GgDealsCacheRecord {
   data: GgDealsPrice | null;
   fetchedAt: number;
@@ -29,6 +39,26 @@ export function isFreshGgDealsRecord(
 
 export function ggDealsRegionForCurrency(currency: string): string {
   return GG_DEALS_REGION_BY_CURRENCY[currency.trim().toUpperCase()] ?? "us";
+}
+
+/**
+ * Resolve GG.deals to the same Store market selected by the user. Returning
+ * null for an unknown country is intentional: callers must surface the
+ * unsupported region instead of silently comparing against US prices.
+ */
+export function ggDealsRegionForCountry(countryCode: string | null | undefined): string | null {
+  const normalized = typeof countryCode === "string" ? countryCode.trim().toUpperCase() : "";
+  const region = normalized.toLowerCase();
+  return isSupportedStoreCountryCode(normalized) && GG_DEALS_SUPPORTED_REGIONS.has(region) ? region : null;
+}
+
+/** Legacy helper for profile data that only has a currency. */
+export function ggDealsRegionForLegacyCurrency(currency: string | null | undefined): string | null {
+  const normalized = typeof currency === "string" ? currency.trim().toUpperCase() : "";
+  const region = GG_DEALS_REGION_BY_CURRENCY[normalized];
+  if (!region) return null;
+  const country = storeCountryCodeForCurrency(normalized);
+  return isSupportedStoreCountryCode(country) && GG_DEALS_SUPPORTED_REGIONS.has(region) ? region : null;
 }
 
 export function bestCurrentGgDealsPrice(data: GgDealsPrice): {

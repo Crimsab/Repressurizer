@@ -110,6 +110,7 @@ export function ChooseStep({
   const ignoredDetailFails = useFailedGamesStore((s) => s.fails);
   const ignoredHltbFails = useHltbIgnoredStore((s) => s.fails);
   const currency = useSettingsStore((s) => s.currency);
+  const storeCountryCode = useSettingsStore((s) => s.storeCountryCode);
   const [cacheNotice, setCacheNotice] = useState("");
   const gameIds = useMemo(() => Object.keys(games).map(Number), [games]);
   const ignoredDetailsSet = useMemo(
@@ -131,15 +132,15 @@ export function ChooseStep({
     [ignoredHltbFails]
   );
   const detailIdsNeedingRefresh = useMemo(
-    () => gameIds.filter((id) => detailsCacheNeedsRefresh(details[id], detailsCacheMaxAgeDays) || detailsPriceNeedsCurrencyRefresh(details[id], currency)),
-    [currency, details, detailsCacheMaxAgeDays, gameIds]
+    () => gameIds.filter((id) => detailsCacheNeedsRefresh(details[id], detailsCacheMaxAgeDays) || detailsPriceNeedsCurrencyRefresh(details[id], currency, storeCountryCode)),
+    [currency, storeCountryCode, details, detailsCacheMaxAgeDays, gameIds]
   );
   const fetchableDetailIds = useMemo(
     () => detailIdsNeedingRefresh.filter((id) => !ignoredDetailsSet.has(id)),
     [detailIdsNeedingRefresh, ignoredDetailsSet]
   );
   const staleDetailCount = gameIds.filter((id) => !!details[id] && detailsCacheNeedsRefresh(details[id], detailsCacheMaxAgeDays)).length;
-  const wrongCurrencyDetailCount = gameIds.filter((id) => detailsPriceNeedsCurrencyRefresh(details[id], currency)).length;
+  const wrongCurrencyDetailCount = gameIds.filter((id) => detailsPriceNeedsCurrencyRefresh(details[id], currency, storeCountryCode)).length;
   const ignoredDetailCount = detailIdsNeedingRefresh.length - fetchableDetailIds.length;
   const cachedCount = gameCount - detailIdsNeedingRefresh.length;
   const missingHltbIds = useMemo(

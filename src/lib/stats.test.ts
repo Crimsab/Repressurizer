@@ -43,7 +43,7 @@ describe("computeStats", () => {
       [],
       {
         1: details(1, "Normal Game", 1_999),
-        2: details(2, "Bad Price Game", 14_200_000),
+        2: details(2, "Bad Price Game", Number.MAX_SAFE_INTEGER + 1),
       }
     );
 

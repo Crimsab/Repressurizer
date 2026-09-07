@@ -8,9 +8,13 @@ import { fetchGgDealsPrice } from "../lib/tauri";
 import type { GgDealsPrice } from "../lib/types";
 
 const STORAGE_KEY = "repressurizer-gg-deals-cache-v1";
-const inFlight = new Map<number, Promise<void>>();
+const inFlight = new Map<string, Promise<void>>();
 let lastRequestAt = 0;
 let requestQueue = Promise.resolve();
+
+export function ggDealsCacheKey(appId: number, region: string): string {
+  return `${Math.trunc(appId)}:${region.trim().toLowerCase()}`;
+}
 
 function isPrice(value: unknown): value is number | null {
   return value === null || (typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1_000_000);
@@ -45,14 +49,18 @@ async function waitForRequestSlot() {
   }
 }
 
-function loadCache(): Record<number, GgDealsCacheRecord> {
+function loadCache(): Record<string, GgDealsCacheRecord> {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return {};
-    const parsed = JSON.parse(raw) as Record<number, GgDealsCacheRecord>;
+    const parsed = JSON.parse(raw) as Record<string, GgDealsCacheRecord>;
     return Object.fromEntries(
-      Object.entries(parsed).filter(([, record]) =>
-        record && Number.isFinite(record.fetchedAt) && record.fetchedAt > 0 && isCachedData(record.data)
+      Object.entries(parsed).filter(([key, record]) =>
+        /^\d+:[a-z]{2}$/.test(key)
+        && record
+        && Number.isFinite(record.fetchedAt)
+        && record.fetchedAt > 0
+        && isCachedData(record.data)
       )
     );
   } catch {
@@ -60,20 +68,21 @@ function loadCache(): Record<number, GgDealsCacheRecord> {
   }
 }
 
-function persist(records: Record<number, GgDealsCacheRecord>) {
+function persist(records: Record<string, GgDealsCacheRecord>) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
   } catch {}
 }
 
 interface GgDealsState {
-  records: Record<number, GgDealsCacheRecord>;
-  loading: Record<number, boolean>;
-  errors: Record<number, string>;
+  /** Records are keyed by `${appId}:${countryCode}` to prevent region reuse. */
+  records: Record<string, GgDealsCacheRecord>;
+  loading: Record<string, boolean>;
+  errors: Record<string, string>;
   fetchPrice: (
     appId: number,
     apiKey: string,
-    region: string,
+    region: string | null,
     force?: boolean
   ) => Promise<void>;
   clear: () => void;
@@ -85,38 +94,44 @@ export const useGgDealsStore = create<GgDealsState>((set, get) => ({
   errors: {},
 
   fetchPrice: async (appId, apiKey, region, force = false) => {
-    if (!force && isFreshGgDealsRecord(get().records[appId])) return;
-    const existing = inFlight.get(appId);
+    const normalizedRegion = typeof region === "string" ? region.trim().toLowerCase() : "";
+    const key = normalizedRegion ? ggDealsCacheKey(appId, normalizedRegion) : ggDealsCacheKey(appId, "??");
+    if (!normalizedRegion) {
+      set((state) => ({ errors: { ...state.errors, [key]: "GG.deals does not support the selected Store market" } }));
+      return;
+    }
+    if (!force && isFreshGgDealsRecord(get().records[key])) return;
+    const existing = inFlight.get(key);
     if (existing) return existing;
 
     const request = (async () => {
       set((state) => ({
-        loading: { ...state.loading, [appId]: true },
-        errors: { ...state.errors, [appId]: "" },
+        loading: { ...state.loading, [key]: true },
+        errors: { ...state.errors, [key]: "" },
       }));
       try {
         await waitForRequestSlot();
-        const data = await fetchGgDealsPrice(appId, apiKey, region);
+        const data = await fetchGgDealsPrice(appId, apiKey, normalizedRegion);
         if (!isCachedData(data)) throw new Error("GG.deals returned invalid price data");
         set((state) => {
-          const records = { ...state.records, [appId]: { data, fetchedAt: Date.now() } };
+          const records = { ...state.records, [key]: { data, fetchedAt: Date.now() } };
           persist(records);
           return { records };
         });
       } catch (error) {
         set((state) => ({
-          errors: { ...state.errors, [appId]: String(error) },
+          errors: { ...state.errors, [key]: String(error) },
         }));
       } finally {
-        set((state) => ({ loading: { ...state.loading, [appId]: false } }));
+        set((state) => ({ loading: { ...state.loading, [key]: false } }));
       }
     })();
 
-    inFlight.set(appId, request);
+    inFlight.set(key, request);
     try {
       await request;
     } finally {
-      inFlight.delete(appId);
+      inFlight.delete(key);
     }
   },
 

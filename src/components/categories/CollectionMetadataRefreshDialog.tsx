@@ -46,6 +46,7 @@ export function CollectionMetadataRefreshDialog({
   const ignoredDetailFails = useFailedGamesStore((s) => s.fails);
   const ignoredHltbFails = useHltbIgnoredStore((s) => s.fails);
   const currency = useSettingsStore((s) => s.currency);
+  const storeCountryCode = useSettingsStore((s) => s.storeCountryCode);
   const detailsMaxAgeDays = useSettingsStore((s) => s.detailsCacheMaxAgeDays);
 
   const detailsRunning = useBackgroundFetchStore((s) => s.detailsRunning);
@@ -72,6 +73,7 @@ export function CollectionMetadataRefreshDialog({
         ignoredDetailFails,
         ignoredHltbFails,
         currency: currency ?? "EUR",
+        storeCountryCode,
         detailsMaxAgeDays: detailsMaxAgeDays ?? 30,
         options,
       }),
@@ -79,6 +81,7 @@ export function CollectionMetadataRefreshDialog({
       achievements,
       appIds,
       currency,
+      storeCountryCode,
       details,
       detailsMaxAgeDays,
       games,
@@ -121,6 +124,7 @@ export function CollectionMetadataRefreshDialog({
       ignoredDetailFails: useFailedGamesStore.getState().fails,
       ignoredHltbFails: useHltbIgnoredStore.getState().fails,
       currency: useSettingsStore.getState().currency ?? "EUR",
+      storeCountryCode: useSettingsStore.getState().storeCountryCode,
       detailsMaxAgeDays: useSettingsStore.getState().detailsCacheMaxAgeDays ?? 30,
       options: currentOptions,
     });

@@ -1,8 +1,9 @@
 # Plan sessions and maintain your library
 
-Repressurizer 0.8 adds a set of local, explainable tools for deciding what to
-play, reviewing changes, moving data between devices, and planning storage.
-They use cached data where possible and keep missing or stale values visible.
+Repressurizer adds a set of local, explainable tools for deciding what to play,
+reviewing changes, moving data between devices, and planning storage. They use
+cached data where possible and keep missing or stale values visible. The tools
+are independent: opening a planner or a preview does not write Steam files.
 
 ## Session Planner and Tonight Queue
 
@@ -34,6 +35,11 @@ Events have stable IDs and are deduplicated. A temporary provider failure is
 recorded as an error and is never interpreted as a removed game. Review,
 accept, ignore, or snooze individual events, or inspect a bulk preview first.
 Actions that change Diary data are recorded and reversible.
+
+The Inbox is a review surface, not an automatic cleanup job. It is populated
+after a successful refresh and does not turn a failed network request into a
+deletion. Use the source and provider details on an event to decide whether to
+apply it.
 
 ## Time Machine and conflict resolution
 
@@ -92,9 +98,23 @@ and the remaining capacity. Packs can be rerolled, saved, staged as collections,
 or used as a prioritized Steam install plan.
 
 Actual local sizes take precedence. An estimate is used only when explicitly
-available. Steam Deck ratings, external-launcher behavior, offline support, and
-first-launch requirements remain **unknown** when no authoritative metadata is
-present; unknown is never promoted to Verified or Playable.
+available. Steam StoreBrowse can provide a Deck compatibility category,
+which Repressurizer maps to **Verified**, **Playable**, or **Unsupported**;
+missing or failed enrichment remains **Unknown**. Popular Steam community tags are
+also available after the bounded Store enrichment request.
+
+Steam does not expose reliable authoritative values for external-launcher
+behavior, offline support, first-launch requirements, or install size through
+the endpoints Repressurizer uses. Those fields remain **Unknown** unless you
+enter a local value in the Pack My Deck metadata editor. A manually entered
+value is stored in local app data (`travel_metadata.json`) and never changes
+Steam. These travel notes are not currently included in portable profile exports. Installed sizes discovered by the Storage Planner take
+precedence over estimates.
+
+Screenshots show an example library and local travel notes, not verified
+compatibility claims for the pictured games.
+
+![Pack My Deck](../assets/screenshots/pack-my-deck.png)
 
 ## Community Rule Packs and metadata health
 
@@ -110,3 +130,12 @@ dependent features and supports full, missing-only, stale-only, provider-only,
 and game-only refreshes. Cache and exponential backoff prevent one unavailable
 provider from blocking unrelated features.
 
+![Metadata Health Center](../assets/screenshots/metadata-health.png)
+
+## Choosing a region for planner prices
+
+Price conditions and library value use the Store country selected in Settings.
+The planner never converts prices between currencies and never assumes that two
+countries sharing a currency have the same Store price. If a country has no
+price for a game, the value is shown as unavailable and the planner reports the
+missing data instead of ranking on a guessed amount.

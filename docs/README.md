@@ -7,7 +7,7 @@ README.
 
 | Document | Covers |
 | --- | --- |
-| [cache-and-network.md](cache-and-network.md) | Cache preparation, Steam request behavior, regional prices, rate limits, and proxy routing. |
+| [cache-and-network.md](cache-and-network.md) | Cache preparation, Store-country price snapshots, Steam tag/Deck enrichment, rate limits, and proxy routing. |
 | [steam-family.md](steam-family.md) | Steam Family detection and optional Store token fallback. |
 | [privacy.md](privacy.md) | Local data, network behavior, redaction, and sensitive settings. |
 | [localization.md](localization.md) | Translation coverage and localization status. |
@@ -33,3 +33,10 @@ README.
 The repository keeps only the README-facing images and demo media under
 [assets/](assets/). The capture workflow itself stays outside the app source so
 it does not become part of releases or developer tooling by accident.
+
+The current product captures live beside the original walkthrough images:
+
+- `assets/screenshots/library.png` - library dashboard and navigation.
+- `assets/screenshots/store-region.png` - Store country and returned currency.
+- `assets/screenshots/metadata-health.png` - provider and per-game freshness.
+- `assets/screenshots/pack-my-deck.png` - travel-pack constraints and local metadata.

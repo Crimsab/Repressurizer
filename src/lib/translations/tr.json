@@ -2568,5 +2568,21 @@
   "palette.actions": "Hızlı eylemler",
   "palette.tools": "Araçlar",
   "common.retry": "Yeniden dene",
-  "games.libraryLabel": "Oyun kütüphanesi"
+  "games.libraryLabel": "Oyun kütüphanesi",
+  "settings.storeCountry": "Steam mağazası ülkesi",
+  "settings.storeCountry.desc": "Fiyatlar ve kullanılabilirlik bu ülkeye aittir. Steam hesabınızın ülkesini değiştirmez.",
+  "settings.storeCurrency": "Mağaza para birimi: {currency}",
+  "settings.storeCountry.search": "Ülke ara",
+  "settings.ggDeals.unsupportedRegion": "Bu mağaza ülkesi için GG.deals fiyatları Repressurizer içinde mevcut değil.",
+  "deck.travelDetails": "Seyahat bilgileri",
+  "deck.travelDetails.desc": "Her oyun için doğruladığınız bilgileri kaydedin. Bilinmeyen değerler bilinmeyen olarak kalır; bu notlar Repressurizer içinde yereldir.",
+  "deck.travelGame": "Oyun",
+  "deck.travelOffline": "Çevrimdışı çalışır",
+  "deck.travelFirstLaunch": "İlk açılış internet gerektirir",
+  "deck.travelLauncher": "Harici başlatıcı gerektirir",
+  "deck.travelSize": "Tahmini boyut (GB)",
+  "deck.travelReset": "Yerel bilgileri temizle",
+  "deck.travelYes": "Evet",
+  "deck.travelNo": "Hayır",
+  "deck.travelSaved": "Yerel olarak kaydedildi. Değişiklikleri uygulamak için paketi yeniden oluşturun."
 }

@@ -24,6 +24,7 @@ import type {
   StorageInventory,
 } from "./types";
 import type { UpdaterKind } from "./updater";
+import { currencyForStoreCountry, isSupportedStoreCountryCode, storeCountryCodeForCurrency, storeRegionsForCurrency } from "./steamRegions";
 
 export async function detectSteam(): Promise<SteamInfo> {
   return invoke<SteamInfo>("detect_steam");
@@ -210,22 +211,38 @@ export async function fetchSteamAppList(apiKey: string): Promise<SteamAppListIte
   return invoke<SteamAppListItem[]>("fetch_steam_app_list", { apiKey });
 }
 
-// Map currency setting to Steam country code for regional pricing
-const CURRENCY_TO_CC: Record<string, string> = {
-  EUR: "it", USD: "us", GBP: "gb", JPY: "jp", CAD: "ca",
-  AUD: "au", CHF: "ch", BRL: "br", PLN: "pl", RUB: "ru",
-};
-
 export function currencyToCountryCode(currency: string): string | undefined {
-  return CURRENCY_TO_CC[currency];
+  const normalized = typeof currency === "string" ? currency.trim().toUpperCase() : "";
+  if (storeRegionsForCurrency(normalized).length === 0) return undefined;
+  return storeCountryCodeForCurrency(normalized).toLowerCase();
+}
+
+/** Normalize a selected Store market for native Steam requests. */
+export function storeCountryCodeToRequestValue(countryCode: string | null | undefined): string | undefined {
+  const normalized = typeof countryCode === "string" ? countryCode.trim().toLowerCase() : "";
+  return normalized.length === 2 ? normalized : undefined;
 }
 
 export async function fetchGameDetails(
   appId: number,
   countryCode?: string
 ): Promise<GameDetails> {
-  return steamDetailsRequest(`${appId}:${countryCode ?? ""}`, () =>
-    invoke<GameDetails>("fetch_game_details", { appId, countryCode: countryCode ?? null }));
+  const requestedCountry = storeCountryCodeToRequestValue(countryCode);
+  return steamDetailsRequest(`${appId}:${requestedCountry ?? ""}`, async () => {
+    const details = await invoke<GameDetails>("fetch_game_details", { appId, countryCode: requestedCountry ?? null });
+    if (requestedCountry && isSupportedStoreCountryCode(requestedCountry.toUpperCase())
+        && details.price_initial == null && details.price_final == null && !details.price_currency) {
+      // Cache a confirmed response without a regional price, including free
+      // games, so unavailable products do not trigger an endless refresh.
+      return {
+        ...details,
+        price_country_code: requestedCountry.toUpperCase(),
+        price_currency: currencyForStoreCountry(requestedCountry),
+        is_free: details.is_free && details.price_country_code?.toLowerCase() === requestedCountry,
+      };
+    }
+    return details;
+  });
 }
 
 export async function fetchStoreReleaseDate(

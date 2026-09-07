@@ -20,6 +20,8 @@ import {
   type DeckPackCandidate,
   type DeckPackCategory,
 } from "../../lib/deckPack";
+import { useTravelMetadataStore } from "../../stores/travelMetadataStore";
+import { TravelMetadataEditor } from "./TravelMetadataEditor";
 import { useDeckPackStore } from "../../stores/deckPackStore";
 import { useStoragePlannerStore } from "../../stores/storagePlannerStore";
 import { useGameStore } from "../../stores/gameStore";
@@ -51,6 +53,8 @@ function includes(details: string[], pattern: RegExp) {
 export function PackMyDeck({ onClose }: { onClose: () => void }) {
   const t = useT();
   const pack = useDeckPackStore();
+  const travel = useTravelMetadataStore((state) => state.records);
+  useEffect(() => { void useTravelMetadataStore.getState().hydrate(); }, []);
   const inventory = useStoragePlannerStore((state) => state.inventory);
   const games = useGameStore((state) => state.games);
   const details = useGameStore((state) => state.details);
@@ -85,6 +89,8 @@ export function PackMyDeck({ onClose }: { onClose: () => void }) {
     (): DeckPackCandidate[] =>
       Object.values(games).map((game) => {
         const meta = details[game.appid];
+        const local = travel[game.appid];
+        const offline = local?.offline ?? meta?.offline_support ?? null;
         const labels = [
           ...(meta?.genres ?? []),
           ...(meta?.tags ?? []),
@@ -101,25 +107,25 @@ export function PackMyDeck({ onClose }: { onClose: () => void }) {
           categories.push("narrative");
         if (includes(labels, /difficult|souls|hard/))
           categories.push("difficult");
-        if (meta?.offline_support === true) categories.push("offline");
+        if (offline === true) categories.push("offline");
         return {
           appId: game.appid,
           name: game.name,
           sizeBytes:
-            sizeById.get(game.appid) ?? meta?.estimated_install_bytes ?? null,
+            sizeById.get(game.appid) ?? local?.sizeBytes ?? meta?.estimated_install_bytes ?? null,
           installed: installed.has(game.appid),
           deckStatus: meta?.deck_status ?? "unknown",
           fullController:
             meta?.full_controller_support ??
             (includes(labels, /full controller/) ? true : null),
-          externalLauncher: meta?.external_launcher ?? null,
-          offline: meta?.offline_support ?? null,
-          firstLaunchOnline: meta?.first_launch_online ?? null,
+          externalLauncher: local?.externalLauncher ?? meta?.external_launcher ?? null,
+          offline,
+          firstLaunchOnline: local?.firstLaunchOnline ?? meta?.first_launch_online ?? null,
           durationHours: duration,
           categories,
         };
       }),
-    [details, games, hltb, installed, sizeById],
+    [details, games, hltb, installed, sizeById, travel],
   );
   const result = pack.result;
   const toggleCategory = (category: DeckPackCategory) =>
@@ -257,6 +263,7 @@ export function PackMyDeck({ onClose }: { onClose: () => void }) {
                     options={["any", "installed", "not-installed"]}
                   />
                 </div>
+                <TravelMetadataEditor games={Object.values(games)} />
                 <EntityPicker
                   label={t("deck.required")}
                   value={requiredId}

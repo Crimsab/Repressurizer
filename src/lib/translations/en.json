@@ -2568,5 +2568,21 @@
   "palette.actions": "Quick actions",
   "palette.tools": "Tools",
   "common.retry": "Retry",
-  "games.libraryLabel": "Game library"
+  "games.libraryLabel": "Game library",
+  "settings.storeCountry": "Steam Store country",
+  "settings.storeCountry.desc": "Prices and availability use this country. This does not change your Steam account country.",
+  "settings.storeCurrency": "Store currency: {currency}",
+  "settings.storeCountry.search": "Search countries",
+  "settings.ggDeals.unsupportedRegion": "GG.deals prices are unavailable for this Store country in Repressurizer.",
+  "deck.travelDetails": "Travel details",
+  "deck.travelDetails.desc": "Record what you have verified for each game. Unknown values stay unknown; these notes are local to Repressurizer.",
+  "deck.travelGame": "Game",
+  "deck.travelOffline": "Works offline",
+  "deck.travelFirstLaunch": "First launch requires internet",
+  "deck.travelLauncher": "Requires an external launcher",
+  "deck.travelSize": "Estimated size (GB)",
+  "deck.travelReset": "Clear local details",
+  "deck.travelYes": "Yes",
+  "deck.travelNo": "No",
+  "deck.travelSaved": "Saved locally. Rebuild the pack to apply changes."
 }

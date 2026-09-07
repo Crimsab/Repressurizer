@@ -4,26 +4,27 @@ import { open as openPath } from "@tauri-apps/plugin-shell";
 import {
   bestCurrentGgDealsPrice,
   formatGgDealsPrice,
-  ggDealsRegionForCurrency,
+  ggDealsRegionForCountry,
   safeGgDealsUrl,
 } from "../../../lib/ggDeals";
 import { useT } from "../../../lib/i18n";
-import { useGgDealsStore } from "../../../stores/ggDealsStore";
+import { ggDealsCacheKey, useGgDealsStore } from "../../../stores/ggDealsStore";
 import { useSettingsStore } from "../../../stores/settingsStore";
 
 export function GgDealsPricePanel({ appId }: { appId: number }) {
   const t = useT();
   const enabled = useSettingsStore((state) => state.ggDealsEnabled);
   const apiKey = useSettingsStore((state) => state.ggDealsApiKey);
-  const currency = useSettingsStore((state) => state.currency);
-  const record = useGgDealsStore((state) => state.records[appId]);
-  const loading = useGgDealsStore((state) => state.loading[appId] ?? false);
-  const error = useGgDealsStore((state) => state.errors[appId] ?? "");
+  const country = useSettingsStore((state) => state.storeCountryCode);
+  const region = ggDealsRegionForCountry(country);
+  const cacheKey = ggDealsCacheKey(appId, region ?? "??");
+  const record = useGgDealsStore((state) => state.records[cacheKey]);
+  const loading = useGgDealsStore((state) => state.loading[cacheKey] ?? false);
+  const error = useGgDealsStore((state) => state.errors[cacheKey] ?? "");
   const fetchPrice = useGgDealsStore((state) => state.fetchPrice);
-  const region = ggDealsRegionForCurrency(currency);
 
   useEffect(() => {
-    if (!enabled || !apiKey.trim()) return;
+    if (!enabled || !apiKey.trim() || !region) return;
     void fetchPrice(appId, apiKey, region);
   }, [apiKey, appId, enabled, fetchPrice, region]);
 
@@ -44,7 +45,7 @@ export function GgDealsPricePanel({ appId }: { appId: number }) {
           <button
             type="button"
             onClick={() => void fetchPrice(appId, apiKey, region, true)}
-            disabled={loading || !apiKey.trim()}
+            disabled={loading || !apiKey.trim() || !region}
             className="btn-press inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] text-repressurizer-text-muted transition-colors hover:bg-repressurizer-surface-hover hover:text-white disabled:opacity-40"
           >
             <ArrowsClockwise size={11} className={loading ? "animate-spin" : ""} />
@@ -63,7 +64,9 @@ export function GgDealsPricePanel({ appId }: { appId: number }) {
         </div>
       </div>
 
-      {!apiKey.trim() ? (
+      {!region ? (
+        <p className="mt-2 text-xs text-repressurizer-text-faint">{t("settings.ggDeals.unsupportedRegion")}</p>
+      ) : !apiKey.trim() ? (
         <p className="mt-2 text-xs text-repressurizer-text-faint">{t("detail.ggDeals.keyRequired")}</p>
       ) : loading && !record ? (
         <p className="mt-2 text-xs text-repressurizer-text-faint">{t("detail.ggDeals.loading")}</p>

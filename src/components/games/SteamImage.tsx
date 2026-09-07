@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useGameStore } from "../../stores/gameStore";
 import { useSettingsStore } from "../../stores/settingsStore";
 import {
-  currencyToCountryCode,
   fetchGameDetails,
   getCapsuleImageUrl,
   getHeaderImageUrl,
@@ -47,7 +46,7 @@ export function SteamImage({
 }: SteamImageProps) {
   const details = useGameStore((s) => s.details[appId]);
   const setDetails = useGameStore((s) => s.setDetails);
-  const currency = useSettingsStore((s) => s.currency);
+  const storeCountryCode = useSettingsStore((s) => s.storeCountryCode);
   const [index, setIndex] = useState(0);
 
   const urls = useMemo(() => {
@@ -65,7 +64,7 @@ export function SteamImage({
   const fetchDetailsIfNeeded = () => {
     if (details || detailsRequests.has(appId) || Date.now() - (detailsFailures.get(appId) ?? 0) < FAILURE_RETRY_MS) return;
     detailsRequests.add(appId);
-    fetchGameDetails(appId, currencyToCountryCode(currency))
+    fetchGameDetails(appId, storeCountryCode)
       .then((result) => {
         setDetails(appId, result);
         scheduleOriginalReleaseDateFetch(appId, result.name);

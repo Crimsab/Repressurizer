@@ -38,12 +38,12 @@ with a Rust backend and a React interface.
 
 | Organize | Enrich | Protect |
 | --- | --- | --- |
-| Create, rename, merge, color, and bulk-edit collections. | Cache Steam details, reviews, prices, achievements, HLTB times, and Steam Family entries. | Preview collection changes and create automatic backups before local writes. |
+| Create, rename, merge, color, and bulk-edit collections. | Cache Steam details, tags, Deck compatibility, reviews, prices, achievements, HLTB times, and Steam Family entries. | Preview collection changes and create automatic backups before local writes. |
 | Search with text, regex, and structured filters. | Build AutoCat rules from genres, tags, year, playtime, platforms, publishers, and more. | Restore backups and export redacted diagnostics when something goes wrong. |
 
 ## Plan, review, and recover
 
-Repressurizer 0.8 adds an explainable Session Planner and temporary Tonight
+The current release adds an explainable Session Planner and temporary Tonight
 Queue; a deduplicated Library Changes Inbox; AutoCat Rule Inspector; Collection
 Time Machine with three-way conflict resolution; portable profiles and safe
 folder sync; Storage Planner and Pack My Deck; declarative Community Rule Packs;
@@ -76,10 +76,10 @@ unfamiliar publisher. Stable release notes include checksums and VirusTotal
 links. Download only from this repository, do not disable Defender, and read the
 [installation guide](https://crimsab.github.io/Repressurizer/getting-started/installation/).
 
-Want the newest commit instead? The rolling
-[`preview` prerelease](https://github.com/Crimsab/Repressurizer/releases/tag/preview)
-is rebuilt from every push to `main`. Use it for testing, not as your only
-recovery path.
+Repressurizer publishes versioned releases. There is no rolling build for every
+commit: use a stable release for normal library maintenance, or choose a
+numbered beta when you have opted into prerelease testing. Do not treat an
+unversioned development build as a recovery path for your Steam data.
 
 ## Quick start
 
@@ -87,8 +87,10 @@ recovery path.
 2. Add a Steam Web API key from <https://steamcommunity.com/dev/apikey>.
 3. Load your local Steam library.
 4. Prepare the metadata cache needed by your filters and AutoCat rules.
-5. Close Steam before saving collection changes.
-6. Review the save preview and keep backups enabled.
+5. Choose the Steam Store country used for regional prices; the returned
+   currency is kept with each snapshot.
+6. Close Steam before saving collection changes.
+7. Review the save preview and keep backups enabled.
 
 The full walkthrough covers [first-run setup](https://crimsab.github.io/Repressurizer/getting-started/first-run/)
 and your [first safe save](https://crimsab.github.io/Repressurizer/getting-started/safe-first-save/).
@@ -131,8 +133,10 @@ See the [Diary guide](https://crimsab.github.io/Repressurizer/user-guide/diary/)
 ## Build useful AutoCat collections
 
 AutoCat can create or update collections from local playtime, cached Steam
-metadata, HLTB data, reviews, achievements, languages, platforms, developers,
-publishers, and imported Depressurizer presets.
+metadata, HLTB data, reviews, languages, platforms, developers, publishers,
+Diary fields, custom rules, and imported Depressurizer presets. Achievement
+progress remains available to search, the Diary, and the Session Planner; it is
+not an AutoCat source.
 
 It prefers cached data, can fetch missing data in the background, and supports
 cached-only runs when you want no additional network requests.
@@ -140,6 +144,22 @@ cached-only runs when you want no additional network requests.
 ![AutoCat preview](docs/assets/autocat.png)
 
 [Read the AutoCat guide](https://crimsab.github.io/Repressurizer/user-guide/autocat/)
+
+## Use the correct Steam Store market
+
+Steam Store prices are regional. In **Settings → Currency and region**, choose
+the country whose storefront you want to inspect; Repressurizer requests that
+country and stores the response with its country code and currency. Prices from
+different countries are kept as separate snapshots, so changing region does
+not silently relabel an old price. A country may return a currency that is not
+the one you expected, and some apps have no price in that storefront. See the
+[cache and network guide](https://crimsab.github.io/Repressurizer/cache-and-network/)
+for refresh and rate-limit behavior.
+
+This is the Steam **Store** market. Repressurizer does not access Steam
+Community Market listings, inventory items, or resale prices.
+
+![Steam Store region settings](docs/assets/screenshots/store-region.png)
 
 ## Export and automate
 
@@ -186,6 +206,24 @@ running app's private loopback endpoint. The same profile is available through
 the authenticated loopback HTTP API. See the [MCP integration
 guide](https://crimsab.github.io/Repressurizer/integrations/mcp/) and [local API
 guide](https://crimsab.github.io/Repressurizer/integrations/local-api/).
+
+## Keep maintenance work explainable
+
+The current app also includes a Session Planner and temporary Tonight Queue,
+Library Changes Inbox, Collection Time Machine with three-way conflict
+resolution, portable profiles with folder sync, Storage Planner, Pack My Deck,
+Community Rule Packs, and Metadata Health. These tools work from local state and
+cached providers, show unknown values explicitly, and keep a preview, backup,
+history, or undo step near each mutating action.
+
+The screenshots below use an example library.
+
+![Library dashboard](docs/assets/screenshots/library.png)
+![Metadata Health Center](docs/assets/screenshots/metadata-health.png)
+![Pack My Deck](docs/assets/screenshots/pack-my-deck.png)
+
+The [planning and maintenance guide](https://crimsab.github.io/Repressurizer/user-guide/planning-and-maintenance/)
+explains the workflows and their limits.
 
 ## Repressurizer and Depressurizer
 

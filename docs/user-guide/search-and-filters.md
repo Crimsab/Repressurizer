@@ -36,4 +36,7 @@ appid:39140
 | `field:10..30` | Between 10 and 30. |
 | `field:true` | Boolean property is enabled. |
 
-Filters that depend on prices, HLTB, reviews, achievements, genres, tags, developers, or publishers require the relevant metadata to be cached first.
+Filters that depend on prices, HLTB, reviews, achievements, genres, tags,
+developers, or publishers require the relevant metadata to be cached first.
+Steam tags are refreshed by the bounded Store enrichment step. A missing tag or
+Deck rating remains unknown and does not match a positive condition.
