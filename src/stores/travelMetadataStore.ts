@@ -6,6 +6,7 @@ import {
   normalizeTravelAppId,
   normalizeTravelMetadataPatch,
   parseTravelMetadata,
+  parseTravelMetadataRecords,
   serializeTravelMetadata,
   type TravelMetadataPatch,
   type TravelMetadataRecord,
@@ -23,6 +24,7 @@ interface TravelMetadataState {
   hydrate: () => Promise<void>;
   setMetadata: (appId: number, patch: TravelMetadataPatch) => void;
   clearMetadata: (appId: number) => void;
+  restoreAll: (records: unknown) => void;
 }
 
 /** Keep a local mirror for environments where app-data is not yet available. */
@@ -42,16 +44,12 @@ function writeLocalStorage(data: string): void {
   }
 }
 
-let persistChain: Promise<void> = Promise.resolve();
-
 function persist(records: Record<number, TravelMetadataRecord>): Promise<void> {
   const data = serializeTravelMetadata(records);
   writeLocalStorage(data);
-  // Keep writes ordered even when the user edits several games before a
-  // previous app-data write has completed.
-  const write = persistChain.then(() => saveAppData(STORAGE_KEY, data));
-  persistChain = write.catch(() => {});
-  return write;
+  // saveAppData already serializes per-file writes. Enqueue synchronously so
+  // profile transactions can discard this write if another section fails.
+  return saveAppData(STORAGE_KEY, data);
 }
 
 let hydratePromise: Promise<void> | null = null;
@@ -132,6 +130,14 @@ export const useTravelMetadataStore = create<TravelMetadataState>((set, get) => 
       });
 
       return hydratePromise;
+    },
+
+    restoreAll: (value) => {
+      if (!get().hydrated) throw new Error("Load travel metadata before applying a profile");
+      const records = parseTravelMetadataRecords(value);
+      // Empty maps explicitly clear metadata; absent fields never call this.
+      schedulePersist(records);
+      set({ records });
     },
 
     setMetadata: (appId, patch) => {

@@ -140,9 +140,24 @@ behavior, offline support, first-launch requirements, or install size through
 the endpoints Repressurizer uses. Those fields remain **Unknown** unless you
 enter a local value in the Pack My Deck metadata editor. A manually entered
 value is stored in local app data (`travel_metadata.json`) and never changes
-Steam. These travel notes are not currently included in portable profile
-exports. Installed sizes discovered by the Storage Planner take precedence
-over estimates.
+Steam. Installed sizes discovered by the Storage Planner take precedence over
+these estimates.
+
+Travel notes are included in a portable profile's **Preferences** section, even
+when optional history is excluded. Deselect Preferences to leave them out of an
+export or keep them unchanged during import. Importing a profile with a travel
+map replaces the local map; an explicitly empty map clears it. Older profiles
+that omit travel notes leave existing local values untouched.
+
+Folder sync includes the same per-game notes and merges independent field edits.
+Conflicting edits, including deletion versus modification, use the existing
+local/remote/base choices. An older snapshot that omits the travel field is not
+a request to delete it. Clearing a field restores **Unknown**; it does not mean
+that offline play or a launcher requirement has been verified false. Travel
+notes are loaded before profile export/import/sync; a failed or corrupt read
+stops that operation instead of exporting empty data. These notes are still
+user observations, not verified claims about another device's installation.
+Saved packs, generated results, and device storage scans are not included.
 
 Screenshots show an example library and local travel notes, not verified
 compatibility claims for the pictured games.

@@ -115,8 +115,14 @@ export function parseTravelMetadata(raw: string | null): Record<number, TravelMe
     throw new Error("Unsupported travel metadata format");
   }
 
+  return parseTravelMetadataRecords(parsed.records);
+}
+
+/** Validate and detach a record map from disk, profile import, or sync. */
+export function parseTravelMetadataRecords(input: unknown): Record<number, TravelMetadataRecord> {
+  if (!isRecord(input)) throw new Error("Invalid travel metadata records");
   const records: Record<number, TravelMetadataRecord> = {};
-  for (const [key, value] of Object.entries(parsed.records)) {
+  for (const [key, value] of Object.entries(input)) {
     const appId = normalizeTravelAppId(key);
     if (appId === null || !isRecord(value)) throw new Error("Invalid travel metadata record");
     if (Object.hasOwn(records, appId)) throw new Error("Duplicate travel metadata app ID");

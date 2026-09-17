@@ -1,3 +1,4 @@
+import { parseTravelMetadataRecords } from "./travelMetadata";
 import { canonicalJson } from "./entityJournal";
 import { isRecord, validProfileAppId } from "./profileValidation";
 import { parseRepressurizerProfile, type ProfileSectionKey, type RepressurizerProfileDocument } from "./repressurizerProfile";
@@ -36,8 +37,15 @@ export function prepareProfileApplication(
     } else {
       const template = current[section];
       if (!isRecord(incoming) || !isRecord(template)) throw new Error(`Invalid ${section} profile section`);
-      const safe = Object.fromEntries(Object.entries(incoming).filter(([key]) => Object.hasOwn(template, key)));
-      if (section !== "history" && !matchesKnownShape(safe, template)) throw new Error(`Invalid ${section} profile field type`);
+      const safe = Object.fromEntries(Object.entries(incoming).filter(([key]) =>
+        Object.hasOwn(template, key) || (section === "preferences" && key === "travel")));
+      if (section === "preferences" && safe.travel !== undefined) {
+        safe.travel = parseTravelMetadataRecords(safe.travel);
+      }
+      // Travel flags and sizes are nullable. Validate them against their schema,
+      // not the current user's non-null values (which would reject a reset).
+      const shape = section === "preferences" ? { ...template, travel: undefined } : template;
+      if (section !== "history" && !matchesKnownShape(safe, shape)) throw new Error(`Invalid ${section} profile field type`);
       if (section === "diary") {
         if (safe.entries) {
           for (const entry of Object.values(safe.entries as object)) {

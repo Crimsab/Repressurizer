@@ -1,3 +1,5 @@
+import { parseTravelMetadataRecords } from "./travelMetadata";
+
 /** Bounded validation for imported profile data before it reaches live stores. */
 export function isRecord(value: unknown): value is Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
@@ -42,6 +44,10 @@ const strings = (value: unknown) => Array.isArray(value) && value.every((item) =
 const idRecord = (value: unknown, test: (value: unknown) => boolean): boolean => isRecord(value) &&
   Object.entries(value).every(([id, item]) => /^\d+$/.test(id) && validProfileAppId(Number(id)) && test(item));
 
+function validTravelRecords(value: unknown): boolean {
+  try { parseTravelMetadataRecords(value); return true; } catch { return false; }
+}
+
 export function validateProfileSectionShape(key: string, value: unknown): boolean {
   if (key === "collections") {
     const keys = new Set<string>();
@@ -58,6 +64,7 @@ export function validateProfileSectionShape(key: string, value: unknown): boolea
   if (key === "preferences") return optional(value, "statuses", (data) => idRecord(data, (status) => ["none", "playing", "beaten", "completed", "abandoned"].includes(String(status)))) &&
     optional(value, "notes", (data) => idRecord(data, (note) => typeof note === "string")) &&
     optional(value, "tags", (data) => idRecord(data, strings)) &&
+    optional(value, "travel", validTravelRecords) &&
     optional(value, "reviews", (data) => idRecord(data, (review) => isRecord(review) && finite(review.rating) && (review.rating as number) >= 1 && (review.rating as number) <= 10 && finite(review.updatedAt)));
   if (key === "diary") return optional(value, "queue", idArray) &&
     ["entries", "finishPrompts", "journal"].every((field) => optional(value, field, isRecord)) &&

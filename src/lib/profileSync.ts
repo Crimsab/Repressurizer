@@ -1,3 +1,4 @@
+import { parseTravelMetadataRecords } from "./travelMetadata";
 import { canonicalJson, entityChecksum, type EntityJournalEntry, type JournalEntityType, type JournalOperation } from "./entityJournal";
 import { createRepressurizerProfile, parseRepressurizerProfile, type RepressurizerProfileDocument } from "./repressurizerProfile";
 
@@ -78,9 +79,29 @@ function mergeValue(base: unknown, local: unknown, remote: unknown, path: string
   return structuredClone(local);
 }
 
+function travelRecords(sections: RepressurizerProfileDocument["sections"]): unknown {
+  return (sections.preferences as Record<string, unknown> | undefined)?.travel;
+}
+
+function withTravelRecords(sections: RepressurizerProfileDocument["sections"], fallback: unknown): RepressurizerProfileDocument["sections"] {
+  const own = travelRecords(sections);
+  const value = own === undefined ? fallback : own;
+  if (value === undefined) return sections;
+  return { ...sections, preferences: { ...(sections.preferences as Record<string, unknown> | undefined), travel: parseTravelMetadataRecords(value) } };
+}
+
 export function mergeProfileDocuments(base: RepressurizerProfileDocument | null, local: RepressurizerProfileDocument, remote: RepressurizerProfileDocument): ProfileSyncMerge {
   const conflicts: ProfileSyncConflict[] = [];
-  const mergedSections = mergeValue(base?.sections ?? {}, local.sections, remote.sections, "sections", conflicts) as RepressurizerProfileDocument["sections"];
+  const baseSections = base?.sections ?? {};
+  const baseTravel = travelRecords(baseSections);
+  const localTravel = travelRecords(local.sections);
+  const remoteTravel = travelRecords(remote.sections);
+  // Older clients/profiles omit this optional extension: omission is not a
+  // deletion. An explicit empty map still participates in three-way deletes.
+  const fallback = baseTravel !== undefined ? baseTravel : localTravel !== undefined ? localTravel : remoteTravel;
+  const mergedSections = mergeValue(withTravelRecords(baseSections, undefined),
+    withTravelRecords(local.sections, fallback), withTravelRecords(remote.sections, fallback),
+    "sections", conflicts) as RepressurizerProfileDocument["sections"];
   const merged = createRepressurizerProfile({
     profileId: local.manifest.profileId,
     name: local.manifest.name,
@@ -97,7 +118,8 @@ export function resolveProfileSyncConflicts(merge: ProfileSyncMerge, choices: Re
     const choice = choices[conflict.path] ?? "local";
     setAtPath(sections, conflict.path.replace(/^sections\.?/, ""), conflict[choice]);
   }
-  return createRepressurizerProfile({ ...merge.merged.manifest, sections });
+  // Selecting an absent base field restores "unknown", not an invalid record.
+  return createRepressurizerProfile({ ...merge.merged.manifest, sections: withTravelRecords(sections, undefined) });
 }
 
 function setAtPath(root: Record<string, unknown>, path: string, value: unknown) {
@@ -159,6 +181,7 @@ export function profileEntityChanges(base: RepressurizerProfileDocument | null, 
     ["preference", "note", before?.preferences?.notes, after.preferences?.notes],
     ["preference", "tag", before?.preferences?.tags, after.preferences?.tags],
     ["preference", "review", before?.preferences?.reviews, after.preferences?.reviews],
+    ["preference", "travel", before?.preferences?.travel, after.preferences?.travel === undefined ? before?.preferences?.travel : after.preferences.travel],
     ["preference", "setting", before?.settings, after.settings],
   ];
   return sources.flatMap(([entityType, prefix, oldValue, newValue]) => {
