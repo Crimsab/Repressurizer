@@ -27,6 +27,7 @@ import { DEFAULT_RANKING_WEIGHTS } from "../../lib/backlogRanking";
 import { isSharedFamilyApp } from "../../lib/familyLibrary";
 import {
   planSession,
+  sessionRecommendationCards,
   type PlannerDevice,
   type PlannerInput,
   type PlannerIntent,
@@ -482,17 +483,11 @@ export function SessionPlanner({ onClose }: { onClose: () => void }) {
                   </div>
                   {recommendations.length ? (
                     <div className="grid gap-3 lg:grid-cols-3">
-                      {recommendations.map((candidate, index) => (
+                      {sessionRecommendationCards(result).map(({ candidate, role }) => (
                         <RecommendationCard
                           key={candidate.game.appid}
                           candidate={candidate}
-                          role={
-                            index === 0
-                              ? "best"
-                              : index === 1
-                                ? "shorter"
-                                : "different"
-                          }
+                          role={role}
                           onLaunch={() => launch(candidate.game.appid)}
                         />
                       ))}

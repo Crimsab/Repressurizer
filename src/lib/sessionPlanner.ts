@@ -82,6 +82,17 @@ export interface SessionPlannerResult {
   excludedCount: number;
 }
 
+/** Preserve semantic card labels when an optional recommendation is absent. */
+export function sessionRecommendationCards(result: SessionPlannerResult): Array<{
+  role: "best" | "shorter" | "different";
+  candidate: SessionPlannerCandidate;
+}> {
+  return (["best", "shorter", "different"] as const).flatMap((role) => {
+    const candidate = result[role];
+    return candidate ? [{ role, candidate }] : [];
+  });
+}
+
 export interface SessionPlannerInput {
   config: SessionPlannerConfig;
   games: OwnedGame[];

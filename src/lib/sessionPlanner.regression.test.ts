@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_SESSION_PLANNER_CONFIG, planSession, type SessionPlannerConfig, type SessionPlannerInput } from "./sessionPlanner";
+import { DEFAULT_SESSION_PLANNER_CONFIG, planSession, sessionRecommendationCards, type SessionPlannerConfig, type SessionPlannerInput } from "./sessionPlanner";
 import type { AchievementSummary, GameDetails, OwnedGame, SteamReviewSummary } from "./types";
 
 const game = (appid: number): OwnedGame => ({ appid, name: `Game ${appid}`, playtime_forever: 0, img_icon_url: null, rtime_last_played: 0 });
@@ -150,5 +150,25 @@ describe("Session Planner estimates and alternatives", () => {
     const before = structuredClone(data);
     expect(planSession(data)).toEqual(planSession(data));
     expect(data).toEqual(before);
+  });
+});
+
+describe("Session Planner card roles", () => {
+  it("keeps a different alternative labeled different when shorter is absent", () => {
+    const result = planSession(input({}, { games: [game(1), game(2)] }));
+    const cards = sessionRecommendationCards(result);
+    expect(cards.map((card) => card.role)).toEqual(["best", "different"]);
+    expect(cards[1].candidate).toBe(result.different);
+  });
+  it("keeps all three semantic roles in order when present", () => {
+    const result = planSession(input({}, { games: [game(1), game(2), game(3)], pinnedAppId: 1,
+      hltbData: { 1: hours(10), 2: hours(2), 3: hours(8) } }));
+    expect(sessionRecommendationCards(result).map((card) => card.role)).toEqual(["best", "shorter", "different"]);
+  });
+  it("renders no cards for an empty result", () => {
+    expect(sessionRecommendationCards(planSession(input({}, { games: [] })))).toEqual([]);
+  });
+  it("does not invent an alternative for a single eligible game", () => {
+    expect(sessionRecommendationCards(planSession(input())).map((card) => card.role)).toEqual(["best"]);
   });
 });
