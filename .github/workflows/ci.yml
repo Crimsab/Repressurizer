@@ -7,6 +7,7 @@ on:
   pull_request:
     branches:
       - main
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -37,6 +38,9 @@ jobs:
           echo "023070a287cd8cccd71515fedc843f1985bf96c436b7effaecce67290e7e0757  $archive" | sha256sum --check
           tar --extract --gzip --file "$archive" actionlint
           ./actionlint -color
+
+      - name: Release gate regression tests
+        run: node --test scripts/verify-release-ci.test.mjs
 
   web-check:
     name: Web checks

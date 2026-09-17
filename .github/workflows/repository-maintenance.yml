@@ -2,11 +2,9 @@ name: Repository maintenance
 
 on:
   push:
-    branches: [fix/release-maintenance-2026-09-17]
+    branches: [main]
     paths:
       - .github/workflows/repository-maintenance.yml
-      - scripts/repository-maintenance.mjs
-      - scripts/repository-maintenance.test.mjs
   workflow_dispatch:
     inputs:
       apply:
@@ -23,7 +21,7 @@ concurrency:
 
 jobs:
   cleanup:
-    if: github.repository == 'Crimsab/Repressurizer'
+    if: github.repository == 'Crimsab/Repressurizer' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
