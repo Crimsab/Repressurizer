@@ -31,12 +31,15 @@ interface PersistedTravelMetadata {
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === "object" && !Array.isArray(value);
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
 }
 
 export function normalizeTravelAppId(value: unknown): number | null {
+  if (typeof value !== "number" && (typeof value !== "string" || !/^\d+$/.test(value))) return null;
   const appId = typeof value === "number" ? value : Number(value);
-  if (!Number.isFinite(appId) || appId <= 0 || !Number.isInteger(appId)) return null;
+  if (!Number.isSafeInteger(appId) || appId <= 0) return null;
   return appId;
 }
 
@@ -45,9 +48,9 @@ function normalizeBoolean(value: unknown): boolean | null {
 }
 
 function normalizeSizeBytes(value: unknown): number | null {
-  if (value === null || value === undefined) return null;
+  if (typeof value !== "number" && typeof value !== "string") return null;
   const size = typeof value === "number" ? value : Number(value);
-  if (!Number.isFinite(size) || size <= 0) return null;
+  if (!Number.isFinite(size) || size <= 0 || size > Number.MAX_SAFE_INTEGER) return null;
   return Math.max(1, Math.trunc(size));
 }
 
@@ -66,16 +69,16 @@ export function normalizeTravelMetadataRecord(value: unknown): TravelMetadataRec
 export function normalizeTravelMetadataPatch(value: unknown): TravelMetadataPatch {
   if (!isRecord(value)) return {};
   const patch: TravelMetadataPatch = {};
-  if (Object.prototype.hasOwnProperty.call(value, "offline")) {
+  if (Object.prototype.hasOwnProperty.call(value, "offline") && value.offline !== undefined) {
     patch.offline = normalizeBoolean(value.offline);
   }
-  if (Object.prototype.hasOwnProperty.call(value, "firstLaunchOnline")) {
+  if (Object.prototype.hasOwnProperty.call(value, "firstLaunchOnline") && value.firstLaunchOnline !== undefined) {
     patch.firstLaunchOnline = normalizeBoolean(value.firstLaunchOnline);
   }
-  if (Object.prototype.hasOwnProperty.call(value, "externalLauncher")) {
+  if (Object.prototype.hasOwnProperty.call(value, "externalLauncher") && value.externalLauncher !== undefined) {
     patch.externalLauncher = normalizeBoolean(value.externalLauncher);
   }
-  if (Object.prototype.hasOwnProperty.call(value, "sizeBytes")) {
+  if (Object.prototype.hasOwnProperty.call(value, "sizeBytes") && value.sizeBytes !== undefined) {
     patch.sizeBytes = normalizeSizeBytes(value.sizeBytes);
   }
   return patch;
@@ -116,6 +119,7 @@ export function parseTravelMetadata(raw: string | null): Record<number, TravelMe
   for (const [key, value] of Object.entries(parsed.records)) {
     const appId = normalizeTravelAppId(key);
     if (appId === null || !isRecord(value)) throw new Error("Invalid travel metadata record");
+    if (Object.hasOwn(records, appId)) throw new Error("Duplicate travel metadata app ID");
 
     const fields: (keyof TravelMetadataRecord)[] = [
       "offline",
@@ -127,7 +131,7 @@ export function parseTravelMetadata(raw: string | null): Record<number, TravelMe
       if (!Object.prototype.hasOwnProperty.call(value, field)) continue;
       const fieldValue = value[field];
       if (field === "sizeBytes") {
-        if (fieldValue !== null && (typeof fieldValue !== "number" || !Number.isFinite(fieldValue) || fieldValue <= 0)) {
+        if (fieldValue !== null && (typeof fieldValue !== "number" || !Number.isSafeInteger(fieldValue) || fieldValue <= 0)) {
           throw new Error("Invalid travel metadata size");
         }
       } else if (fieldValue !== null && typeof fieldValue !== "boolean") {

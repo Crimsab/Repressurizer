@@ -108,7 +108,7 @@ export interface SessionPlannerInput {
 }
 
 function normalizedValues(values: string[] | undefined): string[] {
-  return (values ?? []).map((value) => value.toLocaleLowerCase());
+  return (values ?? []).map((value) => value.trim().toLowerCase());
 }
 
 function hasCategory(details: GameDetails | undefined, values: string[]): boolean {
@@ -117,7 +117,9 @@ function hasCategory(details: GameDetails | undefined, values: string[]): boolea
 }
 
 function achievementPercent(summary: AchievementSummary | undefined): number | null {
-  return summary && summary.total > 0 ? (summary.achieved / summary.total) * 100 : null;
+  if (!summary || !Number.isFinite(summary.total) || summary.total <= 0 ||
+      !Number.isFinite(summary.achieved) || summary.achieved < 0 || summary.achieved > summary.total) return null;
+  return (summary.achieved / summary.total) * 100;
 }
 
 function deterministicNoise(appId: number, seed: number): number {
@@ -159,40 +161,46 @@ export function planSession(input: SessionPlannerInput): SessionPlannerResult {
     const playtimeHours = game.playtime_forever / 60;
     const achievement = achievementPercent(input.achievements[game.appid]);
     const rating = input.ratings[game.appid]?.positive_percentage ?? null;
-    const diaryStatus = input.diaryDecisions[game.appid] ?? input.statuses[game.appid] ?? "none";
-    const hltbHours = getHltbHours(input.hltbData[game.appid], input.hltbTimeMode);
+    const rawHltbHours = getHltbHours(input.hltbData[game.appid], input.hltbTimeMode);
+    const hltbHours = rawHltbHours != null && Number.isFinite(rawHltbHours) && rawHltbHours > 0 ? rawHltbHours : null;
 
     if (["completed", "beaten", "abandoned"].includes(input.statuses[game.appid] ?? "") && cfg.intent !== "achievements") continue;
     if (input.diaryDecisions[game.appid] === "archived" && cfg.intent !== "achievements") continue;
 
+    // Missing evidence must not silently satisfy an explicit requirement.
     if (cfg.installed !== "any") {
-      if (!input.installedDataReady) missingData.push("installation freshness");
-      else if ((cfg.installed === "require" && !installed) || (cfg.installed === "exclude" && installed)) continue;
-      else requirementsPassed.push(cfg.installed === "require" ? "installed" : "not installed");
+      if (!input.installedDataReady) continue;
+      if ((cfg.installed === "require" && !installed) || (cfg.installed === "exclude" && installed)) continue;
+      requirementsPassed.push(cfg.installed === "require" ? "installed" : "not installed");
     }
     if (family && !cfg.familyAvailable) continue;
-    if (family) requirementsPassed.push("Family Sharing available");
+    if (family) requirementsPassed.push("Family Sharing library entry");
     if (cfg.deckCompatible) {
-      if (!details) missingData.push("Deck compatibility");
-      else if (!details.platforms?.linux) continue;
-      else requirementsPassed.push("Deck-compatible platform");
+      if (details?.deck_status !== "verified" && details?.deck_status !== "playable") continue;
+      requirementsPassed.push(`Deck ${details.deck_status}`);
     }
-    if ((cfg.input === "controller" || cfg.input === "touch") && !details) missingData.push(`${cfg.input} support`);
-    if (cfg.input === "controller" && details && !hasCategory(details, ["controller"])) continue;
-    if (cfg.input === "touch" && details && !hasCategory(details, ["touch"])) continue;
-    if (cfg.mode !== "any" && details) {
+    if (cfg.input === "controller") {
+      if (details?.full_controller_support !== true && !hasCategory(details, ["controller"])) continue;
+      requirementsPassed.push("controller support");
+    }
+    if (cfg.input === "touch") {
+      if (!hasCategory(details, ["touch"])) continue;
+      requirementsPassed.push("touch support");
+    }
+    if (cfg.mode !== "any") {
       const modes: Record<Exclude<PlannerMode, "any">, string[]> = {
         single: ["single-player"],
-        "local-coop": ["local co-op", "shared/split screen"],
-        "online-coop": ["online co-op", "co-op"],
-        competitive: ["multi-player", "pvp"],
+        "local-coop": ["local co-op", "shared/split screen co-op"],
+        "online-coop": ["online co-op"],
+        competitive: ["pvp", "online pvp", "lan pvp", "shared/split screen pvp"],
       };
-      if (!hasCategory(details, modes[cfg.mode])) continue;
+      // Generic co-op/multiplayer does not prove an online/competitive mode.
+      const categories = normalizedValues(details?.categories);
+      if (!modes[cfg.mode].some((category) => categories.includes(category))) continue;
       requirementsPassed.push(cfg.mode);
     }
-    if (cfg.mode !== "any" && !details) missingData.push("game modes");
-    if (cfg.genre && cfg.genreRequired && !normalizedValues(details?.genres).includes(cfg.genre.toLocaleLowerCase())) continue;
-    if (cfg.tag && cfg.tagRequired && !normalizedValues(details?.tags).includes(cfg.tag.toLocaleLowerCase())) continue;
+    if (cfg.genre && cfg.genreRequired && !normalizedValues(details?.genres).includes(cfg.genre.trim().toLowerCase())) continue;
+    if (cfg.tag && cfg.tagRequired && !normalizedValues(details?.tags).includes(cfg.tag.trim().toLowerCase())) continue;
     if (cfg.minHltbHours != null || cfg.maxHltbHours != null) {
       const hltbMatches = hltbHours != null
         && (cfg.minHltbHours == null || hltbHours >= cfg.minHltbHours)
@@ -202,33 +210,44 @@ export function planSession(input: SessionPlannerInput): SessionPlannerResult {
       else if (hltbHours == null) missingData.push("HLTB");
     }
     if (cfg.minSteamReviewPercent != null) {
-      if (rating == null) missingData.push("Steam reviews"); else if (rating < cfg.minSteamReviewPercent) continue; else requirementsPassed.push("Steam review threshold");
+      if (rating == null || !Number.isFinite(rating) || rating < 0 || rating > 100 ||
+          !Number.isFinite(cfg.minSteamReviewPercent) || rating < cfg.minSteamReviewPercent) continue;
+      requirementsPassed.push("Steam review threshold");
     }
     if (cfg.minMetacritic != null) {
-      if (details?.metacritic_score == null) missingData.push("Metacritic"); else if (details.metacritic_score < cfg.minMetacritic) continue; else requirementsPassed.push("Metacritic threshold");
+      const metacritic = details?.metacritic_score;
+      if (metacritic == null || !Number.isFinite(metacritic) || metacritic < 0 || metacritic > 100 ||
+          !Number.isFinite(cfg.minMetacritic) || metacritic < cfg.minMetacritic) continue;
+      requirementsPassed.push("Metacritic threshold");
     }
-    if (cfg.maxDaysSincePlayed != null && game.rtime_last_played > 0 && (input.now / 1000 - game.rtime_last_played) / 86_400 > cfg.maxDaysSincePlayed) continue;
-    if (cfg.minPlaytimeHours != null && playtimeHours < cfg.minPlaytimeHours) continue;
-    if (cfg.maxPlaytimeHours != null && playtimeHours > cfg.maxPlaytimeHours) continue;
-    if (cfg.diaryStatus && diaryStatus !== cfg.diaryStatus) continue;
-    if (cfg.minAchievementPercent != null) {
-      if (achievement == null) missingData.push("achievements"); else if (achievement < cfg.minAchievementPercent) continue;
+    if (cfg.maxDaysSincePlayed != null) {
+      if (!Number.isFinite(game.rtime_last_played) || game.rtime_last_played <= 0 ||
+          !Number.isFinite(cfg.maxDaysSincePlayed) ||
+          Math.max(0, (input.now / 1000 - game.rtime_last_played) / 86_400) > cfg.maxDaysSincePlayed) continue;
+      requirementsPassed.push("recent playtime");
     }
-    if (cfg.maxAchievementPercent != null) {
-      if (achievement == null) missingData.push("achievements"); else if (achievement > cfg.maxAchievementPercent) continue;
+    if (cfg.minPlaytimeHours != null && (!Number.isFinite(playtimeHours) || playtimeHours < cfg.minPlaytimeHours)) continue;
+    if (cfg.maxPlaytimeHours != null && (!Number.isFinite(playtimeHours) || playtimeHours > cfg.maxPlaytimeHours)) continue;
+    if (cfg.diaryStatus && cfg.diaryStatus !== input.diaryDecisions[game.appid] &&
+        cfg.diaryStatus !== (input.statuses[game.appid] ?? "none")) continue;
+    if (cfg.minAchievementPercent != null || cfg.maxAchievementPercent != null) {
+      if (achievement == null ||
+          (cfg.minAchievementPercent != null && (!Number.isFinite(cfg.minAchievementPercent) || achievement < cfg.minAchievementPercent)) ||
+          (cfg.maxAchievementPercent != null && (!Number.isFinite(cfg.maxAchievementPercent) || achievement > cfg.maxAchievementPercent))) continue;
+      requirementsPassed.push("achievement progress threshold");
     }
 
     let adjustment = (input.frequency[game.appid] ?? 0) * 5;
     if (input.pinnedAppId === game.appid) { adjustment += 100; preferenceReasons.push("pinned"); }
-    if (cfg.genre && !cfg.genreRequired && normalizedValues(details?.genres).includes(cfg.genre.toLocaleLowerCase())) { adjustment += 10; preferenceReasons.push("preferred genre"); }
-    if (cfg.tag && !cfg.tagRequired && normalizedValues(details?.tags).includes(cfg.tag.toLocaleLowerCase())) { adjustment += 8; preferenceReasons.push("preferred tag"); }
+    if (cfg.genre && !cfg.genreRequired && normalizedValues(details?.genres).includes(cfg.genre.trim().toLowerCase())) { adjustment += 10; preferenceReasons.push("preferred genre"); }
+    if (cfg.tag && !cfg.tagRequired && normalizedValues(details?.tags).includes(cfg.tag.trim().toLowerCase())) { adjustment += 8; preferenceReasons.push("preferred tag"); }
     if (!cfg.hltbRequired && (cfg.minHltbHours != null || cfg.maxHltbHours != null) && hltbHours != null
       && (cfg.minHltbHours == null || hltbHours >= cfg.minHltbHours)
       && (cfg.maxHltbHours == null || hltbHours <= cfg.maxHltbHours)) { adjustment += 8; preferenceReasons.push("preferred HLTB range"); }
     if (cfg.intent === "new" && playtimeHours === 0) { adjustment += 18; preferenceReasons.push("new game"); }
     if (cfg.intent === "continue" && playtimeHours > 0) { adjustment += 16; preferenceReasons.push("continue progress"); }
-    if (cfg.intent === "finish" && playtimeHours > 0 && ranked.mainTime != null && playtimeHours / ranked.mainTime >= 0.65) { adjustment += 22; preferenceReasons.push("close to estimated finish"); }
-    if (cfg.intent === "short" && (ranked.mainTime == null || ranked.mainTime <= 10)) { adjustment += 12; preferenceReasons.push("short-session fit"); }
+    if (cfg.intent === "finish" && playtimeHours > 0 && hltbHours != null && playtimeHours / hltbHours >= 0.65) { adjustment += 22; preferenceReasons.push("close to estimated finish"); }
+    if (cfg.intent === "short" && hltbHours != null && hltbHours <= 10) { adjustment += 12; preferenceReasons.push("short-session fit"); }
     if (cfg.intent === "achievements" && achievement != null && achievement > 0 && achievement < 100) { adjustment += 16; preferenceReasons.push("achievement progress available"); }
     if (cfg.intent === "relaxing" && normalizedValues(details?.tags).some((tag) => ["relaxing", "cozy", "casual"].some((value) => tag.includes(value)))) { adjustment += 14; preferenceReasons.push("relaxing tag"); }
     if (cfg.intent === "difficult" && normalizedValues(details?.tags).some((tag) => ["difficult", "souls-like", "precision"].some((value) => tag.includes(value)))) { adjustment += 14; preferenceReasons.push("challenge tag"); }
@@ -237,7 +256,13 @@ export function planSession(input: SessionPlannerInput): SessionPlannerResult {
     const endless = normalizedValues(details?.genres).some((genre) => ["massively multiplayer", "simulation"].some((value) => genre.includes(value)))
       || normalizedValues(details?.tags).some((tag) => ["sandbox", "roguelike", "rogue-lite"].some((value) => tag.includes(value)));
     const estimatedRemainingHours = endless || hltbHours == null ? null : Math.max(0, hltbHours - playtimeHours);
-    if (endless) preferenceReasons.push("open-ended game: session time used");
+    if (estimatedRemainingHours != null && estimatedRemainingHours > 0 &&
+        Number.isFinite(cfg.durationMinutes) && cfg.durationMinutes > 0 &&
+        estimatedRemainingHours * 60 <= cfg.durationMinutes) {
+      adjustment += 12;
+      preferenceReasons.push("estimated remaining time fits session budget");
+    }
+    if (endless) preferenceReasons.push("open-ended game: completion time not inferred");
     if (hltbHours == null) missingData.push("HLTB (not treated as zero)");
     const scoreReasons = ranked.contributions
       .filter((contribution) => contribution.points !== 0)
@@ -253,14 +278,26 @@ export function planSession(input: SessionPlannerInput): SessionPlannerResult {
   candidates.sort((left, right) => right.adjustedScore - left.adjustedScore || left.game.name.localeCompare(right.game.name) || left.game.appid - right.game.appid);
   const best = candidates[0] ?? null;
   const remaining = candidates.filter((candidate) => candidate.game.appid !== best?.game.appid);
-  const shorter = [...remaining].sort((left, right) => (left.estimatedRemainingHours ?? Infinity) - (right.estimatedRemainingHours ?? Infinity) || right.adjustedScore - left.adjustedScore)[0] ?? null;
+  const bestRemaining = best?.estimatedRemainingHours;
+  const shorter = bestRemaining == null ? null : remaining
+    .filter((candidate) => candidate.estimatedRemainingHours != null && candidate.estimatedRemainingHours < bestRemaining)
+    .sort((left, right) => left.estimatedRemainingHours! - right.estimatedRemainingHours! || right.adjustedScore - left.adjustedScore)[0] ?? null;
   const used = new Set([best?.game.appid, shorter?.game.appid]);
+  const traits = (candidate: SessionPlannerCandidate | null) => new Set([
+    ...normalizedValues(candidate?.details?.genres).map((value) => `genre:${value}`),
+    ...normalizedValues(candidate?.details?.tags).map((value) => `tag:${value}`),
+  ]);
+  const bestTraits = traits(best);
+  const affinity = (candidate: SessionPlannerCandidate): number => {
+    const candidateTraits = traits(candidate);
+    // Unknown metadata is not evidence that a game is deliberately different.
+    if (!bestTraits.size || !candidateTraits.size) return 1;
+    const common = [...candidateTraits].filter((value) => bestTraits.has(value)).length;
+    return common / (bestTraits.size + candidateTraits.size - common);
+  };
   const different = remaining
     .filter((candidate) => !used.has(candidate.game.appid))
-    .sort((left, right) => {
-      const leftAffinity = left.contributions.find((item) => item.signal === "genre")?.points ?? 0;
-      const rightAffinity = right.contributions.find((item) => item.signal === "genre")?.points ?? 0;
-      return leftAffinity - rightAffinity || right.adjustedScore - left.adjustedScore;
-    })[0] ?? null;
+    .map((candidate) => ({ candidate, affinity: affinity(candidate) }))
+    .sort((left, right) => left.affinity - right.affinity || right.candidate.adjustedScore - left.candidate.adjustedScore)[0]?.candidate ?? null;
   return { best, shorter, different, eligibleCount: candidates.length, excludedCount: base.length - candidates.length };
 }

@@ -8,15 +8,39 @@ are independent: opening a planner or a preview does not write Steam files.
 ## Session Planner and Tonight Queue
 
 Open **Session Planner** to combine time, device, input, game mode, session
-intent, installation state, Family availability, metadata, Diary status, and
+intent, installation state, Family library entries, metadata, Diary status, and
 achievement progress. Mark a condition as a requirement to exclude games that
 do not satisfy it; preferences only affect the visible score.
 
-The planner returns a best fit, a shorter alternative, and a deliberately
-different option. Each result lists satisfied requirements, score inputs, and
-missing or stale data. Rerolls are seeded and avoid immediately repeating the
-same games. You can suppress or tune individual games, pin a primary choice,
-save presets, and launch a selected game through Steam.
+An explicit requirement needs known matching data. For example, an unread
+installation inventory cannot prove that a game is installed or not installed;
+missing reviews or achievements cannot pass a configured threshold. Refresh the
+relevant cache or relax that condition when no eligible games remain. Without a
+requirement, missing optional metadata stays unknown rather than becoming zero.
+
+The Deck requirement uses **Verified** or **Playable** Deck metadata, not the
+native Linux platform flag. Controller and game-mode requirements need explicit
+support metadata; generic co-op does not prove online co-op, and generic
+multiplayer does not prove competitive play. Family entries come from the
+loaded library snapshot and do not guarantee that a shared license is currently
+free to launch.
+
+The planner returns a best fit and, when possible, a genuinely shorter
+alternative with a known remaining-time estimate. That alternative is omitted
+when the best fit has no estimate or no eligible game is demonstrably shorter.
+A different option favors less overlap in known genres and tags; missing
+metadata is not evidence of a different genre. Each result lists satisfied
+requirements, score inputs, and missing or stale data. Rerolls are seeded and
+avoid immediately repeating the same games. You can suppress or tune individual
+games, pin a primary choice, save presets, and launch through Steam. Pinning does
+not override failed requirements.
+
+The selected HLTB mode is used for remaining-time, finish, and short-game
+preferences. A positive remaining-time estimate that fits the selected session
+budget receives a preference bonus. This is a rough completion estimate, not a
+measured session length or a guarantee that you can finish the game in that
+time. Games classified as open-ended do not receive that estimate. Missing HLTB
+does not earn a short-game bonus.
 
 **Tonight Queue** is temporary and never edits Steam collections while you
 reorder it. Add unique games manually or from the planner, drag them into order,
@@ -97,6 +121,14 @@ exclude unwanted ones. Each result shows size, priority, reasons, limitations,
 and the remaining capacity. Packs can be rerolled, saved, staged as collections,
 or used as a prioritized Steam install plan.
 
+Mandatory games remain visible even when they exceed the space budget, with
+overflow reported separately. A lock can override compatibility filters, but a
+warning identifies that mismatch; an explicit exclusion still wins. Games with
+missing, nonpositive, fractional, or unsafe byte counts are not allowed to
+create fictional free space. Required games that cannot be included, including
+those beyond the 100-game pack limit, are listed as missing rather than silently
+dropped.
+
 Actual local sizes take precedence. An estimate is used only when explicitly
 available. Steam StoreBrowse can provide a Deck compatibility category,
 which Repressurizer maps to **Verified**, **Playable**, or **Unsupported**;
@@ -108,8 +140,9 @@ behavior, offline support, first-launch requirements, or install size through
 the endpoints Repressurizer uses. Those fields remain **Unknown** unless you
 enter a local value in the Pack My Deck metadata editor. A manually entered
 value is stored in local app data (`travel_metadata.json`) and never changes
-Steam. These travel notes are not currently included in portable profile exports. Installed sizes discovered by the Storage Planner take
-precedence over estimates.
+Steam. These travel notes are not currently included in portable profile
+exports. Installed sizes discovered by the Storage Planner take precedence
+over estimates.
 
 Screenshots show an example library and local travel notes, not verified
 compatibility claims for the pictured games.
@@ -132,10 +165,13 @@ provider from blocking unrelated features.
 
 ![Metadata Health Center](../assets/screenshots/metadata-health.png)
 
-## Choosing a region for planner prices
+## Store prices and planner limits
 
-Price conditions and library value use the Store country selected in Settings.
-The planner never converts prices between currencies and never assumes that two
-countries sharing a currency have the same Store price. If a country has no
-price for a game, the value is shown as unavailable and the planner reports the
-missing data instead of ranking on a guessed amount.
+Store price snapshots and library value use the country selected in Settings;
+changing the country must not relabel an existing price with another currency.
+See the [cache and network guide](../cache-and-network.md) for regional snapshots
+and unavailable prices.
+
+Session Planner does not currently expose a price-budget filter or use a game's
+Store price as a ranking signal. Its time budget and Pack My Deck's storage
+budget are not spending limits.
