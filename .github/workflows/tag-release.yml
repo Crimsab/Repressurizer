@@ -21,8 +21,15 @@ concurrency:
 jobs:
   tag:
     name: Reconcile version tags after CI
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    # A fork PR whose source branch is named main must not gain write permissions.
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_repository.full_name == github.repository &&
+       (github.event.workflow_run.event == 'push' || github.event.workflow_run.event == 'workflow_dispatch'))
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: Checkout validated commit
@@ -31,12 +38,15 @@ jobs:
           fetch-depth: 0
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
-      - name: Record validated commit
+      - name: Verify trusted CI for the exact commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
         run: |
-          echo "Validated commit: $(git rev-parse HEAD)"
-          if [ "${{ github.event_name }}" = "workflow_run" ]; then
-            test "$(git rev-parse HEAD)" = "${{ github.event.workflow_run.head_sha }}"
-          fi
+          set -euo pipefail
+          sha="$(git rev-parse HEAD)"
+          git merge-base --is-ancestor "$sha" origin/main
+          node scripts/verify-release-ci.mjs --repo "$REPOSITORY" --sha "$sha"
 
       - name: Configure git author
         run: |
@@ -44,7 +54,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
       - name: Fetch release tags
-        run: git fetch --tags --force
+        run: git fetch --tags
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
@@ -54,44 +64,78 @@ jobs:
       - name: Read and validate desktop app version
         id: app_version
         run: |
+          set -euo pipefail
           package_version="$(jq -r '.version' package.json)"
           tauri_version="$(jq -r '.version' src-tauri/tauri.conf.json)"
           cargo_version="$(awk -F '"' '/^version = / { print $2; exit }' src-tauri/Cargo.toml)"
-
           if [ -z "$package_version" ] || [ "$package_version" = "null" ]; then
             echo "Could not read package.json version" >&2
             exit 1
           fi
-
           if [ "$package_version" != "$tauri_version" ] || [ "$package_version" != "$cargo_version" ]; then
             echo "Desktop versions differ: package=$package_version tauri=$tauri_version cargo=$cargo_version" >&2
             exit 1
           fi
-
           channel="$(bun scripts/release-channel.ts identify --version "$package_version" --tag "v$package_version")"
           echo "tag=v$package_version" >> "$GITHUB_OUTPUT"
           echo "channel=$channel" >> "$GITHUB_OUTPUT"
 
       - name: Check desktop app tag
         id: app_existing
+        env:
+          RELEASE_TAG: ${{ steps.app_version.outputs.tag }}
         run: |
-          if git rev-parse -q --verify "refs/tags/${{ steps.app_version.outputs.tag }}" >/dev/null; then
+          set -euo pipefail
+          if git rev-parse -q --verify "refs/tags/$RELEASE_TAG" >/dev/null; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
+            sha="$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")"
+            git merge-base --is-ancestor "$sha" origin/main
           else
             echo "exists=false" >> "$GITHUB_OUTPUT"
+            sha="$(git rev-parse HEAD)"
           fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
 
       - name: Create desktop app tag
         if: steps.app_existing.outputs.exists == 'false'
+        env:
+          RELEASE_TAG: ${{ steps.app_version.outputs.tag }}
         run: |
-          git tag -a "${{ steps.app_version.outputs.tag }}" -m "Release ${{ steps.app_version.outputs.tag }}"
-          git push origin "${{ steps.app_version.outputs.tag }}"
+          git tag -a "$RELEASE_TAG" -m "Release $RELEASE_TAG"
+          git push origin "$RELEASE_TAG"
 
-      - name: Start desktop release workflow
-        if: steps.app_existing.outputs.exists == 'false'
+      - name: Reconcile missing or draft desktop release
+        id: app_publish
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh workflow run release.yml --ref "${{ steps.app_version.outputs.tag }}" -f release_tag="${{ steps.app_version.outputs.tag }}"
+          REPOSITORY: ${{ github.repository }}
+          RELEASE_TAG: ${{ steps.app_version.outputs.tag }}
+          RELEASE_SHA: ${{ steps.app_existing.outputs.sha }}
+        run: |
+          set -euo pipefail
+          metadata="$(mktemp)"
+          errors="$(mktemp)"
+          trap 'rm -f "$metadata" "$errors"' EXIT
+          if gh api "repos/$REPOSITORY/releases/tags/$RELEASE_TAG" >"$metadata" 2>"$errors"; then
+            if jq -e '.draft == false' "$metadata" >/dev/null; then
+              echo "Published release $RELEASE_TAG is unchanged"
+              echo "started=false" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            jq -e '.draft == true' "$metadata" >/dev/null
+          elif ! grep -q '(HTTP 404)' "$errors"; then
+            cat "$errors" >&2
+            exit 1
+          fi
+          node scripts/verify-release-ci.mjs --repo "$REPOSITORY" --sha "$RELEASE_SHA"
+          runs="$(gh run list --repo "$REPOSITORY" --workflow release.yml --commit "$RELEASE_SHA" --limit 20 --json status)"
+          if jq -e 'any(.[]; .status != "completed")' <<< "$runs" >/dev/null; then
+            echo "A release run is already active for $RELEASE_SHA"
+            echo "started=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          gh workflow run release.yml --repo "$REPOSITORY" --ref "$RELEASE_TAG" -f release_tag="$RELEASE_TAG"
+          echo "started=true" >> "$GITHUB_OUTPUT"
 
       - name: Read TypeScript integration version
         id: typescript_version
@@ -162,6 +206,7 @@ jobs:
             echo
             echo "- Desktop: ${{ steps.app_version.outputs.tag }} (already existed: ${{ steps.app_existing.outputs.exists }})"
             echo "- Desktop channel: ${{ steps.app_version.outputs.channel }}"
+            echo "- Desktop publication started: ${{ steps.app_publish.outputs.started }}"
             echo "- TypeScript integration: ${{ steps.typescript_version.outputs.tag }} (already existed: ${{ steps.typescript_existing.outputs.exists }})"
             echo "- Rust integration: ${{ steps.rust_version.outputs.tag }} (already existed: ${{ steps.rust_existing.outputs.exists }})"
           } >> "$GITHUB_STEP_SUMMARY"
