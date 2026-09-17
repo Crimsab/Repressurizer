@@ -1,0 +1,56 @@
+name: Repository maintenance
+
+on:
+  push:
+    branches: [fix/release-maintenance-2026-09-17]
+    paths:
+      - .github/workflows/repository-maintenance.yml
+      - scripts/repository-maintenance.mjs
+      - scripts/repository-maintenance.test.mjs
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: Delete only the explicitly approved test releases and merged branches
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: repository-maintenance
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    if: github.repository == 'Crimsab/Repressurizer'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Test deletion guards
+        run: node --test scripts/repository-maintenance.test.mjs
+      - name: Verify inventory and back up test release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          node scripts/repository-maintenance.mjs --prepare _maintenance_backup
+          git archive --format=tar --output=_maintenance_backup/source.tar HEAD
+      - name: Preserve verified backup before deletion
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: repository-maintenance-backup
+          path: _maintenance_backup/
+          if-no-files-found: error
+          retention-days: 7
+      - name: Apply approved cleanup with ref leases
+        if: github.event_name == 'push' || inputs.apply
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node scripts/repository-maintenance.mjs --apply _maintenance_backup
