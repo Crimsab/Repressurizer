@@ -291,6 +291,9 @@ fn set_private_directory_permissions(path: &std::path::Path) -> Result<(), Strin
             |error| format!("Failed to protect local integration runtime directory: {error}"),
         )?;
     }
+    // Windows relies on the per-user profile ACLs of the directory instead.
+    #[cfg(not(unix))]
+    let _ = path;
     Ok(())
 }
 
@@ -301,6 +304,8 @@ fn set_private_file_permissions(path: &std::path::Path) -> Result<(), String> {
         std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
             .map_err(|error| format!("Failed to protect local integration descriptor: {error}"))?;
     }
+    #[cfg(not(unix))]
+    let _ = path;
     Ok(())
 }
 

@@ -173,6 +173,7 @@ fn macos_steam_path_candidates(home: &Path) -> Vec<PathBuf> {
     vec![home.join("Library/Application Support/Steam")]
 }
 
+#[cfg(any(target_os = "linux", test))]
 fn linux_steam_path_candidates(home: &Path, xdg_data_home: Option<&Path>) -> Vec<PathBuf> {
     let mut candidates = Vec::new();
     if let Some(data_home) = xdg_data_home {

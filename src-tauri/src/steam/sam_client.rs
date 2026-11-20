@@ -298,9 +298,9 @@ pub fn is_steam_running() -> bool {
     #[cfg(windows)]
     {
         let steam_path = crate::read_app_setting_string("steamPath").unwrap_or_default();
-        return run_sidecar_probe(&steam_path, 0)
+        run_sidecar_probe(&steam_path, 0)
             .map(|probe| probe.steam_running)
-            .unwrap_or_else(|_| fallback_windows_steam_running());
+            .unwrap_or_else(|_| fallback_windows_steam_running())
     }
 
     #[cfg(not(windows))]
