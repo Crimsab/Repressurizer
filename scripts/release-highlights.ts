@@ -1,6 +1,6 @@
 const RELEASE_HIGHLIGHTS: Record<string, string> = {
   "0.8.8":
-    "This security update makes the app install an update only when its signature names the same version the update server announces, so a tampered update list cannot hand over an older release.",
+    "This update opens the app faster, keeps scrolling smooth in large libraries while the cache fills, fixes security issues in zip handling, installs updates only when their signature names the version the update server announces, and updates Tauri, its plugins, React, Vite and the Rust dependencies. It includes everything planned for 0.8.7, whose Windows build did not complete.",
   "0.8.7":
     "This maintenance update opens the app faster, keeps scrolling smooth in large libraries while the cache fills, fixes security issues in zip handling, and updates Tauri, its plugins, React, Vite and the Rust dependencies.",
   "0.8.6":
