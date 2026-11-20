@@ -1,5 +1,5 @@
 import { afterEach, describe, it, vi } from "vitest";
-import { strict as assert } from "node:assert";
+import { assert } from "../lib/testAssert";
 import { createStore } from "zustand/vanilla";
 import type { TravelMetadataRecord } from "../lib/travelMetadata";
 

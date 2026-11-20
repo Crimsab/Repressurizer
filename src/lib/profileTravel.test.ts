@@ -1,5 +1,5 @@
 import { describe, it } from "vitest";
-import { strict as assert } from "node:assert";
+import { assert } from "./testAssert";
 import { createRepressurizerProfile, parseRepressurizerProfile, selectProfileSections, diffProfileSections, type RepressurizerProfileDocument } from "./repressurizerProfile";
 import { prepareProfileApplication } from "./profileApplication";
 import { mergeProfileDocuments, resolveProfileSyncConflicts, profileEntityChanges, createProfileSyncEnvelope, parseProfileSyncEnvelope } from "./profileSync";
