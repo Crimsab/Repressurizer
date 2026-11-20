@@ -109,14 +109,11 @@ jobs:
           components: clippy, rustfmt
 
       - name: Cache Rust
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
-          path: |
-            ~/.cargo/git
-            ~/.cargo/registry
-          key: ${{ runner.os }}-rust-${{ hashFiles('src-tauri/Cargo.lock', 'packages/rust/Cargo.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-rust-
+          workspaces: src-tauri
+          # Compiled dependencies are reused by check, clippy, tests and the desktop build.
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Rust check
         env:
@@ -164,15 +161,11 @@ jobs:
         with:
           toolchain: 1.94.0
 
-      - name: Restore Rust cache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
-          path: |
-            ~/.cargo/git
-            ~/.cargo/registry
-          key: ${{ runner.os }}-rust-${{ hashFiles('src-tauri/Cargo.lock', 'packages/rust/Cargo.toml') }}
-          restore-keys: |
-            ${{ runner.os }}-rust-
+          workspaces: packages/rust
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Rust integration crate check
         run: cargo check --manifest-path packages/rust/Cargo.toml

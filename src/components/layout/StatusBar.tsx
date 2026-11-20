@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
 import { detailsCacheNeedsRefresh, isDetailsCacheCurrent, useGameStore } from "../../stores/gameStore";
 import { useCategoryStore } from "../../stores/categoryStore";
 import { useStatusStore, STATUS_META, type GameStatus } from "../../stores/statusStore";
@@ -208,21 +208,33 @@ export function StatusBar({ showKanbanTip = false }: { showKanbanTip?: boolean }
 
   const selectedCount = Object.keys(selectedGameIds).length;
   const selectedIds = Object.keys(selectedGameIds).map(Number);
-  const gameIds = Object.keys(games).map(Number);
-  const fetchableDetailIds = gameIds.filter((id) => {
-    if ((ignoredDetailFails[id] ?? 0) >= MAX_FAIL_RUNS) return false;
-    const detail = details[id];
-    return detailsCacheNeedsRefresh(detail, detailsCacheMaxAgeDays) || detailsPriceNeedsCurrencyRefresh(detail, currency, storeCountryCode);
-  });
-  const fetchableHltbIds = gameIds.filter(
-    (id) => !hltbData[id] && (ignoredHltbFails[id] ?? 0) < HLTB_MAX_FAILS
-  );
-  const fetchableStoreReleaseDateIds = gameIds.filter((id) =>
-    isDetailsCacheCurrent(details[id]) && storeReleaseDateNeedsRefresh(details[id])
-  );
-  const missingRatingIds = ratingsHydrated ? steamRatingIdsNeedingFetch(games, ratings) : [];
-  const cachePreparationMissing =
-    fetchableDetailIds.length + fetchableStoreReleaseDateIds.length + fetchableHltbIds.length + missingRatingIds.length;
+  // Background fetches update these maps once per game; deferring keeps the
+  // whole-library count from blocking scrolling and typing in large libraries.
+  const deferredGames = useDeferredValue(games);
+  const deferredDetails = useDeferredValue(details);
+  const deferredHltbData = useDeferredValue(hltbData);
+  const deferredRatings = useDeferredValue(ratings);
+  // Cache freshness depends on the clock, so recount at least once per hour of renders.
+  const freshnessHour = Math.floor(Date.now() / 3_600_000);
+  const cachePreparationMissing = useMemo(() => {
+    let missing = ratingsHydrated ? steamRatingIdsNeedingFetch(deferredGames, deferredRatings).length : 0;
+    for (const key of Object.keys(deferredGames)) {
+      const id = Number(key);
+      const detail = deferredDetails[id];
+      if (
+        (ignoredDetailFails[id] ?? 0) < MAX_FAIL_RUNS &&
+        (detailsCacheNeedsRefresh(detail, detailsCacheMaxAgeDays) ||
+          detailsPriceNeedsCurrencyRefresh(detail, currency, storeCountryCode))
+      ) missing += 1;
+      if (!deferredHltbData[id] && (ignoredHltbFails[id] ?? 0) < HLTB_MAX_FAILS) missing += 1;
+      if (isDetailsCacheCurrent(detail) && storeReleaseDateNeedsRefresh(detail)) missing += 1;
+    }
+    return missing;
+  }, [
+    deferredGames, deferredDetails, deferredHltbData, deferredRatings, ratingsHydrated,
+    ignoredDetailFails, ignoredHltbFails, detailsCacheMaxAgeDays, currency, storeCountryCode,
+    freshnessHour,
+  ]);
   const cachePreparationRunning = detailsRunning || releaseDatesRunning || hltbRunning || ratingsRunning;
   const showPrepareCache =
     gameCount > 0 && cachePreparationMissing > 0 && !cachePreparationRunning;

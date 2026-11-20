@@ -19,6 +19,9 @@
   --md-typeset-a-color: var(--rp-accent);
   --md-code-hl-operator-color: #595959;
   --md-code-hl-punctuation-color: #595959;
+  --md-code-hl-comment-color: #595959;
+  --md-code-hl-generic-color: #595959;
+  --md-code-hl-variable-color: #595959;
 }
 
 [data-md-color-scheme="slate"] {

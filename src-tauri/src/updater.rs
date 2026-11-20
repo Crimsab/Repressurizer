@@ -1,3 +1,4 @@
+use semver::Version;
 use serde::Serialize;
 use std::path::Path;
 
@@ -42,6 +43,24 @@ pub(crate) fn current_capability() -> UpdaterCapability {
 
 pub(crate) fn current_manifest_target() -> Option<&'static str> {
     manifest_target(std::env::consts::OS, std::env::consts::ARCH)
+}
+
+/// Decides whether a remote release should replace the running build.
+///
+/// Channel manifests only publish releases of their own channel, so a stable
+/// release that is older than the running beta only arrives after the user
+/// switched that beta back to the stable channel. That return is allowed; every
+/// other case installs newer versions only.
+pub(crate) fn accepts_release(current: &Version, remote: &Version) -> bool {
+    remote > current || (is_numbered_beta(current) && remote.pre.is_empty())
+}
+
+fn is_numbered_beta(version: &Version) -> bool {
+    version
+        .pre
+        .as_str()
+        .strip_prefix("beta.")
+        .is_some_and(|number| !number.is_empty() && number.bytes().all(|b| b.is_ascii_digit()))
 }
 
 fn manifest_target(operating_system: &str, architecture: &str) -> Option<&'static str> {
@@ -97,7 +116,40 @@ fn classify_runtime(
 
 #[cfg(test)]
 mod tests {
-    use super::{classify_runtime, manifest_target, UpdaterCapability, UpdaterKind};
+    use super::{
+        accepts_release, classify_runtime, manifest_target, UpdaterCapability, UpdaterKind,
+    };
+    use semver::Version;
+
+    fn accepts(current: &str, remote: &str) -> bool {
+        accepts_release(
+            &Version::parse(current).unwrap(),
+            &Version::parse(remote).unwrap(),
+        )
+    }
+
+    #[test]
+    fn installs_newer_releases_on_every_channel() {
+        assert!(accepts("0.8.6", "0.8.7"));
+        assert!(accepts("0.8.0-beta.1", "0.8.0-beta.2"));
+        assert!(accepts("0.8.0-beta.2", "0.8.0"));
+        assert!(accepts("0.0.0-preview.12", "0.0.0-preview.13"));
+    }
+
+    #[test]
+    fn lets_a_beta_return_to_an_older_stable_release() {
+        assert!(accepts("0.9.0-beta.2", "0.8.7"));
+    }
+
+    #[test]
+    fn never_downgrades_outside_a_beta_returning_to_stable() {
+        assert!(!accepts("0.8.7", "0.8.6"));
+        assert!(!accepts("0.8.7", "0.8.7"));
+        assert!(!accepts("0.9.0-beta.2", "0.9.0-beta.1"));
+        assert!(!accepts("0.9.0-beta.2", "0.9.0-beta.2"));
+        assert!(!accepts("0.0.0-preview.12", "0.0.0-preview.11"));
+        assert!(!accepts("0.9.0-beta", "0.8.7"));
+    }
 
     #[test]
     fn windows_installer_supports_in_app_updates() {

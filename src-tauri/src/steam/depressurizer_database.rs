@@ -156,12 +156,14 @@ fn import_depressurizer_database_zip(
             archive
                 .by_index(*index)
                 .ok()
-                .map(|file| {
-                    let normalized = file.name().replace('\\', "/");
-                    normalized
-                        .rsplit('/')
-                        .next()
-                        .is_some_and(|name| name.eq_ignore_ascii_case("database.json"))
+                .and_then(|file| {
+                    // zip 9 rejects names that disagree between headers; skip those entries.
+                    file.name().ok().map(|name| {
+                        name.replace('\\', "/")
+                            .rsplit('/')
+                            .next()
+                            .is_some_and(|name| name.eq_ignore_ascii_case("database.json"))
+                    })
                 })
                 .unwrap_or(false)
         })

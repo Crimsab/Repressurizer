@@ -912,7 +912,13 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_process::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(
+            tauri_plugin_updater::Builder::new()
+                .default_version_comparator(|current, release| {
+                    updater::accepts_release(&current, &release.version)
+                })
+                .build(),
+        )
         .manage(integration_runtime::IntegrationRuntime::new())
         .setup(|app| {
             configure_windows_app_identity();
