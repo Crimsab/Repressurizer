@@ -58,12 +58,9 @@ export function shouldAllowStableReturn(
 export async function checkForAppUpdate(
   platformTarget: string,
   channel: UpdateChannel,
-  currentVersion = __APP_VERSION__,
   buildChannel: "stable" | "preview" = __APP_CHANNEL__
 ): Promise<Update | null> {
   if (buildChannel === "preview") return check();
-  return check({
-    target: channelUpdaterTarget(platformTarget, channel),
-    allowDowngrades: shouldAllowStableReturn(currentVersion, channel),
-  });
+  // A beta switched back to stable may install an older stable release; the Rust updater decides that.
+  return check({ target: channelUpdaterTarget(platformTarget, channel) });
 }
