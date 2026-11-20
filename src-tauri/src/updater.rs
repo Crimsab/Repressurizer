@@ -142,6 +142,15 @@ mod tests {
     }
 
     #[test]
+    fn shipped_config_requires_version_bound_update_signatures() {
+        let config: serde_json::Value =
+            serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
+        let updater: tauri_plugin_updater::Config =
+            serde_json::from_value(config["plugins"]["updater"].clone()).unwrap();
+        assert!(updater.require_signed_version);
+    }
+
+    #[test]
     fn never_downgrades_outside_a_beta_returning_to_stable() {
         assert!(!accepts("0.8.7", "0.8.6"));
         assert!(!accepts("0.8.7", "0.8.7"));

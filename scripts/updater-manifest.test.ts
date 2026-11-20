@@ -2,9 +2,17 @@ import { afterEach, describe, expect, it } from "vitest";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { validateUpdaterManifest } from "./updater-manifest";
+import { signedUpdaterVersion, validateUpdaterManifest } from "./updater-manifest";
 
 const temporaryDirectories: string[] = [];
+
+function signature(version: string | null, file = "Repressurizer_0.5.6_x64-setup.exe"): string {
+  const fields = ["timestamp:1795205483", `file:${file}`];
+  if (version !== null) fields.push(`version:${version}`);
+  return Buffer.from(
+    `untrusted comment: signature from tauri secret key\nRUTtestsignaturepayload\ntrusted comment: ${fields.join("\t")}\nglobalsignaturepayload\n`,
+  ).toString("base64");
+}
 
 afterEach(() => {
   for (const directory of temporaryDirectories.splice(0)) {
@@ -22,7 +30,7 @@ describe("updater manifest validation", () => {
     const fixture = createFixture();
     const assetName = "Repressurizer_0.5.6_universal.app.tar.gz";
     const entry = {
-      signature: "dW50cnVzdGVkIGNvbW1lbnQ6IG1hY09TIHRlc3Qgc2lnbmF0dXJl",
+      signature: signature("0.5.6", assetName),
       url: `https://github.com/Crimsab/Repressurizer/releases/download/v0.5.6/${assetName}`,
     };
     writeFileSync(join(fixture.options.artifactsDirectory, assetName), "universal app", "utf8");
@@ -60,6 +68,28 @@ describe("updater manifest validation", () => {
 
     expect(() => validateUpdaterManifest(fixture.options)).toThrow(/crosses the stable channel/);
   });
+
+  it("reads the version recorded by the Tauri CLI in the trusted comment", () => {
+    expect(signedUpdaterVersion(signature("0.8.7"))).toBe("0.8.7");
+    expect(signedUpdaterVersion(signature(null))).toBeNull();
+    expect(signedUpdaterVersion("not a signature")).toBeNull();
+  });
+
+  it("rejects signatures made before the CLI recorded the version", () => {
+    const fixture = createFixture();
+    fixture.manifest.platforms["windows-x86_64"].signature = signature(null);
+    writeFileSync(fixture.options.manifestPath, JSON.stringify(fixture.manifest), "utf8");
+
+    expect(() => validateUpdaterManifest(fixture.options)).toThrow(/records version <none>/);
+  });
+
+  it("rejects a signature bound to another version", () => {
+    const fixture = createFixture();
+    fixture.manifest.platforms["windows-x86_64"].signature = signature("0.5.5");
+    writeFileSync(fixture.options.manifestPath, JSON.stringify(fixture.manifest), "utf8");
+
+    expect(() => validateUpdaterManifest(fixture.options)).toThrow(/records version 0\.5\.5, expected 0\.5\.6/);
+  });
 });
 
 function createFixture() {
@@ -70,7 +100,7 @@ function createFixture() {
   writeFileSync(join(directory, assetName), "installer", "utf8");
   const platforms: Record<string, { signature: string; url: string }> = {
     "windows-x86_64": {
-      signature: "dW50cnVzdGVkIGNvbW1lbnQ6IHRlc3Qgc2lnbmF0dXJl",
+      signature: signature("0.5.6"),
       url: `https://github.com/Crimsab/Repressurizer/releases/download/v0.5.6/${assetName}`,
     },
   };

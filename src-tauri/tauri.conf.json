@@ -55,6 +55,7 @@
       "endpoints": [
         "https://github.com/Crimsab/Repressurizer/releases/download/updater-manifests/{{target}}.json"
       ],
+      "requireSignedVersion": true,
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IENGODA5RDkxMDQwOTgwNjEKUldSaGdBa0VrWjJBejQ1clVETkc4TWFRY2tsOFNwK1Zhbnh0YlhnMkUvcnZqZlRNVTNYdVBWZHUK"
     }
   }

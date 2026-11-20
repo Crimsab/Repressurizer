@@ -71,6 +71,8 @@ Installed apps request platform-and-channel targets such as `windows-x86_64-stab
 
 The release workflow validates version, tag, channel, platform target, artifact presence, download tag, and updater signature. Mixing stable and beta targets fails validation.
 
+Since 0.8.8 the app sets `requireSignedVersion`: it installs an update only when the signature's trusted comment records the version the manifest announces (`version:0.8.8`), so a tampered manifest cannot pair a new version number with an older signed file. Tauri CLI 2.12 and later write that field during `tauri build`, and the workflow refuses to publish a manifest whose signature lacks it or records another version. Stable releases signed before 0.8.7 carry no version, so a beta cannot return to them.
+
 ## Local packaging and temporary builds
 
 `bun run build:linux` creates local unsigned Linux bundles using Tauri's `--no-sign` flag. The release workflow instead uses `bun run build:linux:release` and the private Tauri updater key in Actions secrets to produce `.AppImage.sig`. This key is unrelated to Apple signing, Steam credentials, or Repressurizer API tokens.
