@@ -42,10 +42,6 @@ jobs:
   rust-audit:
     name: Rust audit (${{ matrix.crate }})
     runs-on: ubuntu-latest
-    permissions:
-      checks: write
-      contents: read
-      issues: write
     strategy:
       fail-fast: false
       matrix:
@@ -67,7 +63,7 @@ jobs:
         run: cargo generate-lockfile --manifest-path packages/rust/Cargo.toml
 
       - name: Audit dependencies
-        uses: rustsec/audit-check@69366f33c96575abad1ee0dba8212993eecbe998 # v2.0.0
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          working-directory: ${{ matrix.directory }}
+        # rustsec/audit-check fails with "Not Found" while publishing warnings (rustsec/audit-check#56).
+        # cargo audit still fails on vulnerabilities and prints unmaintained-crate warnings.
+        working-directory: ${{ matrix.directory }}
+        run: cargo audit
