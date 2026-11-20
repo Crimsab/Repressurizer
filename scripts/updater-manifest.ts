@@ -56,6 +56,14 @@ export function validateUpdaterManifest(options: UpdaterManifestValidationOption
     if (typeof platform.signature !== "string" || platform.signature.trim().length < 32) {
       throw new Error(`Updater signature is missing or invalid for ${platformName}`);
     }
+    // The app sets requireSignedVersion, so it rejects any update whose signature
+    // does not record exactly the version the manifest announces.
+    const signedVersion = signedUpdaterVersion(platform.signature);
+    if (signedVersion?.replace(/^v/, "") !== options.version.replace(/^v/, "")) {
+      throw new Error(
+        `Updater signature for ${platformName} records version ${signedVersion ?? "<none>"}, expected ${options.version}`,
+      );
+    }
     if (typeof platform.url !== "string") {
       throw new Error(`Updater URL is missing for ${platformName}`);
     }
@@ -84,6 +92,20 @@ export function validateUpdaterManifest(options: UpdaterManifestValidationOption
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/** Reads the version:<x> field from a base64 minisign signature's trusted comment. */
+export function signedUpdaterVersion(signature: string): string | null {
+  const decoded = Buffer.from(signature.trim(), "base64").toString("utf8");
+  const trustedComment = decoded
+    .split(/\r?\n/)
+    .find((line) => line.startsWith("trusted comment: "))
+    ?.slice("trusted comment: ".length);
+  if (!trustedComment) return null;
+  for (const field of trustedComment.split("\t")) {
+    if (field.startsWith("version:")) return field.slice("version:".length);
+  }
+  return null;
 }
 
 function optionValues(argv: string[], name: string): string[] {
