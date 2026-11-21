@@ -110,7 +110,9 @@ export function RuleInspectorPanel({ config, collections }: RuleInspectorPanelPr
 
   useEffect(() => {
     if (selectedAppId != null && games[selectedAppId]) return;
-    setSelectedAppId(summary.includedAppIds[0] ?? summary.excludedAppIds[0] ?? summary.missingAppIds[0] ?? Number(Object.keys(games)[0]) ?? null);
+    const firstLibraryAppId = Object.keys(games)[0];
+    // Number(undefined) is NaN, never nullish, so an empty library must fall back to null explicitly.
+    setSelectedAppId(summary.includedAppIds[0] ?? summary.excludedAppIds[0] ?? summary.missingAppIds[0] ?? (firstLibraryAppId === undefined ? null : Number(firstLibraryAppId)));
   }, [games, selectedAppId, summary.excludedAppIds, summary.includedAppIds, summary.missingAppIds]);
 
   const inspection = selectedAppId == null ? null : inspectCustomAutoCatGame(input, selectedAppId);
