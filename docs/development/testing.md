@@ -47,7 +47,7 @@ cargo test --manifest-path src-tauri/Cargo.toml
 cargo test --manifest-path packages/rust/Cargo.toml
 ```
 
-When running isolated app checks without packaged sidecars, CI sets `TAURI_CONFIG` to `{"bundle":{"externalBin":[]}}` for `cargo check`, Clippy, and app tests. Set that environment variable using the syntax of your shell when reproducing those checks. Do not use this override to produce a release that is supposed to include its companions.
+When running isolated app checks without packaged sidecars, CI sets `TAURI_CONFIG` to `{"bundle":{"externalBin":[]}}` for Clippy and app tests. Pull requests skip the release-profile desktop and macOS bundle builds; CI on `main` runs them before any release. Set that environment variable using the syntax of your shell when reproducing those checks. Do not use this override to produce a release that is supposed to include its companions.
 
 Changes to collection parsing, backup behavior, redaction, snapshot contracts, or write guards need regression coverage at the owning boundary.
 
