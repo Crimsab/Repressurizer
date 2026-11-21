@@ -56,7 +56,16 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install cargo-audit
-        run: cargo install cargo-audit --version 0.22.2 --locked
+        # Official prebuilt binary, checked against its published SHA-256, instead of a 2-3 minute source build.
+        run: |
+          archive="cargo-audit-x86_64-unknown-linux-musl-v0.22.2"
+          curl --fail --location --silent --show-error \
+            --output "$archive.tgz" \
+            "https://github.com/rustsec/rustsec/releases/download/cargo-audit%2Fv0.22.2/$archive.tgz"
+          echo "7fb9497f8594b389e5fce5ef9b92db08432996895b2e0c5a0167a69ed445c428  $archive.tgz" | sha256sum --check
+          tar --extract --gzip --file "$archive.tgz"
+          install -m 0755 "$archive/cargo-audit" "$HOME/.cargo/bin/cargo-audit"
+          cargo audit --version
 
       - name: Resolve integration dependencies
         if: matrix.crate == 'integration'
