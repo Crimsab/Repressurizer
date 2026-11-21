@@ -6,9 +6,9 @@ Repressurizer keeps local cache data so library browsing and AutoCat rules do no
 
 Repressurizer can contact these sources:
 
-- Steam Web API for owned games, playtime, achievements, player summaries, wishlist, friends, and Steam Family data.
+- Steam Web API for owned games, playtime, achievements, player summaries, wishlist, friends, Steam Family data, and Steam review summaries (`IUserReviewsService/GetAppReviews`, which needs no API key).
 - Steam Store endpoints and bounded Store enrichment for game details, genres,
-  categories, release dates, platforms, Metacritic, artwork, review summaries,
+  categories, release dates, platforms, Metacritic, artwork,
   popular user-defined tags, Steam Deck compatibility, and regional prices.
 - HowLongToBeat for story length matches.
 - GG.deals for opt-in current deals and historical lows on an open game detail page.
@@ -91,8 +91,8 @@ Higher values can fill cache faster but increase the chance of rate limits. Lowe
 
 Proxy routing is available in Settings under Steam/network request controls. It can apply to:
 
-- Steam Web API.
-- Steam Store and review endpoints.
+- Steam Web API, including review summaries.
+- Steam Store endpoints.
 - HLTB.
 - Automation export.
 

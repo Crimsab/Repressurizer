@@ -1,4 +1,6 @@
 const RELEASE_HIGHLIGHTS: Record<string, string> = {
+  "0.8.9":
+    "This update brings Steam reviews back: Valve retired the old reviews endpoint in October, so Repressurizer now uses Steam's new reviews API. The list view gains Steam review, review count and HLTB columns you can sort by, and game details show the Steam review label.",
   "0.8.8":
     "This update opens the app faster, keeps scrolling smooth in large libraries while the cache fills, fixes security issues in zip handling, installs updates only when their signature names the version the update server announces, and updates Tauri, its plugins, React, Vite and the Rust dependencies. It includes everything planned for 0.8.7, whose Windows build did not complete.",
   "0.8.7":

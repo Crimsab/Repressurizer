@@ -4,6 +4,10 @@ Plain text search ignores common punctuation differences, so `stalker` can match
 
 The toolbar also includes an **Installation** filter with **All**, **Installed only**, and **Not installed**. It becomes available after Repressurizer scans the configured Steam libraries for local `appmanifest_<appid>.acf` files.
 
+## List view columns
+
+The list view shows the Steam review label, the review count and the HLTB length next to hours played. Click a column heading to sort by it, and click it again to reverse the order. A dash means the value has not been fetched yet; **Prepare cache** in the footer fills it for the whole library. The review label also appears next to playtime on a game's detail page.
+
 ## Examples
 
 ```text

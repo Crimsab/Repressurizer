@@ -40,6 +40,9 @@ import type {
   SamBackupInfo,
 } from "../../../lib/types";
 import { useT } from "../../../lib/i18n";
+import { useSteamRatingsStore } from "../../../stores/steamRatingsStore";
+import { steamReviewTone } from "../../../lib/steamRatings";
+import { fullNumber, STEAM_REVIEW_TONE_CLASS } from "../../../lib/steamReviewDisplay";
 import {
   X,
   Clock,
@@ -56,6 +59,7 @@ interface GameDetailPageProps {
 
 export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
   const t = useT();
+  const steamRating = useSteamRatingsStore((s) => s.ratings[game.appid]);
   const {
     apiKey,
     steamId64,
@@ -527,6 +531,15 @@ export function GameDetailPage({ game, onClose }: GameDetailPageProps) {
                 <CalendarBlank size={13} />
                 {t("detail.lastPlayedValue", { date: lastPlayed })}
               </span>
+              {steamRating && steamReviewTone(steamRating) && (
+                <span
+                  data-testid="detail-steam-reviews"
+                  title={`${t("sort.steamReviews")}: ${steamRating.positive_percentage ?? 0}% · ${fullNumber.format(steamRating.total_reviews)}`}
+                  className={`text-xs font-medium ${STEAM_REVIEW_TONE_CLASS[steamReviewTone(steamRating)!]}`}
+                >
+                  {steamRating.review_score_desc || `${steamRating.positive_percentage ?? 0}%`} · {steamRating.positive_percentage ?? 0}%
+                </span>
+              )}
               {details?.metacritic_score && (
                 <span
                   className={`rounded-md px-2 py-0.5 text-xs font-bold ${

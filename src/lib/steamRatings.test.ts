@@ -5,6 +5,7 @@ import {
   isSteamReviewRateLimitedError,
   scoreForRating,
   steamRatingIdsNeedingFetch,
+  steamReviewTone,
   wilsonLowerBoundPercentage,
 } from "./steamRatings";
 import type { OwnedGame, SteamReviewSummary } from "./types";
@@ -131,5 +132,20 @@ describe("Steam review rate-limit detection", () => {
     expect(isSteamReviewRateLimitedError("Steam reviews returned HTTP 429 for app 10")).toBe(true);
     expect(isSteamReviewRateLimitedError("Too many requests")).toBe(true);
     expect(isSteamReviewRateLimitedError("Failed to parse Steam reviews response")).toBe(false);
+  });
+});
+
+describe("steamReviewTone", () => {
+  const rating = (review_score: number, total_reviews = 10) => ({ review_score, total_reviews });
+  it("groups Steam's 1-9 review score like the store labels", () => {
+    expect(steamReviewTone(rating(9))).toBe("positive");
+    expect(steamReviewTone(rating(6))).toBe("positive");
+    expect(steamReviewTone(rating(5))).toBe("mixed");
+    expect(steamReviewTone(rating(4))).toBe("negative");
+    expect(steamReviewTone(rating(1))).toBe("negative");
+  });
+  it("has no tone without reviews", () => {
+    expect(steamReviewTone(rating(0, 0))).toBeNull();
+    expect(steamReviewTone(rating(8, 0))).toBeNull();
   });
 });
