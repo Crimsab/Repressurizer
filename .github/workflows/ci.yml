@@ -73,6 +73,9 @@ jobs:
       - name: Typecheck
         run: bun run check
 
+      - name: Lint
+        run: bun run lint
+
       - name: Localization table freshness
         run: |
           bun run i18n:status:write
