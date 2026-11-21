@@ -131,3 +131,13 @@ function clampInt(value: number, min: number, max: number): number {
   const n = Math.floor(Number(value) || 0);
   return Math.max(min, Math.min(max, n));
 }
+
+export type SteamReviewTone = "positive" | "mixed" | "negative";
+
+/** Groups Steam's review_score (1 = Overwhelmingly Negative … 9 = Overwhelmingly Positive). */
+export function steamReviewTone(rating: Pick<SteamReviewSummary, "review_score" | "total_reviews">): SteamReviewTone | null {
+  if (rating.total_reviews <= 0 || rating.review_score <= 0) return null;
+  if (rating.review_score >= 6) return "positive";
+  if (rating.review_score === 5) return "mixed";
+  return "negative";
+}

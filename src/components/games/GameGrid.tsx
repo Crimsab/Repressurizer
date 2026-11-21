@@ -2,7 +2,7 @@ import { memo, useDeferredValue } from "react";
 import { categoriesForGame } from "../../lib/collectionIndex";
 import { useVirtualLibrary } from "./useVirtualLibrary";
 import { lazy, Suspense, useMemo, useState, useCallback, useEffect, useRef } from "react";
-import { useGameStore } from "../../stores/gameStore";
+import { useGameStore, type SortBy } from "../../stores/gameStore";
 import { useCategoryStore } from "../../stores/categoryStore";
 import { useStatusStore, STATUS_META } from "../../stores/statusStore";
 import { useTagsStore } from "../../stores/tagsStore";
@@ -20,7 +20,8 @@ import { useT, type TranslationKey } from "../../lib/i18n";
 import { MagnifyingGlass, FolderOpen, Clock, UsersThree } from "@phosphor-icons/react";
 import { extractReleaseYear, parseSearchQuery, matchesFilter } from "../../lib/search";
 import { possibleDuplicateAppIds } from "../../lib/gameIdentity";
-import { scoreForRating } from "../../lib/steamRatings";
+import { scoreForRating, steamReviewTone } from "../../lib/steamRatings";
+import { compactNumber, fullNumber, STEAM_REVIEW_TONE_CLASS } from "../../lib/steamReviewDisplay";
 import { priceSnapshotForCurrency } from "../../lib/prices";
 import { getHltbHours } from "../../lib/hltb";
 import { bestAvailableReleaseDate } from "../../lib/releaseDates";
@@ -413,6 +414,8 @@ export function GameGrid() {
   return (
     <>
       {viewMode === "list" ? (
+        <>
+        <GameListHeader />
         <div ref={virtual.containerRef} data-virtual-library={virtual.isVirtual || undefined} style={virtual.style} role="listbox" aria-multiselectable="true" aria-label={t("games.libraryLabel")} className="space-y-0.5" onClick={handleBackgroundClick}>
           {visibleGames.map((game) => (
             <GameListRow
@@ -426,6 +429,7 @@ export function GameGrid() {
             />
           ))}
         </div>
+        </>
       ) : (
         <div
           ref={virtual.containerRef}
@@ -475,6 +479,52 @@ export function GameGrid() {
   );
 }
 
+
+const LIST_COLUMNS = {
+  reviews: "hidden w-40 shrink-0 md:block",
+  reviewCount: "hidden w-24 shrink-0 text-right lg:block",
+  hltb: "hidden w-20 shrink-0 text-right sm:block",
+  playtime: "w-24 shrink-0 text-right",
+  collections: "flex w-[26%] min-w-0 shrink-0 gap-1 overflow-hidden sm:w-[24%]",
+} as const;
+
+
+function formatListHours(hours: number): string {
+  return `${hours >= 100 ? Math.round(hours) : Math.round(hours * 10) / 10}h`;
+}
+
+function GameListHeader() {
+  const t = useT();
+  const sortBy = useGameStore((s) => s.sortBy);
+  const sortAsc = useGameStore((s) => s.sortAsc);
+  const setSortBy = useGameStore((s) => s.setSortBy);
+  const toggleSortAsc = useGameStore((s) => s.toggleSortAsc);
+  const column = (key: SortBy, label: string, className: string) => {
+    const active = sortBy === key;
+    return (
+      <button
+        type="button"
+        aria-pressed={active}
+        onClick={() => (active ? toggleSortAsc() : setSortBy(key))}
+        className={`${className} truncate transition-colors hover:text-repressurizer-text ${active ? "text-repressurizer-text" : ""}`}
+      >
+        {label}
+        {active && <span aria-hidden="true">{sortAsc ? " ↑" : " ↓"}</span>}
+      </button>
+    );
+  };
+  return (
+    <div data-testid="game-list-header" className="sticky top-0 z-10 mb-0.5 flex h-8 items-center gap-2 bg-repressurizer-bg/95 sm:gap-3 px-3 text-xs font-medium text-repressurizer-text-faint backdrop-blur">
+      {column("name", t("sort.name"), "min-w-12 flex-1 text-left sm:min-w-24")}
+      {column("steamReviews", t("sort.steamReviews"), `${LIST_COLUMNS.reviews} text-left`)}
+      {column("reviewCount", t("sort.reviewCount"), LIST_COLUMNS.reviewCount)}
+      {column("hltb", t("sort.hltb"), LIST_COLUMNS.hltb)}
+      {column("playtime", t("sort.playtime"), LIST_COLUMNS.playtime)}
+      <span className={LIST_COLUMNS.collections} aria-hidden="true" />
+    </div>
+  );
+}
+
 const GameListRow = memo(function GameListRow({
   game,
   onContextMenu,
@@ -498,6 +548,11 @@ const GameListRow = memo(function GameListRow({
   const status = useStatusStore((s) => s.statuses[game.appid] ?? "none");
   const statusMeta = STATUS_META[status];
   const isFamilyShared = useFamilyStore((s) => s.isFamilyShared(game.appid));
+  const rating = useSteamRatingsStore((s) => s.ratings[game.appid]);
+  const hltbTimeMode = useSettingsStore((s) => s.hltbTimeMode);
+  const hltbHours = useHltbStore((s) => getHltbHours(s.data[game.appid], hltbTimeMode));
+  const hasReviews = !!rating && rating.total_reviews > 0;
+  const reviewTone = rating ? steamReviewTone(rating) : null;
 
 
   const hours = (game.playtime_forever / 60).toFixed(1);
@@ -542,13 +597,13 @@ const GameListRow = memo(function GameListRow({
       onContextMenu={(e) => onContextMenu(e, game)}
       onPointerEnter={onIntent}
       onFocus={onIntent}
-      className={`game-row group flex h-9 items-center gap-3 rounded-lg px-3 py-2 transition-colors ${
+      className={`game-row group flex h-9 items-center gap-2 rounded-lg sm:gap-3 px-3 py-2 transition-colors ${
         isSelected
           ? "bg-repressurizer-accent/8 ring-1 ring-repressurizer-accent/40"
           : "hover:bg-repressurizer-surface-hover"
       }`}
     >
-      <span className="min-w-24 flex-1 truncate text-sm text-white">{String(game.name ?? "")}</span>
+      <span className="min-w-12 flex-1 truncate text-sm text-white sm:min-w-24">{String(game.name ?? "")}</span>
       {(isPossibleDuplicate || game.is_collection_only) && (
         <span className="shrink-0 rounded-md border border-repressurizer-border-subtle px-1.5 py-0.5 font-mono text-[10px] text-repressurizer-text-faint">
           #{game.appid}
@@ -570,11 +625,23 @@ const GameListRow = memo(function GameListRow({
           {t("games.family")}
         </span>
       )}
-      <span className="inline-flex shrink-0 items-center gap-1 font-mono text-xs text-repressurizer-text-faint tabular-nums">
+      <span
+        className={`${LIST_COLUMNS.reviews} truncate text-xs ${reviewTone ? STEAM_REVIEW_TONE_CLASS[reviewTone] : "text-repressurizer-text-faint"}`}
+        title={hasReviews ? `${rating.positive_percentage ?? 0}% · ${fullNumber.format(rating.total_reviews)}` : undefined}
+      >
+        {hasReviews ? rating.review_score_desc || `${rating.positive_percentage ?? 0}%` : "—"}
+      </span>
+      <span className={`${LIST_COLUMNS.reviewCount} font-mono text-xs tabular-nums text-repressurizer-text-faint`}>
+        {hasReviews ? compactNumber.format(rating.total_reviews) : "—"}
+      </span>
+      <span className={`${LIST_COLUMNS.hltb} font-mono text-xs tabular-nums text-repressurizer-text-faint`}>
+        {hltbHours != null ? formatListHours(hltbHours) : "—"}
+      </span>
+      <span className={`${LIST_COLUMNS.playtime} inline-flex items-center justify-end gap-1 font-mono text-xs text-repressurizer-text-faint tabular-nums`}>
         <Clock size={11} />
         {hours}h
       </span>
-      <div className="flex min-w-0 max-w-[40%] gap-1 overflow-hidden">
+      <div className={LIST_COLUMNS.collections}>
         {categories.slice(0, 3).map((cat) => (
           <span
             key={cat.key}
