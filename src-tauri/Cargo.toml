@@ -1,6 +1,6 @@
 [package]
 name = "repressurizer"
-version = "0.8.8"
+version = "0.8.9"
 description = "Steam Library Manager"
 authors = ["you"]
 edition = "2021"
