@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import { dirname, extname, relative, resolve, sep } from "node:path";
+import { dirname, extname, resolve, sep } from "node:path";
 
 const siteRoot = resolve(process.argv[2] ?? "site");
 const htmlFiles = [...new Bun.Glob("**/*.html").scanSync({ cwd: siteRoot, onlyFiles: true })].sort();

@@ -38,6 +38,7 @@ export interface DiaryExportData {
 }
 
 function safeName(value: string, fallback = "game"): string {
+  // oxlint-disable-next-line no-control-regex -- control characters are invalid in file names
   return value.trim().replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-").replace(/\s+/g, " ").replace(/\.{2,}/g, "…").replace(/^[\s.]+|[\s.]+$/g, "").trim().slice(0, 100) || fallback;
 }
 

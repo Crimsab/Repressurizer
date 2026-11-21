@@ -123,7 +123,7 @@ export function resolveProfileSyncConflicts(merge: ProfileSyncMerge, choices: Re
 }
 
 function setAtPath(root: Record<string, unknown>, path: string, value: unknown) {
-  const tokens = [...path.matchAll(/([^.\[]+)|\[([^\]]+)\]/g)].map((match) => match[1] ?? match[2]);
+  const tokens = [...path.matchAll(/([^.[]+)|\[([^\]]+)\]/g)].map((match) => match[1] ?? match[2]);
   let target: unknown = root;
   for (const token of tokens.slice(0, -1)) {
     if (Array.isArray(target)) target = target.find((item) => stableArrayKey(item) === token);

@@ -97,7 +97,7 @@ function parse(raw: string | null): PersistedSessionPlanner | null {
     if (value.version !== SCHEMA_VERSION) return null;
     return {
       version: SCHEMA_VERSION,
-      config: { ...DEFAULT_SESSION_PLANNER_CONFIG, ...(value.config ?? {}) },
+      config: { ...DEFAULT_SESSION_PLANNER_CONFIG, ...value.config },
       presets: Array.isArray(value.presets) ? value.presets.slice(0, 50) : [],
       hiddenUntil: value.hiddenUntil ?? {},
       permanentlySuppressed: Array.isArray(value.permanentlySuppressed) ? value.permanentlySuppressed : [],

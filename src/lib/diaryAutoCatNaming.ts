@@ -14,6 +14,7 @@ import {
 export const DIARY_COLUMN_NAME_MAX = 24;
 
 /** Characters that would break a Kanban column header or get mangled on export. */
+// oxlint-disable-next-line no-control-regex -- strips control characters from collection names
 const CONTROL_CHARS = /[\u0000-\u001f\u007f-\u009f]/g;
 
 function collapseWhitespace(value: string): string {

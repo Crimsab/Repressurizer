@@ -153,7 +153,7 @@ export const useTravelMetadataStore = create<TravelMetadataState>((set, get) => 
       if (!state.hydrated) {
         const pending = pendingChanges.get(normalizedAppId);
         pendingChanges.set(normalizedAppId, {
-          ...(pending ?? {}),
+          ...pending,
           ...normalizedPatch,
         });
       }

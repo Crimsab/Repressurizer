@@ -55,7 +55,7 @@ const frontendEntry = await readFile(
   join(repositoryRoot, "dist", "index.html"),
   "utf8",
 );
-const embeddedAssets = [...frontendEntry.matchAll(/(?:src|href)="(\/assets\/[^\"]+)"/g)]
+const embeddedAssets = [...frontendEntry.matchAll(/(?:src|href)="(\/assets\/[^"]+)"/g)]
   .map((match) => match[1]);
 if (embeddedAssets.length === 0) {
   throw new Error("Production frontend has no entry assets to verify.");

@@ -321,7 +321,7 @@ function normalizeSettings(raw: Partial<AppSettings>): NormalizedAppSettings {
       mode: proxyMode,
       scopes: {
         ...defaults.proxySettings.scopes,
-        ...(proxySettings.scopes ?? {}),
+        ...proxySettings.scopes,
       },
       profiles: (proxySettings.profiles ?? []).map(normalizeProxyProfile),
     },
