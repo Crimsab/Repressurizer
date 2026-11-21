@@ -54,7 +54,7 @@ export function mergeImportedCollections(
 
     const target = next[targetIndex];
     const added = new Set([...(target.added ?? []), ...(incoming.added ?? [])]);
-    const removed = new Set([...(target.removed ?? [])]);
+    const removed = new Set((target.removed ?? []));
     for (const appId of incoming.removed ?? []) {
       if (!added.has(appId)) removed.add(appId);
     }

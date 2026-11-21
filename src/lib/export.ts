@@ -968,6 +968,7 @@ const FORMAT_EXTENSIONS: Record<ExportFormat, string> = {
 export function sanitizeExportBasename(name: string): string {
   const s = String(name ?? "")
     .trim()
+    // oxlint-disable-next-line no-control-regex -- control characters are invalid in file names
     .replace(/[<>:"/\\|?*\u0000-\u001f]/g, "-")
     .replace(/\s+/g, "-")
     .replace(/-+/g, "-")

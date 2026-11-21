@@ -55,7 +55,7 @@ export function PerformanceSettingsSection() {
         ...patch,
         scopes: {
           ...settings.proxySettings.scopes,
-          ...(patch.scopes ?? {}),
+          ...patch.scopes,
         },
         profiles: patch.profiles ?? settings.proxySettings.profiles,
       },

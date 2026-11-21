@@ -30,7 +30,7 @@ export function MetadataHealthCenter({ onClose, onRefreshLibrary }: { onClose: (
     for (const id of Object.keys(hltb)) result.hltb![Number(id)] = cachedRecord("hltb", null);
     for (const id of Object.keys(familyApps)) result["steam-family"]![Number(id)] = cachedRecord("steam-family", familyFetchedAt);
     for (const install of inventory?.installs ?? []) result.storage![install.appid] = cachedRecord("storage", install.scannedAt);
-    for (const provider of METADATA_PROVIDERS) result[provider] = { ...(result[provider] ?? {}), ...(health.games[provider] ?? {}) };
+    for (const provider of METADATA_PROVIDERS) result[provider] = { ...result[provider], ...health.games[provider] };
     return result;
   }, [achievements, appIds.join(","), details, familyApps, familyFetchedAt, health.games, hltb, inventory, ratings]);
   const summaries = METADATA_PROVIDERS.map((provider) => { const cached = Object.values(observedGames[provider] ?? {}); const inferred = cached.length ? cached.reduce((latest, record) => record.lastAttemptAt > latest.lastAttemptAt ? record : latest) : undefined; return summarizeProvider(provider, health.providers[provider] ?? inferred, observedGames[provider], maxAgeMs); });

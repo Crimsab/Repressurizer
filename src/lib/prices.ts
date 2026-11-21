@@ -152,7 +152,7 @@ export function mergePriceSnapshotIntoDetails(
 
   const key = priceCacheKey(cleanSnapshot.price_currency, cleanSnapshot.price_country_code);
   const priceCache: Record<string, GamePriceSnapshot> = {
-    ...(withExistingCache.price_cache ?? {}),
+    ...withExistingCache.price_cache,
   };
   if (key) {
     priceCache[key] = cleanSnapshot;

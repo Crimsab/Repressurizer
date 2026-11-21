@@ -42,6 +42,6 @@ describe("collection time machine", () => {
   it("rejects incompatible snapshots and preserves unknown collection fields", () => {
     expect(parseCollectionSnapshot({ version: 99, collections: [] })).toBeNull();
     const parsed = parseCollectionSnapshot({ version: 1, collections: [collection("a", "A", [], { future_field: { ok: true } })], steamAccountId: "a", deviceId: "d", createdAt: 1 });
-    expect((parsed?.collections[0] as SteamCollection & { future_field: unknown }).future_field).toEqual({ ok: true });
+    expect((parsed!.collections[0] as SteamCollection & { future_field: unknown }).future_field).toEqual({ ok: true });
   });
 });

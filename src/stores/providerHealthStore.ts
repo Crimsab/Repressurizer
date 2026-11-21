@@ -109,7 +109,7 @@ export const useProviderHealthStore = create<ProviderHealthState>((set) => ({
     if (!observations.length) return;
     set((state) => {
       let providerRecord = state.providers[provider];
-      const providerGames = { ...(state.games[provider] ?? {}) };
+      const providerGames = { ...state.games[provider] };
       for (const observation of observations) {
         providerRecord = recordProviderObservation(
           providerRecord,
