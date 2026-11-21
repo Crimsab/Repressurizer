@@ -118,11 +118,6 @@ jobs:
           # Compiled dependencies are reused by check, clippy, tests and the desktop build.
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
-      - name: Rust check
-        env:
-          TAURI_CONFIG: '{"bundle":{"externalBin":[]}}'
-        run: cargo check --manifest-path src-tauri/Cargo.toml
-
       - name: Rust formatting
         run: cargo fmt --manifest-path src-tauri/Cargo.toml --all -- --check
 
@@ -137,14 +132,18 @@ jobs:
         run: cargo test --manifest-path src-tauri/Cargo.toml
 
       - name: Setup Bun for Linux desktop build
+        # The release-profile desktop build repeats what clippy and tests already compile, so PRs skip it.
+        if: ${{ github.event_name != 'pull_request' }}
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version-file: .bun-version
 
       - name: Install frontend dependencies
+        if: ${{ github.event_name != 'pull_request' }}
         run: bun install --frozen-lockfile
 
       - name: Build Linux desktop executable
+        if: ${{ github.event_name != 'pull_request' }}
         run: bun tauri build --no-bundle
 
   windows-app-check:
@@ -210,7 +209,9 @@ jobs:
         run: cargo publish --dry-run --manifest-path packages/rust/Cargo.toml
 
   macos-bundle-check:
-    name: macOS universal bundle
+    name: macOS app check
+    # Pull requests lint and test the macOS code; the signed universal bundle is built on main,
+    # where the release gate requires a green CI run before anything is published.
     runs-on: macos-15
 
     steps:
@@ -251,16 +252,26 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
-      - name: Prepare universal MCP sidecar
-        run: bun scripts/prepare-macos-mcp.ts
+      - name: Rust lint on macOS
+        env:
+          TAURI_CONFIG: '{"bundle":{"externalBin":[]}}'
+        run: cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
 
       - name: Run macOS detector and guard tests
+        env:
+          TAURI_CONFIG: '{"bundle":{"externalBin":[]}}'
         run: cargo test --manifest-path src-tauri/Cargo.toml steam
 
+      - name: Prepare universal MCP sidecar
+        if: ${{ github.event_name != 'pull_request' }}
+        run: bun scripts/prepare-macos-mcp.ts
+
       - name: Build ad-hoc signed universal bundles
+        if: ${{ github.event_name != 'pull_request' }}
         run: bun run build:macos:ci
 
       - name: Smoke-test app and DMG structure
+        if: ${{ github.event_name != 'pull_request' }}
         run: |
           set -e
           bundle_dir="src-tauri/target/universal-apple-darwin/release/bundle"

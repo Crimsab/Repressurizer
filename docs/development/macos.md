@@ -51,4 +51,4 @@ bun install --frozen-lockfile
 bun run build:macos
 ```
 
-Pull-request CI uses `src-tauri/tauri.macos-ci.conf.json` to disable updater artifacts while exercising the same ad-hoc signature. It verifies the two binary slices, the app signature, and mounts the generated DMG. The release job additionally creates and validates the signed updater archive before uploading the public assets.
+Pull requests run Clippy and the macOS detector tests on a Mac. CI on `main`, which the release gate requires, uses `src-tauri/tauri.macos-ci.conf.json` to disable updater artifacts while exercising the same ad-hoc signature. It verifies the two binary slices, the app signature, and mounts the generated DMG. The release job additionally creates and validates the signed updater archive before uploading the public assets.
