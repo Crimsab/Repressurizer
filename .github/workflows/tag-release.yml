@@ -111,6 +111,7 @@ jobs:
           REPOSITORY: ${{ github.repository }}
           RELEASE_TAG: ${{ steps.app_version.outputs.tag }}
           RELEASE_SHA: ${{ steps.app_existing.outputs.sha }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
           metadata="$(mktemp)"
@@ -128,13 +129,14 @@ jobs:
             exit 1
           fi
           node scripts/verify-release-ci.mjs --repo "$REPOSITORY" --sha "$RELEASE_SHA"
-          runs="$(gh run list --repo "$REPOSITORY" --workflow release.yml --commit "$RELEASE_SHA" --limit 20 --json status)"
+          # Releases run from the default branch, so match any active release run rather than the tag commit.
+          runs="$(gh run list --repo "$REPOSITORY" --workflow release.yml --limit 20 --json status)"
           if jq -e 'any(.[]; .status != "completed")' <<< "$runs" >/dev/null; then
             echo "A release run is already active for $RELEASE_SHA"
             echo "started=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          gh workflow run release.yml --repo "$REPOSITORY" --ref "$RELEASE_TAG" -f release_tag="$RELEASE_TAG"
+          gh workflow run release.yml --repo "$REPOSITORY" --ref "$DEFAULT_BRANCH" -f release_tag="$RELEASE_TAG"
           echo "started=true" >> "$GITHUB_OUTPUT"
 
       - name: Read TypeScript integration version
