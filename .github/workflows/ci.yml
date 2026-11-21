@@ -229,16 +229,21 @@ jobs:
           toolchain: 1.94.0
           targets: aarch64-apple-darwin,x86_64-apple-darwin
 
-      - name: Restore caches
+      - name: Restore Bun cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: |
-            ~/.bun/install/cache
-            ~/.cargo/git
-            ~/.cargo/registry
-          key: ${{ runner.os }}-macos-bundle-${{ hashFiles('bun.lock', 'src-tauri/Cargo.lock') }}
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-macos-bundle-${{ hashFiles('bun.lock') }}
           restore-keys: |
             ${{ runner.os }}-macos-bundle-
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: src-tauri
+          # Shared with the release macOS job, which builds the same universal bundle.
+          shared-key: macos-universal
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install dependencies
         run: bun install --frozen-lockfile

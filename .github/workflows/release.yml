@@ -146,6 +146,14 @@ jobs:
         with:
           toolchain: 1.94.0
 
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: src-tauri
+          shared-key: release-linux
+          # Releases are dispatched from main, so main-scoped caches carry over to the next release.
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
       - name: Install Linux build dependencies
         run: |
           sudo apt-get update
@@ -222,16 +230,21 @@ jobs:
           toolchain: 1.94.0
           targets: aarch64-apple-darwin,x86_64-apple-darwin
 
-      - name: Restore caches
+      - name: Restore Bun cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          path: |
-            ~/.bun/install/cache
-            ~/.cargo/git
-            ~/.cargo/registry
-          key: ${{ runner.os }}-macos-release-${{ hashFiles('bun.lock', 'src-tauri/Cargo.lock') }}
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-macos-release-${{ hashFiles('bun.lock') }}
           restore-keys: |
             ${{ runner.os }}-macos-release-
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: src-tauri
+          shared-key: macos-universal
+          # Releases are dispatched from main, so main-scoped caches carry over to the next release.
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -287,7 +300,7 @@ jobs:
   windows:
     name: Windows installer and portable
     runs-on: windows-2025-vs2026
-    needs: [preflight, linux, macos]
+    needs: preflight
     env:
       DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
       RELEASE_CHANNEL: ${{ needs.preflight.outputs.channel }}
@@ -328,15 +341,13 @@ jobs:
       - name: Install WiX Toolset
         run: choco install wixtoolset -y --no-progress
 
-      - name: Restore Rust cache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
-          path: |
-            ~/.cargo/git
-            ~/.cargo/registry
-          key: ${{ runner.os }}-windows-release-rust-${{ hashFiles('src-tauri/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-windows-release-rust-
+          workspaces: src-tauri
+          shared-key: release-windows
+          # Releases are dispatched from main, so main-scoped caches carry over to the next release.
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -356,18 +367,6 @@ jobs:
       - name: Build Windows CLI
         run: cargo build --manifest-path src-tauri/Cargo.toml --release --bin repressurizer-cli --bin repressurizer-mcp --features mcp-sidecar
 
-      - name: Download Linux artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: linux-release-artifacts
-          path: artifacts
-
-      - name: Download macOS artifacts
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: macos-release-artifacts
-          path: artifacts
-
       - name: Collect Windows artifacts
         shell: pwsh
         run: |
@@ -381,6 +380,64 @@ jobs:
           Copy-Item src-tauri\target\release\bundle\msi\*.msi artifacts\
           Copy-Item src-tauri\target\release\bundle\msi\*.sig artifacts\
           Get-ChildItem artifacts | ForEach-Object { "$($_.Name) $($_.Length) bytes" }
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: windows-release-artifacts
+          path: artifacts
+          retention-days: 3
+          if-no-files-found: error
+
+  publish:
+    name: Publish release
+    # Builds run in parallel; this job only assembles and publishes their artifacts.
+    runs-on: windows-2025-vs2026
+    needs: [preflight, linux, macos, windows]
+    env:
+      DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+      RELEASE_CHANNEL: ${{ needs.preflight.outputs.channel }}
+      RELEASE_SHA: ${{ needs.preflight.outputs.release_sha }}
+      RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
+      RELEASE_VERSION: ${{ needs.preflight.outputs.version }}
+      REPOSITORY: ${{ github.repository }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        env:
+          GIT_CONFIG_COUNT: 1
+          GIT_CONFIG_KEY_0: init.defaultBranch
+          GIT_CONFIG_VALUE_0: main
+        with:
+          ref: ${{ needs.preflight.outputs.release_sha }}
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: .bun-version
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Download Linux artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: linux-release-artifacts
+          path: artifacts
+
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: macos-release-artifacts
+          path: artifacts
+
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: windows-release-artifacts
+          path: artifacts
 
       - name: Create updater manifest
         shell: pwsh
